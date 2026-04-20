@@ -33,13 +33,14 @@ class BusinessCentral:
 
     @staticmethod
     def _connect(server: str, database: str, uid: str, psw: str):
+        driver = os.getenv('BUSINESS_CENTRAL_DRIVER', 'ODBC Driver 17 for SQL Server')
         logger.debug(
-            'Tentativo di connessione a Business Central — server=%s  database=%s  uid=%s',
-            server, database, uid,
+            'Tentativo di connessione a Business Central — server=%s  database=%s  uid=%s  driver=%s',
+            server, database, uid, driver,
         )
         try:
             connection_string = (
-                f"Driver={{SQL Server}};"
+                f"Driver={{{driver}}};"
                 f"Server={server};"
                 f"Database={database};"
                 f"UID={uid};"
