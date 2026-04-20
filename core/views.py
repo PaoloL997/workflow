@@ -8,6 +8,7 @@ from django.db import IntegrityError
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 import json
+import logging
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -15,6 +16,8 @@ from openpyxl.utils import get_column_letter
 from .forms import RegistrazioneForm
 from .models import Testata, IndirSped, Documento, Revisione, StatoEsterno, User
 from src.pdf import genera_trasmittal_pdf
+
+logger = logging.getLogger(__name__)
 from .services.commesse import (
     list_commesse, get_commessa, create_commessa, update_commessa,
     delete_commessa, fetch_from_bc, serialize_testata,
@@ -126,6 +129,7 @@ def commessa_api_detail(request, job):
             t = get_commessa(job)
             return JsonResponse({'data': serialize_testata(t)})
         except Testata.DoesNotExist:
+            logger.warning('Commessa "%s" non trovata nel database locale.', job)
             return JsonResponse({'error': 'Commessa non trovata.'}, status=404)
     if request.method == 'PUT':
         try:
@@ -154,8 +158,13 @@ def erp_api(request):
         return JsonResponse({'error': 'Parametro job mancante.'}, status=400)
     try:
         data = fetch_from_bc(job)
+        if data:
+            logger.info('ERP: commessa "%s" trovata — campi restituiti: %s', job, list(data.keys()))
+        else:
+            logger.warning('ERP: commessa "%s" non trovata in Business Central (risposta vuota).', job)
         return JsonResponse({'data': data})
     except Exception as exc:
+        logger.error('ERP: errore durante il recupero della commessa "%s": %s', job, exc)
         return JsonResponse({'data': {}, 'warning': str(exc)})
 
 

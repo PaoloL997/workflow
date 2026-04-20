@@ -150,6 +150,11 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': False,
         },
+        'core.views': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
         'django': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
