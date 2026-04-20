@@ -1,0 +1,152 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Accedi — Brembana&Rolle{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: #EDECEA;
+    }
+
+    .auth-card {
+        background: #FFFFFF;
+        border-radius: 16px;
+        padding: 2.5rem 2.25rem 2rem;
+        width: 420px;
+        max-width: 90vw;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.07);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .auth-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: #1C1C1A;
+        margin-bottom: 1.5rem;
+        letter-spacing: -0.3px;
+    }
+
+    .auth-tabs {
+        display: flex;
+        background: #EDECEA;
+        border-radius: 999px;
+        padding: 4px;
+        gap: 4px;
+        margin-bottom: 1.75rem;
+        width: 100%;
+    }
+    .auth-tabs a {
+        flex: 1;
+        text-align: center;
+        padding: 0.45rem 0;
+        border-radius: 999px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #6B6B67;
+        text-decoration: none;
+        transition: all 0.15s;
+    }
+    .auth-tabs a.active {
+        background: #FFFFFF;
+        color: #1C1C1A;
+        font-weight: 600;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    .auth-form {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .auth-form input {
+        width: 100%;
+        padding: 0.73rem 1rem;
+        background: #F5F4F0;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        color: #1C1C1A;
+        outline: none;
+        font-family: inherit;
+        transition: background 0.15s;
+    }
+    .auth-form input::placeholder { color: #9CA3AF; }
+    .auth-form input:focus { background: #EDECEA; outline: 1.5px solid #D8D7D2; }
+
+    .btn-submit {
+        width: 100%;
+        padding: 0.78rem;
+        background: #1C1C1A;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 0.25rem;
+        font-family: inherit;
+        transition: background 0.15s;
+    }
+    .btn-submit:hover { background: #3A3A38; }
+
+    .errorlist {
+        list-style: none;
+        color: #DC2626;
+        font-size: 0.78rem;
+        margin: -0.25rem 0 0;
+        padding: 0 0.25rem;
+    }
+
+    .auth-messages {
+        width: 100%;
+        list-style: none;
+        margin-bottom: 0.75rem;
+        padding: 0;
+    }
+    .auth-messages li {
+        background: #FEF2F2;
+        color: #B91C1C;
+        border-radius: 8px;
+        padding: 0.6rem 0.85rem;
+        font-size: 0.82rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+    <div class="auth-title">Brembana&amp;Rolle</div>
+
+    <div class="auth-tabs">
+        <a href="{% url 'login' %}" class="active">Accedi</a>
+        <a href="{% url 'register' %}">Registrati</a>
+    </div>
+
+    {% if messages %}
+    <ul class="auth-messages">
+        {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    <form method="post" class="auth-form">
+        {% csrf_token %}
+        <div>
+            <input type="text" name="username" id="id_username" placeholder="Username"
+                   value="{{ form.username.value|default:'' }}" autocomplete="username">
+            {% if form.username.errors %}<ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div>
+            <input type="password" name="password" id="id_password" placeholder="Password" autocomplete="current-password">
+            {% if form.password.errors %}<ul class="errorlist">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <button type="submit" class="btn-submit">Accedi</button>
+    </form>
+</div>
+{% endblock %}

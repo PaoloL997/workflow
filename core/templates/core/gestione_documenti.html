@@ -1,0 +1,2181 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Gestione Documenti — Brembana&Rolle{% endblock %}
+{% block nav_registro %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Search hero ── */
+    .search-hero {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        padding: 0.5rem 0 1rem;
+    }
+    .search-hero-text {}
+    .search-hero-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1C1C1A;
+        letter-spacing: -0.4px;
+        margin-bottom: 0.15rem;
+    }
+    .search-hero-sub {
+        font-size: 0.875rem;
+        color: #6B6B67;
+        margin: 0;
+    }
+    .search-bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-shrink: 0;
+        width: 320px;
+    }
+    .search-bar input {
+        flex: 1;
+        padding: 0.65rem 1rem;
+        border: 1px solid #D8D7D2;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        background: #FFFFFF;
+        color: #1C1C1A;
+        outline: none;
+        font-family: inherit;
+        transition: border-color .15s;
+    }
+    .search-bar input::placeholder { color: #9CA3AF; }
+    .search-bar input:focus { border-color: #4A4A46; }
+
+    .btn { padding: 0.58rem 1.1rem; border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s; font-family: inherit; }
+    .btn-primary { background: #1C1C1A; color: #FFFFFF; }
+    .btn-primary:hover { background: #3A3A38; }
+    .btn-outline { background: #FFFFFF; color: #1C1C1A; border: 1px solid #D8D7D2; }
+    .btn-outline:hover { background: #F5F4F0; }
+    .btn-sm { padding: 0.32rem 0.8rem; font-size: 0.8rem; }
+    .btn-danger { background: #EF4444; color: #FFFFFF; }
+    .btn-danger:hover { background: #DC2626; }
+
+    /* ── Result ── */
+    .commessa-result { display: none; }
+    .commessa-result.show { display: block; }
+
+    /* ── Content layout: info card then actions below ── */
+    .content-col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    /* ── Info card ── */
+    .info-card {
+        background: #FFFFFF;
+        border: 1px solid #E0DFDB;
+        border-radius: 14px;
+        display: flex;
+        flex-direction: column;
+    }
+    .info-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #F0EFEB;
+    }
+    .info-card-left {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+    }
+    .info-card-title {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #1C1C1A;
+        letter-spacing: -0.4px;
+    }
+    .card-badges { display: flex; gap: 0.25rem; align-items: center; }
+    .cf-badge {
+        padding: 0.12rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.62rem;
+        font-weight: 600;
+        background: #F0EFEB;
+        color: #6B6B67;
+    }
+    .cf-badge.active { background: #D1FAE5; color: #065F46; }
+    .info-card-right { display: flex; gap: 0.3rem; flex-shrink: 0; }
+    .info-card-body {
+        padding: 0.65rem 1rem 0.75rem;
+        flex: 1;
+    }
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.4rem 0.85rem;
+    }
+    .info-item {}
+    .info-item.wide {
+        grid-column: span 2;
+    }
+    .info-label {
+        font-size: 0.58rem;
+        font-weight: 600;
+        color: #9CA3AF;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 0.05rem;
+    }
+    .info-value {
+        font-size: 0.82rem;
+        font-weight: 500;
+        color: #1C1C1A;
+        line-height: 1.25;
+    }
+    .info-value.empty { color: #D0D0CB; }
+
+    /* ── Action cards row ── */
+    .action-col {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .action-card {
+        background: #FFFFFF;
+        border: 1px solid #E0DFDB;
+        border-radius: 10px;
+        padding: 0.45rem 0.7rem;
+        cursor: pointer;
+        transition: border-color .15s, box-shadow .15s;
+        font-family: inherit;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+    }
+    .action-card:hover {
+        border-color: #C5C5C0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .action-card-icon {
+        width: 28px; height: 28px;
+        border-radius: 8px;
+        background: #F0EFEB;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .action-card-icon svg {
+        width: 14px; height: 14px;
+        stroke: #4A4A46;
+        stroke-linecap: round; stroke-linejoin: round;
+        stroke-width: 1.75;
+        fill: none;
+    }
+    .action-card-body {
+        flex: 1;
+        min-width: 0;
+    }
+    .action-card-title {
+        display: inline;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #1C1C1A;
+        line-height: 1.2;
+    }
+    .action-card-sub {
+        display: inline;
+        font-size: 0.62rem;
+        color: #9CA3AF;
+        margin-left: 0.3rem;
+    }
+    .action-card-chevron {
+        width: 14px; height: 14px;
+        stroke: #C5C5C0; fill: none;
+        stroke-linecap: round; stroke-linejoin: round;
+        stroke-width: 2;
+        flex-shrink: 0;
+    }
+    .action-card.active {
+        border-color: #1C1C1A;
+        background: #F5F4F0;
+    }
+    .action-card.active .action-card-icon {
+        background: #1C1C1A;
+    }
+    .action-card.active .action-card-icon svg {
+        stroke: #FFFFFF;
+    }
+    .action-card.active .action-card-chevron {
+        stroke: #6B6B67;
+    }
+
+    /* ── Inline section panel ── */
+    .inline-section {
+        display: none;
+        background: #FFFFFF;
+        border: 1px solid #E0DFDB;
+        border-radius: 14px;
+        padding: 0.85rem 1rem;
+    }
+    .inline-section.show { display: block; }
+    .inline-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 0.65rem;
+    }
+    .inline-section-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #1C1C1A;
+    }
+    .inline-addr-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        background: #FAFAF8;
+        border: 1px solid #E0DFDB;
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.82rem;
+        color: #1C1C1A;
+    }
+    .inline-addr-card .addr-actions { display: flex; gap: 0.3rem; flex-shrink: 0; margin-left: 0.75rem; }
+
+    /* ── Inline document table ── */
+    .doc-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+    }
+    /* ── Scrollable wrapper on small screens ── */
+    .doc-table-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    .doc-table th {
+        text-align: left;
+        font-size: 0.6rem;
+        font-weight: 600;
+        color: #9CA3AF;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0.3rem 0.45rem;
+        border-bottom: 1px solid #E0DFDB;
+        position: sticky;
+        top: 0;
+        background: #FFFFFF;
+        z-index: 1;
+    }
+    .doc-table td {
+        padding: 0.4rem 0.45rem;
+        border-bottom: 1px solid #F0EFEB;
+        color: #1C1C1A;
+        vertical-align: middle;
+    }
+    .doc-table tr:last-child td { border-bottom: none; }
+    .doc-table .doc-flag {
+        display: inline-block;
+        width: 8px; height: 8px;
+        border-radius: 50%;
+        background: #D0D0CB;
+    }
+    .doc-table .doc-flag.on { background: #10B981; }
+
+    /* ── Status badge (shared with ticket view) ── */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .status-badge::before {
+        content: '';
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .status-da_iniziare { background: #F3F4F6; color: #6B7280; }
+    .status-da_iniziare::before { background: #9CA3AF; }
+    .status-in_lavorazione { background: #DBEAFE; color: #1D4ED8; }
+    .status-in_lavorazione::before { background: #3B82F6; }
+    .status-in_revisione { background: #FEF3C7; color: #B45309; }
+    .status-in_revisione::before { background: #F59E0B; }
+    .status-in_approvazione { background: #EDE9FE; color: #7C3AED; }
+    .status-in_approvazione::before { background: #8B5CF6; }
+    .status-da_emettere { background: #ECFDF5; color: #047857; }
+    .status-da_emettere::before { background: #34D399; }
+    .status-inviato_al_cliente { background: #DBEAFE; color: #1E40AF; }
+    .status-inviato_al_cliente::before { background: #3B82F6; }
+    .status-ricevuto { background: #D1FAE5; color: #059669; }
+    .status-ricevuto::before { background: #10B981; }
+
+    /* ── Row context menu ── */
+    .row-menu-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 6px;
+        color: #6B6B67;
+        font-size: 1rem;
+        line-height: 1;
+        transition: background .15s;
+    }
+    .row-menu-btn:hover { background: #F0EFEB; color: #1C1C1A; }
+    .row-menu {
+        position: fixed;
+        background: #FFFFFF;
+        border: 1px solid #E0DFDB;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        z-index: 800;
+        min-width: 130px;
+        overflow: hidden;
+        display: none;
+    }
+    .row-menu.show { display: block; }
+    .row-menu-item {
+        display: block;
+        width: 100%;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.82rem;
+        font-weight: 500;
+        font-family: inherit;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #1C1C1A;
+        transition: background .12s;
+    }
+    .row-menu-item:hover { background: #F5F4F0; }
+    .row-menu-item.danger { color: #EF4444; }
+
+    /* ── Emissione panel ── */
+    .emissione-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .emissione-table th, .emissione-table td { padding: 0.5rem 0.6rem; text-align: left; border-bottom: 1px solid #F0EFEB; }
+    .emissione-table th { font-weight: 600; color: #6B6B67; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; background: #FAFAF9; position: sticky; top: 0; z-index: 1; }
+    .emissione-table tbody tr { transition: background .1s; }
+    .emissione-table tbody tr:hover { background: #F5F4F0; }
+    .emissione-table tbody tr.em-selected { background: #EEF2FF; }
+    .emissione-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #1C1C1A; }
+    .em-status-badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: #F0EFEB;
+        color: #6B6B67;
+    }
+    .em-status-badge.sent { background: #DBEAFE; color: #1E40AF; }
+    .emissione-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        background: #FAFAF9;
+        border: 1px solid #E0DFDB;
+        border-radius: 10px;
+        margin-bottom: 0.75rem;
+    }
+    .emissione-toolbar .em-count {
+        font-size: 0.78rem;
+        color: #6B6B67;
+        white-space: nowrap;
+        min-width: 140px;
+    }
+    .emissione-toolbar .em-count strong { color: #1C1C1A; }
+    .em-date-group {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.78rem;
+        color: #6B6B67;
+        font-weight: 500;
+    }
+    .em-date-group input[type="date"] {
+        font-size: 0.8rem;
+        padding: 0.3rem 0.5rem;
+        border: 1px solid #E0DFDB;
+        border-radius: 7px;
+        background: #fff;
+        color: #1C1C1A;
+    }
+    .ric-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.78rem;
+        color: #6B6B67;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .ric-toggle input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        accent-color: #1C1C1A;
+        cursor: pointer;
+    }
+
+    /* ── Modal overlay ── */
+    .modal-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.25);
+        z-index: 900;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        background: #FFFFFF;
+        border-radius: 14px;
+        padding: 2rem;
+        width: 600px;
+        max-width: 92vw;
+        max-height: 88vh;
+        overflow-y: auto;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.12);
+        border: 1px solid #E0DFDB;
+    }
+    .modal h2 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #1C1C1A;
+        margin-bottom: 1.25rem;
+        letter-spacing: -0.3px;
+    }
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
+
+    /* ── Form fields ── */
+    .fg { margin-bottom: 0.85rem; }
+    .fg label { display: block; font-size: 0.75rem; font-weight: 600; color: #6B6B67; margin-bottom: 0.28rem; text-transform: uppercase; letter-spacing: 0.03em; }
+    .fg input, .fg select {
+        width: 100%;
+        padding: 0.52rem 0.85rem;
+        border: 1px solid #D8D7D2;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        background: #FAFAF8;
+        color: #1C1C1A;
+        outline: none;
+        font-family: inherit;
+        transition: border-color .15s, background .15s;
+    }
+    .fg input:focus, .fg select:focus { border-color: #4A4A46; background: #FFFFFF; }
+    .fg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .fg-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+    .fg .check-row { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.25rem; }
+    .fg .check-row input[type="checkbox"] { width: auto; accent-color: #1C1C1A; }
+    .fg .check-row label { font-size: 0.875rem; color: #1C1C1A; font-weight: 500; text-transform: none; letter-spacing: 0; margin: 0; }
+
+    /* ── Addresses section ── */
+    .addr-section { margin-top: 1.25rem; border-top: 1px solid #E0DFDB; padding-top: 1rem; }
+    .addr-section h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: #1C1C1A; }
+    .addr-card {
+        background: #FAFAF8;
+        border: 1px solid #E0DFDB;
+        border-radius: 10px;
+        padding: 0.85rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.84rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+    .addr-card .addr-info { flex: 1; color: #1C1C1A; }
+    .addr-card .addr-info strong { color: #1C1C1A; }
+    .addr-card .addr-actions { display: flex; gap: 0.35rem; flex-shrink: 0; margin-left: 0.75rem; }
+    .addr-card .addr-actions button { font-size: 0.78rem; }
+
+    /* ── BC banner ── */
+    .bc-banner {
+        padding: 0.65rem 1rem;
+        border-radius: 8px;
+        font-size: 0.84rem;
+        margin-bottom: 1rem;
+        display: none;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .bc-banner.loading { display: flex; background: #F5F4F0; color: #4A4A46; border: 1px solid #D8D7D2; }
+    .bc-banner.success  { display: flex; background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+    .bc-banner.warning  { display: flex; background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+    .bc-spinner {
+        width: 14px; height: 14px;
+        border: 2px solid #D8D7D2;
+        border-top-color: #4A4A46;
+        border-radius: 50%;
+        animation: bcspin 0.6s linear infinite;
+        flex-shrink: 0;
+    }
+    @keyframes bcspin { to { transform: rotate(360deg); } }
+
+    .toast {
+        position: fixed; bottom: 1.5rem; right: 1.5rem;
+        background: #1C1C1A; color: #FFFFFF;
+        padding: 0.7rem 1.25rem; border-radius: 10px;
+        font-size: 0.875rem; z-index: 1100;
+        opacity: 0; transition: opacity .2s;
+        font-family: inherit;
+    }
+    .toast.show { opacity: 1; }
+
+/* ── Custom multi-select dropdown (addresses) ── */
+.addr-dropdown {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.52rem 0.85rem;
+    border: 1px solid #D8D7D2;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    background: #FAFAF8;
+    color: #1C1C1A;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s;
+    position: relative;
+}
+.addr-dropdown:hover { border-color: #4A4A46; }
+.addr-dropdown-list {
+    display: none;
+    position: absolute;
+    left: 0; right: 0;
+    margin-top: 2px;
+    background: #FFFFFF;
+    border: 1px solid #D8D7D2;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    z-index: 910;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0.3rem 0;
+}
+.addr-dropdown-list.show { display: block; }
+.addr-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.75rem;
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: background .1s;
+    color: #1C1C1A;
+}
+.addr-dropdown-item:hover { background: #F5F4F0; }
+.addr-dropdown-item input[type="checkbox"] {
+    width: 15px; height: 15px;
+    accent-color: #1C1C1A;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ── Situazione documenti ── */
+.sit-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+.sit-table thead th {
+    background: #F5F4F0;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid #E0DFDB;
+    white-space: nowrap;
+    font-size: 0.78rem;
+    color: #6B6B67;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.sit-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #F0EFEB;
+    white-space: nowrap;
+}
+.sit-table tbody tr { transition: background .12s; }
+.sit-row-colored { border-left: 4px solid transparent; }
+.sit-ext-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+/* ── Situazione orizzontale ── */
+.sit-horiz-wrap {
+    overflow-x: auto;
+    border: 1px solid #E0DFDB;
+    border-radius: 10px;
+}
+.sit-horiz {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+.sit-horiz th, .sit-horiz td {
+    padding: 5px 9px;
+    border-bottom: 1px solid #F0EFEB;
+    border-right: 1px solid #F0EFEB;
+    vertical-align: middle;
+    background: #fff;
+}
+.sit-horiz thead th {
+    background: #F5F4F0;
+    font-weight: 600;
+    color: #6B6B67;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+/* Sticky left fixed columns */
+.sit-horiz th.sit-fix, .sit-horiz td.sit-fix {
+    position: sticky;
+    z-index: 3;
+    background: #F5F4F0;
+}
+.sit-horiz tbody td.sit-fix {
+    background: #fff;
+    z-index: 1;
+}
+.sit-horiz thead th.sit-fix { z-index: 4; }
+/* Rev group header */
+.sit-horiz th.sit-rev-group {
+    text-align: center;
+    background: #EEEDF0;
+    border-left: 2px solid #D8D7D2;
+    font-size: 0.72rem;
+    color: #4A4A46;
+}
+.sit-horiz td.sit-rev-first {
+    border-left: 2px solid #E8E7E3;
+}
+.sit-horiz tr:last-child td { border-bottom: none; }
+
+/* Warning triangle — no reparto */
+.no-reparto-warn {
+    color: #F59E0B; cursor: pointer; font-size: 1rem;
+    user-select: none;
+}
+#repartoWarnPopover {
+    position: fixed; z-index: 9999;
+    background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px;
+    padding: 0.75rem 1rem; max-width: 280px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    font-size: 0.85rem; color: #92400E; line-height: 1.45;
+    display: none;
+}
+#repartoWarnPopover::before {
+    content: '⚠ Reparto non specificato';
+    display: block; font-weight: 600; margin-bottom: 0.35rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Popover: nessun reparto -->
+<div id="repartoWarnPopover">
+    Senza reparto non verrà creato alcun ticket per l'elaborazione di questo documento.
+    Modifica il documento e assegna il reparto responsabile.
+</div>
+
+<div class="search-hero">
+    <div class="search-hero-text">
+        <h1 class="search-hero-title">Archivio commesse</h1>
+        <p class="search-hero-sub">Cerca un archivio di commessa per numero job</p>
+    </div>
+    <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="Numero commessa…" autocomplete="off">
+        <button class="btn btn-primary" id="btnSearch" onclick="searchOrCreate()">Cerca</button>
+    </div>
+</div>
+
+<!-- ── Inline result ── -->
+<div class="commessa-result" id="commessaCard">
+    <div class="content-col">
+        <div class="info-card">
+            <div class="info-card-header">
+                <div class="info-card-left">
+                    <span class="info-card-title" id="card_job"></span>
+                    <div class="card-badges" id="card_badges"></div>
+                </div>
+                <div class="info-card-right">
+                    <button class="btn btn-outline btn-sm" id="card_editBtn">Modifica</button>
+                    <button class="btn btn-danger btn-sm" id="card_deleteBtn">Elimina</button>
+                </div>
+            </div>
+            <div class="info-card-body">
+                <div class="info-grid" id="card_fields"></div>
+            </div>
+        </div>
+        <div class="action-col">
+            <button class="action-card" id="btn-section-indirizzi" onclick="toggleSection('indirizzi')">
+                <div class="action-card-icon"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+                <div class="action-card-body">
+                    <div class="action-card-title">Indirizzi di consegna</div>
+                    <div class="action-card-sub">Gestisci destinazioni</div>
+                </div>
+                <svg class="action-card-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="action-card" id="btn-section-documenti" onclick="toggleSection('documenti')">
+                <div class="action-card-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                <div class="action-card-body">
+                    <div class="action-card-title">Elenco documenti</div>
+                    <div class="action-card-sub">Vedi tutti i documenti</div>
+                </div>
+                <svg class="action-card-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="action-card" id="btn-section-emissione" onclick="toggleSection('emissione')">
+                <div class="action-card-icon"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></div>
+                <div class="action-card-body">
+                    <div class="action-card-title">Gestisci emissione</div>
+                    <div class="action-card-sub">Documenti in uscita</div>
+                </div>
+                <svg class="action-card-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="action-card" id="btn-section-ricezione" onclick="toggleSection('ricezione')">
+                <div class="action-card-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
+                <div class="action-card-body">
+                    <div class="action-card-title">Gestisci ricezione</div>
+                    <div class="action-card-sub">Documenti in entrata</div>
+                </div>
+                <svg class="action-card-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="action-card" id="btn-section-situazione" onclick="toggleSection('situazione')">
+                <div class="action-card-icon"><svg viewBox="0 0 24 24"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+                <div class="action-card-body">
+                    <div class="action-card-title">Visualizza situazione documenti</div>
+                    <div class="action-card-sub">Riepilogo stato documenti</div>
+                </div>
+                <svg class="action-card-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+        </div>
+        <!-- Pannello indirizzi inline -->
+        <div class="inline-section" id="section-indirizzi">
+            <div class="inline-section-header">
+                <span class="inline-section-title">Indirizzi di consegna</span>
+                <button class="btn btn-primary btn-sm" onclick="openInlineAddrModal()">+ Aggiungi</button>
+            </div>
+            <div id="inline-addr-list"></div>
+        </div>
+        <!-- Pannello documenti inline -->
+        <div class="inline-section" id="section-documenti">
+            <div class="inline-section-header">
+                <span class="inline-section-title">Elenco documenti</span>
+                <div style="display:flex;gap:0.4rem;">
+                    <button class="btn btn-outline btn-sm" onclick="esportaDocumenti()">Esporta</button>
+                    <button class="btn btn-primary btn-sm" onclick="openAddChooser(this);event.stopPropagation()">+ Aggiungi</button>
+                </div>
+            </div>
+            <div id="inline-doc-list"></div>
+        </div>
+        <!-- Pannello emissione inline -->
+        <div class="inline-section" id="section-emissione">
+            <div class="inline-section-header">
+                <span class="inline-section-title">Gestisci emissione</span>
+            </div>
+            <div class="emissione-toolbar" id="emissioneFooter" style="display:none;">
+                <div class="em-count"><strong id="emCountLabel">0</strong> <span>documenti selezionati</span></div>
+                <div style="flex:1"></div>
+                <button class="btn btn-outline btn-sm" onclick="stampaTrasmittal()" id="emPrintBtn" disabled>Stampa trasmittal</button>
+                <button class="btn btn-primary btn-sm" onclick="confermaEmissione()" id="emConfirmBtn" disabled>Emetti e stampa trasmittal</button>
+            </div>
+            <div id="inline-emissione-list"></div>
+        </div>
+        <!-- Pannello ricezione inline -->
+        <div class="inline-section" id="section-ricezione">
+            <div class="inline-section-header">
+                <span class="inline-section-title">Gestisci ricezione</span>
+            </div>
+            <div class="emissione-toolbar" id="ricezioneToolbar" style="display:none;">
+                <div class="em-count"><strong id="ricCountLabel">0</strong> <span>documenti selezionati</span></div>
+                <div style="flex:1"></div>
+                <button class="btn btn-primary btn-sm" onclick="confermaRicezione()" id="ricConfirmBtn" disabled>Conferma ricezione</button>
+            </div>
+            <div id="inline-ricezione-list"></div>
+        </div>
+        <!-- Pannello situazione documenti inline -->
+        <div class="inline-section" id="section-situazione">
+            <div class="inline-section-header">
+                <span class="inline-section-title">Situazione documenti</span>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                    <select id="situazione-vista" onchange="loadSituazioneInline()" style="padding:4px 10px;font-size:0.82rem;border:1px solid #D8D7D2;border-radius:6px;background:#FAFAF9;font-family:inherit;">
+                        <option value="verticale" selected>Vista verticale</option>
+                        <option value="orizzontale">Vista orizzontale</option>
+                    </select>
+                </div>
+            </div>
+            <div id="inline-situazione-list"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Dropdown: Scelta aggiunta documento ── -->
+<div id="addChooserDropdown" style="display:none;position:fixed;background:#FFFFFF;border:1px solid #E0DFDB;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:900;min-width:160px;overflow:hidden;">
+    <button class="row-menu-item" onclick="closeAddChooser();openDocModal()">Manuale</button>
+    <button class="row-menu-item" onclick="closeAddChooser();importaExcel()">Importa da Excel</button>
+</div>
+
+<!-- ── Modal: Importa documenti da Excel ── -->
+<div class="modal-overlay" id="importExcelModal">
+    <div class="modal" style="width:540px;max-height:none;overflow-y:visible;">
+        <h2>Importa documenti da Excel</h2>
+
+        <div style="background:#F5F4F0;border:1px solid #E0DFDB;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.82rem;color:#4A4A46;line-height:1.6;">
+            <strong style="display:block;margin-bottom:0.35rem;color:#1C1C1A;">Colonne supportate</strong>
+            Il file deve avere la prima riga come intestazione. Le colonne vengono riconosciute per nome (non sensibili a maiuscole):
+            <table style="width:100%;margin-top:0.5rem;border-collapse:collapse;font-size:0.78rem;">
+                <thead><tr style="border-bottom:1px solid #D8D7D2;">
+                    <th style="text-align:left;padding:0.2rem 0.4rem;color:#6B6B67;">Intestazione</th>
+                    <th style="text-align:left;padding:0.2rem 0.4rem;color:#6B6B67;">Campo</th>
+                </tr></thead>
+                <tbody>
+                    <tr><td style="padding:0.15rem 0.4rem;">Item</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero item</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Vendor Doc</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero doc. fornitore</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Client Doc N°</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero doc. cliente</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Client Doc Class</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Classe doc. cliente</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Titolo documento</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Titolo</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Reparto</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Nome reparto (deve esistere)</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Penale</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Sì / 1 per attivo</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Pagamento</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Sì / 1 per attivo</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Rev. Generale</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Sì / 1 per attivo</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">Note</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Note libere</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="fg" style="margin-bottom:1rem;">
+            <label>File Excel (.xlsx)</label>
+            <input type="file" id="importExcelFile" accept=".xlsx,.xls"
+                style="width:100%;padding:0.45rem 0.7rem;border:1px solid #D8D7D2;border-radius:8px;font-size:0.875rem;background:#FAFAF8;font-family:inherit;cursor:pointer;">
+        </div>
+
+        <div id="importExcelResult" style="display:none;padding:0.65rem 0.85rem;border-radius:8px;font-size:0.82rem;margin-bottom:1rem;"></div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('importExcelModal')">Chiudi</button>
+            <button type="button" class="btn btn-primary" id="importExcelBtn" onclick="eseguiImportExcel()">Importa</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Documento ── -->
+<div class="modal-overlay" id="docModal">
+    <div class="modal" style="width:560px;">
+        <h2 id="docModalTitle">Nuovo documento</h2>
+        <input type="hidden" id="dm_pk">
+        <div class="fg-row-3">
+            <div class="fg"><label>Item</label><input id="dm_item_no"></div>
+            <div class="fg"><label>Vendor Doc</label><input id="dm_vendor_doc"></div>
+            <div class="fg"><label>Client Doc N°</label><input id="dm_client_doc_no"></div>
+        </div>
+        <div class="fg-row">
+            <div class="fg"><label>Client Doc Class</label><input id="dm_client_doc_class"></div>
+            <div class="fg"><label>Reparto</label>
+                <select id="dm_reparto">
+                    <option value="">--</option>
+                </select>
+            </div>
+        </div>
+        <div class="fg"><label>Titolo documento</label><input id="dm_doc_title"></div>
+        <div class="fg"><label>Note</label><input id="dm_remarks"></div>
+        <div class="fg-row-3">
+            <div class="fg"><div class="check-row"><input type="checkbox" id="dm_doc_penalty"><label for="dm_doc_penalty">Penale</label></div></div>
+            <div class="fg"><div class="check-row"><input type="checkbox" id="dm_doc_payment"><label for="dm_doc_payment">Pagamento</label></div></div>
+            <div class="fg"><div class="check-row"><input type="checkbox" id="dm_rev_gen"><label for="dm_rev_gen">Rev. generale</label></div></div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('docModal')">Annulla</button>
+            <button type="button" class="btn btn-primary" onclick="saveDoc()">Salva</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Row context menu ── -->
+<div class="row-menu" id="rowMenu">
+    <button class="row-menu-item" id="rowMenuEdit">Modifica</button>
+    <button class="row-menu-item danger" id="rowMenuDel">Elimina</button>
+</div>
+
+<!-- ── Modal: Indirizzo di consegna (inline) ── -->
+<div class="modal-overlay" id="addrStandaloneModal">
+    <div class="modal" style="width:480px;">
+        <h2 id="addrStandaloneTitle">Nuovo indirizzo</h2>
+        <input type="hidden" id="ias_pk">
+        <div class="fg-row">
+            <div class="fg"><label>Destinatario</label><input id="ias_consignee"></div>
+            <div class="fg"><label>Telefono</label><input id="ias_ph_no"></div>
+        </div>
+        <div class="fg"><label>Indirizzo</label><input id="ias_address"></div>
+        <div class="fg-row-3">
+            <div class="fg"><label>CAP</label><input id="ias_zip"></div>
+            <div class="fg"><label>Città</label><input id="ias_city"></div>
+            <div class="fg"><label>Paese</label><input id="ias_country"></div>
+        </div>
+        <div class="fg"><label>Attn</label><input id="ias_attn"></div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('addrStandaloneModal')">Annulla</button>
+            <button type="button" class="btn btn-primary" onclick="saveInlineAddr()">Salva</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Conferma emissione / trasmittal ── -->
+<div class="modal-overlay" id="trasmittalModal">
+    <div class="modal" style="width:520px;max-height:none;overflow-y:visible;">
+        <h2>Emetti e stampa trasmittal</h2>
+        <p id="trasmittalSummary" style="font-size:0.875rem;color:#4A4A46;margin-bottom:1.25rem;"></p>
+        <div class="fg">
+            <label>Data di invio</label>
+            <input type="date" id="trasmittal_date">
+        </div>
+        <div class="fg" style="margin-bottom:0;position:relative;">
+            <label>Indirizzi di consegna</label>
+            <div id="addrDropdown" class="addr-dropdown" onclick="toggleAddrDropdown(event)">
+                <span id="addrDropdownLabel" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Seleziona…</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B6B67" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div id="addrDropdownList" class="addr-dropdown-list" onclick="event.stopPropagation()"></div>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('trasmittalModal')">Annulla</button>
+            <button type="button" class="btn btn-primary" id="trasmittalPrintOnlyBtn" onclick="soloStampaTrasmittal()" style="display:none;">Stampa trasmittal</button>
+            <button type="button" class="btn btn-primary" id="trasmittalConfirmBtn" onclick="eseguiEmissione()">Conferma ed emetti</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Conferma ricezione ── -->
+<div class="modal-overlay" id="ricezioneConfirmModal">
+    <div class="modal" style="width:480px;">
+        <h2>Conferma ricezione</h2>
+        <p id="ricezioneConfirmSummary" style="font-size:0.875rem;color:#4A4A46;margin-bottom:1.25rem;"></p>
+        <div class="fg">
+            <label>Data di ricezione</label>
+            <input type="date" id="ricezione_date">
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeModal('ricezioneConfirmModal')">Annulla</button>
+            <button type="button" class="btn btn-primary" onclick="eseguiRicezione()">Conferma ricezione</button>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal: Nuovo / Modifica archivio di commessa ── -->
+<div class="modal-overlay" id="commessaModal">
+    <div class="modal">
+        <h2 id="commessaModalTitle">Nuovo archivio di commessa</h2>
+        <div class="bc-banner" id="bcBanner">
+            <div class="bc-spinner" id="bcSpinner"></div>
+            <span id="bcBannerText"></span>
+        </div>
+        <form id="commessaForm" onsubmit="return saveCommessa(event)">
+            <input type="hidden" id="cf_origJob">
+            <!-- BC fields first -->
+            <div class="fg-row">
+                <div class="fg"><label>Job</label><input id="cf_job" required></div>
+                <div class="fg"><label>Cliente</label><input id="cf_client"></div>
+            </div>
+            <div class="fg-row">
+                <div class="fg"><label>PO N°</label><input id="cf_po_no"></div>
+                <div class="fg"><label>Data consegna</label><input type="date" id="cf_delivery_date"></div>
+            </div>
+            <div class="fg"><label>Descrizione progetto</label><input id="cf_job_detail"></div>
+            <!-- Non-BC fields -->
+            <div class="fg-row">
+                <div class="fg"><label>VB Job</label><input id="cf_vb_job"></div>
+                <div class="fg"><label>Requisizione</label><input id="cf_requisition"></div>
+            </div>
+            <div class="fg"><label>Termini consegna</label><input id="cf_delivery_term"></div>
+            <div class="fg-row">
+                <div class="fg"><label>Giorni rev. cliente</label><input type="number" id="cf_time_cli" min="0"></div>
+                <div class="fg"><label>Giorni rev. fornitore</label><input type="number" id="cf_time_ven" min="0"></div>
+            </div>
+            <div class="fg-row">
+                <div class="fg"><div class="check-row"><input type="checkbox" id="cf_rev_let"><label for="cf_rev_let">Revisioni con lettere</label></div></div>
+                <div class="fg"><div class="check-row"><input type="checkbox" id="cf_transm"><label for="cf_transm">Previsto trasmittal</label></div></div>
+            </div>
+
+            <!-- Indirizzi di Spedizione rimossi da qui -->
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('commessaModal')">Annulla</button>
+                <button type="button" class="btn btn-danger" id="btnDelete" style="display:none" onclick="deleteCommessa()">Elimina</button>
+                <button type="submit" class="btn btn-primary">Salva</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const csrfToken = '{{ csrf_token }}';
+const API = '/api/commesse/';
+const ERP = '/api/erp/';
+
+function headers(extra = {}) {
+    return { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken, ...extra };
+}
+
+function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function hideCommessaCard() {
+    document.getElementById('commessaCard').classList.remove('show');
+    if (activeSection) {
+        document.getElementById(`btn-section-${activeSection}`).classList.remove('active');
+        document.getElementById(`section-${activeSection}`).classList.remove('show');
+        activeSection = null;
+    }
+}
+
+// ── Show commessa inline ──
+function showCommessaCard(c) {
+    const d = v => (v !== null && v !== undefined && v !== '') ? String(v) : null;
+    document.getElementById('card_job').textContent = `Commessa ${c.job}`;
+
+    const fields = [
+        ['Cliente', d(c.client), 'wide'],
+        ['PO N\u00b0', d(c.po_no), ''],
+        ['VB Job', d(c.vb_job), ''],
+        ['Consegna', d(c.delivery_date), ''],
+        ['Requisizione', d(c.requisition), ''],
+        ['Rev. cli (gg)', d(c.time_cli_doc_rev), ''],
+        ['Rev. forn (gg)', d(c.time_ven_doc_rev), ''],
+        ['Descrizione', d(c.job_detail), 'wide'],
+        ['Termini consegna', d(c.delivery_term), 'wide'],
+    ];
+    document.getElementById('card_fields').innerHTML = fields
+        .map(([label, val, spanCls]) => {
+            const cls = val ? '' : ' empty';
+            const sCls = spanCls ? ` ${spanCls}` : '';
+            return `<div class="info-item${sCls}"><div class="info-label">${label}</div><div class="info-value${cls}">${val || '\u2014'}</div></div>`;
+        })
+        .join('');
+
+    const badge = (val, labelOn, labelOff) => val
+        ? `<span class="cf-badge active">${labelOn}</span>`
+        : `<span class="cf-badge">${labelOff}</span>`;
+    document.getElementById('card_badges').innerHTML = [
+        badge(c.rev_let_flag, 'Revisioni con lettere: sì', 'Revisioni con lettere: no'),
+        badge(c.transm_flag, 'Trasmittal previsto: sì', 'Trasmittal previsto: no'),
+    ].join('');
+
+    document.getElementById('card_editBtn').onclick = () => openEditModal(c.job);
+    document.getElementById('card_deleteBtn').onclick = () => deleteFromCard(c.job);
+    currentJob = c.job;
+    document.getElementById('commessaCard').classList.add('show');
+}
+
+// ── Search: local lookup → show card, or open new modal ──
+async function searchOrCreate() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
+
+    const btn = document.getElementById('btnSearch');
+    btn.disabled = true; btn.textContent = 'Ricerca…';
+    hideCommessaCard();
+
+    try {
+        // 1. Found locally → show inline card
+        const localRes = await fetch(`${API}${encodeURIComponent(q)}/`);
+        if (localRes.ok) {
+            let payload;
+            try { payload = await localRes.json(); } catch(e) { payload = null; }
+            if (payload?.data) {
+                showCommessaCard(payload.data);
+                return;
+            }
+        }
+
+        // 2. Not found (or bad response) → open new modal + try BC prefill
+        openNewModal();
+        document.getElementById('cf_job').value = q;
+        showBcBanner('loading', 'Ricerca in Business Central…');
+
+        try {
+            const erpRes = await fetch(`${ERP}?job=${encodeURIComponent(q)}`);
+            const erpJson = await erpRes.json();
+            const d = erpJson.data || {};
+            const hasData = d.job || d.client || d.po_no || d.job_detail || d.delivery_date;
+
+            if (hasData) {
+                if (d.job) document.getElementById('cf_job').value = d.job;
+                if (d.client) document.getElementById('cf_client').value = d.client;
+                if (d.po_no) document.getElementById('cf_po_no').value = d.po_no;
+                if (d.job_detail) document.getElementById('cf_job_detail').value = d.job_detail;
+                if (d.delivery_date) document.getElementById('cf_delivery_date').value = d.delivery_date;
+                showBcBanner('success', 'Dati precompilati da Business Central');
+            } else {
+                showBcBanner('warning', 'Commessa non trovata in Business Central');
+            }
+            if (erpJson.warning) toast(erpJson.warning);
+        } catch (e) {
+            showBcBanner('warning', 'Impossibile contattare Business Central');
+        }
+    } catch(e) {
+        // Network error or unexpected exception → still open the modal
+        openNewModal();
+        document.getElementById('cf_job').value = q;
+        showBcBanner('warning', 'Errore durante la ricerca');
+    } finally {
+        btn.disabled = false; btn.textContent = 'Cerca';
+    }
+}
+
+function showBcBanner(state, msg) {
+    const banner = document.getElementById('bcBanner');
+    const spinner = document.getElementById('bcSpinner');
+    const text = document.getElementById('bcBannerText');
+    banner.className = 'bc-banner ' + state;
+    spinner.style.display = state === 'loading' ? '' : 'none';
+    text.textContent = msg;
+}
+
+// ── New commessa modal ──
+function openNewModal() {
+    document.getElementById('commessaModalTitle').textContent = 'Nuovo archivio di commessa';
+    document.getElementById('commessaForm').reset();
+    document.getElementById('cf_origJob').value = '';
+    document.getElementById('cf_job').readOnly = false;
+    document.getElementById('btnDelete').style.display = 'none';
+    const addrSec = document.getElementById('addrSection');
+    if (addrSec) addrSec.style.display = 'none';
+    document.getElementById('bcBanner').className = 'bc-banner';
+    openModal('commessaModal');
+}
+
+// ── Edit commessa modal ──
+async function openEditModal(job) {
+    const res = await fetch(`${API}${encodeURIComponent(job)}/`);
+    if (!res.ok) { toast('Errore nel caricamento.'); return; }
+    const { data: c } = await res.json();
+    document.getElementById('bcBanner').className = 'bc-banner';
+    document.getElementById('commessaModalTitle').textContent = `Archivio commessa ${c.job}`;
+    document.getElementById('cf_origJob').value = c.job;
+    document.getElementById('cf_job').value = c.job;
+    document.getElementById('cf_job').readOnly = true;
+    document.getElementById('cf_vb_job').value = c.vb_job || '';
+    document.getElementById('cf_client').value = c.client || '';
+    document.getElementById('cf_po_no').value = c.po_no || '';
+    document.getElementById('cf_job_detail').value = c.job_detail || '';
+    document.getElementById('cf_delivery_date').value = c.delivery_date || '';
+    document.getElementById('cf_delivery_term').value = c.delivery_term || '';
+    document.getElementById('cf_requisition').value = c.requisition || '';
+    document.getElementById('cf_time_cli').value = c.time_cli_doc_rev ?? '';
+    document.getElementById('cf_time_ven').value = c.time_ven_doc_rev ?? '';
+    document.getElementById('cf_rev_let').checked = c.rev_let_flag;
+    document.getElementById('cf_transm').checked = c.transm_flag;
+    document.getElementById('btnDelete').style.display = '';
+    openModal('commessaModal');
+}
+
+// ── Save (create / update) ──
+async function saveCommessa(e) {
+    e.preventDefault();
+    const origJob = document.getElementById('cf_origJob').value;
+    const body = {
+        job: document.getElementById('cf_job').value.trim(),
+        vb_job: document.getElementById('cf_vb_job').value.trim(),
+        client: document.getElementById('cf_client').value.trim(),
+        po_no: document.getElementById('cf_po_no').value.trim(),
+        job_detail: document.getElementById('cf_job_detail').value.trim(),
+        delivery_date: document.getElementById('cf_delivery_date').value || null,
+        delivery_term: document.getElementById('cf_delivery_term').value.trim(),
+        requisition: document.getElementById('cf_requisition').value.trim(),
+        time_cli_doc_rev: parseInt(document.getElementById('cf_time_cli').value) || null,
+        time_ven_doc_rev: parseInt(document.getElementById('cf_time_ven').value) || null,
+        rev_let_flag: document.getElementById('cf_rev_let').checked,
+        transm_flag: document.getElementById('cf_transm').checked,
+    };
+    const isEdit = !!origJob;
+    const url = isEdit ? `${API}${encodeURIComponent(origJob)}/` : API;
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: headers(), body: JSON.stringify(body) });
+    const json = await res.json();
+    if (!res.ok) { toast(json.error ? (typeof json.error === 'string' ? json.error : JSON.stringify(json.error)) : 'Errore.'); return; }
+    toast(isEdit ? 'Archivio aggiornato.' : 'Archivio creato.');
+    closeModal('commessaModal');
+    const r = await fetch(`${API}${encodeURIComponent(body.job)}/`);
+    if (r.ok) { const { data } = await r.json(); showCommessaCard(data); }
+}
+
+// ── Delete from card ──
+async function deleteFromCard(job) {
+    if (!confirm(`Eliminare l'archivio della commessa ${job}?`)) return;
+    const res = await fetch(`${API}${encodeURIComponent(job)}/`, { method: 'DELETE', headers: headers() });
+    if (!res.ok) { toast('Errore durante l\'eliminazione.'); return; }
+    toast('Archivio eliminato.');
+    hideCommessaCard();
+}
+
+// ── Delete from modal ──
+async function deleteCommessa() {
+    const job = document.getElementById('cf_origJob').value;
+    if (!confirm(`Eliminare l'archivio della commessa ${job}?`)) return;
+    const res = await fetch(`${API}${encodeURIComponent(job)}/`, { method: 'DELETE', headers: headers() });
+    if (!res.ok) { toast('Errore durante l\'eliminazione.'); return; }
+    toast('Archivio eliminato.');
+    closeModal('commessaModal');
+    hideCommessaCard();
+}
+
+// ── Indirizzi ──
+let currentJob = '';
+async function loadIndirizzi(job) {
+    currentJob = job;
+    const res = await fetch(`${API}${encodeURIComponent(job)}/indirizzi/`);
+    const { indirizzi } = await res.json();
+    const wrap = document.getElementById('addrList');
+    if (!indirizzi.length) { wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.84rem;">Nessun indirizzo.</p>'; return; }
+    wrap.innerHTML = indirizzi.map(a => `
+        <div class="addr-card">
+            <div class="addr-info">
+                <strong>${a.consignee || '—'}</strong><br>
+                ${[a.address, a.zip_code, a.city, a.country].filter(Boolean).join(', ') || '—'}
+                ${a.attn ? '<br>Attn: ' + a.attn : ''} ${a.ph_no ? '— Tel: ' + a.ph_no : ''}
+            </div>
+            <div class="addr-actions">
+                <button type="button" class="btn btn-outline btn-sm" onclick='editAddr(${JSON.stringify(a)})'>Modifica</button>
+                <button type="button" class="btn btn-danger btn-sm" onclick="delAddr(${a.id})">Elimina</button>
+            </div>
+        </div>`).join('');
+}
+
+function openAddrForm() {
+    document.getElementById('af_pk').value = '';
+    ['af_consignee','af_address','af_zip','af_city','af_country','af_attn','af_ph_no'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('addrFormWrap').style.display = '';
+}
+function closeAddrForm() { document.getElementById('addrFormWrap').style.display = 'none'; }
+
+function editAddr(a) {
+    openAddrForm();
+    document.getElementById('af_pk').value = a.id;
+    document.getElementById('af_consignee').value = a.consignee || '';
+    document.getElementById('af_address').value = a.address || '';
+    document.getElementById('af_zip').value = a.zip_code || '';
+    document.getElementById('af_city').value = a.city || '';
+    document.getElementById('af_country').value = a.country || '';
+    document.getElementById('af_attn').value = a.attn || '';
+    document.getElementById('af_ph_no').value = a.ph_no || '';
+}
+
+async function saveAddr() {
+    const pk = document.getElementById('af_pk').value;
+    const body = {
+        consignee: document.getElementById('af_consignee').value.trim(),
+        address: document.getElementById('af_address').value.trim(),
+        zip_code: document.getElementById('af_zip').value.trim(),
+        city: document.getElementById('af_city').value.trim(),
+        country: document.getElementById('af_country').value.trim(),
+        attn: document.getElementById('af_attn').value.trim(),
+        ph_no: document.getElementById('af_ph_no').value.trim(),
+    };
+    let res;
+    if (pk) {
+        res = await fetch(`/api/indirizzi/${pk}/`, { method: 'PATCH', headers: headers(), body: JSON.stringify(body) });
+    } else {
+        res = await fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    }
+    if (!res.ok) { const j = await res.json(); toast(j.error || 'Errore.'); return; }
+    toast(pk ? 'Indirizzo aggiornato.' : 'Indirizzo creato.');
+    closeAddrForm();
+    loadIndirizzi(currentJob);
+}
+
+async function delAddr(pk) {
+    if (!confirm('Eliminare questo indirizzo?')) return;
+    await fetch(`/api/indirizzi/${pk}/`, { method: 'DELETE', headers: headers() });
+    toast('Indirizzo eliminato.');
+    loadIndirizzi(currentJob);
+}
+
+// ── Inline sections ──
+let activeSection = null;
+
+function toggleSection(name) {
+    const btn = document.getElementById(`btn-section-${name}`);
+    const panel = document.getElementById(`section-${name}`);
+    if (activeSection === name) {
+        btn.classList.remove('active');
+        panel.classList.remove('show');
+        activeSection = null;
+    } else {
+        if (activeSection) {
+            document.getElementById(`btn-section-${activeSection}`).classList.remove('active');
+            document.getElementById(`section-${activeSection}`).classList.remove('show');
+        }
+        btn.classList.add('active');
+        panel.classList.add('show');
+        activeSection = name;
+        if (name === 'indirizzi') loadIndirizziInline();
+        if (name === 'documenti') loadDocumentiInline();
+        if (name === 'emissione') loadEmissioneInline();
+        if (name === 'ricezione') loadRicezioneInline();
+        if (name === 'situazione') loadSituazioneInline();
+    }
+}
+
+async function loadIndirizziInline() {
+    const wrap = document.getElementById('inline-addr-list');
+    if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento…</p>';
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`);
+        const { indirizzi } = await res.json();
+        if (!indirizzi.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun indirizzo.</p>';
+            return;
+        }
+        wrap.innerHTML = indirizzi.map(a => `
+            <div class="inline-addr-card">
+                <div>
+                    <strong>${a.consignee || '—'}</strong><br>
+                    <span style="color:#6B6B67">${[a.address, a.zip_code, a.city, a.country].filter(Boolean).join(', ') || '—'}</span>
+                    ${a.attn ? `<br><span style="color:#9CA3AF;font-size:0.75rem">Attn: ${a.attn}</span>` : ''}
+                    ${a.ph_no ? `<span style="color:#9CA3AF;font-size:0.75rem"> — Tel: ${a.ph_no}</span>` : ''}
+                </div>
+                <div class="addr-actions">
+                    <button class="btn btn-outline btn-sm" onclick='openInlineAddrModal(${JSON.stringify(a)})'>Modifica</button>
+                    <button class="btn btn-danger btn-sm" onclick="delInlineAddr(${a.id})">Elimina</button>
+                </div>
+            </div>`).join('');
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+function openInlineAddrModal(a = null) {
+    document.getElementById('addrStandaloneTitle').textContent = a ? 'Modifica indirizzo' : 'Nuovo indirizzo';
+    document.getElementById('ias_pk').value = a ? a.id : '';
+    document.getElementById('ias_consignee').value = a?.consignee || '';
+    document.getElementById('ias_ph_no').value = a?.ph_no || '';
+    document.getElementById('ias_address').value = a?.address || '';
+    document.getElementById('ias_zip').value = a?.zip_code || '';
+    document.getElementById('ias_city').value = a?.city || '';
+    document.getElementById('ias_country').value = a?.country || '';
+    document.getElementById('ias_attn').value = a?.attn || '';
+    openModal('addrStandaloneModal');
+}
+
+async function saveInlineAddr() {
+    const pk = document.getElementById('ias_pk').value;
+    const body = {
+        consignee: document.getElementById('ias_consignee').value.trim(),
+        address: document.getElementById('ias_address').value.trim(),
+        zip_code: document.getElementById('ias_zip').value.trim(),
+        city: document.getElementById('ias_city').value.trim(),
+        country: document.getElementById('ias_country').value.trim(),
+        attn: document.getElementById('ias_attn').value.trim(),
+        ph_no: document.getElementById('ias_ph_no').value.trim(),
+    };
+    let res;
+    if (pk) {
+        res = await fetch(`/api/indirizzi/${pk}/`, { method: 'PATCH', headers: headers(), body: JSON.stringify(body) });
+    } else {
+        res = await fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    }
+    if (!res.ok) { const j = await res.json(); toast(j.error || 'Errore.'); return; }
+    toast(pk ? 'Indirizzo aggiornato.' : 'Indirizzo creato.');
+    closeModal('addrStandaloneModal');
+    loadIndirizziInline();
+}
+
+async function delInlineAddr(pk) {
+    if (!confirm('Eliminare questo indirizzo?')) return;
+    await fetch(`/api/indirizzi/${pk}/`, { method: 'DELETE', headers: headers() });
+    toast('Indirizzo eliminato.');
+    loadIndirizziInline();
+}
+
+// ── Documenti inline ──
+let repartiCache = null;
+
+async function loadRepartiSelect() {
+    if (!repartiCache) {
+        const res = await fetch('/api/reparti/');
+        const { reparti } = await res.json();
+        repartiCache = reparti;
+    }
+    const sel = document.getElementById('dm_reparto');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">--</option>' +
+        repartiCache.map(r => `<option value="${r.nome}">${r.nome}</option>`).join('');
+    sel.value = cur;
+}
+
+// ── Row menu ──
+let _rowMenuDocId = null;
+let _rowMenuDocData = null;
+
+function openRowMenu(event, docId, docData) {
+    _rowMenuDocId = docId;
+    _rowMenuDocData = typeof docData === 'string' ? JSON.parse(docData.replace(/&quot;/g, '"')) : docData;
+    const menu = document.getElementById('rowMenu');
+    menu.classList.add('show');
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuW = 140;
+    let left = rect.left - menuW + rect.width;
+    if (left < 8) left = 8;
+    if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+    let top = rect.bottom + 4;
+    if (top + 90 > window.innerHeight) top = rect.top - 90;
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    event.stopPropagation();
+}
+
+document.getElementById('rowMenuEdit').addEventListener('click', () => {
+    document.getElementById('rowMenu').classList.remove('show');
+    openDocModal(_rowMenuDocData);
+});
+document.getElementById('rowMenuDel').addEventListener('click', () => {
+    document.getElementById('rowMenu').classList.remove('show');
+    delDoc(_rowMenuDocId);
+});
+document.addEventListener('click', (e) => {
+    document.getElementById('rowMenu').classList.remove('show');
+    closeAddChooser();
+    const ddList = document.getElementById('addrDropdownList');
+    if (ddList && !e.target.closest('.addr-dropdown') && !e.target.closest('.addr-dropdown-list')) {
+        ddList.classList.remove('show');
+    }
+});
+
+async function loadDocumentiInline() {
+    const wrap = document.getElementById('inline-doc-list');
+    if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
+        const { documenti } = await res.json();
+        if (!documenti.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento.</p>';
+            return;
+        }
+        const flag = v => `<span class="doc-flag${v ? ' on' : ''}"></span>`;
+        const statusBadge = d => d.latest_int_status
+            ? `<span class="status-badge status-${d.latest_int_status}">${esc(d.latest_int_status_label)}</span>`
+            : `<span style="color:#9CA3AF">—</span>`;
+        wrap.innerHTML = `<div class="doc-table-wrap"><table class="doc-table">
+            <thead><tr>
+                <th>Item</th><th>Vendor Doc</th><th>Client Doc</th><th>Class</th>
+                <th>Titolo</th><th>Reparto</th><th>Stato</th><th>Pen.</th><th>Pag.</th><th>Rev.</th><th></th>
+            </tr></thead>
+            <tbody>${documenti.map(d => `<tr>
+                <td style="white-space:nowrap">${esc(d.item_no) || '—'}</td>
+                <td style="white-space:nowrap">${esc(d.vendor_doc) || '—'}</td>
+                <td style="white-space:nowrap">${esc(d.client_doc_no) || '—'}</td>
+                <td style="white-space:nowrap">${esc(d.client_doc_class) || '—'}</td>
+                <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(d.doc_title||'').replace(/"/g,'&quot;')}">${esc(d.doc_title) || '—'}</td>
+                <td style="white-space:nowrap">${d.reparto_label || '<span class="no-reparto-warn" onclick="showRepartoWarn(event)">&#9888;</span>'}</td>
+                <td>${statusBadge(d)}</td>
+                <td>${flag(d.doc_penalty)}</td>
+                <td>${flag(d.doc_payment)}</td>
+                <td>${flag(d.rev_gen)}</td>
+                <td style="white-space:nowrap">
+                    <button class="row-menu-btn" onclick="openRowMenu(event, ${d.id}, ${JSON.stringify(d).replace(/"/g,'&quot;')})">&#8942;</button>
+                </td>
+            </tr>`).join('')}</tbody></table></div>`;
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+async function openDocModal(d = null) {
+    await loadRepartiSelect();
+    document.getElementById('docModalTitle').textContent = d ? 'Modifica documento' : 'Nuovo documento';
+    document.getElementById('dm_pk').value = d ? d.id : '';
+    document.getElementById('dm_item_no').value = d?.item_no || '';
+    document.getElementById('dm_vendor_doc').value = d?.vendor_doc || '';
+    document.getElementById('dm_client_doc_no').value = d?.client_doc_no || '';
+    document.getElementById('dm_client_doc_class').value = d?.client_doc_class || '';
+    document.getElementById('dm_doc_title').value = d?.doc_title || '';
+    document.getElementById('dm_reparto').value = d?.reparto ?? '';
+    document.getElementById('dm_remarks').value = d?.remarks || '';
+    document.getElementById('dm_doc_penalty').checked = d?.doc_penalty || false;
+    document.getElementById('dm_doc_payment').checked = d?.doc_payment || false;
+    document.getElementById('dm_rev_gen').checked = d?.rev_gen || false;
+    openModal('docModal');
+}
+
+async function saveDoc() {
+    const pk = document.getElementById('dm_pk').value;
+    const repartoVal = document.getElementById('dm_reparto').value;
+    const body = {
+        item_no: document.getElementById('dm_item_no').value.trim(),
+        vendor_doc: document.getElementById('dm_vendor_doc').value.trim(),
+        client_doc_no: document.getElementById('dm_client_doc_no').value.trim(),
+        client_doc_class: document.getElementById('dm_client_doc_class').value.trim(),
+        doc_title: document.getElementById('dm_doc_title').value.trim(),
+        reparto: repartoVal || '',
+        remarks: document.getElementById('dm_remarks').value.trim(),
+        doc_penalty: document.getElementById('dm_doc_penalty').checked,
+        doc_payment: document.getElementById('dm_doc_payment').checked,
+        rev_gen: document.getElementById('dm_rev_gen').checked,
+    };
+    let res;
+    if (pk) {
+        res = await fetch(`/api/documenti/${pk}/`, { method: 'PATCH', headers: headers(), body: JSON.stringify(body) });
+    } else {
+        res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`, { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    }
+    if (!res.ok) { const j = await res.json(); toast(j.error || 'Errore.'); return; }
+    toast(pk ? 'Documento aggiornato.' : 'Documento creato.');
+    closeModal('docModal');
+    loadDocumentiInline();
+}
+
+async function delDoc(pk) {
+    if (!confirm('Eliminare questo documento?')) return;
+    await fetch(`/api/documenti/${pk}/`, { method: 'DELETE', headers: headers() });
+    toast('Documento eliminato.');
+    loadDocumentiInline();
+}
+
+// ── Emissione inline ──
+let emissioneDocIds = new Set();
+let _emDocRevCache = {};
+
+async function loadEmissioneInline() {
+    const wrap = document.getElementById('inline-emissione-list');
+    const footer = document.getElementById('emissioneFooter');
+    emissioneDocIds.clear();
+    _emDocRevCache = {};
+    footer.style.display = 'none';
+    if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
+        const { documenti } = await res.json();
+        if (!documenti.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento da inviare.</p>';
+            return;
+        }
+        // Fetch all revision info first, then filter out already-sent docs
+        await Promise.all(documenti.map(async d => {
+            try {
+                const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
+                const { revisioni } = await r.json();
+                _emDocRevCache[d.id] = revisioni.length ? revisioni[revisioni.length - 1] : null;
+            } catch(e) { _emDocRevCache[d.id] = null; }
+        }));
+        const daInviare = documenti.filter(d => _emDocRevCache[d.id]?.int_status === 'da_emettere');
+        if (!daInviare.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento pronto per l\'emissione (stato interno: <em>Da emettere</em>).</p>';
+            return;
+        }
+        wrap.innerHTML = `<table class="emissione-table">
+            <thead><tr>
+                <th style="width:32px"><input type="checkbox" id="emissione_all" onchange="toggleAllEmissione(this.checked)"></th>
+                <th>Item</th><th>Titolo</th><th>Reparto</th>
+                <th>Rev.</th><th>Stato interno</th>
+            </tr></thead>
+            <tbody>${daInviare.map(d => {
+                const latest = _emDocRevCache[d.id];
+                const revNo = latest != null ? latest.rev_no : '\u2014';
+                const label = latest?.int_status_label || '';
+                const badge = label
+                    ? `<span class="em-status-badge">${label}</span>`
+                    : `<span style="color:#9CA3AF">\u2014</span>`;
+                return `<tr id="em-row-${d.id}">
+                <td><input type="checkbox" class="em-chk" value="${d.id}" onchange="updateEmissioneSelection()"></td>
+                <td>${d.item_no || '\u2014'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(d.doc_title||'').replace(/"/g,'&quot;')}">${d.doc_title || '\u2014'}</td>
+                <td>${d.reparto_label || '\u2014'}</td>
+                <td style="text-align:center">${revNo}</td>
+                <td>${badge}</td>
+            </tr>`;
+            }).join('')}</tbody></table>`;
+        footer.style.display = 'flex';
+        updateEmissioneSelection();
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+function toggleAllEmissione(checked) {
+    document.querySelectorAll('.em-chk').forEach(cb => { cb.checked = checked; });
+    updateEmissioneSelection();
+}
+
+function updateEmissioneSelection() {
+    emissioneDocIds.clear();
+    document.querySelectorAll('.em-chk').forEach(cb => {
+        const row = document.getElementById(`em-row-${cb.value}`);
+        if (cb.checked) {
+            emissioneDocIds.add(parseInt(cb.value));
+            row?.classList.add('em-selected');
+        } else {
+            row?.classList.remove('em-selected');
+        }
+    });
+    const n = emissioneDocIds.size;
+    document.getElementById('emCountLabel').textContent = n;
+    document.getElementById('emConfirmBtn').disabled = n === 0;
+    document.getElementById('emPrintBtn').disabled = n === 0;
+}
+
+async function confermaEmissione() {
+    if (!emissioneDocIds.size) { toast('Seleziona almeno un documento.'); return; }
+    const n = emissioneDocIds.size;
+    document.getElementById('trasmittalSummary').textContent =
+        n === 1 ? 'Stai per emettere 1 documento.' : `Stai per emettere ${n} documenti.`;
+    document.getElementById('trasmittal_date').value = new Date().toISOString().slice(0, 10);
+    // Show emissione button, hide print-only
+    document.getElementById('trasmittalConfirmBtn').style.display = '';
+    document.getElementById('trasmittalPrintOnlyBtn').style.display = 'none';
+    _loadTrasmittalAddresses();
+    openModal('trasmittalModal');
+}
+
+async function _loadTrasmittalAddresses() {
+    const ddLabel = document.getElementById('addrDropdownLabel');
+    const ddList = document.getElementById('addrDropdownList');
+    ddLabel.textContent = 'Caricamento\u2026';
+    ddLabel.style.color = '#9CA3AF';
+    ddList.innerHTML = '';
+    ddList.classList.remove('show');
+
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`);
+        const { indirizzi } = await res.json();
+        if (!indirizzi.length) {
+            ddLabel.textContent = 'Nessun indirizzo disponibile.';
+        } else {
+            ddList.innerHTML = indirizzi.map((a, i) => {
+                const label = [a.consignee, a.city, a.country].filter(Boolean).join(' \u2014 ');
+                return `<label class="addr-dropdown-item">
+                    <input type="checkbox" class="addr-chk" value="${a.id}" ${i === 0 ? 'checked' : ''} onchange="updateAddrDropdownLabel()">
+                    <span>${label || 'Indirizzo #' + a.id}</span>
+                </label>`;
+            }).join('');
+            updateAddrDropdownLabel();
+        }
+    } catch(e) {
+        ddLabel.textContent = 'Errore nel caricamento.';
+        ddLabel.style.color = '#EF4444';
+    }
+}
+
+async function eseguiEmissione() {
+    if (!emissioneDocIds.size) { toast('Seleziona almeno un documento.'); return; }
+    const dateVal = document.getElementById('trasmittal_date').value;
+    if (!dateVal) { toast('Specificare la data di invio.'); return; }
+    const addrIds = Array.from(document.querySelectorAll('.addr-chk:checked')).map(cb => parseInt(cb.value)).filter(Boolean);
+    const body = { doc_ids: Array.from(emissioneDocIds), dis_act_date: dateVal, addr_ids: addrIds };
+    const res = await fetch('/api/emissione/', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    if (!res.ok) { const j = await res.json(); toast(j.error || 'Errore.'); return; }
+    closeModal('trasmittalModal');
+    const n = emissioneDocIds.size;
+    toast(n === 1 ? 'Emissione registrata per 1 documento.' : `Emissione registrata per ${n} documenti.`);
+    // Trigger PDF download
+    _downloadTrasmittalPdf(Array.from(emissioneDocIds), addrIds, dateVal);
+    loadEmissioneInline();
+}
+
+async function _downloadTrasmittalPdf(docIds, addrIds, dateVal) {
+    try {
+        const body = { doc_ids: docIds, addr_ids: addrIds, date: dateVal, job: currentJob };
+        const res = await fetch('/api/trasmittal/pdf/', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+        if (!res.ok) {
+            let errMsg = 'Errore generazione PDF.';
+            try { const j = await res.json(); errMsg = j.error || errMsg; } catch { /* non-JSON response */ }
+            toast(errMsg);
+            return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch(e) {
+        toast('Errore durante la generazione del PDF.');
+    }
+}
+
+async function soloStampaTrasmittal() {
+    const dateVal = document.getElementById('trasmittal_date').value;
+    if (!dateVal) { toast('Specificare la data.'); return; }
+    const addrIds = Array.from(document.querySelectorAll('.addr-chk:checked')).map(cb => parseInt(cb.value)).filter(Boolean);
+    closeModal('trasmittalModal');
+    _downloadTrasmittalPdf(Array.from(emissioneDocIds), addrIds, dateVal);
+}
+
+// ── Custom address multi-select dropdown ──
+function toggleAddrDropdown(e) {
+    e.stopPropagation();
+    document.getElementById('addrDropdownList').classList.toggle('show');
+}
+function updateAddrDropdownLabel() {
+    const checked = document.querySelectorAll('.addr-chk:checked');
+    const label = document.getElementById('addrDropdownLabel');
+    label.style.color = '';
+    if (checked.length === 0) {
+        label.textContent = 'Seleziona\u2026';
+        label.style.color = '#9CA3AF';
+    } else if (checked.length === 1) {
+        label.textContent = checked[0].parentElement.querySelector('span').textContent;
+    } else {
+        label.textContent = checked[0].parentElement.querySelector('span').textContent + ` (+${checked.length - 1})`;
+    }
+}
+
+function stampaTrasmittal() {
+    if (!emissioneDocIds.size) { toast('Seleziona almeno un documento.'); return; }
+    // Same modal as emissione, but only download PDF
+    const n = emissioneDocIds.size;
+    document.getElementById('trasmittalSummary').textContent =
+        n === 1 ? 'Stampa trasmittal per 1 documento.' : `Stampa trasmittal per ${n} documenti.`;
+    document.getElementById('trasmittal_date').value = new Date().toISOString().slice(0, 10);
+    // Show the "Solo stampa" button, hide the emissione one (swap)
+    document.getElementById('trasmittalConfirmBtn').style.display = 'none';
+    document.getElementById('trasmittalPrintOnlyBtn').style.display = '';
+    // Load addresses
+    _loadTrasmittalAddresses();
+    openModal('trasmittalModal');
+}
+
+function esportaDocumenti() {
+    if (!currentJob) { toast('Seleziona prima una commessa.'); return; }
+    window.location.href = `/api/commesse/${encodeURIComponent(currentJob)}/export/`;
+}
+
+function openAddChooser(btn) {
+    const dropdown = document.getElementById('addChooserDropdown');
+    dropdown.style.display = 'block';
+    const rect = btn.getBoundingClientRect();
+    const dropW = 180;
+    let left = rect.right - dropW;
+    if (left < 8) left = 8;
+    if (left + dropW > window.innerWidth - 8) left = window.innerWidth - dropW - 8;
+    dropdown.style.top = (rect.bottom + 6) + 'px';
+    dropdown.style.left = left + 'px';
+}
+function closeAddChooser() {
+    document.getElementById('addChooserDropdown').style.display = 'none';
+}
+
+function importaExcel() {
+    // Reset state and open modal
+    document.getElementById('importExcelFile').value = '';
+    const res = document.getElementById('importExcelResult');
+    res.style.display = 'none';
+    res.textContent = '';
+    document.getElementById('importExcelBtn').disabled = false;
+    openModal('importExcelModal');
+}
+
+async function eseguiImportExcel() {
+    const fileInput = document.getElementById('importExcelFile');
+    const resultEl = document.getElementById('importExcelResult');
+    const btn = document.getElementById('importExcelBtn');
+    if (!fileInput.files.length) { toast('Seleziona un file Excel.'); return; }
+    if (!currentJob) { toast('Nessuna commessa selezionata.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Importazione…';
+    resultEl.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const res = await fetch(`/api/commesse/${encodeURIComponent(currentJob)}/import-excel/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData,
+        });
+        const json = await res.json();
+        if (!res.ok) {
+            resultEl.style.cssText = 'display:block;padding:0.65rem 0.85rem;border-radius:8px;font-size:0.82rem;margin-bottom:1rem;background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;';
+            resultEl.textContent = json.error || 'Errore durante l\'importazione.';
+        } else {
+            let msg = `Importati ${json.created} document${json.created === 1 ? 'o' : 'i'}.`;
+            if (json.errors && json.errors.length) {
+                msg += '\n\nAvvisi:\n' + json.errors.join('\n');
+                resultEl.style.cssText = 'display:block;padding:0.65rem 0.85rem;border-radius:8px;font-size:0.82rem;margin-bottom:1rem;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;white-space:pre-wrap;';
+            } else {
+                resultEl.style.cssText = 'display:block;padding:0.65rem 0.85rem;border-radius:8px;font-size:0.82rem;margin-bottom:1rem;background:#F0FDF4;border:1px solid #BBF7D0;color:#15803D;';
+            }
+            resultEl.textContent = msg;
+            if (activeSection === 'documenti') loadDocumentiInline();
+            if (!json.errors || !json.errors.length) {
+                closeModal('importExcelModal');
+                toast(msg);
+            }
+        }
+    } catch(e) {
+        resultEl.style.cssText = 'display:block;padding:0.65rem 0.85rem;border-radius:8px;font-size:0.82rem;margin-bottom:1rem;background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;';
+        resultEl.textContent = 'Errore di rete.';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Importa';
+    }
+}
+
+function importaAI() {
+    toast('Importa tramite AI: funzionalità in arrivo.');
+}
+
+// ── Ricezione ──
+let ricezioneDocEntries = new Map();
+let _ricDocRevCache = {};
+let _statiEsterniCache = null;
+
+async function loadStatiEsterni() {
+    if (_statiEsterniCache) return _statiEsterniCache;
+    try {
+        const res = await fetch('/api/stati-esterni/');
+        const data = await res.json();
+        _statiEsterniCache = data.stati || data.stati_esterni || data.results || [];
+    } catch(e) { _statiEsterniCache = []; }
+    return _statiEsterniCache;
+}
+
+async function loadRicezioneInline() {
+    const wrap = document.getElementById('inline-ricezione-list');
+    const toolbar = document.getElementById('ricezioneToolbar');
+    ricezioneDocEntries.clear();
+    _ricDocRevCache = {};
+    toolbar.style.display = 'none';
+    if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
+    try {
+        const [, stati] = await Promise.all([
+            (async () => {
+                const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
+                const { documenti } = await res.json();
+                await Promise.all(documenti.map(async d => {
+                    try {
+                        const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
+                        const { revisioni } = await r.json();
+                        _ricDocRevCache[d.id] = { doc: d, rev: revisioni.length ? revisioni[revisioni.length - 1] : null };
+                    } catch(e) { _ricDocRevCache[d.id] = { doc: d, rev: null }; }
+                }));
+            })(),
+            loadStatiEsterni()
+        ]);
+        const daRicevere = Object.values(_ricDocRevCache).filter(e => e.rev?.dis_act_date && !e.rev?.rec_act_date);
+        if (!daRicevere.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento in attesa di ricezione.</p>';
+            return;
+        }
+        const statiOptions = stati.map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
+        wrap.innerHTML = `<table class="emissione-table">
+            <thead><tr>
+                <th style="width:32px"><input type="checkbox" id="ricezione_all" onchange="toggleAllRicezione(this.checked)"></th>
+                <th>Item</th><th>Titolo</th><th>Reparto</th>
+                <th>Rev.</th><th>Inviato il</th><th>Risposta del cliente</th><th style="text-align:center">Crea nuova revisione</th>
+            </tr></thead>
+            <tbody>${daRicevere.map(({doc: d, rev}) => {
+                const revNo = rev ? rev.rev_no : '\u2014';
+                const disDate = rev?.dis_act_date || '\u2014';
+                return `<tr id="ric-row-${d.id}">
+                <td><input type="checkbox" class="ric-chk" value="${d.id}" onchange="updateRicezioneSelection()"></td>
+                <td>${d.item_no || '\u2014'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(d.doc_title||'').replace(/"/g,'&quot;')}">${d.doc_title || '\u2014'}</td>
+                <td>${d.reparto_label || '\u2014'}</td>
+                <td style="text-align:center">${revNo}</td>
+                <td>${disDate}</td>
+                <td><select class="ric-ext-status" data-doc="${d.id}" style="padding:2px 6px;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;">
+                    <option value="">--</option>${statiOptions}
+                </select></td>
+                <td style="text-align:center"><input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}" checked style="width:15px;height:15px;accent-color:#1C1C1A;cursor:pointer;"></td>
+            </tr>`;
+            }).join('')}</tbody></table>`;
+        toolbar.style.display = 'flex';
+        updateRicezioneSelection();
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+function toggleAllRicezione(checked) {
+    document.querySelectorAll('.ric-chk').forEach(cb => { cb.checked = checked; });
+    updateRicezioneSelection();
+}
+
+function updateRicezioneSelection() {
+    ricezioneDocEntries.clear();
+    document.querySelectorAll('.ric-chk').forEach(cb => {
+        const row = document.getElementById(`ric-row-${cb.value}`);
+        if (cb.checked) {
+            ricezioneDocEntries.set(parseInt(cb.value), true);
+            row?.classList.add('em-selected');
+        } else {
+            row?.classList.remove('em-selected');
+        }
+    });
+    const n = ricezioneDocEntries.size;
+    document.getElementById('ricCountLabel').textContent = n;
+    document.getElementById('ricConfirmBtn').disabled = n === 0;
+}
+
+async function confermaRicezione() {
+    if (!ricezioneDocEntries.size) { toast('Seleziona almeno un documento.'); return; }
+    const n = ricezioneDocEntries.size;
+    document.getElementById('ricezioneConfirmSummary').textContent =
+        n === 1 ? 'Stai per registrare la ricezione di 1 documento.' : `Stai per registrare la ricezione di ${n} documenti.`;
+    document.getElementById('ricezione_date').value = new Date().toISOString().slice(0, 10);
+    openModal('ricezioneConfirmModal');
+}
+
+async function eseguiRicezione() {
+    if (!ricezioneDocEntries.size) { toast('Seleziona almeno un documento.'); return; }
+    const dateVal = document.getElementById('ricezione_date').value;
+    if (!dateVal) { toast('Specificare la data di ricezione.'); return; }
+    const entries = [];
+    ricezioneDocEntries.forEach((_, docId) => {
+        const sel = document.querySelector(`.ric-ext-status[data-doc="${docId}"]`);
+        const crea = document.querySelector(`.ric-nuova-rev[data-doc="${docId}"]`)?.checked ?? true;
+        entries.push({ doc_id: docId, rec_act_date: dateVal, ext_status_id: sel?.value ? parseInt(sel.value) : null, crea_nuova_revisione: crea });
+    });
+    const body = { entries };
+    const res = await fetch('/api/ricezione/', { method: 'POST', headers: headers(), body: JSON.stringify(body) });
+    if (!res.ok) { const j = await res.json(); toast(j.error || 'Errore.'); return; }
+    closeModal('ricezioneConfirmModal');
+    const n = ricezioneDocEntries.size;
+    toast(n === 1 ? 'Ricezione registrata per 1 documento.' : `Ricezione registrata per ${n} documenti.`);
+    loadRicezioneInline();
+}
+
+// ── Situazione documenti ──
+
+async function loadSituazioneInline() {
+    const wrap = document.getElementById('inline-situazione-list');
+    const vista = document.getElementById('situazione-vista').value;
+    if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
+    if (vista === 'orizzontale') {
+        await loadSituazioneOrizzontale(wrap);
+        return;
+    }
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
+        const { documenti } = await res.json();
+        if (!documenti.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento in questa commessa.</p>';
+            return;
+        }
+        // Fetch revisions for each document
+        const allRows = [];
+        await Promise.all(documenti.map(async d => {
+            try {
+                const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
+                const { revisioni } = await r.json();
+                if (revisioni.length) {
+                    for (const rev of revisioni) {
+                        allRows.push({ doc: d, rev });
+                    }
+                } else {
+                    allRows.push({ doc: d, rev: null });
+                }
+            } catch(e) { allRows.push({ doc: d, rev: null }); }
+        }));
+        // Sort by item_no, then rev_no
+        allRows.sort((a, b) => {
+            const ia = (a.doc.item_no || '').localeCompare(b.doc.item_no || '', undefined, {numeric: true});
+            if (ia !== 0) return ia;
+            return (a.rev?.rev_no ?? -1) - (b.rev?.rev_no ?? -1);
+        });
+        if (!allRows.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento in questa commessa.</p>';
+            return;
+        }
+        wrap.innerHTML = `<div style="overflow-x:auto;border:1px solid #E0DFDB;border-radius:10px;"><table class="sit-table">
+            <thead><tr>
+                <th>Item</th>
+                <th>Vendor Doc</th>
+                <th>Client Doc N\u00b0</th>
+                <th>Client Doc Class</th>
+                <th>Titolo</th>
+                <th>Reparto</th>
+                <th>Penale</th>
+                <th>Pagamento</th>
+                <th>Rev.</th>
+                <th>Inv. previsto</th>
+                <th>Inv. effettivo</th>
+                <th>Ric. previsto</th>
+                <th>Ric. effettivo</th>
+                <th>Stato interno</th>
+                <th>Risposta del cliente</th>
+            </tr></thead>
+            <tbody>${allRows.map(({doc: d, rev: r}) => {
+                const extColor = r?.ext_status_colore || '';
+                const extLabel = r?.ext_status_label || '';
+                const rowBg = extColor ? `background:${extColor}18;border-left-color:${extColor}` : '';
+                const badge = extLabel
+                    ? `<span class="sit-ext-badge" style="background:${extColor || '#9E9E9E'}">${extLabel}</span>`
+                    : `<span style="color:#9CA3AF">\u2014</span>`;
+                return `<tr class="sit-row-colored" style="${rowBg}">
+                    <td>${d.item_no || '\u2014'}</td>
+                    <td>${d.vendor_doc || '\u2014'}</td>
+                    <td>${d.client_doc_no || '\u2014'}</td>
+                    <td>${d.client_doc_class || '\u2014'}</td>
+                    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;" title="${(d.doc_title||'').replace(/"/g,'&quot;')}">${d.doc_title || '\u2014'}</td>
+                    <td>${d.reparto_label || '\u2014'}</td>
+                    <td style="text-align:center">${d.doc_penalty ? '\u2714' : ''}</td>
+                    <td style="text-align:center">${d.doc_payment ? '\u2714' : ''}</td>
+                    <td style="text-align:center">${r ? (r.rev_no ?? '\u2014') + (r.rev_let || '') : '\u2014'}</td>
+                    <td>${r?.dis_plan_date || '\u2014'}</td>
+                    <td>${r?.dis_act_date || '\u2014'}</td>
+                    <td>${r?.rec_plan_date || '\u2014'}</td>
+                    <td>${r?.rec_act_date || '\u2014'}</td>
+                    <td>${r?.int_status ? `<span class="status-badge status-${r.int_status}">${r.int_status_label}</span>` : '\u2014'}</td>
+                    <td>${badge}</td>
+                </tr>`;
+            }).join('')}</tbody></table></div>`;
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+// ── Situazione orizzontale ──
+async function loadSituazioneOrizzontale(wrap) {
+    wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
+    try {
+        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
+        const { documenti } = await res.json();
+        if (!documenti.length) {
+            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento in questa commessa.</p>';
+            return;
+        }
+
+        // Fetch revisions for every document in parallel
+        const docRevs = await Promise.all(documenti.map(async d => {
+            try {
+                const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
+                const { revisioni } = await r.json();
+                return { doc: d, revs: revisioni.sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)) };
+            } catch(e) { return { doc: d, revs: [] }; }
+        }));
+
+        // Sort documents by item_no
+        docRevs.sort((a, b) => (a.doc.item_no || '').localeCompare(b.doc.item_no || '', undefined, { numeric: true }));
+
+        // Max revision count across all documents; always show at least 1 slot
+        const maxRevs = Math.max(...docRevs.map(e => e.revs.length), 1);
+
+        const FIX_COLS = [
+            { label: 'Item', key: 'item_no' },
+            { label: 'Vendor Doc', key: 'vendor_doc' },
+            { label: 'Client Doc N\u00b0', key: 'client_doc_no' },
+            { label: 'Client Doc Class', key: 'client_doc_class' },
+            { label: 'Descrizione', key: 'doc_title' },
+            { label: 'Reparto', key: 'reparto_label' },
+        ];
+
+        // Calculate sticky left offsets (approx, using fixed widths)
+        const fixWidths = [80, 110, 120, 120, 180, 90];
+        let leftAcc = 0;
+        const leftOffsets = fixWidths.map(w => { const v = leftAcc; leftAcc += w; return v; });
+
+        // Build header rows
+        // Row 1: fixed headers (rowspan=2) + rev group headers (colspan=4)
+        const REV_SUB = ['Inv. prev.', 'Inv. eff.', 'Ric. prev.', 'Ric. eff.'];
+        let thead = '<thead>';
+
+        // Top row: fixed cols (rowspan 2) + rev group labels
+        thead += '<tr>';
+        FIX_COLS.forEach((c, i) => {
+            thead += `<th class="sit-fix" rowspan="2" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;max-width:${fixWidths[i]}px;">${c.label}</th>`;
+        });
+        for (let r = 0; r < maxRevs; r++) {
+            thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
+        }
+        thead += '</tr>';
+
+        // Second row: sub-headers for each revision slot
+        thead += '<tr>';
+        for (let r = 0; r < maxRevs; r++) {
+            REV_SUB.forEach((sub, si) => {
+                const cls = si === 0 ? ' sit-rev-first' : '';
+                thead += `<th class="${cls}" style="min-width:85px;">${sub}</th>`;
+            });
+        }
+        thead += '</tr></thead>';
+
+        // Build body rows
+        const d = v => v || '\u2014';
+        let tbody = '<tbody>';
+        for (const { doc, revs } of docRevs) {
+            tbody += '<tr>';
+            FIX_COLS.forEach((c, i) => {
+                const val = doc[c.key] || '\u2014';
+                const title = c.key === 'doc_title' ? ` title="${String(doc[c.key] || '').replace(/"/g, '&quot;')}"` : '';
+                tbody += `<td class="sit-fix" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;max-width:${fixWidths[i]}px;overflow:hidden;text-overflow:ellipsis;"${title}>${val}</td>`;
+            });
+            for (let r = 0; r < maxRevs; r++) {
+                const rev = revs[r];
+                if (rev) {
+                    tbody += `<td class="sit-rev-first">${d(rev.dis_plan_date)}</td>`;
+                    tbody += `<td>${d(rev.dis_act_date)}</td>`;
+                    tbody += `<td>${d(rev.rec_plan_date)}</td>`;
+                    tbody += `<td>${d(rev.rec_act_date)}</td>`;
+                } else {
+                    tbody += `<td class="sit-rev-first"></td><td></td><td></td><td></td>`;
+                }
+            }
+            tbody += '</tr>';
+        }
+        tbody += '</tbody>';
+
+        wrap.innerHTML = `<div class="sit-horiz-wrap"><table class="sit-horiz">${thead}${tbody}</table></div>`;
+    } catch(e) {
+        wrap.innerHTML = '<p style="color:#EF4444;font-size:0.82rem;">Errore nel caricamento.</p>';
+    }
+}
+
+// ── Init ──
+document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchOrCreate(); });
+document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) el.classList.remove('show'); }));
+
+// ── Reparto warning popover ──
+const _warnPop = document.getElementById('repartoWarnPopover');
+function showRepartoWarn(e) {
+    e.stopPropagation();
+    const r = e.target.getBoundingClientRect();
+    const pop = _warnPop;
+    pop.style.display = 'block';
+    // Position below the icon, clamped to viewport
+    let top = r.bottom + 8;
+    let left = r.left;
+    const popW = 280;
+    if (left + popW > window.innerWidth - 12) left = window.innerWidth - popW - 12;
+    pop.style.top = top + 'px';
+    pop.style.left = left + 'px';
+}
+document.addEventListener('click', () => { _warnPop.style.display = 'none'; });
+</script>
+{% endblock %}

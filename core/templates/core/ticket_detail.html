@@ -1,0 +1,515 @@
+﻿{% extends 'core/base.html' %}
+
+{% block title %}Dettaglio Ticket — Brembana&Rolle{% endblock %}
+{% block nav_ticket %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+    .td-back {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        font-size: 0.9rem; color: #6B7280; text-decoration: none;
+        margin-bottom: 0.8rem; transition: color .15s;
+    }
+    .td-back:hover { color: #111827; }
+    .td-back svg { width: 14px; height: 14px; }
+
+    .td-title {
+        font-size: 1.4rem; font-weight: 700; color: #111827;
+        margin: 0 0 1rem; letter-spacing: -0.3px;
+    }
+
+    /* ── Progress bar ── */
+    .progress-bar {
+        display: flex; align-items: center;
+        background: #fff; border: 1px solid #E5E7EB; border-radius: 10px;
+        padding: 0.75rem 1.2rem; margin-bottom: 1rem;
+    }
+    .pb-step {
+        display: flex; align-items: center; gap: 0.45rem;
+        font-size: 0.85rem; font-weight: 600; color: #9CA3AF;
+        white-space: nowrap;
+    }
+    .pb-dot {
+        width: 20px; height: 20px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.7rem; font-weight: 700;
+        background: #F3F4F6; color: #9CA3AF;
+        border: 2px solid #E5E7EB; flex-shrink: 0;
+    }
+    .pb-step.done .pb-dot    { background: #22C55E; border-color: #22C55E; color: #fff; }
+    .pb-step.done            { color: #15803D; }
+    .pb-step.current .pb-dot { background: #16A34A; border-color: #16A34A; color: #fff; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
+    .pb-step.current         { color: #111827; font-weight: 700; }
+    .pb-line {
+        flex: 1; height: 3px; margin: 0 0.35rem;
+        background: #E5E7EB; border-radius: 2px;
+    }
+    .pb-line.done { background: #22C55E; }
+
+    /* ── Top grid: info + azioni ── */
+    .td-top {
+        display: grid;
+        grid-template-columns: 1fr 240px;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        align-items: start;
+    }
+
+    /* ── Card base ── */
+    .td-card {
+        background: #fff; border: 1px solid #E5E7EB;
+        border-radius: 10px; padding: 1.1rem 1.3rem;
+    }
+    .td-card-title {
+        font-size: 0.77rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.6px; color: #9CA3AF; margin-bottom: 0.85rem;
+    }
+
+    /* ── Info grid ── */
+    .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem 1.5rem;
+    }
+    .info-item { font-size: 0.92rem; }
+    .info-label { color: #9CA3AF; font-size: 0.8rem; font-weight: 600; margin-bottom: 1px; }
+    .info-value { color: #1F2937; font-weight: 500; }
+    .info-sep {
+        grid-column: 1 / -1;
+        height: 1px; background: #F3F4F6;
+        margin: 0.3rem 0;
+    }
+
+    /* ── Azioni card ── */
+    .td-card.azioni { padding: 0.9rem 1rem; }
+    .azioni-list { display: flex; flex-direction: column; gap: 0.35rem; }
+
+    .btn-azione {
+        width: 100%; padding: 0.5rem 0.85rem;
+        font-size: 0.9rem; font-weight: 600; font-family: inherit;
+        border-radius: 8px; border: none; cursor: pointer;
+        text-align: center; background: #1C1C1A; color: #FFFFFF;
+        transition: background .12s;
+    }
+    .btn-azione:hover { background: #3A3A38; }
+    .btn-azione.delete { background: #fff; color: #DC2626; border: 1.5px solid #FECACA; }
+    .btn-azione.delete:hover { background: #FEF2F2; border-color: #F87171; }
+
+    .trans-row {
+        display: none; flex-direction: column; gap: 0.4rem;
+        margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #E5E7EB;
+    }
+    .trans-row.show { display: flex; }
+    .trans-row textarea {
+        width: 100%; padding: 0.4rem 0.6rem; font-size: 0.9rem; font-family: inherit;
+        border: 1.5px solid #E5E7EB; border-radius: 7px; resize: none;
+        background: #FAFAFA; outline: none; transition: border-color .15s;
+    }
+    .trans-row textarea:focus { border-color: #6366F1; background: #fff; }
+    .btn-conferma {
+        padding: 0.4rem 0.9rem; font-size: 0.9rem; font-weight: 600;
+        background: #111827; color: #fff; border: none; border-radius: 7px;
+        cursor: pointer; font-family: inherit; align-self: flex-end;
+        transition: background .12s;
+    }
+    .btn-conferma:hover { background: #1F2937; }
+    .btn-conferma:disabled { opacity: 0.45; cursor: default; }
+
+    /* ── Revisioni ── */
+    .td-rev-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden; }
+    .td-rev-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 0.8rem 1.2rem; border-bottom: 1px solid #F3F4F6;
+        font-size: 0.77rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.6px; color: #9CA3AF;
+    }
+    .rev-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    .rev-table th {
+        text-align: left; padding: 0.5rem 1rem; font-weight: 700; color: #6B7280;
+        font-size: 0.77rem; text-transform: uppercase; letter-spacing: 0.5px;
+        background: #F9FAFB; border-bottom: 1px solid #E5E7EB;
+    }
+    .rev-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #F3F4F6; color: #374151; vertical-align: middle; }
+    .rev-table tbody tr:last-child td { border-bottom: none; }
+    .rev-table tbody tr:hover { background: #FAFAFA; }
+    .cell-mono { font-family: 'SF Mono','Consolas',monospace; font-size: 0.87rem; color: #6B7280; font-weight: 600; }
+    .cell-title { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rev-num { font-weight: 700; color: #1F2937; }
+
+    /* ── Status badge (read-only) ── */
+    .rev-status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.65rem;
+        font-size: 0.84rem; font-weight: 600; font-family: inherit;
+        border-radius: 6px;
+    }
+    .rss-da_iniziare        { background: #F3F4F6; color: #4B5563; }
+    .rss-in_lavorazione     { background: #EFF6FF; color: #1D4ED8; }
+    .rss-in_revisione       { background: #FFFBEB; color: #92400E; }
+    .rss-in_approvazione    { background: #F5F3FF; color: #6D28D9; }
+    .rss-da_emettere        { background: #F0FDF4; color: #15803D; }
+    .rss-inviato_al_cliente { background: #ECFEFF; color: #0E7490; }
+    .rss-ricevuto           { background: #F0FDF4; color: #166534; }
+
+    /* ── Buttons / Modal / Toast ── */
+    .btn-secondary {
+        padding: 0.38rem 0.9rem; font-size: 0.9rem; font-weight: 500;
+        background: #F9FAFB; color: #374151; border: 1.5px solid #E5E7EB;
+        border-radius: 7px; cursor: pointer; font-family: inherit; transition: background .12s;
+    }
+    .btn-secondary:hover { background: #F3F4F6; }
+    .btn-danger {
+        padding: 0.38rem 0.9rem; font-size: 0.9rem; font-weight: 600;
+        background: #FEE2E2; color: #991B1B; border: none;
+        border-radius: 7px; cursor: pointer; font-family: inherit; transition: background .12s;
+    }
+    .btn-danger:hover { background: #FECACA; }
+
+    .tk-toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; }
+    .tk-toast { padding: 0.55rem 1rem; border-radius: 8px; font-size: 0.9rem; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,.1); animation: toastIn .2s ease-out; max-width: 340px; }
+    .tk-toast.success { background: #F0FDF4; color: #15803D; border-left: 3px solid #22C55E; }
+    .tk-toast.error   { background: #FEF2F2; color: #B91C1C; border-left: 3px solid #EF4444; }
+    .tk-toast.info    { background: #EEF2FF; color: #3730A3; border-left: 3px solid #6366F1; }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 1.75rem 1.75rem 1.4rem; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,.15); }
+    .modal-title { font-size: 1.1rem; font-weight: 700; color: #111827; margin: 0 0 0.45rem; }
+    .modal-desc { color: #6B7280; font-size: 0.96rem; margin: 0 0 1.3rem; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+
+    /* ── Notes modal ── */
+    .notes-modal .modal-box { max-width: 540px; max-height: 80vh; display: flex; flex-direction: column; }
+    .notes-list {
+        flex: 1; overflow-y: auto; margin-bottom: 1rem;
+        max-height: 40vh; min-height: 60px;
+        display: flex; flex-direction: column; gap: 0.55rem;
+    }
+    .notes-list::-webkit-scrollbar { width: 5px; }
+    .notes-list::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+    .note-item {
+        padding: 0.6rem 0.75rem; border-radius: 8px;
+        background: #F9FAFB; border: 1px solid #E5E7EB;
+    }
+    .note-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 0.25rem;
+    }
+    .note-author { font-size: 0.82rem; font-weight: 700; color: #374151; }
+    .note-date { font-size: 0.78rem; color: #9CA3AF; }
+    .note-text { font-size: 0.92rem; color: #1F2937; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+    .note-empty { text-align: center; color: #9CA3AF; font-size: 0.92rem; padding: 1.5rem 0; }
+    .note-input-row { display: flex; gap: 0.5rem; }
+    .note-input-row textarea {
+        flex: 1; padding: 0.5rem 0.7rem; font-size: 0.92rem; font-family: inherit;
+        border: 1.5px solid #E5E7EB; border-radius: 8px; resize: none;
+        background: #FAFAFA; outline: none; transition: border-color .15s;
+    }
+    .note-input-row textarea:focus { border-color: #6366F1; background: #fff; }
+    .note-input-row button {
+        padding: 0.5rem 1rem; font-size: 0.9rem; font-weight: 600;
+        background: #1C1C1A; color: #fff; border: none; border-radius: 8px;
+        cursor: pointer; font-family: inherit; white-space: nowrap;
+        transition: background .12s; align-self: flex-end;
+    }
+    .note-input-row button:hover { background: #3A3A38; }
+    .note-input-row button:disabled { opacity: 0.45; cursor: default; }
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="td-back" href="{% url 'gestione_ticket' %}">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+    Torna ai ticket
+</a>
+
+<h1 class="td-title" id="ticketTitle">Caricamento…</h1>
+
+<!-- Progress bar -->
+<div class="progress-bar" id="progressBar"></div>
+
+<!-- Top grid: dettagli + azioni -->
+<div class="td-top">
+    <div class="td-card">
+        <div class="td-card-title">Dettagli</div>
+        <div class="info-grid" id="infoGrid"></div>
+    </div>
+    <div class="td-card azioni">
+        <div class="td-card-title">Azioni</div>
+        <div class="azioni-list" id="azioniList"></div>
+        <div class="trans-row" id="transRow">
+            <textarea id="transNote" placeholder="Nota opzionale…" rows="2"></textarea>
+            <button class="btn-conferma" id="transConfirm">Conferma</button>
+        </div>
+    </div>
+</div>
+
+<!-- Revisioni -->
+<div class="td-rev-card">
+    <div class="td-rev-header">
+        <span>Revisioni collegate</span>
+        <span id="revCount" style="font-weight:500;color:#6B7280;"></span>
+    </div>
+    <div id="revTableWrap"></div>
+</div>
+
+<!-- Delete modal -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-box">
+        <h3 class="modal-title">Elimina ticket</h3>
+        <p class="modal-desc">Questa azione è irreversibile. Il ticket verrà eliminato definitivamente.</p>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="document.getElementById('deleteModal').style.display='none'">Annulla</button>
+            <button class="btn-danger" id="btnDeleteConfirm" onclick="doDelete()">Elimina definitivamente</button>
+        </div>
+    </div>
+</div>
+
+<!-- Notes modal -->
+<div class="modal-overlay notes-modal" id="notesModal">
+    <div class="modal-box">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;">
+            <h3 class="modal-title" style="margin:0;">Note</h3>
+            <button class="btn-secondary" style="padding:0.2rem 0.6rem;font-size: 0.85rem;" onclick="closeNotesModal()">✕</button>
+        </div>
+        <div class="notes-list" id="notesList">
+            <div class="note-empty">Caricamento…</div>
+        </div>
+        <div class="note-input-row">
+            <textarea id="newNoteText" placeholder="Scrivi una nota…" rows="2"></textarea>
+            <button id="btnAddNote" onclick="addNote()">Invia</button>
+        </div>
+    </div>
+</div>
+
+<div class="tk-toast-container" id="toastContainer"></div>
+
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
+const _headers = () => ({ 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' });
+const TICKET_ID = {{ ticket_id }};
+
+const STEPS = ['da_iniziare','in_lavorazione','in_revisione','in_approvazione','concluso'];
+const STEP_LABELS = {
+    da_iniziare:'Da iniziare', in_lavorazione:'Lavorazione',
+    in_revisione:'Revisione', in_approvazione:'Approvazione', concluso:'Concluso'
+};
+const STATUS_OPTIONS = [
+    ['da_iniziare','Da iniziare'],['in_lavorazione','In lavorazione'],
+    ['in_revisione','In revisione'],['in_approvazione','In approvazione'],
+    ['da_emettere','Da emettere'],['inviato_al_cliente','Inviato al Cliente'],['ricevuto','Ricevuto'],
+];
+
+let ticketData = null;
+let pendingAction = null;
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, type='info') {
+    const c = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `tk-toast ${type}`;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3500);
+}
+
+async function api(method, url, body) {
+    const opts = { method, headers: _headers() };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    return { ok: res.ok, status: res.status, data: await res.json() };
+}
+
+function confirmDelete() { document.getElementById('deleteModal').style.display = 'flex'; }
+
+async function doDelete() {
+    const btn = document.getElementById('btnDeleteConfirm');
+    btn.disabled = true; btn.textContent = 'Eliminazione…';
+    const r = await api('DELETE', `/api/tickets/${TICKET_ID}/`);
+    if (r.ok) { window.location.href = '/gestione-ticket/'; }
+    else {
+        showToast(r.data.error || "Errore durante l'eliminazione", 'error');
+        btn.disabled = false; btn.textContent = 'Elimina definitivamente';
+        document.getElementById('deleteModal').style.display = 'none';
+    }
+}
+
+async function loadTicket() {
+    const { ok, data } = await api('GET', `/api/tickets/${TICKET_ID}/`);
+    if (!ok) { document.getElementById('ticketTitle').textContent = 'Ticket non trovato'; return; }
+    ticketData = data;
+    renderAll();
+}
+
+function renderAll() {
+    const t = ticketData;
+    document.getElementById('ticketTitle').textContent = `Ticket ${t.nome}`;
+
+    // Progress bar
+    const idx = STEPS.indexOf(t.stato);
+    const pb = document.getElementById('progressBar');
+    let html = '';
+    STEPS.forEach((step, i) => {
+        if (i > 0) html += `<div class="pb-line${i <= idx ? ' done' : ''}"></div>`;
+        const cls = i < idx ? 'done' : (i === idx ? 'current' : '');
+        const icon = i < idx ? '✓' : (i + 1);
+        html += `<div class="pb-step ${cls}"><span class="pb-dot">${icon}</span><span>${STEP_LABELS[step]}</span></div>`;
+    });
+    pb.innerHTML = html;
+
+    // Info grid
+    document.getElementById('infoGrid').innerHTML =
+        infoRow('Reparto', t.reparto || '—') +
+        infoRow('Commessa', t.commessa || '—') +
+        infoRow('Esecutore', t.esecutore?.username || '—') +
+        infoRow('Cliente', t.cliente || '—') +
+        infoRow('Revisore', t.revisore?.username || '—') +
+        infoRow('Descrizione', t.descrizione_commessa || '—') +
+        infoRow('Approvatore', t.approvatore?.username || '—') +
+        infoRow('Consegna', t.consegna || '—');
+
+    // Azioni
+    const list = document.getElementById('azioniList');
+    list.innerHTML = '';
+    getActions(t.stato).forEach(([action, label, cls]) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-azione';
+        btn.textContent = label;
+        btn.onclick = () => startTransition(action, label);
+        list.appendChild(btn);
+    });
+    // Commenta button
+    const commentBtn = document.createElement('button');
+    commentBtn.className = 'btn-azione';
+    commentBtn.textContent = 'Commenta';
+    commentBtn.onclick = openNotesModal;
+    list.appendChild(commentBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-azione delete';
+    delBtn.textContent = 'Elimina ticket';
+    delBtn.onclick = confirmDelete;
+    list.appendChild(delBtn);
+    document.getElementById('transRow').classList.remove('show');
+
+    // Revisioni
+    document.getElementById('revCount').textContent = `${t.revisioni.length}`;
+    const wrap = document.getElementById('revTableWrap');
+    if (t.revisioni.length) {
+        wrap.innerHTML = `<table class="rev-table">
+            <thead><tr><th>Commessa</th><th>Documento</th><th>Titolo</th><th>Rev.</th><th>Stato interno</th></tr></thead>
+            <tbody>${t.revisioni.map(r => {
+                const css = r.int_status || '';
+                return `<tr>
+                    <td class="cell-mono">${esc(r.job)}</td>
+                    <td>${esc(r.vendor_doc)||'—'}</td>
+                    <td class="cell-title" title="${esc(r.doc_title)}">${esc(r.doc_title)||'—'}</td>
+                    <td class="rev-num">${r.rev_no??'—'}</td>
+                    <td>${r.int_status
+                        ? `<span class="rev-status-badge rss-${css}">${esc(STATUS_OPTIONS.find(([v])=>v===r.int_status)?.[1]||r.int_status)}</span>`
+                        : `<span style="color:#9CA3AF">—</span>`
+                    }</td>
+                </tr>`;
+            }).join('')}</tbody></table>`;
+    } else {
+        wrap.innerHTML = '<div style="padding:1rem 1.2rem;font-size: 0.92rem;color:#9CA3AF;text-align:center;">Nessuna revisione collegata.</div>';
+    }
+}
+
+function infoRow(label, val) {
+    return `<div class="info-item"><div class="info-label">${label}</div><div class="info-value">${esc(val)}</div></div>`;
+}
+
+function getActions(stato) {
+    switch(stato) {
+        case 'da_iniziare':     return [['avvia','Avvia lavorazione','start']];
+        case 'in_lavorazione':  return [['sottometti','Sottometti al revisore','submit']];
+        case 'in_revisione':    return [['accetta','Accetta','accept'],['rifiuta','Rifiuta','reject']];
+        case 'in_approvazione': return [['accetta','Approva','accept'],['rifiuta','Rifiuta','reject']];
+        default: return [];
+    }
+}
+
+function startTransition(action, label) {
+    pendingAction = action;
+    document.getElementById('transRow').classList.add('show');
+    document.getElementById('transNote').value = '';
+    document.getElementById('transNote').placeholder = `Nota per "${label}" (opzionale)…`;
+    document.getElementById('transConfirm').textContent = label;
+    document.getElementById('transNote').focus();
+}
+
+document.getElementById('transConfirm').addEventListener('click', async () => {
+    if (!pendingAction) return;
+    const nota = document.getElementById('transNote').value.trim();
+    const btn  = document.getElementById('transConfirm');
+    btn.disabled = true;
+    const { ok, data } = await api('POST', `/api/tickets/${TICKET_ID}/transition/`, { action: pendingAction, nota: nota||'' });
+    btn.disabled = false;
+    if (!ok) { showToast(data.error || 'Errore nella transizione.', 'error'); return; }
+    pendingAction = null;
+    document.getElementById('transRow').classList.remove('show');
+    showToast('Ticket aggiornato con successo.', 'success');
+    ticketData = data;
+    renderAll();
+});
+
+
+
+// ── Notes modal ──────────────────────────────────────────────────────────
+function openNotesModal() {
+    document.getElementById('notesModal').style.display = 'flex';
+    document.getElementById('newNoteText').value = '';
+    loadNotes();
+}
+
+function closeNotesModal() {
+    document.getElementById('notesModal').style.display = 'none';
+}
+
+document.getElementById('notesModal').addEventListener('click', function(e) {
+    if (e.target === this) closeNotesModal();
+});
+
+async function loadNotes() {
+    const notesList = document.getElementById('notesList');
+    notesList.innerHTML = '<div class="note-empty">Caricamento…</div>';
+    const { ok, data } = await api('GET', `/api/tickets/${TICKET_ID}/note/`);
+    if (!ok) { notesList.innerHTML = '<div class="note-empty">Errore nel caricamento delle note.</div>'; return; }
+    if (!data.length) { notesList.innerHTML = '<div class="note-empty">Nessuna nota presente.</div>'; return; }
+    notesList.innerHTML = data.map(n => {
+        const dt = n.created_at ? new Date(n.created_at) : null;
+        const dateStr = dt ? dt.toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}) + ' ' + dt.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '';
+        return `<div class="note-item">
+            <div class="note-header">
+                <span class="note-author">${esc(n.autore||'—')}</span>
+                <span class="note-date">${esc(dateStr)}</span>
+            </div>
+            <div class="note-text">${esc(n.testo)}</div>
+        </div>`;
+    }).join('');
+    notesList.scrollTop = notesList.scrollHeight;
+}
+
+async function addNote() {
+    const textarea = document.getElementById('newNoteText');
+    const btn = document.getElementById('btnAddNote');
+    const testo = textarea.value.trim();
+    if (!testo) return;
+    btn.disabled = true;
+    const { ok, data } = await api('POST', `/api/tickets/${TICKET_ID}/note/`, { testo });
+    btn.disabled = false;
+    if (!ok) { showToast(data.error || "Errore nell'aggiunta della nota.", 'error'); return; }
+    textarea.value = '';
+    showToast('Nota aggiunta.', 'success');
+    loadNotes();
+}
+
+document.getElementById('newNoteText').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addNote(); }
+});
+
+loadTicket();
+</script>
+{% endblock %}

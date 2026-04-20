@@ -1,0 +1,434 @@
+﻿<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Workflow Documentale{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #EDECEA;
+            color: #1C1C1A;
+            min-height: 100vh;
+            font-size: 17px;
+        }
+
+        /* â”€â”€ Navbar â”€â”€ */
+        .navbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2.5rem;
+            height: 52px;
+            background: #EDECEA;
+            position: relative;
+        }
+
+        .navbar-brand {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #1C1C1A;
+            text-decoration: none;
+            letter-spacing: -0.3px;
+            flex-shrink: 0;
+        }
+
+        .navbar-nav {
+            display: flex;
+            align-items: stretch;
+            gap: 0;
+            height: 100%;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        .navbar-nav a {
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #6B6B67;
+            padding: 0 1rem;
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid transparent;
+            transition: color .15s, border-color .15s;
+            white-space: nowrap;
+        }
+        .navbar-nav a:hover { color: #1C1C1A; }
+        .navbar-nav a.active {
+            color: #1C1C1A;
+            border-bottom-color: #1C1C1A;
+        }
+
+        .navbar-end {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-shrink: 0;
+        }
+
+        .btn-bell {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #1C1C1A;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.3rem;
+            position: relative;
+        }
+        .btn-bell svg { width: 18px; height: 18px; }
+        .btn-bell .bell-dot {
+            position: absolute;
+            top: 3px; right: 3px;
+            width: 7px; height: 7px;
+            background: #EF4444;
+            border-radius: 50%;
+            border: 1.5px solid #EDECEA;
+        }
+
+        .notif-wrapper { position: relative; }
+
+        .notif-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            background: #FFFFFF;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            width: 340px;
+            max-height: 400px;
+            border: 1px solid #E0DFDB;
+            z-index: 1001;
+            overflow: hidden;
+        }
+        .notif-dropdown.show { display: block; }
+
+        .notif-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #F0EFEB;
+        }
+        .notif-title { font-size: 0.84rem; font-weight: 600; color: #1C1C1A; }
+        .notif-mark-all {
+            font-size: 0.75rem; color: #6B6B67; background: none; border: none;
+            cursor: pointer; font-family: inherit; font-weight: 500;
+        }
+        .notif-mark-all:hover { color: #1C1C1A; }
+
+        .notif-list {
+            list-style: none; max-height: 320px; overflow-y: auto;
+        }
+        .notif-item {
+            padding: 0.65rem 1rem;
+            font-size: 0.82rem;
+            color: #4A4A46;
+            border-bottom: 1px solid #F5F4F0;
+            cursor: pointer;
+            transition: background .12s;
+        }
+        .notif-item:hover { background: #F5F4F0; }
+        .notif-item.unread { font-weight: 600; color: #1C1C1A; background: #FAFAF9; }
+        .notif-item .notif-time {
+            display: block;
+            font-size: 0.7rem;
+            color: #9CA3AF;
+            margin-top: 2px;
+            font-weight: 400;
+        }
+        .notif-empty {
+            padding: 1.5rem 1rem;
+            font-size: 0.82rem;
+            color: #AEADA8;
+            text-align: center;
+        }
+
+        .user-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            border-radius: 50%;
+            background: #4A4A46;
+            color: #fff;
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .user-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            text-align: left;
+        }
+        .user-name {
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: #1C1C1A;
+            line-height: 1.25;
+        }
+        .user-role {
+            font-size: 0.7rem;
+            color: #6B6B67;
+            line-height: 1.25;
+        }
+
+        /* — Avatar dropdown — */
+        .avatar-wrapper {
+            position: relative;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            background: #FFFFFF;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+            min-width: 160px;
+            overflow: hidden;
+            border: 1px solid #E0DFDB;
+            z-index: 1000;
+        }
+        .user-dropdown.show { display: block; }
+
+        .dropdown-username {
+            padding: 0.75rem 1rem;
+            font-size: 0.82rem;
+            color: #9CA3AF;
+            font-weight: 500;
+            border-bottom: 1px solid #F0EFEB;
+        }
+
+        .dropdown-logout {
+            display: block;
+            width: 100%;
+            padding: 0.7rem 1rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #EF4444;
+            transition: background .15s;
+        }
+        .dropdown-logout:hover { background: #FEF2F2; }
+
+        /* â”€â”€ Page content â”€â”€ */
+        .page-content {
+            padding: 1.5rem 2.5rem 2rem;
+        }
+
+        .page-header { margin-bottom: 1.5rem; }
+        .page-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #1C1C1A;
+            letter-spacing: -0.5px;
+        }
+
+        /* â”€â”€ Messages â”€â”€ */
+        .messages { list-style: none; margin-bottom: 1.5rem; }
+        .messages li {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        .messages .error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+        .messages .success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+        .messages .info { background: #F5F4F0; color: #4A4A46; border: 1px solid #D8D7D2; }
+
+        .navbar-divider {
+            height: 1px;
+            background: #D8D7D2;
+            margin: 0 2.5rem;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+{% if user.is_authenticated %}
+<nav class="navbar">
+    <a class="navbar-brand" href="{% url 'home' %}">Brembana&amp;Rolle</a>
+
+    <div class="navbar-nav">
+        <a href="{% url 'home' %}" class="{% block nav_overview %}{% endblock %}">Overview</a>
+        <a href="{% url 'gestione_documenti' %}" class="{% block nav_registro %}{% endblock %}">Gestione Documenti</a>
+        <a href="{% url 'gestione_ticket' %}" class="{% block nav_ticket %}{% endblock %}">Gestione Ticket</a>
+        <a href="{% url 'impostazioni' %}" class="{% block nav_impostazioni %}{% endblock %}">Impostazioni</a>
+    </div>
+
+    <div class="navbar-end">
+        <div class="notif-wrapper">
+            <button class="btn-bell" id="bellBtn" title="Notifiche">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+                <span class="bell-dot" id="bellDot" style="display:none;"></span>
+            </button>
+            <div class="notif-dropdown" id="notifDropdown">
+                <div class="notif-header">
+                    <span class="notif-title">Notifiche</span>
+                    <button class="notif-mark-all" id="markAllReadBtn">Segna tutte come lette</button>
+                </div>
+                <ul class="notif-list" id="notifList">
+                    <li class="notif-empty">Nessuna notifica.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="avatar-wrapper">
+            <button class="user-btn" id="avatarBtn" title="Menu utente">
+                <div class="avatar">{{ user.username|first|upper }}</div>
+                <div class="user-meta">
+                    <span class="user-name">{{ user.username }}</span>
+                    {% if user.ruolo %}<span class="user-role">{{ user.ruolo }}</span>{% endif %}
+                </div>
+            </button>
+            <div class="user-dropdown" id="userDropdown">
+                <div class="dropdown-username">{{ user.username }}</div>
+                <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-logout">Esci</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>
+<div class="navbar-divider"></div>
+
+<script>
+    const avatarBtn = document.getElementById('avatarBtn');
+    const userDropdown = document.getElementById('userDropdown');
+    const bellBtn = document.getElementById('bellBtn');
+    const bellDot = document.getElementById('bellDot');
+    const notifDropdown = document.getElementById('notifDropdown');
+    const notifList = document.getElementById('notifList');
+    const markAllReadBtn = document.getElementById('markAllReadBtn');
+
+    const CSRF_BASE = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
+
+    avatarBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        userDropdown.classList.toggle('show');
+        notifDropdown.classList.remove('show');
+    });
+
+    bellBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        notifDropdown.classList.toggle('show');
+        userDropdown.classList.remove('show');
+        if (notifDropdown.classList.contains('show')) loadNotifiche();
+    });
+
+    document.addEventListener('click', () => {
+        userDropdown.classList.remove('show');
+        notifDropdown.classList.remove('show');
+    });
+    notifDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+    function formatTimeAgo(isoStr) {
+        if (!isoStr) return '';
+        const diff = (Date.now() - new Date(isoStr).getTime()) / 1000;
+        if (diff < 60) return 'Adesso';
+        if (diff < 3600) return Math.floor(diff / 60) + ' min fa';
+        if (diff < 86400) return Math.floor(diff / 3600) + ' ore fa';
+        return Math.floor(diff / 86400) + ' giorni fa';
+    }
+
+    async function loadNotifiche() {
+        try {
+            const res = await fetch('/api/notifiche/');
+            const data = await res.json();
+            renderNotifiche(data.notifiche || []);
+            bellDot.style.display = data.non_lette_count > 0 ? '' : 'none';
+        } catch(e) { console.error('Errore caricamento notifiche', e); }
+    }
+
+    function renderNotifiche(items) {
+        notifList.innerHTML = '';
+        if (!items.length) {
+            notifList.innerHTML = '<li class="notif-empty">Nessuna notifica.</li>';
+            return;
+        }
+        items.forEach(n => {
+            const li = document.createElement('li');
+            li.className = 'notif-item' + (n.letta ? '' : ' unread');
+            li.innerHTML = `${n.testo}<span class="notif-time">${formatTimeAgo(n.created_at)}</span>`;
+            li.addEventListener('click', async () => {
+                if (!n.letta) {
+                    await fetch(`/api/notifiche/${n.id}/leggi/`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': CSRF_BASE }
+                    });
+                    li.classList.remove('unread');
+                    n.letta = true;
+                    checkBellDot();
+                }
+                if (n.ticket_id) window.location.href = '/gestione-ticket/' + n.ticket_id + '/';
+            });
+            notifList.appendChild(li);
+        });
+    }
+
+    function checkBellDot() {
+        const unread = notifList.querySelectorAll('.notif-item.unread').length;
+        bellDot.style.display = unread > 0 ? '' : 'none';
+    }
+
+    markAllReadBtn.addEventListener('click', async () => {
+        await fetch('/api/notifiche/leggi-tutte/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_BASE }
+        });
+        notifList.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+        bellDot.style.display = 'none';
+    });
+
+    // Poll for notifications every 30s
+    loadNotifiche();
+    setInterval(loadNotifiche, 30000);
+</script>
+{% endif %}
+
+<main class="page-content">
+    {% if messages %}
+    <ul class="messages">
+        {% for message in messages %}
+        <li class="{{ message.tags }}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>
+

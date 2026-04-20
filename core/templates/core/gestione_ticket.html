@@ -1,0 +1,884 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Gestione Ticket — Brembana&amp;Rolle{% endblock %}
+{% block nav_ticket %}active{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ── Search hero ── */
+    .search-hero {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        padding: 0.5rem 0 1rem;
+    }
+    .search-hero-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1C1C1A;
+        letter-spacing: -0.4px;
+        margin-bottom: 0.15rem;
+    }
+    .search-hero-sub {
+        font-size: 0.875rem;
+        color: #6B6B67;
+        margin: 0;
+    }
+    .search-bar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        flex-shrink: 0;
+    }
+    .search-bar input[type="text"] {
+        width: 220px;
+        padding: 0.65rem 1rem;
+        border: 1px solid #D8D7D2;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        background: #FFFFFF;
+        color: #1C1C1A;
+        outline: none;
+        font-family: inherit;
+        transition: border-color .15s;
+    }
+    .search-bar input[type="text"]::placeholder { color: #9CA3AF; }
+    .search-bar input[type="text"]:focus { border-color: #4A4A46; }
+    .search-bar select {
+        padding: 0.65rem 0.85rem;
+        border: 1px solid #D8D7D2;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        background: #FFFFFF;
+        color: #1C1C1A;
+        outline: none;
+        font-family: inherit;
+        cursor: pointer;
+        transition: border-color .15s;
+    }
+    .search-bar select:focus { border-color: #4A4A46; }
+    .btn { padding: 0.58rem 1.1rem; border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s; font-family: inherit; }
+    .btn-sm { padding: 0.38rem 0.85rem; font-size: 0.82rem; }
+    .selection-info {
+        font-size: 0.88rem;
+        color: #6B6B67;
+        font-weight: 500;
+    }
+
+    /* ── Tab navbar ────────────────────────────────────────────────────────── */
+    .tk-tabs {
+        display: flex;
+        gap: 0;
+        border-bottom: 2px solid #E0DFDB;
+        margin-bottom: 1.1rem;
+    }
+    .tk-tab {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 1.1rem;
+        font-size: 0.94rem;
+        font-weight: 600;
+        color: #9CA3AF;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -2px;
+        background: none;
+        border-top: none;
+        border-left: none;
+        border-right: none;
+        font-family: inherit;
+        transition: color .15s;
+        white-space: nowrap;
+    }
+    .tk-tab:hover { color: #4A4A46; }
+    .tk-tab.active { color: #1C1C1A; border-bottom-color: #1C1C1A; }
+    .tk-tab .count-badge {
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: #F3F4F6;
+        color: #6B7280;
+        padding: 1px 7px;
+        border-radius: 9px;
+        min-width: 20px;
+        text-align: center;
+    }
+    .tk-tab.active .count-badge { background: #1C1C1A; color: #fff; }
+
+    /* ── Tab panels ────────────────────────────────────────────────────────── */
+    .tk-tab-panel { display: none; }
+    .tk-tab-panel.active { display: block; }
+
+    /* ── Full-width panel card ─────────────────────────────────────────────── */
+    .panel-card {
+        background: #FFFFFF;
+        border: 1px solid #E0DFDB;
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .panel-scroll {
+        overflow-y: auto;
+        min-height: 120px;
+        max-height: calc(100vh - 310px);
+    }
+
+    /* ── Table ─────────────────────────────────────────────────────────────── */
+    .tk-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.92rem;
+    }
+    .tk-table th {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        font-weight: 600;
+        color: #9CA3AF;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        border-bottom: 1px solid #F0EFEB;
+        background: #fff;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .tk-table td {
+        padding: 0.5rem 0.75rem;
+        border-bottom: 1px solid #F5F4F0;
+        color: #4A4A46;
+    }
+    .tk-table tbody tr { transition: background .1s; }
+    .tk-table tbody tr:hover { background: #F8F8F6; }
+    .tk-table tbody tr.clickable { cursor: pointer; }
+    .tk-table tbody tr.selected { background: #EFF6FF !important; }
+    .tk-table tbody tr.selected td { color: #1D4ED8; }
+    .tk-table td.cell-mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.88rem; color: #6B6B67; }
+    .btn-icon-danger {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 28px; height: 28px; border-radius: 6px; border: none;
+        background: transparent; color: #D1D5DB; cursor: pointer;
+        transition: background .12s, color .12s;
+    }
+    .btn-icon-danger:hover { background: #FEF2F2; color: #DC2626; }
+    .btn-icon-danger svg { width: 14px; height: 14px; }
+
+    /* ── Status badges ─────────────────────────────────────────────────────── */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 10px;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .status-badge::before {
+        content: '';
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .status-da_iniziare { background: #F3F4F6; color: #6B7280; }
+    .status-da_iniziare::before { background: #9CA3AF; }
+    .status-in_lavorazione { background: #DBEAFE; color: #1D4ED8; }
+    .status-in_lavorazione::before { background: #3B82F6; }
+    .status-in_revisione { background: #FEF3C7; color: #B45309; }
+    .status-in_revisione::before { background: #F59E0B; }
+    .status-in_approvazione { background: #EDE9FE; color: #7C3AED; }
+    .status-in_approvazione::before { background: #8B5CF6; }
+    .status-concluso { background: #D1FAE5; color: #059669; }
+    .status-concluso::before { background: #10B981; }
+    .status-da_emettere { background: #ECFDF5; color: #047857; }
+    .status-da_emettere::before { background: #34D399; }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn-primary {
+        padding: 0.42rem 1rem;
+        font-size: 0.92rem;
+        font-weight: 600;
+        background: #1C1C1A;
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.35; cursor: default; }
+
+    .btn-secondary {
+        padding: 0.42rem 1rem;
+        font-size: 0.92rem;
+        font-weight: 500;
+        background: #fff;
+        color: #4A4A46;
+        border: 1px solid #E0DFDB;
+        border-radius: 7px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: background .12s;
+    }
+    .btn-secondary:hover { background: #F5F4F0; }
+
+    /* ── Modal ─────────────────────────────────────────────────────────────── */
+    .tk-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+        z-index: 2000;
+        align-items: flex-start;
+        justify-content: center;
+        padding-top: min(10vh, 80px);
+        overflow-y: auto;
+    }
+    .tk-modal-overlay.show { display: flex; }
+    .tk-modal {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+        width: 520px;
+        max-width: 95vw;
+        max-height: 85vh;
+        overflow-y: auto;
+        padding: 1.5rem;
+        animation: modalIn .18s ease-out;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
+    .tk-modal h3 {
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-bottom: 1.15rem;
+        color: #1C1C1A;
+    }
+
+    .form-group { margin-bottom: 0.85rem; }
+    .form-group label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #6B6B67;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .form-group textarea,
+    .form-group input[type="text"] {
+        width: 100%;
+        padding: 0.45rem 0.7rem;
+        font-size: 0.94rem;
+        border: 1px solid #E0DFDB;
+        border-radius: 7px;
+        background: #FAFAF9;
+        color: #1C1C1A;
+        font-family: inherit;
+        outline: none;
+        transition: border-color .15s, background .15s;
+    }
+    .form-group textarea:focus,
+    .form-group input:focus { border-color: #9CA3AF; background: #fff; }
+
+    /* ── Searchable user input ─────────────────────────────────────────────── */
+    .user-autocomplete {
+        position: relative;
+    }
+    .user-autocomplete input {
+        width: 100%;
+        padding: 0.45rem 0.7rem;
+        font-size: 0.94rem;
+        border: 1px solid #E0DFDB;
+        border-radius: 7px;
+        background: #FAFAF9;
+        color: #1C1C1A;
+        font-family: inherit;
+        outline: none;
+        transition: border-color .15s, background .15s;
+    }
+    .user-autocomplete input:focus { border-color: #9CA3AF; background: #fff; }
+    .user-autocomplete input::placeholder { color: #AEADA8; }
+    .user-autocomplete .ac-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border: 1px solid #E0DFDB;
+        border-radius: 7px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        max-height: 180px;
+        overflow-y: auto;
+        z-index: 10;
+        margin-top: 2px;
+    }
+    .user-autocomplete .ac-dropdown.show { display: block; }
+    .user-autocomplete .ac-item {
+        padding: 0.45rem 0.7rem;
+        font-size: 0.94rem;
+        color: #4A4A46;
+        cursor: pointer;
+        transition: background .1s;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .user-autocomplete .ac-item:hover { background: #F5F4F0; }
+    .user-autocomplete .ac-item .ac-reparto {
+        margin-left: auto;
+        font-size: 0.82rem;
+        color: #9CA3AF;
+    }
+    .user-autocomplete .ac-empty {
+        padding: 0.5rem 0.7rem;
+        font-size: 0.92rem;
+        color: #AEADA8;
+    }
+    .user-autocomplete input.selected { font-weight: 600; }
+
+    /* ── Assignees row ─────────────────────────────────────────────────────── */
+    .assignees-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0.65rem;
+    }
+    @media (max-width: 520px) { .assignees-row { grid-template-columns: 1fr; } }
+
+    .rev-count-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        background: #F3F4F6;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        color: #4A4A46;
+        font-weight: 500;
+    }
+    .rev-count-chip svg { width: 14px; height: 14px; color: #9CA3AF; }
+
+    .modal-footer {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #F0EFEB;
+    }
+
+    /* ── Empty state ───────────────────────────────────────────────────────── */
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+        text-align: center;
+    }
+    .empty-state svg { width: 36px; height: 36px; color: #D8D7D2; margin-bottom: 0.6rem; }
+    .empty-state .empty-title { font-size: 0.94rem; font-weight: 600; color: #6B6B67; margin-bottom: 0.2rem; }
+    .empty-state .empty-desc { font-size: 0.88rem; color: #AEADA8; max-width: 280px; }
+
+    /* ── Toast ──────────────────────────────────────────────────────────────── */
+    .tk-toast-container {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .tk-toast {
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        font-size: 0.92rem;
+        font-weight: 500;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+        animation: toastIn .25s ease-out;
+        max-width: 360px;
+    }
+    .tk-toast.success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
+    .tk-toast.error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
+    .tk-toast.info { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Search hero -->
+<div class="search-hero">
+    <div class="search-hero-text">
+        <div class="search-hero-title">Gestione Ticket</div>
+        <p class="search-hero-sub">Cerca per numero di commessa o seleziona un reparto</p>
+    </div>
+    <div class="search-bar">
+        <input type="text" id="searchCommessa" placeholder="N° commessa…" onkeydown="if(event.key==='Enter')doSearch()">
+        <select id="filterReparto" onchange="if(this.value)doSearch()">
+            <option value="">Tutti i reparti</option>
+        </select>
+        <button class="btn btn-primary" onclick="doSearch()">Cerca</button>
+    </div>
+</div>
+
+<!-- Results (shown after search) -->
+<div id="tkResult" style="display:none;">
+    <!-- Tab navbar with Crea Ticket integrated -->
+    <div class="tk-tabs">
+        <button class="tk-tab active" id="tabDaAssegnare" onclick="switchTab('da_assegnare')">
+            Da assegnare
+            <span class="count-badge" id="revCount">0</span>
+        </button>
+        <button class="tk-tab" id="tabTicket" onclick="switchTab('ticket')">
+            Ticket
+            <span class="count-badge" id="ticketCount">0</span>
+        </button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:0.6rem;padding:0 0.25rem 2px;">
+            <span class="selection-info" id="selectionInfo" style="display:none;"></span>
+            <button class="btn btn-primary btn-sm" id="btnCreaTicket" disabled onclick="openCreateTicketModal()">+ Crea Ticket</button>
+        </div>
+    </div>
+
+    <!-- Stato filter (only in ticket tab) -->
+    <div id="filterStatoRow" style="display:none;margin-bottom:0.85rem;">
+        <select id="filterStato" onchange="loadTickets()" style="padding:0.42rem 0.75rem;font-size:0.9rem;border:1px solid #E0DFDB;border-radius:8px;background:#fff;font-family:inherit;color:#4A4A46;outline:none;">
+            <option value="">Tutti gli stati</option>
+            <option value="da_iniziare">Da iniziare</option>
+            <option value="in_lavorazione">In lavorazione</option>
+            <option value="in_revisione">In revisione</option>
+            <option value="in_approvazione">In approvazione</option>
+            <option value="concluso">Concluso</option>
+        </select>
+    </div>
+
+    <!-- Tab: Da assegnare -->
+    <div class="tk-tab-panel active" id="panelDaAssegnare">
+        <div class="panel-card">
+            <div class="panel-scroll" id="revDaAssegnareBody">
+                <div class="empty-state"><div class="empty-desc">Caricamento…</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Ticket -->
+    <div class="tk-tab-panel" id="panelTicket">
+        <div class="panel-card">
+            <div class="panel-scroll" id="ticketsBody">
+                <div class="empty-state"><div class="empty-desc">Caricamento…</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="tk-toast-container" id="toastContainer"></div>
+
+<!-- Modal: Crea Ticket -->
+<div class="tk-modal-overlay" id="createTicketModal">
+    <div class="tk-modal">
+        <h3>Nuovo Ticket</h3>
+
+        <div class="form-group">
+            <label>Revisioni</label>
+            <div class="rev-count-chip" id="ctRevCount">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+                <span id="ctRevText">0 revisioni selezionate</span>
+            </div>
+        </div>
+
+        <div class="assignees-row">
+            <div class="form-group">
+                <label>Esecutore</label>
+                <div class="user-autocomplete" id="acEsecutore">
+                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                    <input type="hidden" id="ctEsecutore">
+                    <div class="ac-dropdown"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Revisore</label>
+                <div class="user-autocomplete" id="acRevisore">
+                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                    <input type="hidden" id="ctRevisore">
+                    <div class="ac-dropdown"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Approvatore</label>
+                <div class="user-autocomplete" id="acApprovatore">
+                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                    <input type="hidden" id="ctApprovatore">
+                    <div class="ac-dropdown"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Nota</label>
+            <textarea id="ctNota" rows="2" placeholder="Facoltativa…"></textarea>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="closeModal('createTicketModal')">Annulla</button>
+            <button class="btn-primary" id="btnSubmitCreate" onclick="submitCreateTicket()">Crea Ticket</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
+const _headers = () => ({ 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' });
+
+let usersCache = [];
+let repartiCache = [];
+let selectedRevIds = new Set();
+let currentTab = 'da_assegnare';
+
+// ── Utilities ───────────────────────────────────────────────────────────────
+let _debounceTimers = {};
+function debounce(fn, delay) {
+    return function () {
+        clearTimeout(_debounceTimers[fn.name]);
+        _debounceTimers[fn.name] = setTimeout(fn, delay);
+    };
+}
+
+function showToast(msg, type = 'info') {
+    const c = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `tk-toast ${type}`;
+    el.textContent = msg;
+    c.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+async function api(method, url, body) {
+    const opts = { method, headers: _headers() };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(url, opts);
+    return { ok: res.ok, status: res.status, data: await res.json() };
+}
+
+function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('tabDaAssegnare').classList.toggle('active', tab === 'da_assegnare');
+    document.getElementById('tabTicket').classList.toggle('active', tab === 'ticket');
+    document.getElementById('panelDaAssegnare').classList.toggle('active', tab === 'da_assegnare');
+    document.getElementById('panelTicket').classList.toggle('active', tab === 'ticket');
+    document.getElementById('filterStatoRow').style.display = tab === 'ticket' ? '' : 'none';
+}
+
+// ── Delete ticket ────────────────────────────────────────────────────────────
+async function deleteTicket(id, nome) {
+    if (!confirm(`Eliminare definitivamente il ticket ${nome}?\nQuesta azione è irreversibile.`)) return;
+    const res = await fetch(`/api/tickets/${id}/`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': CSRF }
+    });
+    if (res.ok) {
+        showToast(`Ticket ${nome} eliminato`, 'success');
+        loadAll();
+    } else {
+        const d = await res.json();
+        showToast(d.error || 'Errore durante l\'eliminazione', 'error');
+    }
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+async function init() {
+    await Promise.all([loadRepartiFilter(), loadUsers()]);
+    // Do not auto-load: wait for user to search
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+function doSearch() {
+    const commessa = document.getElementById('searchCommessa').value.trim();
+    const reparto = document.getElementById('filterReparto').value;
+    if (!commessa && !reparto) {
+        showToast('Inserisci un numero di commessa o seleziona un reparto.', 'info');
+        return;
+    }
+    document.getElementById('tkResult').style.display = '';
+    loadAll();
+}
+
+async function loadRepartiFilter() {
+    const { ok, data } = await api('GET', '/api/reparti/');
+    if (!ok || !data.reparti) return;
+    repartiCache = data.reparti;
+    const sel = document.getElementById('filterReparto');
+    sel.innerHTML = '<option value="">Tutti i reparti</option>' +
+        data.reparti.map(r => `<option value="${r.nome}">${r.nome}</option>`).join('');
+}
+
+function loadAll() {
+    loadRevisioniDaAssegnare();
+    loadTickets();
+}
+
+// ── Section: Da assegnare ───────────────────────────────────────────────────
+async function loadRevisioniDaAssegnare() {
+    const body = document.getElementById('revDaAssegnareBody');
+    selectedRevIds.clear();
+    updateSelectionUI();
+
+    const commessa = document.getElementById('searchCommessa').value.trim();
+    const reparto = document.getElementById('filterReparto').value;
+    let url = `/api/revisioni-da-emettere/`;
+    const params = [];
+    if (reparto) params.push(`reparto=${encodeURIComponent(reparto)}`);
+    if (commessa) params.push(`commessa=${encodeURIComponent(commessa)}`);
+    if (params.length) url += '?' + params.join('&');
+
+    const { ok, data } = await api('GET', url);
+    document.getElementById('revCount').textContent = (ok && data) ? data.length : 0;
+
+    if (!ok || !data.length) {
+        body.innerHTML = emptyHTML('check', 'Nessuna revisione',
+            commessa ? `Nessun risultato per "${commessa}".`
+                     : 'Nessuna revisione in attesa.');
+        return;
+    }
+
+    body.innerHTML = `<table class="tk-table">
+        <thead><tr>
+            <th>Commessa</th><th>Documento</th><th>Titolo</th><th>Rev</th><th>Reparto</th>
+        </tr></thead>
+        <tbody>${data.map(r => `<tr class="clickable" data-id="${r.id}" data-reparto="${esc(r.reparto_nome || '')}" onclick="toggleRevRow(this, ${r.id})">
+            <td class="cell-mono">${esc(r.job)}</td>
+            <td>${esc(r.vendor_doc || '—')}</td>
+            <td class="cell-title" title="${esc(r.doc_title)}" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.doc_title || '—')}</td>
+            <td>${r.rev_no ?? '—'}</td>
+            <td>${esc(r.reparto_nome || '—')}</td>
+        </tr>`).join('')}</tbody></table>`;
+}
+
+function toggleRevRow(row, id) {
+    if (selectedRevIds.has(id)) {
+        selectedRevIds.delete(id);
+        row.classList.remove('selected');
+    } else {
+        selectedRevIds.add(id);
+        row.classList.add('selected');
+    }
+    updateSelectionUI();
+}
+
+function updateSelectionUI() {
+    const n = selectedRevIds.size;
+    document.getElementById('btnCreaTicket').disabled = n === 0;
+    const info = document.getElementById('selectionInfo');
+    if (n > 0) {
+        info.style.display = '';
+        info.textContent = `${n} selezionat${n === 1 ? 'a' : 'e'}`;
+    } else {
+        info.style.display = 'none';
+    }
+}
+
+// ── Section: Ticket ─────────────────────────────────────────────────────────
+async function loadTickets() {
+    const body = document.getElementById('ticketsBody');
+
+    const stato = document.getElementById('filterStato').value;
+    const search = document.getElementById('searchCommessa').value.trim();
+    const reparto = document.getElementById('filterReparto').value;
+
+    let url = `/api/tickets/`;
+    const params = [];
+    if (reparto) params.push(`reparto=${encodeURIComponent(reparto)}`);
+    if (stato) params.push(`stato=${stato}`);
+    if (search && !search.startsWith('#')) params.push(`commessa=${encodeURIComponent(search)}`);
+    if (params.length) url += '?' + params.join('&');
+
+    const { ok, data } = await api('GET', url);
+
+    let filtered = data || [];
+    if (search.startsWith('#')) {
+        const num = search.slice(1);
+        filtered = filtered.filter(t => String(t.id).includes(num));
+    }
+
+    document.getElementById('ticketCount').textContent = filtered.length;
+
+    if (!ok || !filtered.length) {
+        body.innerHTML = emptyHTML('ticket', 'Nessun ticket',
+            search ? `Nessun risultato per "${search}".`
+                   : 'Nessun ticket con i filtri selezionati.');
+        return;
+    }
+
+    body.innerHTML = `<table class="tk-table">
+        <thead><tr>
+            <th>Nome</th><th>Stato</th><th>Reparto</th><th>Esecutore</th><th>Rev</th><th>Creato</th><th></th>
+        </tr></thead>
+        <tbody>${filtered.map(t => `<tr class="clickable" onclick="window.location.href='/gestione-ticket/${t.id}/'">
+            <td class="cell-mono" style="font-weight:600;">${esc(t.nome)}</td>
+            <td><span class="status-badge status-${t.stato}">${esc(t.stato_label)}</span></td>
+            <td>${esc(t.reparto) || '—'}</td>
+            <td>${esc(t.esecutore.username)}</td>
+            <td>${t.revisioni.length}</td>
+            <td style="color:#9CA3AF;font-size: 0.88rem;">${t.created_at ? new Date(t.created_at).toLocaleDateString('it-IT') : '—'}</td>
+            <td onclick="event.stopPropagation()">
+                <button class="btn-icon-danger" title="Elimina" onclick="deleteTicket(${t.id}, '${esc(t.nome)}')">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                </button>
+            </td>
+        </tr>`).join('')}</tbody></table>`;
+}
+
+// ── Empty state helper ──────────────────────────────────────────────────────
+function emptyHTML(icon, title, desc) {
+    const icons = {
+        ticket: '<path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z"/>',
+        check: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+    };
+    return `<div class="empty-state">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">${icons[icon] || icons.check}</svg>
+        <div class="empty-title">${title}</div>
+        <div class="empty-desc">${desc}</div>
+    </div>`;
+}
+
+// ── Users cache ─────────────────────────────────────────────────────────────
+async function loadUsers() {
+    const { ok, data } = await api('GET', '/api/users/');
+    usersCache = ok ? data : [];
+}
+
+// ── Autocomplete for user inputs ────────────────────────────────────────────
+function setupAutocomplete(wrapperId, hiddenId) {
+    const wrapper = document.getElementById(wrapperId);
+    const input = wrapper.querySelector('input[type="text"]');
+    const hidden = document.getElementById(hiddenId);
+    const dropdown = wrapper.querySelector('.ac-dropdown');
+
+    input.addEventListener('focus', () => renderDropdown());
+    input.addEventListener('input', () => {
+        hidden.value = '';
+        input.classList.remove('selected');
+        renderDropdown();
+    });
+
+    function renderDropdown() {
+        const query = input.value.trim().toLowerCase();
+        const filtered = usersCache.filter(u =>
+            u.username.toLowerCase().includes(query) ||
+            (u.reparto || '').toLowerCase().includes(query)
+        );
+
+        if (!filtered.length) {
+            dropdown.innerHTML = '<div class="ac-empty">Nessun utente trovato</div>';
+        } else {
+            dropdown.innerHTML = filtered.map(u =>
+                `<div class="ac-item" data-id="${u.id}" data-name="${esc(u.username)}">${esc(u.username)}${u.reparto ? `<span class="ac-reparto">${esc(u.reparto)}</span>` : ''}</div>`
+            ).join('');
+        }
+        dropdown.classList.add('show');
+
+        dropdown.querySelectorAll('.ac-item').forEach(item => {
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                hidden.value = item.dataset.id;
+                input.value = item.dataset.name;
+                input.classList.add('selected');
+                dropdown.classList.remove('show');
+            });
+        });
+    }
+
+    input.addEventListener('blur', () => {
+        setTimeout(() => dropdown.classList.remove('show'), 150);
+    });
+}
+
+// ── Modal: Create Ticket ────────────────────────────────────────────────────
+function openCreateTicketModal() {
+    if (!selectedRevIds.size) return;
+
+    const n = selectedRevIds.size;
+    document.getElementById('ctRevText').textContent = `${n} revision${n === 1 ? 'e' : 'i'} selezionat${n === 1 ? 'a' : 'e'}`;
+
+    // Reset autocomplete fields
+    ['acEsecutore', 'acRevisore', 'acApprovatore'].forEach(id => {
+        const w = document.getElementById(id);
+        w.querySelector('input[type="text"]').value = '';
+        w.querySelector('input[type="text"]').classList.remove('selected');
+    });
+    document.getElementById('ctEsecutore').value = '';
+    document.getElementById('ctRevisore').value = '';
+    document.getElementById('ctApprovatore').value = '';
+    document.getElementById('ctNota').value = '';
+    document.getElementById('btnSubmitCreate').disabled = false;
+
+    setupAutocomplete('acEsecutore', 'ctEsecutore');
+    setupAutocomplete('acRevisore', 'ctRevisore');
+    setupAutocomplete('acApprovatore', 'ctApprovatore');
+
+    openModal('createTicketModal');
+}
+
+async function submitCreateTicket() {
+    const esecutore = document.getElementById('ctEsecutore').value;
+    const revisore = document.getElementById('ctRevisore').value;
+    const approvatore = document.getElementById('ctApprovatore').value;
+    if (!esecutore || !revisore || !approvatore) {
+        showToast('Seleziona esecutore, revisore e approvatore.', 'error');
+        return;
+    }
+
+    document.getElementById('btnSubmitCreate').disabled = true;
+
+    // Determine reparto: use filter value or derive from first selected revision row
+    let reparto = document.getElementById('filterReparto').value;
+    if (!reparto) {
+        const firstRow = document.querySelector('.tk-table tbody tr.selected');
+        if (firstRow) reparto = firstRow.dataset.reparto || '';
+    }
+
+    const payload = {
+        reparto: reparto || '',
+        esecutore_id: parseInt(esecutore),
+        revisore_id: parseInt(revisore),
+        approvatore_id: parseInt(approvatore),
+        revisione_ids: Array.from(selectedRevIds),
+    };
+
+    const { ok, data } = await api('POST', '/api/tickets/', payload);
+    if (!ok) {
+        showToast(data.error || 'Errore nella creazione del ticket.', 'error');
+        document.getElementById('btnSubmitCreate').disabled = false;
+        return;
+    }
+
+    const nota = document.getElementById('ctNota').value.trim();
+    if (nota) await api('POST', `/api/tickets/${data.id}/note/`, { testo: nota });
+
+    closeModal('createTicketModal');
+    showToast(`Ticket ${data.nome || '#' + data.id} creato.`, 'success');
+    selectedRevIds.clear();
+    loadAll();
+}
+
+// ── Modal helpers ───────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+document.querySelectorAll('.tk-modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('show'); });
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.querySelectorAll('.tk-modal-overlay.show').forEach(o => o.classList.remove('show'));
+});
+
+// ── Start ───────────────────────────────────────────────────────────────────
+init();
+</script>
+{% endblock %}
