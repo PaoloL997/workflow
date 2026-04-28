@@ -40,7 +40,7 @@ urlpatterns = [
     # API — Ticket
     path('api/tickets/', views.tickets_api, name='tickets_api'),
     path('api/tickets/<int:pk>/', views.ticket_api_detail, name='ticket_api_detail'),
-    path('api/tickets/<int:pk>/transition/', views.ticket_transition_api, name='ticket_transition_api'),
+    path('api/revisioni/<int:pk>/transition/', views.revisione_transition_api, name='revisione_transition_api'),
     path('api/tickets/<int:pk>/note/', views.ticket_note_api, name='ticket_note_api'),
     path('api/revisioni-da-emettere/', views.revisioni_da_emettere_api, name='revisioni_da_emettere_api'),
     path('api/ticket-counts/', views.ticket_counts_api, name='ticket_counts_api'),

@@ -33,7 +33,8 @@ class BusinessCentral:
 
     @staticmethod
     def _connect(server: str, database: str, uid: str, psw: str):
-        driver = os.getenv('BUSINESS_CENTRAL_DRIVER', 'ODBC Driver 17 for SQL Server')
+        driver = os.getenv('BUSINESS_CENTRAL_DRIVER', 'ODBC Driver 18 for SQL Server')
+        trust = os.getenv('BUSINESS_CENTRAL_TRUST_SERVER_CERTIFICATE', 'yes')
         logger.debug(
             'Tentativo di connessione a Business Central — server=%s  database=%s  uid=%s  driver=%s',
             server, database, uid, driver,
@@ -44,7 +45,8 @@ class BusinessCentral:
                 f"Server={server};"
                 f"Database={database};"
                 f"UID={uid};"
-                f"PWD={psw}"
+                f"PWD={psw};"
+                f"TrustServerCertificate={trust}"
             )
             conn = pyodbc.connect(connection_string, timeout=10)
             logger.info('Connessione a Business Central riuscita (server=%s, database=%s)', server, database)

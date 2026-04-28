@@ -853,7 +853,7 @@
                 </tr></thead>
                 <tbody>
                     <tr><td style="padding:0.15rem 0.4rem;">Item</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero item</td></tr>
-                    <tr><td style="padding:0.15rem 0.4rem;">Vendor Doc</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero doc. fornitore</td></tr>
+                    <tr><td style="padding:0.15rem 0.4rem;">B&R Doc</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero doc. B&R</td></tr>
                     <tr><td style="padding:0.15rem 0.4rem;">Client Doc N°</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Numero doc. cliente</td></tr>
                     <tr><td style="padding:0.15rem 0.4rem;">Client Doc Class</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Classe doc. cliente</td></tr>
                     <tr><td style="padding:0.15rem 0.4rem;">Titolo documento</td><td style="padding:0.15rem 0.4rem;color:#6B6B67;">Titolo</td></tr>
@@ -888,7 +888,7 @@
         <input type="hidden" id="dm_pk">
         <div class="fg-row-3">
             <div class="fg"><label>Item</label><input id="dm_item_no"></div>
-            <div class="fg"><label>Vendor Doc</label><input id="dm_vendor_doc"></div>
+            <div class="fg"><label>B&R Doc</label><input id="dm_vendor_doc"></div>
             <div class="fg"><label>Client Doc N°</label><input id="dm_client_doc_no"></div>
         </div>
         <div class="fg-row">
@@ -993,32 +993,24 @@
         </div>
         <form id="commessaForm" onsubmit="return saveCommessa(event)">
             <input type="hidden" id="cf_origJob">
-            <!-- BC fields first -->
             <div class="fg-row">
                 <div class="fg"><label>Job</label><input id="cf_job" required></div>
                 <div class="fg"><label>Cliente</label><input id="cf_client"></div>
             </div>
             <div class="fg-row">
                 <div class="fg"><label>PO N°</label><input id="cf_po_no"></div>
+                <div class="fg"><label>Bid no.</label><input id="cf_requisition"></div>
+            </div>
+            <div class="fg-row">
                 <div class="fg"><label>Data consegna</label><input type="date" id="cf_delivery_date"></div>
+                <div class="fg"><label>Termini consegna</label><input id="cf_delivery_term"></div>
             </div>
             <div class="fg"><label>Descrizione progetto</label><input id="cf_job_detail"></div>
-            <!-- Non-BC fields -->
-            <div class="fg-row">
-                <div class="fg"><label>VB Job</label><input id="cf_vb_job"></div>
-                <div class="fg"><label>Requisizione</label><input id="cf_requisition"></div>
-            </div>
-            <div class="fg"><label>Termini consegna</label><input id="cf_delivery_term"></div>
             <div class="fg-row">
                 <div class="fg"><label>Giorni rev. cliente</label><input type="number" id="cf_time_cli" min="0"></div>
-                <div class="fg"><label>Giorni rev. fornitore</label><input type="number" id="cf_time_ven" min="0"></div>
+                <div class="fg"><label>Giorni rev. B&R</label><input type="number" id="cf_time_ven" min="0"></div>
             </div>
-            <div class="fg-row">
-                <div class="fg"><div class="check-row"><input type="checkbox" id="cf_rev_let"><label for="cf_rev_let">Revisioni con lettere</label></div></div>
-                <div class="fg"><div class="check-row"><input type="checkbox" id="cf_transm"><label for="cf_transm">Previsto trasmittal</label></div></div>
-            </div>
-
-            <!-- Indirizzi di Spedizione rimossi da qui -->
+            <div class="fg"><div class="check-row"><input type="checkbox" id="cf_rev_let"><label for="cf_rev_let">Revisioni con lettere</label></div></div>
 
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline" onclick="closeModal('commessaModal')">Annulla</button>
@@ -1067,13 +1059,12 @@ function showCommessaCard(c) {
     const fields = [
         ['Cliente', d(c.client), 'wide'],
         ['PO N\u00b0', d(c.po_no), ''],
-        ['VB Job', d(c.vb_job), ''],
+        ['Bid no.', d(c.requisition), ''],
         ['Consegna', d(c.delivery_date), ''],
-        ['Requisizione', d(c.requisition), ''],
-        ['Rev. cli (gg)', d(c.time_cli_doc_rev), ''],
-        ['Rev. forn (gg)', d(c.time_ven_doc_rev), ''],
+        ['Termini consegna', d(c.delivery_term), ''],
         ['Descrizione', d(c.job_detail), 'wide'],
-        ['Termini consegna', d(c.delivery_term), 'wide'],
+        ['Rev. cli (gg)', d(c.time_cli_doc_rev), ''],
+        ['Rev. B&R (gg)', d(c.time_ven_doc_rev), ''],
     ];
     document.getElementById('card_fields').innerHTML = fields
         .map(([label, val, spanCls]) => {
@@ -1088,7 +1079,6 @@ function showCommessaCard(c) {
         : `<span class="cf-badge">${labelOff}</span>`;
     document.getElementById('card_badges').innerHTML = [
         badge(c.rev_let_flag, 'Revisioni con lettere: sì', 'Revisioni con lettere: no'),
-        badge(c.transm_flag, 'Trasmittal previsto: sì', 'Trasmittal previsto: no'),
     ].join('');
 
     document.getElementById('card_editBtn').onclick = () => openEditModal(c.job);
@@ -1185,7 +1175,6 @@ async function openEditModal(job) {
     document.getElementById('cf_origJob').value = c.job;
     document.getElementById('cf_job').value = c.job;
     document.getElementById('cf_job').readOnly = true;
-    document.getElementById('cf_vb_job').value = c.vb_job || '';
     document.getElementById('cf_client').value = c.client || '';
     document.getElementById('cf_po_no').value = c.po_no || '';
     document.getElementById('cf_job_detail').value = c.job_detail || '';
@@ -1195,7 +1184,6 @@ async function openEditModal(job) {
     document.getElementById('cf_time_cli').value = c.time_cli_doc_rev ?? '';
     document.getElementById('cf_time_ven').value = c.time_ven_doc_rev ?? '';
     document.getElementById('cf_rev_let').checked = c.rev_let_flag;
-    document.getElementById('cf_transm').checked = c.transm_flag;
     document.getElementById('btnDelete').style.display = '';
     openModal('commessaModal');
 }
@@ -1206,7 +1194,6 @@ async function saveCommessa(e) {
     const origJob = document.getElementById('cf_origJob').value;
     const body = {
         job: document.getElementById('cf_job').value.trim(),
-        vb_job: document.getElementById('cf_vb_job').value.trim(),
         client: document.getElementById('cf_client').value.trim(),
         po_no: document.getElementById('cf_po_no').value.trim(),
         job_detail: document.getElementById('cf_job_detail').value.trim(),
@@ -1216,7 +1203,6 @@ async function saveCommessa(e) {
         time_cli_doc_rev: parseInt(document.getElementById('cf_time_cli').value) || null,
         time_ven_doc_rev: parseInt(document.getElementById('cf_time_ven').value) || null,
         rev_let_flag: document.getElementById('cf_rev_let').checked,
-        transm_flag: document.getElementById('cf_transm').checked,
     };
     const isEdit = !!origJob;
     const url = isEdit ? `${API}${encodeURIComponent(origJob)}/` : API;
@@ -1490,7 +1476,7 @@ async function loadDocumentiInline() {
             : `<span style="color:#9CA3AF">—</span>`;
         wrap.innerHTML = `<div class="doc-table-wrap"><table class="doc-table">
             <thead><tr>
-                <th>Item</th><th>Vendor Doc</th><th>Client Doc</th><th>Class</th>
+                <th>Item</th><th>B&R Doc</th><th>Client Doc</th><th>Class</th>
                 <th>Titolo</th><th>Reparto</th><th>Stato</th><th>Pen.</th><th>Pag.</th><th>Rev.</th><th></th>
             </tr></thead>
             <tbody>${documenti.map(d => `<tr>
@@ -1577,10 +1563,17 @@ async function loadEmissioneInline() {
     if (!currentJob) { wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessuna commessa selezionata.</p>'; return; }
     wrap.innerHTML = '<p style="color:#9ca3af;font-size:0.82rem;">Caricamento\u2026</p>';
     try {
-        const res = await fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`);
-        const { documenti } = await res.json();
+        const [resDoc, resAddr] = await Promise.all([
+            fetch(`${API}${encodeURIComponent(currentJob)}/documenti/`),
+            fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`),
+        ]);
+        const { documenti } = await resDoc.json();
+        const { indirizzi } = await resAddr.json();
+        const addrWarning = !indirizzi.length
+            ? '<p style="color:#92400E;background:#FEF9C3;border:1px solid #FDE68A;border-radius:8px;padding:0.55rem 0.85rem;font-size:0.82rem;margin-bottom:0.75rem;">Nessun indirizzo inserito per questa commessa.</p>'
+            : '';
         if (!documenti.length) {
-            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento da inviare.</p>';
+            wrap.innerHTML = addrWarning + '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento da inviare.</p>';
             return;
         }
         // Fetch all revision info first, then filter out already-sent docs
@@ -1593,10 +1586,10 @@ async function loadEmissioneInline() {
         }));
         const daInviare = documenti.filter(d => _emDocRevCache[d.id]?.int_status === 'da_emettere');
         if (!daInviare.length) {
-            wrap.innerHTML = '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento pronto per l\'emissione (stato interno: <em>Da emettere</em>).</p>';
+            wrap.innerHTML = addrWarning + '<p style="color:#9CA3AF;font-size:0.82rem;">Nessun documento pronto per l\'emissione (stato interno: <em>Da emettere</em>).</p>';
             return;
         }
-        wrap.innerHTML = `<table class="emissione-table">
+        wrap.innerHTML = addrWarning + `<table class="emissione-table">
             <thead><tr>
                 <th style="width:32px"><input type="checkbox" id="emissione_all" onchange="toggleAllEmissione(this.checked)"></th>
                 <th>Item</th><th>Titolo</th><th>Reparto</th>
@@ -1672,7 +1665,8 @@ async function _loadTrasmittalAddresses() {
         const res = await fetch(`${API}${encodeURIComponent(currentJob)}/indirizzi/`);
         const { indirizzi } = await res.json();
         if (!indirizzi.length) {
-            ddLabel.textContent = 'Nessun indirizzo disponibile.';
+            ddLabel.textContent = 'Nessun indirizzo di consegna';
+            ddList.innerHTML = '<div style="padding:0.6rem 1rem;font-size:0.85rem;color:#9CA3AF;font-style:italic;">Non ci sono indirizzi di consegna per questa commessa.</div>';
         } else {
             ddList.innerHTML = indirizzi.map((a, i) => {
                 const label = [a.consignee, a.city, a.country].filter(Boolean).join(' \u2014 ');
@@ -2016,7 +2010,7 @@ async function loadSituazioneInline() {
         wrap.innerHTML = `<div style="overflow-x:auto;border:1px solid #E0DFDB;border-radius:10px;"><table class="sit-table">
             <thead><tr>
                 <th>Item</th>
-                <th>Vendor Doc</th>
+                <th>B&R Doc</th>
                 <th>Client Doc N\u00b0</th>
                 <th>Client Doc Class</th>
                 <th>Titolo</th>
@@ -2089,7 +2083,7 @@ async function loadSituazioneOrizzontale(wrap) {
 
         const FIX_COLS = [
             { label: 'Item', key: 'item_no' },
-            { label: 'Vendor Doc', key: 'vendor_doc' },
+            { label: 'B&R Doc', key: 'vendor_doc' },
             { label: 'Client Doc N\u00b0', key: 'client_doc_no' },
             { label: 'Client Doc Class', key: 'client_doc_class' },
             { label: 'Descrizione', key: 'doc_title' },

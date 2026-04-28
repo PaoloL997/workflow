@@ -109,6 +109,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .ov-item-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.3rem;
+    }
 
     .ov-item-check {
         width: 22px;
@@ -176,7 +182,7 @@
 
 {% block content %}
 <div class="ov-hero">
-    <div class="ov-greeting">Ciao, {{ user.username }}</div>
+    <div class="ov-greeting">Ciao, {{ user.nome_completo }}</div>
     <p class="ov-sub">Ecco un riepilogo delle tue attività.</p>
 </div>
 
@@ -200,14 +206,26 @@ const checkSvg = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0
 function renderItem(t, type) {
     const iconClass = type === 'action' ? 'action' : 'corso';
     const icon = type === 'action' ? iconAction : iconCorso;
-    const done = t.stato === 'concluso';
+
+    const counts = t.status_counts || {};
+    const order = ['da_iniziare','in_lavorazione','in_revisione','in_approvazione','da_emettere','inviato_al_cliente','ricevuto'];
+    const labels = t.status_labels || {};
+    const chips = order
+        .filter(s => counts[s])
+        .map(s => `<span class="status-badge status-${s}" style="margin-right:0.25rem;">${counts[s]} ${esc(labels[s] || s)}</span>`)
+        .join('');
+
+    const concluseN = (counts.da_emettere || 0) + (counts.inviato_al_cliente || 0) + (counts.ricevuto || 0);
+    const allDone = t.totale_revisioni && concluseN === t.totale_revisioni;
+
     return `<a class="ov-item" href="/gestione-ticket/${t.id}/">
         <div class="ov-item-icon ${iconClass}">${icon}</div>
         <div class="ov-item-text">
-            <div class="ov-item-name">${esc(t.nome)} · ${esc(t.reparto)}</div>
-            <div class="ov-item-meta">${esc(t.ruolo)} · <span class="status-badge status-${t.stato}">${esc(t.stato_label)}</span></div>
+            <div class="ov-item-name">Commessa N° ${esc(t.commessa)} — Ticket N° ${t.progressivo}</div>
+            <div class="ov-item-meta">${esc(t.ruolo)}</div>
+            <div class="ov-item-chips">${chips || '<span style="color:#9CA3AF;font-size:0.75rem;">—</span>'}</div>
         </div>
-        <div class="ov-item-check${done ? ' active' : ''}">${done ? checkSvg : ''}</div>
+        <div class="ov-item-check${allDone ? ' active' : ''}">${allDone ? checkSvg : ''}</div>
     </a>`;
 }
 

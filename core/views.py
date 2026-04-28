@@ -491,7 +491,7 @@ def export_documenti(request, job):
     ws.title = 'Document List'
 
     headers = [
-        'Item', 'Vendor Doc', 'Client Doc N°', 'Client Doc Class',
+        'Item', 'B&R Doc', 'Client Doc N°', 'Client Doc Class',
         'Titolo', 'Reparto', 'Penale', 'Pagamento', 'Note',
     ]
     header_fill = PatternFill(start_color='1C1C1A', end_color='1C1C1A', fill_type='solid')
@@ -545,6 +545,7 @@ _IMPORT_COL_MAP = {
     'item_no': 'item_no',
     'vendor doc': 'vendor_doc',
     'vendor_doc': 'vendor_doc',
+    'b&r doc': 'vendor_doc',
     'client doc n°': 'client_doc_no',
     'client doc no': 'client_doc_no',
     'client doc n': 'client_doc_no',
@@ -659,7 +660,7 @@ def import_documenti_excel(request, job):
 
 from .services.tickets import (
     list_tickets, get_ticket, create_ticket, update_ticket, delete_ticket,
-    transition_ticket, list_revisioni_da_emettere,
+    transition_revisione, list_revisioni_da_emettere,
     list_note, create_nota,
     list_notifiche, count_non_lette, mark_as_read, mark_all_as_read,
     serialize_ticket,
@@ -673,11 +674,16 @@ from .services.tickets import (
 def tickets_api(request):
     if request.method == 'GET':
         reparto = request.GET.get('reparto', '')
-        stato = request.GET.get('stato', '')
+        concluso_param = request.GET.get('concluso', '')
         commessa = request.GET.get('commessa', '')
+        concluso = None
+        if concluso_param == '1':
+            concluso = True
+        elif concluso_param == '0':
+            concluso = False
         data = list_tickets(
             reparto=reparto or None,
-            stato=stato or None,
+            concluso=concluso,
             commessa=commessa or None,
         )
         return JsonResponse(data, safe=False)
@@ -712,13 +718,14 @@ def ticket_api_detail(request, pk):
 
 @login_required
 @require_http_methods(['POST'])
-def ticket_transition_api(request, pk):
+def revisione_transition_api(request, pk):
+    """Per-revisione workflow transition. Body: {action, nota?}."""
     try:
         body = json.loads(request.body)
         action = body.get('action', '')
         nota = body.get('nota', '')
-        t = transition_ticket(pk, action, request.user, nota_testo=nota or None)
-        return JsonResponse(serialize_ticket(t))
+        ticket, _rev = transition_revisione(pk, action, request.user, nota_testo=nota or None)
+        return JsonResponse(serialize_ticket(ticket))
     except PermissionError as e:
         return JsonResponse({'error': str(e)}, status=403)
     except ValueError as e:
@@ -809,7 +816,10 @@ def overview_api(request):
 @require_http_methods(['GET'])
 def users_api(request):
     """Return list of active users for ticket assignment dropdowns."""
-    users = User.objects.filter(is_active=True).order_by('username')
-    data = [{'id': u.pk, 'username': u.username, 'reparto': u.reparto} for u in users]
+    users = User.objects.filter(is_active=True).order_by('last_name', 'first_name', 'username')
+    data = [
+        {'id': u.pk, 'username': u.username, 'nome_completo': u.nome_completo, 'reparto': u.reparto}
+        for u in users
+    ]
     return JsonResponse(data, safe=False)
 

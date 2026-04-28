@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser
 
 class Reparto(models.Model):
     nome = models.CharField(db_column='Nome', max_length=100, unique=True)
+    acronimo = models.CharField(db_column='Acronimo', max_length=20, blank=True)
 
     class Meta:
         managed = True
@@ -30,16 +31,20 @@ class User(AbstractUser):
     def __str__(self):
         return self.username
 
+    @property
+    def nome_completo(self):
+        return self.get_full_name() or self.username
+
 
 class Testata(models.Model):
     job = models.CharField(db_column='Job', max_length=50, unique=True)
-    vb_job = models.CharField(db_column='VBJob', max_length=50, blank=True)
     client = models.CharField(db_column='Client', max_length=200, blank=True)
     po_no = models.CharField(db_column='PONo', max_length=100, blank=True)
     job_detail = models.CharField(db_column='JobDetail', max_length=300, blank=True)
     delivery_date = models.DateField(db_column='DeliveryDate', blank=True, null=True)
     delivery_term = models.CharField(db_column='DeliveryTerm', max_length=200, blank=True)
-    requisition = models.CharField(db_column='Requisition', max_length=100, blank=True)
+    requisition = models.CharField(db_column='Requisition', max_length=100, blank=True,
+                                   verbose_name='Bid no.')
     time_cli_doc_rev = models.IntegerField(
         db_column='TimeCliDocRev', blank=True, null=True,
         help_text='Giorni a disposizione del cliente per revisionare un documento.',
@@ -49,7 +54,6 @@ class Testata(models.Model):
         help_text='Giorni a nostra disposizione per emettere/revisionare un documento.',
     )
     rev_let_flag = models.BooleanField(db_column='RevLetFlag', default=False)
-    transm_flag = models.BooleanField(db_column='TransmFlag', default=False)
 
     class Meta:
         managed = True
@@ -97,14 +101,11 @@ STATI_INTERNI_CHOICES = [
     ('ricevuto', 'Ricevuto'),
 ]
 
-# ── Choices for Ticket.stato ─────────────────────────────────────────────────
-STATO_TICKET_CHOICES = [
-    ('da_iniziare', 'Da iniziare'),
-    ('in_lavorazione', 'In lavorazione'),
-    ('in_revisione', 'In revisione'),
-    ('in_approvazione', 'In approvazione'),
-    ('concluso', 'Concluso'),
-]
+# Stati attivi della revisione = workflow del ticket (non concluso)
+STATI_ATTIVI_REV = ('da_iniziare', 'in_lavorazione', 'in_revisione', 'in_approvazione')
+
+# Stati post-workflow = ticket concluso per quella rev
+STATI_CONCLUSI_REV = ('da_emettere', 'inviato_al_cliente', 'ricevuto')
 
 
 class StatoEsterno(models.Model):
@@ -216,10 +217,6 @@ class Ticket(models.Model):
     approvatore = models.ForeignKey(
         User, db_column='Approvatore', on_delete=models.RESTRICT,
         related_name='ticket_approvatore',
-    )
-    stato = models.CharField(
-        db_column='Stato', max_length=50,
-        choices=STATO_TICKET_CHOICES, default='da_iniziare',
     )
     revisioni = models.ManyToManyField(
         Revisione, related_name='tickets', blank=True,

@@ -151,6 +151,19 @@
     .rss-inviato_al_cliente { background: #ECFEFF; color: #0E7490; }
     .rss-ricevuto           { background: #F0FDF4; color: #166534; }
 
+    /* ── Per-revisione action buttons ── */
+    .rev-action-btn {
+        padding: 0.32rem 0.7rem; margin-left: 0.3rem;
+        font-size: 0.82rem; font-weight: 600; font-family: inherit;
+        border-radius: 6px; border: none; cursor: pointer;
+        transition: filter .12s;
+    }
+    .rev-action-btn:hover { filter: brightness(0.92); }
+    .rev-act-start  { background: #1C1C1A; color: #fff; }
+    .rev-act-submit { background: #1C1C1A; color: #fff; }
+    .rev-act-accept { background: #16A34A; color: #fff; }
+    .rev-act-reject { background: #FEE2E2; color: #B91C1C; }
+
     /* ── Buttons / Modal / Toast ── */
     .btn-secondary {
         padding: 0.38rem 0.9rem; font-size: 0.9rem; font-weight: 500;
@@ -225,9 +238,6 @@
 
 <h1 class="td-title" id="ticketTitle">Caricamento…</h1>
 
-<!-- Progress bar -->
-<div class="progress-bar" id="progressBar"></div>
-
 <!-- Top grid: dettagli + azioni -->
 <div class="td-top">
     <div class="td-card">
@@ -237,10 +247,6 @@
     <div class="td-card azioni">
         <div class="td-card-title">Azioni</div>
         <div class="azioni-list" id="azioniList"></div>
-        <div class="trans-row" id="transRow">
-            <textarea id="transNote" placeholder="Nota opzionale…" rows="2"></textarea>
-            <button class="btn-conferma" id="transConfirm">Conferma</button>
-        </div>
     </div>
 </div>
 
@@ -251,6 +257,19 @@
         <span id="revCount" style="font-weight:500;color:#6B7280;"></span>
     </div>
     <div id="revTableWrap"></div>
+</div>
+
+<!-- Transition note modal -->
+<div class="modal-overlay" id="transModal">
+    <div class="modal-box">
+        <h3 class="modal-title" id="transModalTitle">Conferma azione</h3>
+        <p class="modal-desc" id="transModalDesc">Vuoi confermare?</p>
+        <textarea id="transModalNote" placeholder="Nota opzionale…" rows="3" style="width:100%;padding:0.5rem 0.7rem;font-size:0.92rem;font-family:inherit;border:1.5px solid #E5E7EB;border-radius:8px;resize:none;background:#FAFAFA;outline:none;margin-bottom:1rem;"></textarea>
+        <div class="modal-actions">
+            <button class="btn-secondary" id="transModalCancel">Annulla</button>
+            <button class="btn-conferma" id="transModalConfirm">Conferma</button>
+        </div>
+    </div>
 </div>
 
 <!-- Delete modal -->
@@ -288,20 +307,17 @@
 const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
 const _headers = () => ({ 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' });
 const TICKET_ID = {{ ticket_id }};
+const CURRENT_USER_ID = {{ request.user.pk }};
 
-const STEPS = ['da_iniziare','in_lavorazione','in_revisione','in_approvazione','concluso'];
-const STEP_LABELS = {
-    da_iniziare:'Da iniziare', in_lavorazione:'Lavorazione',
-    in_revisione:'Revisione', in_approvazione:'Approvazione', concluso:'Concluso'
-};
 const STATUS_OPTIONS = [
     ['da_iniziare','Da iniziare'],['in_lavorazione','In lavorazione'],
     ['in_revisione','In revisione'],['in_approvazione','In approvazione'],
     ['da_emettere','Da emettere'],['inviato_al_cliente','Inviato al Cliente'],['ricevuto','Ricevuto'],
 ];
+const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS);
 
 let ticketData = null;
-let pendingAction = null;
+let pendingTransition = null; // {revId, action, label}
 
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 
@@ -344,42 +360,22 @@ async function loadTicket() {
 
 function renderAll() {
     const t = ticketData;
-    document.getElementById('ticketTitle').textContent = `Ticket ${t.nome}`;
-
-    // Progress bar
-    const idx = STEPS.indexOf(t.stato);
-    const pb = document.getElementById('progressBar');
-    let html = '';
-    STEPS.forEach((step, i) => {
-        if (i > 0) html += `<div class="pb-line${i <= idx ? ' done' : ''}"></div>`;
-        const cls = i < idx ? 'done' : (i === idx ? 'current' : '');
-        const icon = i < idx ? '✓' : (i + 1);
-        html += `<div class="pb-step ${cls}"><span class="pb-dot">${icon}</span><span>${STEP_LABELS[step]}</span></div>`;
-    });
-    pb.innerHTML = html;
+    document.getElementById('ticketTitle').textContent =
+        `Commessa N° ${t.commessa} — Ticket N° ${t.progressivo}`;
 
     // Info grid
     document.getElementById('infoGrid').innerHTML =
         infoRow('Reparto', t.reparto || '—') +
         infoRow('Commessa', t.commessa || '—') +
-        infoRow('Esecutore', t.esecutore?.username || '—') +
+        infoRow('Esecutore', t.esecutore?.nome_completo || '—') +
         infoRow('Cliente', t.cliente || '—') +
-        infoRow('Revisore', t.revisore?.username || '—') +
+        infoRow('Revisore', t.revisore?.nome_completo || '—') +
         infoRow('Descrizione', t.descrizione_commessa || '—') +
-        infoRow('Approvatore', t.approvatore?.username || '—') +
-        infoRow('Consegna', t.consegna || '—');
+        infoRow('Approvatore', t.approvatore?.nome_completo || '—');
 
-    // Azioni
+    // Azioni — ora solo Commenta + Elimina
     const list = document.getElementById('azioniList');
     list.innerHTML = '';
-    getActions(t.stato).forEach(([action, label, cls]) => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-azione';
-        btn.textContent = label;
-        btn.onclick = () => startTransition(action, label);
-        list.appendChild(btn);
-    });
-    // Commenta button
     const commentBtn = document.createElement('button');
     commentBtn.className = 'btn-azione';
     commentBtn.textContent = 'Commenta';
@@ -391,29 +387,52 @@ function renderAll() {
     delBtn.textContent = 'Elimina ticket';
     delBtn.onclick = confirmDelete;
     list.appendChild(delBtn);
-    document.getElementById('transRow').classList.remove('show');
 
     // Revisioni
-    document.getElementById('revCount').textContent = `${t.revisioni.length}`;
+    const revs = t.revisioni || [];
+    document.getElementById('revCount').textContent = `${revs.length}`;
     const wrap = document.getElementById('revTableWrap');
-    if (t.revisioni.length) {
+    if (revs.length) {
         wrap.innerHTML = `<table class="rev-table">
-            <thead><tr><th>Commessa</th><th>Documento</th><th>Titolo</th><th>Rev.</th><th>Stato interno</th></tr></thead>
-            <tbody>${t.revisioni.map(r => {
-                const css = r.int_status || '';
-                return `<tr>
-                    <td class="cell-mono">${esc(r.job)}</td>
-                    <td>${esc(r.vendor_doc)||'—'}</td>
-                    <td class="cell-title" title="${esc(r.doc_title)}">${esc(r.doc_title)||'—'}</td>
-                    <td class="rev-num">${r.rev_no??'—'}</td>
-                    <td>${r.int_status
-                        ? `<span class="rev-status-badge rss-${css}">${esc(STATUS_OPTIONS.find(([v])=>v===r.int_status)?.[1]||r.int_status)}</span>`
-                        : `<span style="color:#9CA3AF">—</span>`
-                    }</td>
-                </tr>`;
-            }).join('')}</tbody></table>`;
+            <thead><tr><th>Commessa</th><th>B&R Doc</th><th>Titolo</th><th>Rev.</th><th>Stato</th><th style="text-align:right;">Azioni</th></tr></thead>
+            <tbody>${revs.map(r => renderRevRow(r, t)).join('')}</tbody>
+        </table>`;
     } else {
         wrap.innerHTML = '<div style="padding:1rem 1.2rem;font-size: 0.92rem;color:#9CA3AF;text-align:center;">Nessuna revisione collegata.</div>';
+    }
+}
+
+function renderRevRow(r, t) {
+    const css = r.int_status || 'none';
+    const badge = r.int_status
+        ? `<span class="rev-status-badge rss-${css}">${esc(STATUS_LABELS[r.int_status] || r.int_status)}</span>`
+        : `<span style="color:#9CA3AF">—</span>`;
+
+    const actions = getRevActions(r.int_status, t)
+        .map(([action, label, kind]) => `<button class="rev-action-btn rev-act-${kind}" data-rev="${r.id}" data-action="${action}" data-label="${esc(label)}">${esc(label)}</button>`)
+        .join('');
+
+    return `<tr>
+        <td class="cell-mono">${esc(r.job)}</td>
+        <td>${esc(r.vendor_doc)||'—'}</td>
+        <td class="cell-title" title="${esc(r.doc_title)}">${esc(r.doc_title)||'—'}</td>
+        <td class="rev-num">${r.rev_no??'—'}</td>
+        <td>${badge}</td>
+        <td style="text-align:right;white-space:nowrap;">${actions || '<span style="color:#D1D5DB;font-size:0.85rem;">—</span>'}</td>
+    </tr>`;
+}
+
+function getRevActions(status, t) {
+    // Returns array of [action, label, kind] available to current user.
+    const isEsec = CURRENT_USER_ID === t.esecutore.id;
+    const isRev  = CURRENT_USER_ID === t.revisore.id;
+    const isApp  = CURRENT_USER_ID === t.approvatore.id;
+    switch (status) {
+        case 'da_iniziare':     return isEsec ? [['avvia','Avvia lavorazione','start']] : [];
+        case 'in_lavorazione':  return isEsec ? [['sottometti','Invia al revisore','submit']] : [];
+        case 'in_revisione':    return isRev  ? [['accetta','Invia all\'approvatore','accept'],['rifiuta','Rimanda in lavorazione','reject']] : [];
+        case 'in_approvazione': return isApp  ? [['accetta','Approva documento','accept'],['rifiuta','Rimanda in lavorazione','reject']] : [];
+        default: return [];
     }
 }
 
@@ -421,36 +440,42 @@ function infoRow(label, val) {
     return `<div class="info-item"><div class="info-label">${label}</div><div class="info-value">${esc(val)}</div></div>`;
 }
 
-function getActions(stato) {
-    switch(stato) {
-        case 'da_iniziare':     return [['avvia','Avvia lavorazione','start']];
-        case 'in_lavorazione':  return [['sottometti','Sottometti al revisore','submit']];
-        case 'in_revisione':    return [['accetta','Accetta','accept'],['rifiuta','Rifiuta','reject']];
-        case 'in_approvazione': return [['accetta','Approva','accept'],['rifiuta','Rifiuta','reject']];
-        default: return [];
-    }
-}
+// ── Per-revisione transition modal ─────────────────────────────────────────
+document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.rev-action-btn');
+    if (!btn) return;
+    const revId = parseInt(btn.dataset.rev, 10);
+    const action = btn.dataset.action;
+    const label = btn.dataset.label;
+    pendingTransition = { revId, action, label };
+    document.getElementById('transModalTitle').textContent = label;
+    document.getElementById('transModalDesc').textContent = `Confermi l'azione "${label}" su questa revisione?`;
+    document.getElementById('transModalNote').value = '';
+    document.getElementById('transModalConfirm').textContent = label;
+    document.getElementById('transModal').style.display = 'flex';
+});
 
-function startTransition(action, label) {
-    pendingAction = action;
-    document.getElementById('transRow').classList.add('show');
-    document.getElementById('transNote').value = '';
-    document.getElementById('transNote').placeholder = `Nota per "${label}" (opzionale)…`;
-    document.getElementById('transConfirm').textContent = label;
-    document.getElementById('transNote').focus();
-}
+document.getElementById('transModalCancel').addEventListener('click', () => {
+    document.getElementById('transModal').style.display = 'none';
+    pendingTransition = null;
+});
 
-document.getElementById('transConfirm').addEventListener('click', async () => {
-    if (!pendingAction) return;
-    const nota = document.getElementById('transNote').value.trim();
-    const btn  = document.getElementById('transConfirm');
+document.getElementById('transModalConfirm').addEventListener('click', async () => {
+    if (!pendingTransition) return;
+    const { revId, action } = pendingTransition;
+    const nota = document.getElementById('transModalNote').value.trim();
+    const btn = document.getElementById('transModalConfirm');
     btn.disabled = true;
-    const { ok, data } = await api('POST', `/api/tickets/${TICKET_ID}/transition/`, { action: pendingAction, nota: nota||'' });
+    const { ok, data } = await api('POST', `/api/revisioni/${revId}/transition/`,
+        { action, nota: nota || '' });
     btn.disabled = false;
-    if (!ok) { showToast(data.error || 'Errore nella transizione.', 'error'); return; }
-    pendingAction = null;
-    document.getElementById('transRow').classList.remove('show');
-    showToast('Ticket aggiornato con successo.', 'success');
+    if (!ok) {
+        showToast(data.error || 'Errore nella transizione.', 'error');
+        return;
+    }
+    document.getElementById('transModal').style.display = 'none';
+    pendingTransition = null;
+    showToast('Revisione aggiornata.', 'success');
     ticketData = data;
     renderAll();
 });

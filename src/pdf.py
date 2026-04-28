@@ -10,9 +10,9 @@ from fpdf.enums import TableBordersLayout
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / 'static' / 'logo.jpg'
 
-# Column layout: Job, Item No, Vendor Doc, Doc. Title, Rev. No, Rev. Let., Req. By
+# Column layout: Job, Item No, B&R Doc, Doc. Title, Rev. No, Rev. Let., Req. By
 COL_WIDTHS = [15, 20, 30, 65, 15, 15, 30]
-COL_HEADERS = ['Job', 'Item No', 'Vendor Doc', 'Doc. Title', 'Rev. No', 'Rev. Let.', 'Req. By']
+COL_HEADERS = ['Job', 'Item No', 'B&R Doc', 'Doc. Title', 'Rev. No', 'Rev. Let.', 'Req. By']
 
 
 class TrasmittalPDF(FPDF):

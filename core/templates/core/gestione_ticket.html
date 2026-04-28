@@ -447,12 +447,9 @@
     <!-- Stato filter (only in ticket tab) -->
     <div id="filterStatoRow" style="display:none;margin-bottom:0.85rem;">
         <select id="filterStato" onchange="loadTickets()" style="padding:0.42rem 0.75rem;font-size:0.9rem;border:1px solid #E0DFDB;border-radius:8px;background:#fff;font-family:inherit;color:#4A4A46;outline:none;">
-            <option value="">Tutti gli stati</option>
-            <option value="da_iniziare">Da iniziare</option>
-            <option value="in_lavorazione">In lavorazione</option>
-            <option value="in_revisione">In revisione</option>
-            <option value="in_approvazione">In approvazione</option>
-            <option value="concluso">Concluso</option>
+            <option value="">Tutti i ticket</option>
+            <option value="0">Solo attivi</option>
+            <option value="1">Solo conclusi</option>
         </select>
     </div>
 
@@ -489,6 +486,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
                 <span id="ctRevText">0 revisioni selezionate</span>
             </div>
+            <div id="ctRevList" style="margin-top:0.5rem;max-height:220px;overflow-y:auto;border:1px solid #E0DFDB;border-radius:8px;"></div>
         </div>
 
         <div class="assignees-row">
@@ -536,6 +534,7 @@ const _headers = () => ({ 'X-CSRFToken': CSRF, 'Content-Type': 'application/json
 let usersCache = [];
 let repartiCache = [];
 let selectedRevIds = new Set();
+let revDaAssegnareCache = {};
 let currentTab = 'da_assegnare';
 
 // ── Utilities ───────────────────────────────────────────────────────────────
@@ -640,6 +639,11 @@ async function loadRevisioniDaAssegnare() {
     const { ok, data } = await api('GET', url);
     document.getElementById('revCount').textContent = (ok && data) ? data.length : 0;
 
+    revDaAssegnareCache = {};
+    if (ok && data && data.length) {
+        data.forEach(r => { revDaAssegnareCache[r.id] = r; });
+    }
+
     if (!ok || !data.length) {
         body.innerHTML = emptyHTML('check', 'Nessuna revisione',
             commessa ? `Nessun risultato per "${commessa}".`
@@ -694,7 +698,7 @@ async function loadTickets() {
     let url = `/api/tickets/`;
     const params = [];
     if (reparto) params.push(`reparto=${encodeURIComponent(reparto)}`);
-    if (stato) params.push(`stato=${stato}`);
+    if (stato) params.push(`concluso=${stato}`);
     if (search && !search.startsWith('#')) params.push(`commessa=${encodeURIComponent(search)}`);
     if (params.length) url += '?' + params.join('&');
 
@@ -717,13 +721,13 @@ async function loadTickets() {
 
     body.innerHTML = `<table class="tk-table">
         <thead><tr>
-            <th>Nome</th><th>Stato</th><th>Reparto</th><th>Esecutore</th><th>Rev</th><th>Creato</th><th></th>
+            <th>Nome</th><th>Stato revisioni</th><th>Reparto</th><th>Esecutore</th><th>Rev</th><th>Creato</th><th></th>
         </tr></thead>
         <tbody>${filtered.map(t => `<tr class="clickable" onclick="window.location.href='/gestione-ticket/${t.id}/'">
             <td class="cell-mono" style="font-weight:600;">${esc(t.nome)}</td>
-            <td><span class="status-badge status-${t.stato}">${esc(t.stato_label)}</span></td>
+            <td>${renderStatusCounts(t)}</td>
             <td>${esc(t.reparto) || '—'}</td>
-            <td>${esc(t.esecutore.username)}</td>
+            <td>${esc(t.esecutore.nome_completo)}</td>
             <td>${t.revisioni.length}</td>
             <td style="color:#9CA3AF;font-size: 0.88rem;">${t.created_at ? new Date(t.created_at).toLocaleDateString('it-IT') : '—'}</td>
             <td onclick="event.stopPropagation()">
@@ -732,6 +736,24 @@ async function loadTickets() {
                 </button>
             </td>
         </tr>`).join('')}</tbody></table>`;
+}
+
+const STATUS_LABELS_TKLIST = {
+    da_iniziare:'Da iniziare', in_lavorazione:'In lavorazione', in_revisione:'In revisione',
+    in_approvazione:'In approvazione', da_emettere:'Da emettere',
+    inviato_al_cliente:'Inviato al Cliente', ricevuto:'Ricevuto',
+};
+
+function renderStatusCounts(t) {
+    if (t.is_concluso) {
+        return `<span class="status-badge status-concluso">Concluso</span>`;
+    }
+    const counts = t.status_counts || {};
+    const order = ['da_iniziare','in_lavorazione','in_revisione','in_approvazione','da_emettere','inviato_al_cliente','ricevuto'];
+    const chips = order.filter(s => counts[s])
+        .map(s => `<span class="status-badge status-${s}" title="${esc(STATUS_LABELS_TKLIST[s])}" style="margin-right:0.25rem;">${counts[s]} ${esc(STATUS_LABELS_TKLIST[s])}</span>`)
+        .join('');
+    return chips || '<span style="color:#9CA3AF">—</span>';
 }
 
 // ── Empty state helper ──────────────────────────────────────────────────────
@@ -770,6 +792,7 @@ function setupAutocomplete(wrapperId, hiddenId) {
     function renderDropdown() {
         const query = input.value.trim().toLowerCase();
         const filtered = usersCache.filter(u =>
+            u.nome_completo.toLowerCase().includes(query) ||
             u.username.toLowerCase().includes(query) ||
             (u.reparto || '').toLowerCase().includes(query)
         );
@@ -778,7 +801,7 @@ function setupAutocomplete(wrapperId, hiddenId) {
             dropdown.innerHTML = '<div class="ac-empty">Nessun utente trovato</div>';
         } else {
             dropdown.innerHTML = filtered.map(u =>
-                `<div class="ac-item" data-id="${u.id}" data-name="${esc(u.username)}">${esc(u.username)}${u.reparto ? `<span class="ac-reparto">${esc(u.reparto)}</span>` : ''}</div>`
+                `<div class="ac-item" data-id="${u.id}" data-name="${esc(u.nome_completo)}">${esc(u.nome_completo)}${u.reparto ? `<span class="ac-reparto">${esc(u.reparto)}</span>` : ''}</div>`
             ).join('');
         }
         dropdown.classList.add('show');
@@ -805,6 +828,33 @@ function openCreateTicketModal() {
 
     const n = selectedRevIds.size;
     document.getElementById('ctRevText').textContent = `${n} revision${n === 1 ? 'e' : 'i'} selezionat${n === 1 ? 'a' : 'e'}`;
+
+    // Popola tabella revisioni con data di invio prevista pre-compilata
+    const list = document.getElementById('ctRevList');
+    const rows = Array.from(selectedRevIds).map(id => {
+        const r = revDaAssegnareCache[id] || {};
+        const label = [r.job, r.vendor_doc || r.doc_title || `Doc #${r.documento_id || ''}`]
+            .filter(Boolean).join(' — ');
+        const revLbl = (r.rev_no ?? '—');
+        return `<tr>
+            <td style="padding:0.45rem 0.6rem;font-size:0.82rem;">
+                <span style="display:inline-block;min-width:32px;font-weight:600;color:#1C1C1A;">Rev ${revLbl}</span>
+                <span style="color:#4A4A46;">${esc(label || '—')}</span>
+            </td>
+            <td style="padding:0.45rem 0.6rem;text-align:right;">
+                <input type="date" class="ct-rev-date" data-rev-id="${id}"
+                    value="${esc(r.dis_plan_date_iso || '')}"
+                    style="font-size:0.82rem;padding:0.25rem 0.4rem;border:1px solid #E0DFDB;border-radius:6px;">
+            </td>
+        </tr>`;
+    }).join('');
+    list.innerHTML = `<table style="width:100%;border-collapse:collapse;">
+        <thead><tr style="background:#FAFAF9;">
+            <th style="padding:0.4rem 0.6rem;text-align:left;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;color:#6B6B67;font-weight:600;">Revisione</th>
+            <th style="padding:0.4rem 0.6rem;text-align:right;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;color:#6B6B67;font-weight:600;">Data invio prevista</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table>`;
 
     // Reset autocomplete fields
     ['acEsecutore', 'acRevisore', 'acApprovatore'].forEach(id => {
@@ -843,6 +893,12 @@ async function submitCreateTicket() {
         if (firstRow) reparto = firstRow.dataset.reparto || '';
     }
 
+    // Raccogli le date di invio previste per ciascuna revisione
+    const revDates = {};
+    document.querySelectorAll('.ct-rev-date').forEach(inp => {
+        revDates[parseInt(inp.dataset.revId)] = inp.value || '';
+    });
+
     const payload = {
         reparto: reparto || '',
         esecutore_id: parseInt(esecutore),
@@ -857,6 +913,14 @@ async function submitCreateTicket() {
         document.getElementById('btnSubmitCreate').disabled = false;
         return;
     }
+
+    // Aggiorna dis_plan_date sulle revisioni (solo se l'utente ha modificato/inserito un valore)
+    await Promise.all(Object.entries(revDates).map(async ([revId, dateVal]) => {
+        const original = revDaAssegnareCache[revId]?.dis_plan_date_iso || '';
+        if (dateVal !== original) {
+            await api('PATCH', `/api/revisioni/${revId}/`, { dis_plan_date: dateVal });
+        }
+    }));
 
     const nota = document.getElementById('ctNota').value.trim();
     if (nota) await api('POST', `/api/tickets/${data.id}/note/`, { testo: nota });

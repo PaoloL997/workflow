@@ -143,6 +143,16 @@
             {% if form.username.errors %}<ul class="errorlist">{% for e in form.username.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         </div>
         <div>
+            <input type="text" name="first_name" id="id_first_name" placeholder="Nome"
+                   value="{{ form.first_name.value|default:'' }}" autocomplete="given-name">
+            {% if form.first_name.errors %}<ul class="errorlist">{% for e in form.first_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div>
+            <input type="text" name="last_name" id="id_last_name" placeholder="Cognome"
+                   value="{{ form.last_name.value|default:'' }}" autocomplete="family-name">
+            {% if form.last_name.errors %}<ul class="errorlist">{% for e in form.last_name.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        <div>
             <input type="email" name="email" id="id_email" placeholder="Email"
                    value="{{ form.email.value|default:'' }}" autocomplete="email">
             {% if form.email.errors %}<ul class="errorlist">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}

@@ -9,8 +9,8 @@ from .models import (
 
 @admin.register(Reparto)
 class RepartoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nome')
-    search_fields = ('nome',)
+    list_display = ('id', 'nome', 'acronimo')
+    search_fields = ('nome', 'acronimo')
 
 
 @admin.register(User)
@@ -45,7 +45,7 @@ class IndirSpedInline(admin.TabularInline):
 class TestataAdmin(admin.ModelAdmin):
     list_display = ('job', 'client', 'po_no', 'job_detail', 'delivery_date')
     search_fields = ('job', 'client', 'po_no', 'job_detail')
-    list_filter = ('rev_let_flag', 'transm_flag')
+    list_filter = ('rev_let_flag',)
     inlines = [IndirSpedInline]
 
 
@@ -90,8 +90,8 @@ class TicketNotaInline(admin.TabularInline):
 
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
-    list_display = ('id', 'reparto', 'stato', 'esecutore', 'revisore', 'approvatore', 'created_at')
-    list_filter = ('stato', 'reparto')
+    list_display = ('id', 'reparto', 'esecutore', 'revisore', 'approvatore', 'created_at')
+    list_filter = ('reparto',)
     search_fields = ('reparto', 'esecutore__username', 'revisore__username', 'approvatore__username')
     inlines = [TicketNotaInline]
 

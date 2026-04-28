@@ -305,14 +305,14 @@
         </div>
         <div class="avatar-wrapper">
             <button class="user-btn" id="avatarBtn" title="Menu utente">
-                <div class="avatar">{{ user.username|first|upper }}</div>
+                <div class="avatar">{{ user.nome_completo|first|upper }}</div>
                 <div class="user-meta">
-                    <span class="user-name">{{ user.username }}</span>
+                    <span class="user-name">{{ user.nome_completo }}</span>
                     {% if user.ruolo %}<span class="user-role">{{ user.ruolo }}</span>{% endif %}
                 </div>
             </button>
             <div class="user-dropdown" id="userDropdown">
-                <div class="dropdown-username">{{ user.username }}</div>
+                <div class="dropdown-username">{{ user.nome_completo }}</div>
                 <form method="post" action="{% url 'logout' %}" style="margin: 0;">
                     {% csrf_token %}
                     <button type="submit" class="dropdown-logout">Esci</button>

@@ -1,4 +1,6 @@
-from ..models import Testata, IndirSped, Documento, Revisione, StatoEsterno, User, Reparto, STATI_INTERNI_CHOICES
+from django.db import transaction
+
+from ..models import Testata, IndirSped, Documento, Revisione, StatoEsterno, Ticket, User, Reparto, STATI_INTERNI_CHOICES
 from datetime import timedelta, date as date_type
 
 
@@ -8,7 +10,6 @@ def serialize_testata(t):
     return {
         'id': t.pk,
         'job': t.job,
-        'vb_job': t.vb_job,
         'client': t.client,
         'po_no': t.po_no,
         'job_detail': t.job_detail,
@@ -18,7 +19,6 @@ def serialize_testata(t):
         'time_cli_doc_rev': t.time_cli_doc_rev,
         'time_ven_doc_rev': t.time_ven_doc_rev,
         'rev_let_flag': t.rev_let_flag,
-        'transm_flag': t.transm_flag,
     }
 
 
@@ -65,8 +65,10 @@ def update_commessa(job, data):
     return t
 
 
+@transaction.atomic
 def delete_commessa(job):
     t = Testata.objects.get(job=job)
+    Ticket.objects.filter(revisioni__documento__testata=t).distinct().delete()
     t.delete()
 
 
@@ -125,10 +127,10 @@ def delete_indirizzo(pk):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _TESTATA_FIELDS = {
-    'job', 'vb_job', 'client', 'po_no', 'job_detail',
+    'job', 'client', 'po_no', 'job_detail',
     'delivery_date', 'delivery_term', 'requisition',
     'time_cli_doc_rev', 'time_ven_doc_rev',
-    'rev_let_flag', 'transm_flag',
+    'rev_let_flag',
 }
 
 _INDIRIZZO_FIELDS = {
