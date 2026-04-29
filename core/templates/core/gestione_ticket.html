@@ -5,72 +5,80 @@
 
 {% block extra_css %}
 <style>
-    /* ── Search hero ── */
-    .search-hero {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        padding: 0.5rem 0 1rem;
-    }
-    .search-hero-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1C1C1A;
-        letter-spacing: -0.4px;
-        margin-bottom: 0.15rem;
-    }
-    .search-hero-sub {
-        font-size: 0.875rem;
-        color: #6B6B67;
-        margin: 0;
-    }
-    .search-bar {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        flex-shrink: 0;
-    }
-    .search-bar input[type="text"] {
-        width: 220px;
-        padding: 0.65rem 1rem;
-        border: 1px solid #D8D7D2;
-        border-radius: 10px;
-        font-size: 0.9rem;
-        background: #FFFFFF;
-        color: #1C1C1A;
-        outline: none;
-        font-family: inherit;
-        transition: border-color .15s;
-    }
-    .search-bar input[type="text"]::placeholder { color: #9CA3AF; }
-    .search-bar input[type="text"]:focus { border-color: #4A4A46; }
     .search-bar select {
-        padding: 0.65rem 0.85rem;
-        border: 1px solid #D8D7D2;
-        border-radius: 10px;
+        padding: 0.65rem 2rem 0.65rem 0.85rem;
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-pill);
         font-size: 0.9rem;
-        background: #FFFFFF;
-        color: #1C1C1A;
+        background: #FFFFFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%236B6B67' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 0.75rem center;
+        color: var(--c-fg);
         outline: none;
         font-family: inherit;
         cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
         transition: border-color .15s;
     }
-    .search-bar select:focus { border-color: #4A4A46; }
-    .btn { padding: 0.58rem 1.1rem; border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s; font-family: inherit; }
-    .btn-sm { padding: 0.38rem 0.85rem; font-size: 0.82rem; }
-    .selection-info {
-        font-size: 0.88rem;
-        color: #6B6B67;
-        font-weight: 500;
-    }
+    .search-bar select:focus { border-color: var(--c-fg-soft); }
+    .search-bar input[type="text"] { border-radius: var(--r-pill); width: 220px; }
 
-    /* ── Tab navbar ────────────────────────────────────────────────────────── */
+    /* ── Custom select ──────────────────────────────────────────────────── */
+    .custom-select-wrap { position: relative; }
+    .custom-select-btn {
+        display: flex; align-items: center; gap: 0.5rem;
+        padding: 0.65rem 0.9rem;
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-pill);
+        font-size: 0.9rem;
+        background: #FFFFFF;
+        color: var(--c-fg);
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: border-color .15s;
+        width: max-content;
+    }
+    .custom-select-btn:hover { border-color: var(--c-fg-soft); }
+    .custom-select-btn svg { margin-left: auto; flex-shrink: 0; color: var(--c-fg-muted); transition: transform .15s; }
+    .custom-select-btn.open svg { transform: rotate(180deg); }
+    .custom-select-menu {
+        display: none;
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: max-content;
+        min-width: 100%;
+        background: #FFFFFF;
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-xl);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        z-index: 500;
+        overflow: hidden;
+        padding: 4px;
+    }
+    .custom-select-menu.open { display: block; }
+    .custom-select-option {
+        padding: 0.48rem 0.85rem;
+        font-size: 0.9rem;
+        color: var(--c-fg-soft);
+        cursor: pointer;
+        border-radius: 8px;
+        white-space: nowrap;
+        transition: background .1s;
+    }
+    .custom-select-option:hover { background: var(--c-surface-2); }
+    .custom-select-option.selected { font-weight: 600; color: var(--c-fg); background: var(--c-surface-2); }
+    .selection-info { font-size: 0.88rem; color: var(--c-fg-muted); font-weight: 500; }
+
+    #filterStatoBtn { padding: 0.38rem 0.7rem; font-size: 0.82rem; }
+    #statoMenu { padding: 3px; }
+    #statoMenu .custom-select-option { padding: 0.32rem 0.65rem; font-size: 0.82rem; border-radius: 6px; }
+
+    /* ── Tab navbar ─────────────────────────────────────────────────────── */
     .tk-tabs {
         display: flex;
         gap: 0;
-        border-bottom: 2px solid #E0DFDB;
+        border-bottom: 2px solid var(--c-border);
         margin-bottom: 1.1rem;
     }
     .tk-tab {
@@ -82,18 +90,16 @@
         font-weight: 600;
         color: #9CA3AF;
         cursor: pointer;
+        border: none;
         border-bottom: 2px solid transparent;
         margin-bottom: -2px;
         background: none;
-        border-top: none;
-        border-left: none;
-        border-right: none;
         font-family: inherit;
         transition: color .15s;
         white-space: nowrap;
     }
-    .tk-tab:hover { color: #4A4A46; }
-    .tk-tab.active { color: #1C1C1A; border-bottom-color: #1C1C1A; }
+    .tk-tab:hover { color: var(--c-fg-soft); }
+    .tk-tab.active { color: var(--c-fg); border-bottom-color: var(--c-fg); }
     .tk-tab .count-badge {
         font-size: 0.78rem;
         font-weight: 600;
@@ -104,17 +110,17 @@
         min-width: 20px;
         text-align: center;
     }
-    .tk-tab.active .count-badge { background: #1C1C1A; color: #fff; }
+    .tk-tab.active .count-badge { background: var(--c-fg); color: #fff; }
 
-    /* ── Tab panels ────────────────────────────────────────────────────────── */
+    /* ── Tab panels ─────────────────────────────────────────────────────── */
     .tk-tab-panel { display: none; }
     .tk-tab-panel.active { display: block; }
 
-    /* ── Full-width panel card ─────────────────────────────────────────────── */
+    /* ── Full-width panel card ─────────────────────────────────────────── */
     .panel-card {
         background: #FFFFFF;
-        border: 1px solid #E0DFDB;
-        border-radius: 12px;
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-lg);
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -125,7 +131,7 @@
         max-height: calc(100vh - 310px);
     }
 
-    /* ── Table ─────────────────────────────────────────────────────────────── */
+    /* ── Table ──────────────────────────────────────────────────────────── */
     .tk-table {
         width: 100%;
         border-collapse: collapse;
@@ -139,7 +145,7 @@
         font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.4px;
-        border-bottom: 1px solid #F0EFEB;
+        border-bottom: 1px solid var(--c-border-soft);
         background: #fff;
         position: sticky;
         top: 0;
@@ -147,15 +153,15 @@
     }
     .tk-table td {
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid #F5F4F0;
-        color: #4A4A46;
+        border-bottom: 1px solid var(--c-border-softer);
+        color: var(--c-fg-soft);
     }
     .tk-table tbody tr { transition: background .1s; }
     .tk-table tbody tr:hover { background: #F8F8F6; }
     .tk-table tbody tr.clickable { cursor: pointer; }
     .tk-table tbody tr.selected { background: #EFF6FF !important; }
     .tk-table tbody tr.selected td { color: #1D4ED8; }
-    .tk-table td.cell-mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.88rem; color: #6B6B67; }
+    .tk-table td.cell-mono { font-family: 'SF Mono', 'Consolas', monospace; font-size: 0.88rem; color: var(--c-fg-muted); }
     .btn-icon-danger {
         display: inline-flex; align-items: center; justify-content: center;
         width: 28px; height: 28px; border-radius: 6px; border: none;
@@ -165,7 +171,7 @@
     .btn-icon-danger:hover { background: #FEF2F2; color: #DC2626; }
     .btn-icon-danger svg { width: 14px; height: 14px; }
 
-    /* ── Status badges ─────────────────────────────────────────────────────── */
+    /* ── Status badges ──────────────────────────────────────────────────── */
     .status-badge {
         display: inline-flex;
         align-items: center;
@@ -195,106 +201,16 @@
     .status-da_emettere { background: #ECFDF5; color: #047857; }
     .status-da_emettere::before { background: #34D399; }
 
-    /* ── Buttons ───────────────────────────────────────────────────────────── */
-    .btn-primary {
-        padding: 0.42rem 1rem;
-        font-size: 0.92rem;
-        font-weight: 600;
-        background: #1C1C1A;
-        color: #fff;
-        border: none;
-        border-radius: 7px;
-        cursor: pointer;
-        font-family: inherit;
-        transition: opacity .15s;
-    }
-    .btn-primary:hover { opacity: 0.85; }
-    .btn-primary:disabled { opacity: 0.35; cursor: default; }
-
-    .btn-secondary {
-        padding: 0.42rem 1rem;
-        font-size: 0.92rem;
-        font-weight: 500;
-        background: #fff;
-        color: #4A4A46;
-        border: 1px solid #E0DFDB;
-        border-radius: 7px;
-        cursor: pointer;
-        font-family: inherit;
-        transition: background .12s;
-    }
-    .btn-secondary:hover { background: #F5F4F0; }
-
-    /* ── Modal ─────────────────────────────────────────────────────────────── */
-    .tk-modal-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.4);
-        z-index: 2000;
-        align-items: flex-start;
-        justify-content: center;
-        padding-top: min(10vh, 80px);
-        overflow-y: auto;
-    }
-    .tk-modal-overlay.show { display: flex; }
-    .tk-modal {
-        background: #fff;
-        border-radius: 14px;
-        box-shadow: 0 16px 48px rgba(0,0,0,0.18);
-        width: 520px;
-        max-width: 95vw;
-        max-height: 85vh;
-        overflow-y: auto;
-        padding: 1.5rem;
-        animation: modalIn .18s ease-out;
-    }
-    @keyframes modalIn { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
-    .tk-modal h3 {
-        font-size: 1.15rem;
-        font-weight: 700;
-        margin-bottom: 1.15rem;
-        color: #1C1C1A;
-    }
-
-    .form-group { margin-bottom: 0.85rem; }
-    .form-group label {
-        display: block;
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #6B6B67;
-        margin-bottom: 0.25rem;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-    }
-    .form-group textarea,
-    .form-group input[type="text"] {
-        width: 100%;
-        padding: 0.45rem 0.7rem;
-        font-size: 0.94rem;
-        border: 1px solid #E0DFDB;
-        border-radius: 7px;
-        background: #FAFAF9;
-        color: #1C1C1A;
-        font-family: inherit;
-        outline: none;
-        transition: border-color .15s, background .15s;
-    }
-    .form-group textarea:focus,
-    .form-group input:focus { border-color: #9CA3AF; background: #fff; }
-
-    /* ── Searchable user input ─────────────────────────────────────────────── */
-    .user-autocomplete {
-        position: relative;
-    }
+    /* ── Searchable user input ─────────────────────────────────────────── */
+    .user-autocomplete { position: relative; }
     .user-autocomplete input {
         width: 100%;
         padding: 0.45rem 0.7rem;
         font-size: 0.94rem;
-        border: 1px solid #E0DFDB;
+        border: 1px solid var(--c-border);
         border-radius: 7px;
         background: #FAFAF9;
-        color: #1C1C1A;
+        color: var(--c-fg);
         font-family: inherit;
         outline: none;
         transition: border-color .15s, background .15s;
@@ -308,9 +224,9 @@
         left: 0;
         right: 0;
         background: #fff;
-        border: 1px solid #E0DFDB;
+        border: 1px solid var(--c-border);
         border-radius: 7px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        box-shadow: var(--sh-md);
         max-height: 180px;
         overflow-y: auto;
         z-index: 10;
@@ -320,7 +236,7 @@
     .user-autocomplete .ac-item {
         padding: 0.45rem 0.7rem;
         font-size: 0.94rem;
-        color: #4A4A46;
+        color: var(--c-fg-soft);
         cursor: pointer;
         transition: background .1s;
         display: flex;
@@ -340,7 +256,7 @@
     }
     .user-autocomplete input.selected { font-weight: 600; }
 
-    /* ── Assignees row ─────────────────────────────────────────────────────── */
+    /* ── Assignees row ──────────────────────────────────────────────────── */
     .assignees-row {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
@@ -351,26 +267,134 @@
     .rev-count-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
-        padding: 0.35rem 0.75rem;
-        background: #F3F4F6;
-        border-radius: 8px;
-        font-size: 0.92rem;
-        color: #4A4A46;
-        font-weight: 500;
+        gap: 0.4rem;
+        padding: 0.3rem 0.7rem;
+        background: var(--c-surface-2);
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-pill);
+        font-size: 0.82rem;
+        color: var(--c-fg-soft);
+        font-weight: 600;
     }
-    .rev-count-chip svg { width: 14px; height: 14px; color: #9CA3AF; }
+    .rev-count-chip svg { width: 13px; height: 13px; color: var(--c-fg-muted); }
 
     .modal-footer {
         display: flex;
         gap: 0.5rem;
         justify-content: flex-end;
-        margin-top: 1.25rem;
         padding-top: 1rem;
-        border-top: 1px solid #F0EFEB;
+        margin-top: 0;
     }
 
-    /* ── Empty state ───────────────────────────────────────────────────────── */
+    /* ── Ticket creation modal enhancements ─────────────────────────────── */
+    #createTicketModal .modal {
+        width: min(760px, 94vw);
+        padding: 0;
+        overflow: hidden;
+        border-radius: 18px;
+    }
+    .ct-modal-header {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 1.35rem 1.6rem 1.15rem;
+        border-bottom: 1px solid var(--c-border-soft);
+        background: var(--c-surface);
+    }
+    .ct-modal-icon {
+        flex-shrink: 0;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #1C1C1A 0%, #3A3A38 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+    }
+    .ct-modal-icon svg { width: 18px; height: 18px; }
+    .ct-modal-header-text { flex: 1; min-width: 0; }
+    .ct-modal-header-text h3 {
+        font-size: var(--fs-lg);
+        font-weight: 700;
+        color: var(--c-text);
+        margin: 0 0 0.1rem;
+        letter-spacing: -0.2px;
+    }
+    .ct-modal-header-text p {
+        font-size: var(--fs-sm);
+        color: var(--c-text-muted);
+        margin: 0;
+    }
+    .ct-modal-close {
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: var(--r-md);
+        color: var(--c-fg-muted);
+        cursor: pointer;
+        transition: background .12s, color .12s;
+        margin-left: auto;
+    }
+    .ct-modal-close:hover { background: var(--c-surface-2); color: var(--c-fg); }
+    .ct-modal-close svg { width: 16px; height: 16px; }
+    .ct-modal-body {
+        padding: 1.35rem 1.6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+    }
+    .ct-section {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+    }
+    .ct-section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .ct-section-title {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--c-fg-muted);
+    }
+    .ct-section-title svg { width: 13px; height: 13px; }
+    .ct-rev-table-wrap {
+        border: 1px solid var(--c-border);
+        border-radius: var(--r-lg);
+        overflow: hidden;
+        background: var(--c-surface);
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    .ct-assignees-wrap {
+        background: var(--c-surface);
+        border: 1px solid var(--c-border-soft);
+        border-radius: var(--r-lg);
+        padding: 0.85rem 0.9rem;
+    }
+    .ct-modal-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        padding: 1rem 1.6rem 1.35rem;
+        border-top: 1px solid var(--c-border-soft);
+        background: var(--c-surface);
+    }
+
+    /* ── Empty state ────────────────────────────────────────────────────── */
     .empty-state {
         display: flex;
         flex-direction: column;
@@ -379,34 +403,149 @@
         padding: 2rem 1rem;
         text-align: center;
     }
-    .empty-state svg { width: 36px; height: 36px; color: #D8D7D2; margin-bottom: 0.6rem; }
-    .empty-state .empty-title { font-size: 0.94rem; font-weight: 600; color: #6B6B67; margin-bottom: 0.2rem; }
+    .empty-state svg { width: 36px; height: 36px; color: var(--c-border); margin-bottom: 0.6rem; }
+    .empty-state .empty-title { font-size: 0.94rem; font-weight: 600; color: var(--c-fg-muted); margin-bottom: 0.2rem; }
     .empty-state .empty-desc { font-size: 0.88rem; color: #AEADA8; max-width: 280px; }
 
-    /* ── Toast ──────────────────────────────────────────────────────────────── */
-    .tk-toast-container {
-        position: fixed;
-        bottom: 1.5rem;
-        right: 1.5rem;
-        z-index: 9999;
+    /* ── Flatpickr overrides ────────────────────────────────────────────── */
+    .flatpickr-calendar {
+        font-family: inherit !important;
+        border-radius: 14px !important;
+        border: 1px solid var(--c-border) !important;
+        box-shadow: 0 12px 36px rgba(0,0,0,0.13) !important;
+        overflow: hidden;
+        padding: 8px !important;
+    }
+    .flatpickr-calendar.open { z-index: 9999 !important; }
+    .flatpickr-months {
+        background: var(--c-card) !important;
+        padding: 2px 4px 0 !important;
+    }
+    .flatpickr-months .flatpickr-month { color: var(--c-text) !important; fill: var(--c-text) !important; height: 36px !important; }
+    .flatpickr-current-month { font-size: 0.9rem !important; font-weight: 600 !important; color: var(--c-text) !important; }
+    .flatpickr-current-month select { font-family: inherit !important; color: var(--c-text) !important; }
+    .flatpickr-prev-month, .flatpickr-next-month { color: var(--c-fg-muted) !important; fill: var(--c-fg-muted) !important; padding: 6px !important; border-radius: 8px !important; }
+    .flatpickr-prev-month:hover, .flatpickr-next-month:hover { background: var(--c-surface-2) !important; color: var(--c-text) !important; fill: var(--c-text) !important; }
+    .flatpickr-weekdays { background: var(--c-card) !important; }
+    span.flatpickr-weekday { font-size: 0.72rem !important; font-weight: 700 !important; color: var(--c-text-muted) !important; background: transparent !important; }
+    .flatpickr-days { border: none !important; padding: 2px !important; }
+    .dayContainer { padding: 0 !important; }
+    .flatpickr-day {
+        font-family: inherit !important;
+        font-size: 0.84rem !important;
+        color: var(--c-text) !important;
+        border-radius: 8px !important;
+        border: none !important;
+        height: 34px !important;
+        line-height: 34px !important;
+        max-width: 34px !important;
+    }
+    .flatpickr-day:hover { background: var(--c-surface-2) !important; color: var(--c-text) !important; }
+    .flatpickr-day.selected, .flatpickr-day.selected:hover {
+        background: var(--c-text) !important;
+        color: #fff !important;
+    }
+    .flatpickr-day.today { border-bottom: 2px solid #9CA3AF !important; }
+    .flatpickr-day.today.selected { border-bottom: none !important; }
+    .flatpickr-day.flatpickr-disabled, .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: var(--c-text-faint) !important; }
+    .ct-rev-date-input {
+        font-size: 0.82rem;
+        padding: 0.28rem 0.6rem;
+        border: 1px solid var(--c-border);
+        border-radius: 7px;
+        background: var(--c-surface);
+        color: var(--c-text);
+        font-family: inherit;
+        outline: none;
+        cursor: pointer;
+        transition: border-color .15s;
+        width: 112px;
+        text-align: center;
+    }
+    .ct-rev-date-input:focus { border-color: #9CA3AF; background: #fff; }
+
+    /* ── Recents section ──────────────────────────────────────────── */
+    .recents-section {
+        margin: 0 0 1.75rem;
+        max-width: 960px;
+    }
+    .recents-header {
+        display: flex; align-items: center; gap: 0.4rem;
+        font-size: 0.72rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: var(--c-fg-muted, #6B7280);
+        margin-bottom: 0.7rem;
+    }
+    .recents-header svg { width: 13px; height: 13px; }
+    .recents-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 0.7rem;
+    }
+    .recent-card {
+        background: #fff;
+        border: 1px solid var(--c-border, #E5E7EB);
+        border-radius: 12px;
+        padding: 0.9rem 1rem;
+        cursor: pointer;
+        transition: border-color .12s, transform .12s, box-shadow .12s;
+        text-align: left;
+        font-family: inherit;
+        display: flex; flex-direction: column; gap: 0.25rem;
+        min-width: 0;
+    }
+    .recent-card:hover {
+        border-color: var(--c-fg-soft, #9CA3AF);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+    }
+    .recent-card-top {
+        display: flex; align-items: center; gap: 0.45rem;
+    }
+    .recent-card-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #10B981; flex-shrink: 0;
+    }
+    .recent-card-dot.done { background: #9CA3AF; }
+    .recent-card-job {
+        font-size: 1rem; font-weight: 700;
+        color: var(--c-fg, #111827);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .recent-card-name {
+        font-size: 0.83rem; font-weight: 500;
+        color: var(--c-fg, #111827);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .recent-card-detail {
+        font-size: 0.78rem; color: var(--c-fg-muted, #6B7280);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .recent-card-meta {
+        display: flex; align-items: center; gap: 0.4rem;
+        margin-top: 0.3rem; flex-wrap: wrap;
+    }
+    .recent-card-badge {
+        font-size: 0.7rem; font-weight: 600;
+        padding: 0.1rem 0.45rem; border-radius: 99px;
+        background: var(--c-surface-alt, #F3F4F6);
+        color: var(--c-fg-muted, #6B7280);
+        white-space: nowrap;
+    }
+    .recent-card-statuses {
         display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.3rem;
+        margin-top: 0.4rem;
     }
-    .tk-toast {
-        padding: 0.6rem 1rem;
-        border-radius: 8px;
-        font-size: 0.92rem;
-        font-weight: 500;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-        animation: toastIn .25s ease-out;
-        max-width: 360px;
+    .recent-card-statuses .status-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.5rem;
     }
-    .tk-toast.success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
-    .tk-toast.error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
-    .tk-toast.info { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
-    @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/it.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -419,12 +558,28 @@
     </div>
     <div class="search-bar">
         <input type="text" id="searchCommessa" placeholder="N° commessa…" onkeydown="if(event.key==='Enter')doSearch()">
-        <select id="filterReparto" onchange="if(this.value)doSearch()">
-            <option value="">Tutti i reparti</option>
-        </select>
+        <div class="custom-select-wrap">
+            <button type="button" class="custom-select-btn" id="filterRepartoBtn" onclick="toggleRepartoDropdown()">
+                <span id="filterRepartoLabel">Tutti i reparti</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M1 1l4 4 4-4"/></svg>
+            </button>
+            <div class="custom-select-menu" id="repartoMenu">
+                <div class="custom-select-option selected" data-value="" onclick="selectReparto(this)">Tutti i reparti</div>
+            </div>
+            <select id="filterReparto" style="display:none;"></select>
+        </div>
         <button class="btn btn-primary" onclick="doSearch()">Cerca</button>
     </div>
 </div>
+
+<!-- Recents -->
+<section class="recents-section" id="recentsSection" style="display:none;">
+    <div class="recents-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        <span>Ticket aperti di recente</span>
+    </div>
+    <div class="recents-grid" id="recentsGrid"></div>
+</section>
 
 <!-- Results (shown after search) -->
 <div id="tkResult" style="display:none;">
@@ -445,8 +600,19 @@
     </div>
 
     <!-- Stato filter (only in ticket tab) -->
-    <div id="filterStatoRow" style="display:none;margin-bottom:0.85rem;">
-        <select id="filterStato" onchange="loadTickets()" style="padding:0.42rem 0.75rem;font-size:0.9rem;border:1px solid #E0DFDB;border-radius:8px;background:#fff;font-family:inherit;color:#4A4A46;outline:none;">
+    <div id="filterStatoRow" style="display:none;margin-bottom:0.85rem;width:fit-content;">
+        <div class="custom-select-wrap">
+            <button type="button" class="custom-select-btn" id="filterStatoBtn" onclick="toggleStatoDropdown()">
+                <span id="filterStatoLabel">Tutti i ticket</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M1 1l4 4 4-4"/></svg>
+            </button>
+            <div class="custom-select-menu" id="statoMenu">
+                <div class="custom-select-option selected" data-value="" onclick="selectStato(this)">Tutti i ticket</div>
+                <div class="custom-select-option" data-value="0" onclick="selectStato(this)">Solo attivi</div>
+                <div class="custom-select-option" data-value="1" onclick="selectStato(this)">Solo conclusi</div>
+            </div>
+        </div>
+        <select id="filterStato" style="display:none;">
             <option value="">Tutti i ticket</option>
             <option value="0">Solo attivi</option>
             <option value="1">Solo conclusi</option>
@@ -473,57 +639,104 @@
 </div>
 
 <!-- Toast container -->
-<div class="tk-toast-container" id="toastContainer"></div>
+
 
 <!-- Modal: Crea Ticket -->
-<div class="tk-modal-overlay" id="createTicketModal">
-    <div class="tk-modal">
-        <h3>Nuovo Ticket</h3>
+<div class="modal-overlay" id="createTicketModal">
+    <div class="modal">
 
-        <div class="form-group">
-            <label>Revisioni</label>
-            <div class="rev-count-chip" id="ctRevCount">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
-                <span id="ctRevText">0 revisioni selezionate</span>
+        <!-- Header -->
+        <div class="ct-modal-header">
+            <div class="ct-modal-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a3 3 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z"/></svg>
             </div>
-            <div id="ctRevList" style="margin-top:0.5rem;max-height:220px;overflow-y:auto;border:1px solid #E0DFDB;border-radius:8px;"></div>
-        </div>
-
-        <div class="assignees-row">
-            <div class="form-group">
-                <label>Esecutore</label>
-                <div class="user-autocomplete" id="acEsecutore">
-                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
-                    <input type="hidden" id="ctEsecutore">
-                    <div class="ac-dropdown"></div>
-                </div>
+            <div class="ct-modal-header-text">
+                <h3>Nuovo Ticket</h3>
+                <p>Assegna le revisioni selezionate e imposta il team</p>
             </div>
-            <div class="form-group">
-                <label>Revisore</label>
-                <div class="user-autocomplete" id="acRevisore">
-                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
-                    <input type="hidden" id="ctRevisore">
-                    <div class="ac-dropdown"></div>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Approvatore</label>
-                <div class="user-autocomplete" id="acApprovatore">
-                    <input type="text" placeholder="Cerca utente…" autocomplete="off">
-                    <input type="hidden" id="ctApprovatore">
-                    <div class="ac-dropdown"></div>
-                </div>
-            </div>
+            <button class="ct-modal-close" onclick="closeModal('createTicketModal')" title="Chiudi">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+            </button>
         </div>
 
-        <div class="form-group">
-            <label>Nota</label>
-            <textarea id="ctNota" rows="2" placeholder="Facoltativa…"></textarea>
+        <!-- Body -->
+        <div class="ct-modal-body">
+
+            <!-- Revisioni -->
+            <div class="ct-section">
+                <div class="ct-section-head">
+                    <div class="ct-section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
+                        Revisioni
+                    </div>
+                    <div class="rev-count-chip" id="ctRevCount">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                        <span id="ctRevText">0 revisioni selezionate</span>
+                    </div>
+                </div>
+                <div class="ct-rev-table-wrap" id="ctRevList"></div>
+            </div>
+
+            <!-- Team -->
+            <div class="ct-section">
+                <div class="ct-section-head">
+                    <div class="ct-section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
+                        Team
+                    </div>
+                </div>
+                <div class="ct-assignees-wrap">
+                    <div class="assignees-row">
+                        <div class="fg">
+                            <label>Esecutore</label>
+                            <div class="user-autocomplete" id="acEsecutore">
+                                <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                                <input type="hidden" id="ctEsecutore">
+                                <div class="ac-dropdown"></div>
+                            </div>
+                        </div>
+                        <div class="fg">
+                            <label>Revisore</label>
+                            <div class="user-autocomplete" id="acRevisore">
+                                <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                                <input type="hidden" id="ctRevisore">
+                                <div class="ac-dropdown"></div>
+                            </div>
+                        </div>
+                        <div class="fg">
+                            <label>Approvatore</label>
+                            <div class="user-autocomplete" id="acApprovatore">
+                                <input type="text" placeholder="Cerca utente…" autocomplete="off">
+                                <input type="hidden" id="ctApprovatore">
+                                <div class="ac-dropdown"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nota -->
+            <div class="ct-section">
+                <div class="ct-section-head">
+                    <div class="ct-section-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z"/></svg>
+                        Nota
+                        <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.75rem;color:var(--c-fg-muted);margin-left:0.2rem;">(facoltativa)</span>
+                    </div>
+                </div>
+                <div class="fg" style="margin-bottom:0;">
+                    <textarea id="ctNota" rows="2" placeholder="Aggiungi una nota al ticket…" style="resize:none;"></textarea>
+                </div>
+            </div>
+
         </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="closeModal('createTicketModal')">Annulla</button>
-            <button class="btn-primary" id="btnSubmitCreate" onclick="submitCreateTicket()">Crea Ticket</button>
+
+        <!-- Footer -->
+        <div class="ct-modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('createTicketModal')">Annulla</button>
+            <button class="btn btn-primary" id="btnSubmitCreate" onclick="submitCreateTicket()">Crea Ticket</button>
         </div>
+
     </div>
 </div>
 
@@ -549,10 +762,11 @@ function debounce(fn, delay) {
 function showToast(msg, type = 'info') {
     const c = document.getElementById('toastContainer');
     const el = document.createElement('div');
-    el.className = `tk-toast ${type}`;
+    el.className = `toast ${type}`;
     el.textContent = msg;
     c.appendChild(el);
-    setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, 3500);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3500);
 }
 
 async function api(method, url, body) {
@@ -592,9 +806,41 @@ async function deleteTicket(id, nome) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 async function init() {
-    await Promise.all([loadRepartiFilter(), loadUsers()]);
+    await Promise.all([loadRepartiFilter(), loadUsers(), loadRecents()]);
     // Do not auto-load: wait for user to search
 }
+
+async function loadRecents() {
+    const { ok, data } = await api('GET', '/api/tickets/?concluso=0');
+    if (!ok || !Array.isArray(data)) return;
+    const items = data.slice(0, 5);
+    const sec = document.getElementById('recentsSection');
+    const grid = document.getElementById('recentsGrid');
+    if (!items.length) { sec.style.display = 'none'; return; }
+    grid.innerHTML = '';
+    items.forEach(t => {
+        const el = document.createElement('button');
+        el.type = 'button';
+        el.className = 'recent-card';
+        el.innerHTML = `
+            <div class="recent-card-top">
+                <span class="recent-card-dot${t.is_concluso ? ' done' : ''}"></span>
+                <span class="recent-card-job">${escapeHtml(t.nome || t.commessa || 'Ticket')}</span>
+            </div>
+            ${t.reparto ? `<span class="recent-card-detail">${escapeHtml(t.reparto)}</span>` : ''}
+            <div class="recent-card-statuses">${renderStatusCounts(t)}</div>
+        `;
+        el.addEventListener('click', () => {
+            window.location.href = `/gestione-ticket/${t.id}/`;
+        });
+        grid.appendChild(el);
+    });
+    sec.style.display = '';
+}
+function hideRecents() {
+    document.getElementById('recentsSection').style.display = 'none';
+}
+function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ── Search ───────────────────────────────────────────────────────────────────
 function doSearch() {
@@ -604,6 +850,7 @@ function doSearch() {
         showToast('Inserisci un numero di commessa o seleziona un reparto.', 'info');
         return;
     }
+    hideRecents();
     document.getElementById('tkResult').style.display = '';
     loadAll();
 }
@@ -612,9 +859,55 @@ async function loadRepartiFilter() {
     const { ok, data } = await api('GET', '/api/reparti/');
     if (!ok || !data.reparti) return;
     repartiCache = data.reparti;
+    /* keep hidden select in sync (used by doSearch, etc.) */
     const sel = document.getElementById('filterReparto');
     sel.innerHTML = '<option value="">Tutti i reparti</option>' +
         data.reparti.map(r => `<option value="${r.nome}">${r.nome}</option>`).join('');
+    /* populate custom menu */
+    const menu = document.getElementById('repartoMenu');
+    menu.innerHTML = '<div class="custom-select-option selected" data-value="" onclick="selectReparto(this)">Tutti i reparti</div>' +
+        data.reparti.map(r => `<div class="custom-select-option" data-value="${esc(r.nome)}" onclick="selectReparto(this)">${esc(r.nome)}</div>`).join('');
+}
+
+function toggleRepartoDropdown() {
+    const btn  = document.getElementById('filterRepartoBtn');
+    const menu = document.getElementById('repartoMenu');
+    btn.classList.toggle('open');
+    menu.classList.toggle('open');
+}
+
+function selectReparto(el) {
+    const value = el.dataset.value;
+    /* update hidden select */
+    document.getElementById('filterReparto').value = value;
+    /* update label */
+    document.getElementById('filterRepartoLabel').textContent = el.textContent;
+    /* update selected state */
+    document.querySelectorAll('#repartoMenu .custom-select-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    /* close */
+    document.getElementById('filterRepartoBtn').classList.remove('open');
+    document.getElementById('repartoMenu').classList.remove('open');
+    /* trigger search */
+    if (value) doSearch();
+}
+
+function toggleStatoDropdown() {
+    const btn  = document.getElementById('filterStatoBtn');
+    const menu = document.getElementById('statoMenu');
+    btn.classList.toggle('open');
+    menu.classList.toggle('open');
+}
+
+function selectStato(el) {
+    const value = el.dataset.value;
+    document.getElementById('filterStato').value = value;
+    document.getElementById('filterStatoLabel').textContent = el.textContent;
+    document.querySelectorAll('#statoMenu .custom-select-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('filterStatoBtn').classList.remove('open');
+    document.getElementById('statoMenu').classList.remove('open');
+    loadTickets();
 }
 
 function loadAll() {
@@ -842,9 +1135,9 @@ function openCreateTicketModal() {
                 <span style="color:#4A4A46;">${esc(label || '—')}</span>
             </td>
             <td style="padding:0.45rem 0.6rem;text-align:right;">
-                <input type="date" class="ct-rev-date" data-rev-id="${id}"
-                    value="${esc(r.dis_plan_date_iso || '')}"
-                    style="font-size:0.82rem;padding:0.25rem 0.4rem;border:1px solid #E0DFDB;border-radius:6px;">
+                <input type="text" class="ct-rev-date" data-rev-id="${id}"
+                    placeholder="gg/mm/aaaa"
+                    data-iso="${esc(r.dis_plan_date_iso || '')}">
             </td>
         </tr>`;
     }).join('');
@@ -855,6 +1148,27 @@ function openCreateTicketModal() {
         </tr></thead>
         <tbody>${rows}</tbody>
     </table>`;
+
+    // Init Flatpickr on date inputs
+    list.querySelectorAll('.ct-rev-date').forEach(inp => {
+        inp.classList.add('ct-rev-date-input');
+        flatpickr(inp, {
+            locale: 'it',
+            dateFormat: 'd/m/Y',
+            defaultDate: inp.dataset.iso || null,
+            allowInput: true,
+            disableMobile: true,
+            onReady(_, __, fp) {
+                // store ISO for submission
+                fp.element.dataset.isoVal = fp.element.dataset.iso || '';
+            },
+            onChange(selectedDates, dateStr, fp) {
+                fp.element.dataset.isoVal = selectedDates.length
+                    ? selectedDates[0].toISOString().split('T')[0]
+                    : '';
+            }
+        });
+    });
 
     // Reset autocomplete fields
     ['acEsecutore', 'acRevisore', 'acApprovatore'].forEach(id => {
@@ -896,7 +1210,7 @@ async function submitCreateTicket() {
     // Raccogli le date di invio previste per ciascuna revisione
     const revDates = {};
     document.querySelectorAll('.ct-rev-date').forEach(inp => {
-        revDates[parseInt(inp.dataset.revId)] = inp.value || '';
+        revDates[parseInt(inp.dataset.revId)] = inp.dataset.isoVal || inp.value || '';
     });
 
     const payload = {
@@ -935,11 +1249,19 @@ async function submitCreateTicket() {
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-document.querySelectorAll('.tk-modal-overlay').forEach(overlay => {
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('show'); });
 });
 document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') document.querySelectorAll('.tk-modal-overlay.show').forEach(o => o.classList.remove('show'));
+    if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.show').forEach(o => o.classList.remove('show'));
+});
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.custom-select-wrap')) {
+        document.getElementById('filterRepartoBtn')?.classList.remove('open');
+        document.getElementById('repartoMenu')?.classList.remove('open');
+        document.getElementById('filterStatoBtn')?.classList.remove('open');
+        document.getElementById('statoMenu')?.classList.remove('open');
+    }
 });
 
 // ── Start ───────────────────────────────────────────────────────────────────

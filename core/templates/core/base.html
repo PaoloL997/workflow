@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -8,17 +8,89 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* ── Design tokens ───────────────────────────────────────────────── */
+        :root {
+            /* Palette */
+            --c-bg:           #EDECEA;
+            --c-card:         #FFFFFF;
+            --c-surface:      #FAFAF8;
+            --c-surface-2:    #F5F4F0;
+            --c-surface-3:    #F0EFEB;
+
+            --c-text:         #1C1C1A;
+            --c-text-muted:   #6B6B67;
+            --c-text-dim:     #9CA3AF;
+            --c-text-faint:   #C5C5C0;
+
+            --c-border:       #E0DFDB;
+            --c-border-2:     #D8D7D2;
+            --c-border-light: #F0EFEB;
+
+            --c-accent:       #1C1C1A;
+            --c-accent-hover: #3A3A38;
+
+            --c-danger:       #EF4444;
+            --c-danger-hover: #DC2626;
+            --c-danger-bg:    #FEF2F2;
+            --c-danger-text:  #991B1B;
+            --c-danger-border:#FECACA;
+
+            --c-success-bg:   #F0FDF4;
+            --c-success-text: #15803D;
+            --c-success-border:#BBF7D0;
+
+            --c-warning-bg:   #FFFBEB;
+            --c-warning-text: #92400E;
+            --c-warning-border:#FDE68A;
+
+            --c-info-bg:      #DBEAFE;
+            --c-info-text:    #1D4ED8;
+
+            /* Aliases (for compatibility across templates) */
+            --c-fg:           #1C1C1A;
+            --c-fg-soft:      #4A4A46;
+            --c-fg-muted:     #6B6B67;
+            --c-border-soft:  #F0EFEB;
+            --c-border-softer:#F5F4F0;
+
+            /* Radius */
+            --r-sm:   6px;
+            --r-md:   8px;
+            --r-lg:   10px;
+            --r-xl:   14px;
+            --r-pill: 999px;
+
+            /* Shadow */
+            --sh-sm:  0 1px 2px rgba(0,0,0,0.04);
+            --sh-md:  0 2px 8px rgba(0,0,0,0.06);
+            --sh-lg:  0 8px 24px rgba(0,0,0,0.08);
+            --sh-xl:  0 16px 48px rgba(0,0,0,0.14);
+
+            /* Typography */
+            --fs-xs:   0.7rem;
+            --fs-sm:   0.82rem;
+            --fs-md:   0.875rem;
+            --fs-base: 0.92rem;
+            --fs-lg:   1.05rem;
+            --fs-xl:   1.15rem;
+            --fs-2xl:  1.5rem;
+
+            /* Transitions */
+            --t-fast: 0.12s;
+            --t-base: 0.15s;
+        }
+
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: #EDECEA;
-            color: #1C1C1A;
+            background-color: var(--c-bg);
+            color: var(--c-text);
             min-height: 100vh;
             font-size: 17px;
         }
 
-        /* â”€â”€ Navbar â”€â”€ */
+        /* ── Navbar ──────────────────────────────────────────────────────── */
         .navbar {
             display: flex;
             align-items: center;
@@ -239,7 +311,7 @@
         }
         .dropdown-logout:hover { background: #FEF2F2; }
 
-        /* â”€â”€ Page content â”€â”€ */
+        /* ── Page content ────────────────────────────────────────────────── */
         .page-content {
             padding: 1.5rem 2.5rem 2rem;
         }
@@ -252,27 +324,202 @@
             letter-spacing: -0.5px;
         }
 
-        /* â”€â”€ Messages â”€â”€ */
+        /* ── Messages ────────────────────────────────────────────────────── */
         .messages { list-style: none; margin-bottom: 1.5rem; }
         .messages li {
             padding: 0.75rem 1rem;
-            border-radius: 8px;
+            border-radius: var(--r-md);
             margin-bottom: 0.5rem;
-            font-size: 0.875rem;
+            font-size: var(--fs-md);
         }
-        .messages .error { background: #FEF2F2; color: #B91C1C; border: 1px solid #FECACA; }
-        .messages .success { background: #F0FDF4; color: #15803D; border: 1px solid #BBF7D0; }
-        .messages .info { background: #F5F4F0; color: #4A4A46; border: 1px solid #D8D7D2; }
+        .messages .error   { background: var(--c-danger-bg);  color: var(--c-danger-text);  border: 1px solid var(--c-danger-border); }
+        .messages .success { background: var(--c-success-bg); color: var(--c-success-text); border: 1px solid var(--c-success-border); }
+        .messages .info    { background: var(--c-surface-2);  color: #4A4A46; border: 1px solid var(--c-border-2); }
 
         .navbar-divider {
             height: 1px;
-            background: #D8D7D2;
+            background: var(--c-border-2);
             margin: 0 2.5rem;
         }
+
+        /* ── Buttons (canonical) ─────────────────────────────────────────── */
+        .btn {
+            padding: 0.55rem 1.05rem;
+            border-radius: var(--r-lg);
+            font-size: var(--fs-md);
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background var(--t-base), border-color var(--t-base), color var(--t-base), opacity var(--t-base);
+            font-family: inherit;
+            line-height: 1.2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+        }
+        .btn:disabled { opacity: 0.45; cursor: default; }
+        .btn-primary { background: var(--c-accent); color: #FFFFFF; }
+        .btn-primary:hover:not(:disabled) { background: var(--c-accent-hover); }
+        .btn-outline { background: var(--c-card); color: var(--c-text); border: 1px solid var(--c-border-2); }
+        .btn-outline:hover:not(:disabled) { background: var(--c-surface-2); }
+        .btn-danger { background: var(--c-danger); color: #FFFFFF; }
+        .btn-danger:hover:not(:disabled) { background: var(--c-danger-hover); }
+        .btn-soft-danger { background: var(--c-danger-bg); color: var(--c-danger-text); border: 1px solid var(--c-danger-border); }
+        .btn-soft-danger:hover:not(:disabled) { background: #FECACA; }
+        .btn-sm { padding: 0.35rem 0.85rem; font-size: var(--fs-sm); border-radius: var(--r-md); }
+        .btn-xs { padding: 0.25rem 0.65rem; font-size: var(--fs-xs); border-radius: var(--r-sm); }
+
+        /* ── Search hero (shared on list pages) ──────────────────────────── */
+        .search-hero {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            padding: 0.5rem 0 1rem;
+        }
+        .search-hero-title {
+            font-size: var(--fs-2xl);
+            font-weight: 700;
+            color: var(--c-text);
+            letter-spacing: -0.4px;
+            margin-bottom: 0.15rem;
+        }
+        .search-hero-sub {
+            font-size: var(--fs-md);
+            color: var(--c-text-muted);
+            margin: 0;
+        }
+        .search-bar {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .search-bar input[type="text"], .search-bar input[type="search"], .search-bar select {
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--c-border-2);
+            border-radius: var(--r-pill);
+            font-size: 0.9rem;
+            background: var(--c-card);
+            color: var(--c-text);
+            outline: none;
+            font-family: inherit;
+            transition: border-color var(--t-base);
+        }
+        .search-bar input::placeholder { color: var(--c-text-dim); }
+        .search-bar input:focus, .search-bar select:focus { border-color: #4A4A46; }
+
+        /* ── Modal (canonical) ───────────────────────────────────────────── */
+        .modal-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--c-card);
+            border-radius: var(--r-xl);
+            padding: 1.75rem;
+            width: 600px;
+            max-width: 92vw;
+            max-height: 88vh;
+            overflow-y: auto;
+            box-shadow: var(--sh-xl);
+            border: 1px solid var(--c-border);
+            animation: modalIn .18s ease-out;
+        }
+        .modal.modal-sm { width: 420px; }
+        @keyframes modalIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+        .modal h2, .modal h3 {
+            font-size: var(--fs-xl);
+            font-weight: 700;
+            color: var(--c-text);
+            margin-bottom: 1.15rem;
+            letter-spacing: -0.3px;
+        }
+        .modal-desc {
+            color: var(--c-text-muted);
+            font-size: 0.94rem;
+            margin: -0.6rem 0 1.15rem;
+            line-height: 1.5;
+        }
+        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
+
+        /* ── Form fields (canonical) ─────────────────────────────────────── */
+        .fg { margin-bottom: 0.85rem; }
+        .fg label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--c-text-muted);
+            margin-bottom: 0.28rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .fg input, .fg select, .fg textarea, .input, .select, .textarea {
+            width: 100%;
+            padding: 0.52rem 0.85rem;
+            border: 1px solid var(--c-border-2);
+            border-radius: var(--r-md);
+            font-size: var(--fs-md);
+            background: var(--c-surface);
+            color: var(--c-text);
+            outline: none;
+            font-family: inherit;
+            transition: border-color var(--t-base), background var(--t-base);
+        }
+        .fg input:focus, .fg select:focus, .fg textarea:focus,
+        .input:focus, .select:focus, .textarea:focus {
+            border-color: #4A4A46; background: var(--c-card);
+        }
+        .fg textarea, .textarea { resize: vertical; min-height: 80px; }
+        .fg-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .fg-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+        .fg .check-row { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.25rem; }
+        .fg .check-row input[type="checkbox"] { width: auto; accent-color: var(--c-accent); }
+        .fg .check-row label { font-size: var(--fs-md); color: var(--c-text); font-weight: 500; text-transform: none; letter-spacing: 0; margin: 0; }
+
+        /* ── Toast (canonical) ───────────────────────────────────────────── */
+        .toast-container {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--c-text);
+            color: #FFFFFF;
+            padding: 0.7rem 1.15rem;
+            border-radius: var(--r-lg);
+            font-size: var(--fs-md);
+            font-family: inherit;
+            font-weight: 500;
+            box-shadow: var(--sh-lg);
+            max-width: 340px;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity .2s, transform .2s;
+            pointer-events: auto;
+        }
+        .toast.show { opacity: 1; transform: none; }
+        .toast.success { background: var(--c-success-bg); color: var(--c-success-text); border-left: 3px solid #22C55E; }
+        .toast.error   { background: var(--c-danger-bg);  color: var(--c-danger-text);  border-left: 3px solid var(--c-danger); }
+        .toast.warn    { background: var(--c-warning-bg); color: var(--c-warning-text); border-left: 3px solid #F59E0B; }
+        .toast.info    { background: #EFF6FF; color: #1D4ED8; border-left: 3px solid #3B82F6; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+
+<div class="toast-container" id="toastContainer"></div>
 
 {% if user.is_authenticated %}
 <nav class="navbar">
@@ -282,7 +529,7 @@
         <a href="{% url 'home' %}" class="{% block nav_overview %}{% endblock %}">Overview</a>
         <a href="{% url 'gestione_documenti' %}" class="{% block nav_registro %}{% endblock %}">Gestione Documenti</a>
         <a href="{% url 'gestione_ticket' %}" class="{% block nav_ticket %}{% endblock %}">Gestione Ticket</a>
-        <a href="{% url 'impostazioni' %}" class="{% block nav_impostazioni %}{% endblock %}">Impostazioni</a>
+        <a href="{% url 'chatbot' %}" class="{% block nav_chatbot %}{% endblock %}">Chatbot</a>
     </div>
 
     <div class="navbar-end">
@@ -322,6 +569,23 @@
     </div>
 </nav>
 <div class="navbar-divider"></div>
+
+<script>
+    /* ── Toast helper (canonical) ─────────────────────────────────────── */
+    window.toast = function (message, kind = '') {
+        const c = document.getElementById('toastContainer');
+        if (!c) return;
+        const el = document.createElement('div');
+        el.className = 'toast' + (kind ? ' ' + kind : '');
+        el.textContent = message;
+        c.appendChild(el);
+        requestAnimationFrame(() => el.classList.add('show'));
+        setTimeout(() => {
+            el.classList.remove('show');
+            setTimeout(() => el.remove(), 220);
+        }, 2400);
+    };
+</script>
 
 <script>
     const avatarBtn = document.getElementById('avatarBtn');

@@ -116,12 +116,46 @@ class StatoEsterno(models.Model):
     class Meta:
         managed = True
         db_table = 'stati_esterni'
-        verbose_name = 'Stato esterno'
-        verbose_name_plural = 'Stati esterni'
+        verbose_name = 'Risposta del cliente'
+        verbose_name_plural = 'Risposte del cliente'
         ordering = ['nome']
 
     def __str__(self):
         return self.nome
+
+
+class ModelloDocumento(models.Model):
+    doc_title = models.CharField(
+        db_column='DocTitle', max_length=300,
+        verbose_name='Titolo documento',
+    )
+    item_no = models.CharField(
+        db_column='ItemNo', max_length=100, blank=True, default='',
+        verbose_name='Item',
+    )
+    codice_fisso = models.CharField(
+        db_column='CodiceFisso', max_length=100,
+        verbose_name='Codice fisso',
+        help_text='Parte fissa del numero documento interno B&R. '
+                  'Il numero finale sarà "{numero_commessa}-{codice_fisso}".',
+    )
+    reparto = models.CharField(
+        db_column='Reparto', max_length=100, blank=True, default='',
+        verbose_name='Reparto',
+    )
+
+    class Meta:
+        managed = True
+        db_table = 'modelli_documento'
+        verbose_name = 'Modello documento'
+        verbose_name_plural = 'Modelli documento'
+        ordering = ['doc_title']
+
+    def __str__(self):
+        return self.doc_title
+
+    def vendor_doc_for(self, job):
+        return f'{job}-{self.codice_fisso}'
 
 
 class Documento(models.Model):

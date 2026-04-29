@@ -5,57 +5,9 @@
 
 {% block extra_css %}
 <style>
-    /* ── Search hero ── */
-    .search-hero {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 1.5rem;
-        padding: 0.5rem 0 1rem;
-    }
-    .search-hero-text {}
-    .search-hero-title {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1C1C1A;
-        letter-spacing: -0.4px;
-        margin-bottom: 0.15rem;
-    }
-    .search-hero-sub {
-        font-size: 0.875rem;
-        color: #6B6B67;
-        margin: 0;
-    }
-    .search-bar {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-        flex-shrink: 0;
-        width: 320px;
-    }
-    .search-bar input {
-        flex: 1;
-        padding: 0.65rem 1rem;
-        border: 1px solid #D8D7D2;
-        border-radius: 10px;
-        font-size: 0.9rem;
-        background: #FFFFFF;
-        color: #1C1C1A;
-        outline: none;
-        font-family: inherit;
-        transition: border-color .15s;
-    }
-    .search-bar input::placeholder { color: #9CA3AF; }
-    .search-bar input:focus { border-color: #4A4A46; }
-
-    .btn { padding: 0.58rem 1.1rem; border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none; transition: background .15s; font-family: inherit; }
-    .btn-primary { background: #1C1C1A; color: #FFFFFF; }
-    .btn-primary:hover { background: #3A3A38; }
-    .btn-outline { background: #FFFFFF; color: #1C1C1A; border: 1px solid #D8D7D2; }
-    .btn-outline:hover { background: #F5F4F0; }
-    .btn-sm { padding: 0.32rem 0.8rem; font-size: 0.8rem; }
-    .btn-danger { background: #EF4444; color: #FFFFFF; }
-    .btn-danger:hover { background: #DC2626; }
+    /* Search bar override (page sets its width) */
+    .search-bar { width: 320px; }
+    .search-bar input { flex: 1; }
 
     /* ── Result ── */
     .commessa-result { display: none; }
@@ -429,58 +381,6 @@
         cursor: pointer;
     }
 
-    /* ── Modal overlay ── */
-    .modal-overlay {
-        display: none;
-        position: fixed; inset: 0;
-        background: rgba(0,0,0,0.25);
-        z-index: 900;
-        align-items: center;
-        justify-content: center;
-    }
-    .modal-overlay.show { display: flex; }
-    .modal {
-        background: #FFFFFF;
-        border-radius: 14px;
-        padding: 2rem;
-        width: 600px;
-        max-width: 92vw;
-        max-height: 88vh;
-        overflow-y: auto;
-        box-shadow: 0 16px 48px rgba(0,0,0,0.12);
-        border: 1px solid #E0DFDB;
-    }
-    .modal h2 {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #1C1C1A;
-        margin-bottom: 1.25rem;
-        letter-spacing: -0.3px;
-    }
-    .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.25rem; }
-
-    /* ── Form fields ── */
-    .fg { margin-bottom: 0.85rem; }
-    .fg label { display: block; font-size: 0.75rem; font-weight: 600; color: #6B6B67; margin-bottom: 0.28rem; text-transform: uppercase; letter-spacing: 0.03em; }
-    .fg input, .fg select {
-        width: 100%;
-        padding: 0.52rem 0.85rem;
-        border: 1px solid #D8D7D2;
-        border-radius: 8px;
-        font-size: 0.875rem;
-        background: #FAFAF8;
-        color: #1C1C1A;
-        outline: none;
-        font-family: inherit;
-        transition: border-color .15s, background .15s;
-    }
-    .fg input:focus, .fg select:focus { border-color: #4A4A46; background: #FFFFFF; }
-    .fg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    .fg-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
-    .fg .check-row { display: flex; align-items: center; gap: 0.5rem; padding-top: 0.25rem; }
-    .fg .check-row input[type="checkbox"] { width: auto; accent-color: #1C1C1A; }
-    .fg .check-row label { font-size: 0.875rem; color: #1C1C1A; font-weight: 500; text-transform: none; letter-spacing: 0; margin: 0; }
-
     /* ── Addresses section ── */
     .addr-section { margin-top: 1.25rem; border-top: 1px solid #E0DFDB; padding-top: 1rem; }
     .addr-section h3 { font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: #1C1C1A; }
@@ -522,16 +422,6 @@
         flex-shrink: 0;
     }
     @keyframes bcspin { to { transform: rotate(360deg); } }
-
-    .toast {
-        position: fixed; bottom: 1.5rem; right: 1.5rem;
-        background: #1C1C1A; color: #FFFFFF;
-        padding: 0.7rem 1.25rem; border-radius: 10px;
-        font-size: 0.875rem; z-index: 1100;
-        opacity: 0; transition: opacity .2s;
-        font-family: inherit;
-    }
-    .toast.show { opacity: 1; }
 
 /* ── Custom multi-select dropdown (addresses) ── */
 .addr-dropdown {
@@ -678,6 +568,80 @@
     color: #F59E0B; cursor: pointer; font-size: 1rem;
     user-select: none;
 }
+
+/* ── Column resize ── */
+.sit-table thead th,
+.sit-horiz thead th {
+    position: relative;
+}
+/* ── Vista custom select ── */
+.vista-select-wrap { position: relative; }
+.vista-select-btn {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 4px 10px;
+    border: 1px solid #D8D7D2;
+    border-radius: var(--r-pill);
+    font-size: 0.82rem;
+    background: #FAFAF9;
+    color: var(--c-fg);
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color .15s;
+    width: max-content;
+}
+.vista-select-btn:hover { border-color: var(--c-fg-soft); }
+.vista-select-btn svg { flex-shrink: 0; color: var(--c-fg-muted); transition: transform .15s; }
+.vista-select-btn.open svg { transform: rotate(180deg); }
+.vista-select-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: max-content;
+    min-width: 100%;
+    background: #FFFFFF;
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-xl);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    z-index: 500;
+    overflow: hidden;
+    padding: 4px;
+}
+.vista-select-menu.open { display: block; }
+.vista-select-option {
+    padding: 0.42rem 0.85rem;
+    font-size: 0.82rem;
+    color: var(--c-fg-soft);
+    cursor: pointer;
+    border-radius: 8px;
+    white-space: nowrap;
+    transition: background .1s;
+}
+.vista-select-option:hover { background: var(--c-surface-2); }
+.vista-select-option.selected { font-weight: 600; color: var(--c-fg); background: var(--c-surface-2); }
+/* Fullscreen mode for situazione panel */
+.inline-section.is-fullscreen {
+    position: fixed; inset: 0;
+    z-index: 1000;
+    background: var(--c-bg, #FAFAF9);
+    margin: 0; padding: 1rem 1.25rem;
+    overflow: auto;
+    border-radius: 0;
+    box-shadow: none;
+}
+.inline-section.is-fullscreen #inline-situazione-list { max-height: none; }
+.inline-section.is-fullscreen .sit-table-wrap,
+.inline-section.is-fullscreen .sit-horiz-wrap { max-height: calc(100vh - 120px); }
+.btn-fullscreen {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px;
+    background: #FAFAF9; border: 1px solid #D8D7D2; border-radius: 6px;
+    cursor: pointer; color: #4A4A46;
+    transition: background 0.15s, border-color 0.15s;
+}
+.btn-fullscreen:hover { background: #F0EFEB; border-color: #B8B7B2; }
+.btn-fullscreen svg { width: 16px; height: 16px; }
 #repartoWarnPopover {
     position: fixed; z-index: 9999;
     background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px;
@@ -690,6 +654,88 @@
     content: '⚠ Reparto non specificato';
     display: block; font-weight: 600; margin-bottom: 0.35rem;
 }
+
+/* ── Recents section ─────────────────────────────────────────────────── */
+.recents-section {
+    margin: 0 0 1.75rem;
+    max-width: 960px;
+}
+.recents-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--c-fg-muted);
+    margin-bottom: 0.7rem;
+}
+.recents-header svg { width: 13px; height: 13px; }
+.recents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.7rem;
+}
+.recent-card {
+    background: #fff;
+    border: 1px solid var(--c-border);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    transition: border-color .12s, transform .12s, box-shadow .12s;
+    text-align: left;
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+.recent-card:hover {
+    border-color: var(--c-fg-soft);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+}
+.recent-card-job {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--c-fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.recent-card-client {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--c-fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.recent-card-detail {
+    font-size: 0.78rem;
+    color: var(--c-fg-muted);
+    white-space: normal;
+    line-height: 1.4;
+    overflow: visible;
+}
+.recent-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+    flex-wrap: wrap;
+}
+.recent-card-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.45rem;
+    border-radius: 99px;
+    background: var(--c-surface-alt, #F3F4F6);
+    color: var(--c-fg-muted);
+    white-space: nowrap;
+}
+.recents-empty { font-size: 0.84rem; color: var(--c-text-faint); }
 </style>
 {% endblock %}
 
@@ -711,6 +757,15 @@
         <button class="btn btn-primary" id="btnSearch" onclick="searchOrCreate()">Cerca</button>
     </div>
 </div>
+
+<!-- ── Recents ── -->
+<section class="recents-section" id="recentsSection" style="display:none;">
+    <div class="recents-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        <span>Archivi aperti di recente</span>
+    </div>
+    <div class="recents-grid" id="recentsGrid"></div>
+</section>
 
 <!-- ── Inline result ── -->
 <div class="commessa-result" id="commessaCard">
@@ -821,10 +876,23 @@
             <div class="inline-section-header">
                 <span class="inline-section-title">Situazione documenti</span>
                 <div style="display:flex;align-items:center;gap:0.75rem;">
-                    <select id="situazione-vista" onchange="loadSituazioneInline()" style="padding:4px 10px;font-size:0.82rem;border:1px solid #D8D7D2;border-radius:6px;background:#FAFAF9;font-family:inherit;">
-                        <option value="verticale" selected>Vista verticale</option>
-                        <option value="orizzontale">Vista orizzontale</option>
-                    </select>
+                    <div class="vista-select-wrap">
+                        <button type="button" class="vista-select-btn" id="vistaSelectBtn" onclick="toggleVistaDropdown()">
+                            <span id="vistaSelectLabel">Vista verticale</span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                        </button>
+                        <div class="vista-select-menu" id="vistaSelectMenu">
+                            <div class="vista-select-option selected" data-value="verticale" onclick="selectVista(this)">Vista verticale</div>
+                            <div class="vista-select-option" data-value="orizzontale" onclick="selectVista(this)">Vista orizzontale</div>
+                        </div>
+                        <select id="situazione-vista" style="display:none;">
+                            <option value="verticale" selected>Vista verticale</option>
+                            <option value="orizzontale">Vista orizzontale</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btnFullscreenSituazione" class="btn-fullscreen" onclick="toggleSituazioneFullscreen()" title="Schermo intero">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/></svg>
+                    </button>
                 </div>
             </div>
             <div id="inline-situazione-list"></div>
@@ -834,8 +902,9 @@
 
 <!-- ── Dropdown: Scelta aggiunta documento ── -->
 <div id="addChooserDropdown" style="display:none;position:fixed;background:#FFFFFF;border:1px solid #E0DFDB;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.12);z-index:900;min-width:160px;overflow:hidden;">
-    <button class="row-menu-item" onclick="closeAddChooser();openDocModal()">Manuale</button>
+    <button class="row-menu-item" onclick="closeAddChooser();openDocModal()">Crea manualmente</button>
     <button class="row-menu-item" onclick="closeAddChooser();importaExcel()">Importa da Excel</button>
+    <button class="row-menu-item" onclick="closeAddChooser();generaDaModello()">Genera da modello</button>
 </div>
 
 <!-- ── Modal: Importa documenti da Excel ── -->
@@ -1021,8 +1090,6 @@
     </div>
 </div>
 
-<div class="toast" id="toast"></div>
-
 <script>
 const csrfToken = '{{ csrf_token }}';
 const API = '/api/commesse/';
@@ -1034,11 +1101,38 @@ function headers(extra = {}) {
 
 function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
 
-function toast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg; t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+/* ── Vista dropdown ───────────────────────────────────────────────────── */
+function toggleVistaDropdown() {
+    document.getElementById('vistaSelectBtn').classList.toggle('open');
+    document.getElementById('vistaSelectMenu').classList.toggle('open');
 }
+function selectVista(el) {
+    const value = el.dataset.value;
+    document.getElementById('situazione-vista').value = value;
+    document.getElementById('vistaSelectLabel').textContent = el.textContent;
+    document.querySelectorAll('.vista-select-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('vistaSelectBtn').classList.remove('open');
+    document.getElementById('vistaSelectMenu').classList.remove('open');
+    loadSituazioneInline();
+}
+
+/* ── Fullscreen toggle ────────────────────────────────────────────────── */
+function toggleSituazioneFullscreen() {
+    const section = document.getElementById('section-situazione');
+    const btn = document.getElementById('btnFullscreenSituazione');
+    const isFs = section.classList.toggle('is-fullscreen');
+    btn.innerHTML = isFs
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/></svg>';
+    btn.title = isFs ? 'Esci dallo schermo intero' : 'Schermo intero';
+}
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        const section = document.getElementById('section-situazione');
+        if (section && section.classList.contains('is-fullscreen')) toggleSituazioneFullscreen();
+    }
+});
 
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -1092,6 +1186,7 @@ async function searchOrCreate() {
     const q = document.getElementById('searchInput').value.trim();
     if (!q) return;
 
+    hideRecents();
     const btn = document.getElementById('btnSearch');
     btn.disabled = true; btn.textContent = 'Ricerca…';
     hideCommessaCard();
@@ -1842,6 +1937,30 @@ function importaAI() {
     toast('Importa tramite AI: funzionalità in arrivo.');
 }
 
+async function generaDaModello() {
+    if (!currentJob) { toast('Nessuna commessa selezionata.'); return; }
+    try {
+        const res = await fetch(`/api/commesse/${encodeURIComponent(currentJob)}/genera-da-modelli/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+        });
+        const json = await res.json();
+        if (!res.ok) {
+            toast(json.error || 'Errore durante la generazione.');
+            return;
+        }
+        const created = json.created || 0;
+        const skipped = json.skipped || 0;
+        let msg = `Creati ${created} document${created === 1 ? 'o' : 'i'}`;
+        if (skipped) msg += ` (${skipped} già presenti, saltati)`;
+        if (created === 0 && skipped === 0) msg = 'Nessun modello configurato nel pannello admin.';
+        toast(msg);
+        if (activeSection === 'documenti') loadDocumentiInline();
+    } catch (e) {
+        toast('Errore di rete.');
+    }
+}
+
 // ── Ricezione ──
 let ricezioneDocEntries = new Map();
 let _ricDocRevCache = {};
@@ -1902,7 +2021,7 @@ async function loadRicezioneInline() {
                 <td>${d.reparto_label || '\u2014'}</td>
                 <td style="text-align:center">${revNo}</td>
                 <td>${disDate}</td>
-                <td><select class="ric-ext-status" data-doc="${d.id}" style="padding:2px 6px;font-size:0.8rem;border:1px solid #ddd;border-radius:4px;">
+                <td><select class="ric-ext-status" data-doc="${d.id}" style="padding:2px 6px;font-size:0.8rem;border:1px solid var(--c-border);border-radius:6px;">
                     <option value="">--</option>${statiOptions}
                 </select></td>
                 <td style="text-align:center"><input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}" checked style="width:15px;height:15px;accent-color:#1C1C1A;cursor:pointer;"></td>
@@ -2091,7 +2210,7 @@ async function loadSituazioneOrizzontale(wrap) {
         ];
 
         // Calculate sticky left offsets (approx, using fixed widths)
-        const fixWidths = [80, 110, 120, 120, 180, 90];
+        const fixWidths = [80, 110, 130, 130, 240, 100];
         let leftAcc = 0;
         const leftOffsets = fixWidths.map(w => { const v = leftAcc; leftAcc += w; return v; });
 
@@ -2103,7 +2222,7 @@ async function loadSituazioneOrizzontale(wrap) {
         // Top row: fixed cols (rowspan 2) + rev group labels
         thead += '<tr>';
         FIX_COLS.forEach((c, i) => {
-            thead += `<th class="sit-fix" rowspan="2" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;max-width:${fixWidths[i]}px;">${c.label}</th>`;
+            thead += `<th class="sit-fix" rowspan="2" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;">${c.label}</th>`;
         });
         for (let r = 0; r < maxRevs; r++) {
             thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
@@ -2128,7 +2247,7 @@ async function loadSituazioneOrizzontale(wrap) {
             FIX_COLS.forEach((c, i) => {
                 const val = doc[c.key] || '\u2014';
                 const title = c.key === 'doc_title' ? ` title="${String(doc[c.key] || '').replace(/"/g, '&quot;')}"` : '';
-                tbody += `<td class="sit-fix" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;max-width:${fixWidths[i]}px;overflow:hidden;text-overflow:ellipsis;"${title}>${val}</td>`;
+                tbody += `<td class="sit-fix" style="left:${leftOffsets[i]}px;min-width:${fixWidths[i]}px;"${title}>${val}</td>`;
             });
             for (let r = 0; r < maxRevs; r++) {
                 const rev = revs[r];
@@ -2152,8 +2271,52 @@ async function loadSituazioneOrizzontale(wrap) {
 }
 
 // ── Init ──
+async function loadRecents() {
+    try {
+        const res = await fetch(API);
+        if (!res.ok) return;
+        const payload = await res.json();
+        const items = (payload.commesse || []).slice(0, 5);
+        const grid = document.getElementById('recentsGrid');
+        const sec = document.getElementById('recentsSection');
+        if (!items.length) { sec.style.display = 'none'; return; }
+        grid.innerHTML = '';
+        items.forEach(c => {
+            const el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'recent-card';
+            const badges = [];
+            if (c.po_no) badges.push(`PO: ${escapeHtml(c.po_no)}`);
+            el.innerHTML = `
+                <span class="recent-card-job">${escapeHtml(c.job || '')}</span>
+                ${c.client ? `<span class="recent-card-client">${escapeHtml(c.client)}</span>` : ''}
+                ${c.job_detail ? `<span class="recent-card-detail">${escapeHtml(c.job_detail)}</span>` : ''}
+                ${badges.length ? `<div class="recent-card-meta">${badges.map(b => `<span class="recent-card-badge">${b}</span>`).join('')}</div>` : ''}
+            `;
+            el.addEventListener('click', () => {
+                hideRecents();
+                document.getElementById('searchInput').value = c.job;
+                searchOrCreate();
+            });
+            grid.appendChild(el);
+        });
+        sec.style.display = '';
+    } catch (e) { /* silent */ }
+}
+function hideRecents() {
+    document.getElementById('recentsSection').style.display = 'none';
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+loadRecents();
+
 document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') searchOrCreate(); });
 document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) el.classList.remove('show'); }));
+document.addEventListener('click', e => {
+    if (!e.target.closest('.vista-select-wrap')) {
+        document.getElementById('vistaSelectBtn')?.classList.remove('open');
+        document.getElementById('vistaSelectMenu')?.classList.remove('open');
+    }
+});
 
 // ── Reparto warning popover ──
 const _warnPop = document.getElementById('repartoWarnPopover');

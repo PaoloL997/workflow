@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from ..models import Testata, IndirSped, Documento, Revisione, StatoEsterno, Ticket, User, Reparto, STATI_INTERNI_CHOICES
+from ..models import Testata, IndirSped, Documento, Revisione, StatoEsterno, Ticket, User, Reparto, ModelloDocumento, STATI_INTERNI_CHOICES
 from datetime import timedelta, date as date_type
 
 
@@ -208,6 +208,37 @@ def update_documento(pk, data):
 
 def delete_documento(pk):
     Documento.objects.get(pk=pk).delete()
+
+
+@transaction.atomic
+def genera_documenti_da_modelli(job):
+    """Crea un Documento per ciascun ModelloDocumento, per la commessa indicata.
+    Se vendor_doc è già presente nella commessa, il modello viene saltato.
+    Restituisce (creati, saltati)."""
+    t = Testata.objects.get(job=job)
+    modelli = list(ModelloDocumento.objects.all())
+    if not modelli:
+        return [], 0
+    existing_vendor = set(
+        v for v in t.documenti.values_list('vendor_doc', flat=True) if v
+    )
+    creati = []
+    saltati = 0
+    for m in modelli:
+        vendor = m.vendor_doc_for(job)
+        if vendor in existing_vendor:
+            saltati += 1
+            continue
+        d = Documento.objects.create(
+            testata=t,
+            doc_title=m.doc_title,
+            item_no=m.item_no,
+            vendor_doc=vendor,
+            reparto=m.reparto,
+        )
+        Revisione.objects.create(documento=d, rev_no=0)
+        creati.append(d)
+    return creati, saltati
 
 
 _DOCUMENTO_FIELDS = {

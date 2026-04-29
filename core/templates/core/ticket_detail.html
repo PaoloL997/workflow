@@ -1,207 +1,286 @@
-﻿{% extends 'core/base.html' %}
+{% extends 'core/base.html' %}
 
 {% block title %}Dettaglio Ticket — Brembana&Rolle{% endblock %}
 {% block nav_ticket %}active{% endblock %}
 
 {% block extra_css %}
 <style>
+    /* ─── Page wrapper ─────────────────────────────────────────────── */
+    .td-page { max-width: none; width: 100%; }
+
+    /* ─── Back link ────────────────────────────────────────────────── */
     .td-back {
-        display: inline-flex; align-items: center; gap: 0.35rem;
-        font-size: 0.9rem; color: #6B7280; text-decoration: none;
-        margin-bottom: 0.8rem; transition: color .15s;
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        font-size: 0.85rem; color: #6B7280; text-decoration: none;
+        margin-bottom: 1rem; transition: color .15s;
+        font-weight: 500;
     }
     .td-back:hover { color: #111827; }
     .td-back svg { width: 14px; height: 14px; }
 
-    .td-title {
-        font-size: 1.4rem; font-weight: 700; color: #111827;
-        margin: 0 0 1rem; letter-spacing: -0.3px;
-    }
-
-    /* ── Progress bar ── */
-    .progress-bar {
-        display: flex; align-items: center;
-        background: #fff; border: 1px solid #E5E7EB; border-radius: 10px;
-        padding: 0.75rem 1.2rem; margin-bottom: 1rem;
-    }
-    .pb-step {
-        display: flex; align-items: center; gap: 0.45rem;
-        font-size: 0.85rem; font-weight: 600; color: #9CA3AF;
-        white-space: nowrap;
-    }
-    .pb-dot {
-        width: 20px; height: 20px; border-radius: 50%;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 0.7rem; font-weight: 700;
-        background: #F3F4F6; color: #9CA3AF;
-        border: 2px solid #E5E7EB; flex-shrink: 0;
-    }
-    .pb-step.done .pb-dot    { background: #22C55E; border-color: #22C55E; color: #fff; }
-    .pb-step.done            { color: #15803D; }
-    .pb-step.current .pb-dot { background: #16A34A; border-color: #16A34A; color: #fff; box-shadow: 0 0 0 3px rgba(34,197,94,.2); }
-    .pb-step.current         { color: #111827; font-weight: 700; }
-    .pb-line {
-        flex: 1; height: 3px; margin: 0 0.35rem;
-        background: #E5E7EB; border-radius: 2px;
-    }
-    .pb-line.done { background: #22C55E; }
-
-    /* ── Top grid: info + azioni ── */
-    .td-top {
-        display: grid;
-        grid-template-columns: 1fr 240px;
-        gap: 1rem;
+    /* ─── Hero header ──────────────────────────────────────────────── */
+    .td-hero {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 14px;
+        padding: 1.4rem 1.6rem;
         margin-bottom: 1rem;
-        align-items: start;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+    .td-hero-left { flex: 1; min-width: 0; }
+    .td-hero-eyebrow {
+        font-size: 0.72rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.06em;
+        color: #9CA3AF; margin-bottom: 0.35rem;
+        display: flex; align-items: center; gap: 0.4rem;
+    }
+    .td-hero-title {
+        font-size: 1.55rem; font-weight: 700; color: #111827;
+        margin: 0 0 0.55rem; letter-spacing: -0.4px;
+        word-break: break-word;
+    }
+    .td-hero-meta {
+        display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;
+        font-size: 0.85rem; color: #6B7280;
+    }
+    .td-hero-meta-item {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+    }
+    .td-hero-meta-item strong { color: #1F2937; font-weight: 600; }
+    .td-hero-sep { color: #D1D5DB; }
+
+    .td-hero-status {
+        flex-shrink: 0;
+        display: inline-flex; align-items: center; gap: 0.5rem;
+        padding: 0.45rem 0.9rem;
+        border-radius: 99px;
+        font-size: 0.85rem; font-weight: 600;
+        background: #F0FDF4; color: #15803D;
+        border: 1px solid #BBF7D0;
+    }
+    .td-hero-status.attivo { background: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+    .td-hero-status .dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: currentColor;
     }
 
-    /* ── Card base ── */
-    .td-card {
-        background: #fff; border: 1px solid #E5E7EB;
-        border-radius: 10px; padding: 1.1rem 1.3rem;
+    .td-hero-actions {
+        display: flex; gap: 0.5rem;
+        margin-top: 0.85rem;
+        flex-wrap: wrap;
     }
-    .td-card-title {
-        font-size: 0.77rem; font-weight: 700; text-transform: uppercase;
-        letter-spacing: 0.6px; color: #9CA3AF; margin-bottom: 0.85rem;
+    .td-action-btn {
+        display: inline-flex; align-items: center; gap: 0.4rem;
+        padding: 0.5rem 0.95rem;
+        font-size: 0.88rem; font-weight: 600; font-family: inherit;
+        border-radius: 8px; border: 1px solid #E5E7EB;
+        background: #fff; color: #374151;
+        cursor: pointer; transition: all .12s;
     }
+    .td-action-btn:hover { background: #F9FAFB; border-color: #D1D5DB; }
+    .td-action-btn svg { width: 14px; height: 14px; }
+    .td-action-btn.primary {
+        background: #1C1C1A; color: #fff; border-color: #1C1C1A;
+    }
+    .td-action-btn.primary:hover { background: #3A3A38; border-color: #3A3A38; }
+    .td-action-btn.danger {
+        color: #DC2626; border-color: #FECACA;
+    }
+    .td-action-btn.danger:hover { background: #FEF2F2; border-color: #FCA5A5; }
 
-    /* ── Info grid ── */
-    .info-grid {
+    /* ─── Info cards grid ──────────────────────────────────────────── */
+    .td-grid {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem 1.5rem;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.75rem;
+        margin-bottom: 1rem;
     }
-    .info-item { font-size: 0.92rem; }
-    .info-label { color: #9CA3AF; font-size: 0.8rem; font-weight: 600; margin-bottom: 1px; }
-    .info-value { color: #1F2937; font-weight: 500; }
-    .info-sep {
-        grid-column: 1 / -1;
-        height: 1px; background: #F3F4F6;
-        margin: 0.3rem 0;
+    .td-info-card {
+        background: #fff; border: 1px solid #E5E7EB;
+        border-radius: 12px; padding: 1rem 1.15rem;
+    }
+    .td-info-card-label {
+        font-size: 0.7rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.07em;
+        color: #9CA3AF; margin-bottom: 0.5rem;
+        display: flex; align-items: center; gap: 0.35rem;
+    }
+    .td-info-card-label svg { width: 12px; height: 12px; }
+    .td-info-card-content {
+        font-size: 0.92rem; color: #111827; line-height: 1.45;
+        word-break: break-word;
+    }
+    .td-people {
+        display: flex; flex-direction: column; gap: 0.55rem;
+    }
+    .td-person {
+        display: flex; align-items: center; gap: 0.6rem;
+    }
+    .td-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: linear-gradient(135deg, #6366F1, #8B5CF6);
+        color: #fff; font-weight: 700; font-size: 0.78rem;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .td-avatar.rev { background: linear-gradient(135deg, #F59E0B, #EF4444); }
+    .td-avatar.app { background: linear-gradient(135deg, #10B981, #06B6D4); }
+    .td-person-info { min-width: 0; flex: 1; }
+    .td-person-role {
+        font-size: 0.7rem; font-weight: 600; color: #9CA3AF;
+        text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .td-person-name {
+        font-size: 0.88rem; font-weight: 500; color: #1F2937;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
 
-    /* ── Azioni card ── */
-    .td-card.azioni { padding: 0.9rem 1rem; }
-    .azioni-list { display: flex; flex-direction: column; gap: 0.35rem; }
-
-    .btn-azione {
-        width: 100%; padding: 0.5rem 0.85rem;
-        font-size: 0.9rem; font-weight: 600; font-family: inherit;
-        border-radius: 8px; border: none; cursor: pointer;
-        text-align: center; background: #1C1C1A; color: #FFFFFF;
-        transition: background .12s;
+    /* ─── Revisioni section ────────────────────────────────────────── */
+    .td-rev-card {
+        background: #fff; border: 1px solid #E5E7EB;
+        border-radius: 14px; overflow: hidden;
     }
-    .btn-azione:hover { background: #3A3A38; }
-    .btn-azione.delete { background: #fff; color: #DC2626; border: 1.5px solid #FECACA; }
-    .btn-azione.delete:hover { background: #FEF2F2; border-color: #F87171; }
-
-    .trans-row {
-        display: none; flex-direction: column; gap: 0.4rem;
-        margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #E5E7EB;
-    }
-    .trans-row.show { display: flex; }
-    .trans-row textarea {
-        width: 100%; padding: 0.4rem 0.6rem; font-size: 0.9rem; font-family: inherit;
-        border: 1.5px solid #E5E7EB; border-radius: 7px; resize: none;
-        background: #FAFAFA; outline: none; transition: border-color .15s;
-    }
-    .trans-row textarea:focus { border-color: #6366F1; background: #fff; }
-    .btn-conferma {
-        padding: 0.4rem 0.9rem; font-size: 0.9rem; font-weight: 600;
-        background: #111827; color: #fff; border: none; border-radius: 7px;
-        cursor: pointer; font-family: inherit; align-self: flex-end;
-        transition: background .12s;
-    }
-    .btn-conferma:hover { background: #1F2937; }
-    .btn-conferma:disabled { opacity: 0.45; cursor: default; }
-
-    /* ── Revisioni ── */
-    .td-rev-card { background: #fff; border: 1px solid #E5E7EB; border-radius: 10px; overflow: hidden; }
     .td-rev-header {
         display: flex; align-items: center; justify-content: space-between;
-        padding: 0.8rem 1.2rem; border-bottom: 1px solid #F3F4F6;
-        font-size: 0.77rem; font-weight: 700; text-transform: uppercase;
-        letter-spacing: 0.6px; color: #9CA3AF;
+        padding: 1rem 1.3rem;
+        border-bottom: 1px solid #F3F4F6;
     }
+    .td-rev-header-title {
+        font-size: 1rem; font-weight: 700; color: #111827;
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+    .td-rev-header-count {
+        font-size: 0.75rem; font-weight: 700;
+        background: #F3F4F6; color: #6B7280;
+        padding: 0.15rem 0.55rem; border-radius: 99px;
+    }
+
     .rev-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
     .rev-table th {
-        text-align: left; padding: 0.5rem 1rem; font-weight: 700; color: #6B7280;
-        font-size: 0.77rem; text-transform: uppercase; letter-spacing: 0.5px;
+        text-align: left; padding: 0.65rem 1rem;
+        font-weight: 700; color: #6B7280;
+        font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
         background: #F9FAFB; border-bottom: 1px solid #E5E7EB;
+        white-space: nowrap;
     }
-    .rev-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #F3F4F6; color: #374151; vertical-align: middle; }
+    .rev-table td {
+        padding: 0.75rem 1rem; border-bottom: 1px solid #F3F4F6;
+        color: #374151; vertical-align: middle;
+    }
     .rev-table tbody tr:last-child td { border-bottom: none; }
+    .rev-table tbody tr { transition: background .1s; }
     .rev-table tbody tr:hover { background: #FAFAFA; }
-    .cell-mono { font-family: 'SF Mono','Consolas',monospace; font-size: 0.87rem; color: #6B7280; font-weight: 600; }
-    .cell-title { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rev-num { font-weight: 700; color: #1F2937; }
+    .cell-mono { font-family: 'SF Mono','Consolas',monospace; font-size: 0.85rem; color: #6B7280; font-weight: 600; }
+    .cell-title { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rev-num {
+        display: inline-block; min-width: 26px; text-align: center;
+        font-weight: 700; color: #1F2937;
+        background: #F3F4F6; padding: 0.15rem 0.5rem; border-radius: 6px;
+        font-size: 0.85rem;
+    }
+    .cell-date {
+        font-size: 0.85rem; color: #4B5563;
+        white-space: nowrap;
+        display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .cell-date svg { width: 12px; height: 12px; color: #9CA3AF; }
+    .cell-date.empty { color: #D1D5DB; }
 
-    /* ── Status badge (read-only) ── */
+    /* ── Status badge ── */
     .rev-status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.65rem;
-        font-size: 0.84rem; font-weight: 600; font-family: inherit;
-        border-radius: 6px;
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.22rem 0.65rem;
+        font-size: 0.78rem; font-weight: 600; font-family: inherit;
+        border-radius: 99px;
+    }
+    .rev-status-badge::before {
+        content: ''; width: 6px; height: 6px; border-radius: 50%;
+        background: currentColor; opacity: 0.6;
     }
     .rss-da_iniziare        { background: #F3F4F6; color: #4B5563; }
-    .rss-in_lavorazione     { background: #EFF6FF; color: #1D4ED8; }
-    .rss-in_revisione       { background: #FFFBEB; color: #92400E; }
-    .rss-in_approvazione    { background: #F5F3FF; color: #6D28D9; }
-    .rss-da_emettere        { background: #F0FDF4; color: #15803D; }
-    .rss-inviato_al_cliente { background: #ECFEFF; color: #0E7490; }
-    .rss-ricevuto           { background: #F0FDF4; color: #166534; }
+    .rss-in_lavorazione     { background: #DBEAFE; color: #1D4ED8; }
+    .rss-in_revisione       { background: #FEF3C7; color: #92400E; }
+    .rss-in_approvazione    { background: #EDE9FE; color: #6D28D9; }
+    .rss-da_emettere        { background: #DCFCE7; color: #15803D; }
+    .rss-inviato_al_cliente { background: #CFFAFE; color: #0E7490; }
+    .rss-ricevuto           { background: #DCFCE7; color: #166534; }
 
     /* ── Per-revisione action buttons ── */
     .rev-action-btn {
         padding: 0.32rem 0.7rem; margin-left: 0.3rem;
-        font-size: 0.82rem; font-weight: 600; font-family: inherit;
+        font-size: 0.8rem; font-weight: 600; font-family: inherit;
         border-radius: 6px; border: none; cursor: pointer;
-        transition: filter .12s;
+        transition: filter .12s, background .12s;
+        white-space: nowrap;
     }
-    .rev-action-btn:hover { filter: brightness(0.92); }
+    .rev-action-btn:hover { filter: brightness(0.93); }
     .rev-act-start  { background: #1C1C1A; color: #fff; }
     .rev-act-submit { background: #1C1C1A; color: #fff; }
     .rev-act-accept { background: #16A34A; color: #fff; }
     .rev-act-reject { background: #FEE2E2; color: #B91C1C; }
 
-    /* ── Buttons / Modal / Toast ── */
+    .rev-empty {
+        padding: 2.5rem 1.5rem;
+        text-align: center;
+        color: #9CA3AF;
+        font-size: 0.92rem;
+    }
+    .rev-empty svg { width: 36px; height: 36px; margin-bottom: 0.5rem; opacity: 0.5; }
+
+    /* ─── Modal shared ─────────────────────────────────────────────── */
     .btn-secondary {
-        padding: 0.38rem 0.9rem; font-size: 0.9rem; font-weight: 500;
-        background: #F9FAFB; color: #374151; border: 1.5px solid #E5E7EB;
-        border-radius: 7px; cursor: pointer; font-family: inherit; transition: background .12s;
+        padding: 0.42rem 0.95rem; font-size: 0.88rem; font-weight: 500;
+        background: #F9FAFB; color: #374151; border: 1px solid #E5E7EB;
+        border-radius: 8px; cursor: pointer; font-family: inherit; transition: background .12s;
     }
     .btn-secondary:hover { background: #F3F4F6; }
+    .btn-conferma {
+        padding: 0.42rem 1rem; font-size: 0.88rem; font-weight: 600;
+        background: #111827; color: #fff; border: none; border-radius: 8px;
+        cursor: pointer; font-family: inherit; transition: background .12s;
+    }
+    .btn-conferma:hover { background: #1F2937; }
+    .btn-conferma:disabled { opacity: 0.45; cursor: default; }
     .btn-danger {
-        padding: 0.38rem 0.9rem; font-size: 0.9rem; font-weight: 600;
-        background: #FEE2E2; color: #991B1B; border: none;
-        border-radius: 7px; cursor: pointer; font-family: inherit; transition: background .12s;
+        padding: 0.42rem 1rem; font-size: 0.88rem; font-weight: 600;
+        background: #DC2626; color: #fff; border: none;
+        border-radius: 8px; cursor: pointer; font-family: inherit; transition: background .12s;
     }
-    .btn-danger:hover { background: #FECACA; }
+    .btn-danger:hover { background: #B91C1C; }
 
-    .tk-toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; }
-    .tk-toast { padding: 0.55rem 1rem; border-radius: 8px; font-size: 0.9rem; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,.1); animation: toastIn .2s ease-out; max-width: 340px; }
-    .tk-toast.success { background: #F0FDF4; color: #15803D; border-left: 3px solid #22C55E; }
-    .tk-toast.error   { background: #FEF2F2; color: #B91C1C; border-left: 3px solid #EF4444; }
-    .tk-toast.info    { background: #EEF2FF; color: #3730A3; border-left: 3px solid #6366F1; }
-    @keyframes toastIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
-
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 1000; align-items: center; justify-content: center; }
-    .modal-box { background: #fff; border-radius: 12px; padding: 1.75rem 1.75rem 1.4rem; max-width: 400px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,.15); }
-    .modal-title { font-size: 1.1rem; font-weight: 700; color: #111827; margin: 0 0 0.45rem; }
-    .modal-desc { color: #6B7280; font-size: 0.96rem; margin: 0 0 1.3rem; line-height: 1.5; }
+    .modal-box {
+        background: #fff; border-radius: 14px;
+        padding: 1.5rem 1.6rem 1.25rem; max-width: 440px; width: 90%;
+        box-shadow: 0 20px 50px rgba(0,0,0,.18);
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; color: #111827; margin: 0 0 0.4rem; }
+    .modal-desc { color: #6B7280; font-size: 0.92rem; margin: 0 0 1.2rem; line-height: 1.5; }
     .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
-
-    /* ── Notes modal ── */
-    .notes-modal .modal-box { max-width: 540px; max-height: 80vh; display: flex; flex-direction: column; }
-    .notes-list {
-        flex: 1; overflow-y: auto; margin-bottom: 1rem;
-        max-height: 40vh; min-height: 60px;
-        display: flex; flex-direction: column; gap: 0.55rem;
+    .modal-textarea {
+        width: 100%; padding: 0.55rem 0.75rem; font-size: 0.9rem; font-family: inherit;
+        border: 1px solid #E5E7EB; border-radius: 8px; resize: vertical;
+        background: #FAFAFA; outline: none; transition: border-color .15s, background .15s;
+        margin-bottom: 1rem;
+        min-height: 70px;
     }
-    .notes-list::-webkit-scrollbar { width: 5px; }
+    .modal-textarea:focus { border-color: #6366F1; background: #fff; }
+
+    /* ─── Notes modal ──────────────────────────────────────────────── */
+    .notes-modal .modal-box { max-width: 560px; max-height: 80vh; display: flex; flex-direction: column; }
+    .notes-list {
+        flex: 1; overflow-y: auto; margin-bottom: 0.85rem;
+        max-height: 45vh; min-height: 80px;
+        display: flex; flex-direction: column; gap: 0.55rem;
+        padding-right: 0.25rem;
+    }
+    .notes-list::-webkit-scrollbar { width: 6px; }
     .notes-list::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
     .note-item {
-        padding: 0.6rem 0.75rem; border-radius: 8px;
+        padding: 0.7rem 0.85rem; border-radius: 10px;
         background: #F9FAFB; border: 1px solid #E5E7EB;
     }
     .note-header {
@@ -209,62 +288,58 @@
         margin-bottom: 0.25rem;
     }
     .note-author { font-size: 0.82rem; font-weight: 700; color: #374151; }
-    .note-date { font-size: 0.78rem; color: #9CA3AF; }
-    .note-text { font-size: 0.92rem; color: #1F2937; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
-    .note-empty { text-align: center; color: #9CA3AF; font-size: 0.92rem; padding: 1.5rem 0; }
-    .note-input-row { display: flex; gap: 0.5rem; }
+    .note-date { font-size: 0.75rem; color: #9CA3AF; }
+    .note-text { font-size: 0.9rem; color: #1F2937; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    .note-empty { text-align: center; color: #9CA3AF; font-size: 0.9rem; padding: 1.5rem 0; }
+    .note-input-row { display: flex; gap: 0.5rem; align-items: stretch; }
     .note-input-row textarea {
-        flex: 1; padding: 0.5rem 0.7rem; font-size: 0.92rem; font-family: inherit;
-        border: 1.5px solid #E5E7EB; border-radius: 8px; resize: none;
-        background: #FAFAFA; outline: none; transition: border-color .15s;
+        flex: 1; padding: 0.55rem 0.75rem; font-size: 0.9rem; font-family: inherit;
+        border: 1px solid #E5E7EB; border-radius: 8px; resize: none;
+        background: #FAFAFA; outline: none; transition: border-color .15s, background .15s;
     }
     .note-input-row textarea:focus { border-color: #6366F1; background: #fff; }
     .note-input-row button {
-        padding: 0.5rem 1rem; font-size: 0.9rem; font-weight: 600;
+        padding: 0 1.1rem; font-size: 0.88rem; font-weight: 600;
         background: #1C1C1A; color: #fff; border: none; border-radius: 8px;
         cursor: pointer; font-family: inherit; white-space: nowrap;
-        transition: background .12s; align-self: flex-end;
+        transition: background .12s;
     }
     .note-input-row button:hover { background: #3A3A38; }
     .note-input-row button:disabled { opacity: 0.45; cursor: default; }
+
+    /* ─── Loading skeleton ─────────────────────────────────────────── */
+    .td-loading {
+        text-align: center; padding: 3rem 1rem;
+        color: #9CA3AF; font-size: 0.95rem;
+    }
+
+    @media (max-width: 900px) {
+        .td-grid { grid-template-columns: 1fr; }
+        .td-hero { flex-direction: column; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="td-page">
+
 <a class="td-back" href="{% url 'gestione_ticket' %}">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
     Torna ai ticket
 </a>
 
-<h1 class="td-title" id="ticketTitle">Caricamento…</h1>
-
-<!-- Top grid: dettagli + azioni -->
-<div class="td-top">
-    <div class="td-card">
-        <div class="td-card-title">Dettagli</div>
-        <div class="info-grid" id="infoGrid"></div>
-    </div>
-    <div class="td-card azioni">
-        <div class="td-card-title">Azioni</div>
-        <div class="azioni-list" id="azioniList"></div>
-    </div>
+<div id="ticketBody">
+    <div class="td-loading">Caricamento del ticket…</div>
 </div>
 
-<!-- Revisioni -->
-<div class="td-rev-card">
-    <div class="td-rev-header">
-        <span>Revisioni collegate</span>
-        <span id="revCount" style="font-weight:500;color:#6B7280;"></span>
-    </div>
-    <div id="revTableWrap"></div>
 </div>
 
-<!-- Transition note modal -->
+<!-- Transition modal -->
 <div class="modal-overlay" id="transModal">
     <div class="modal-box">
         <h3 class="modal-title" id="transModalTitle">Conferma azione</h3>
         <p class="modal-desc" id="transModalDesc">Vuoi confermare?</p>
-        <textarea id="transModalNote" placeholder="Nota opzionale…" rows="3" style="width:100%;padding:0.5rem 0.7rem;font-size:0.92rem;font-family:inherit;border:1.5px solid #E5E7EB;border-radius:8px;resize:none;background:#FAFAFA;outline:none;margin-bottom:1rem;"></textarea>
+        <textarea id="transModalNote" class="modal-textarea" placeholder="Nota opzionale…" rows="3"></textarea>
         <div class="modal-actions">
             <button class="btn-secondary" id="transModalCancel">Annulla</button>
             <button class="btn-conferma" id="transModalConfirm">Conferma</button>
@@ -289,7 +364,7 @@
     <div class="modal-box">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.85rem;">
             <h3 class="modal-title" style="margin:0;">Note</h3>
-            <button class="btn-secondary" style="padding:0.2rem 0.6rem;font-size: 0.85rem;" onclick="closeNotesModal()">✕</button>
+            <button class="btn-secondary" style="padding:0.25rem 0.55rem;font-size:0.85rem;line-height:1;" onclick="closeNotesModal()">✕</button>
         </div>
         <div class="notes-list" id="notesList">
             <div class="note-empty">Caricamento…</div>
@@ -300,8 +375,6 @@
         </div>
     </div>
 </div>
-
-<div class="tk-toast-container" id="toastContainer"></div>
 
 <script>
 const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
@@ -317,17 +390,18 @@ const STATUS_OPTIONS = [
 const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS);
 
 let ticketData = null;
-let pendingTransition = null; // {revId, action, label}
+let pendingTransition = null;
 
-function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function esc(s) { return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function showToast(msg, type='info') {
     const c = document.getElementById('toastContainer');
     const el = document.createElement('div');
-    el.className = `tk-toast ${type}`;
+    el.className = `toast ${type}`;
     el.textContent = msg;
     c.appendChild(el);
-    setTimeout(()=>{ el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(),300); }, 3500);
+    requestAnimationFrame(()=> el.classList.add('show'));
+    setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>el.remove(),250); }, 3500);
 }
 
 async function api(method, url, body) {
@@ -335,6 +409,11 @@ async function api(method, url, body) {
     if (body !== undefined) opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
     return { ok: res.ok, status: res.status, data: await res.json() };
+}
+
+function initials(name) {
+    if (!name) return '—';
+    return name.trim().split(/\s+/).slice(0,2).map(p => p[0]?.toUpperCase() || '').join('') || '—';
 }
 
 function confirmDelete() { document.getElementById('deleteModal').style.display = 'flex'; }
@@ -353,53 +432,148 @@ async function doDelete() {
 
 async function loadTicket() {
     const { ok, data } = await api('GET', `/api/tickets/${TICKET_ID}/`);
-    if (!ok) { document.getElementById('ticketTitle').textContent = 'Ticket non trovato'; return; }
+    if (!ok) {
+        document.getElementById('ticketBody').innerHTML =
+            '<div class="td-loading">Ticket non trovato.</div>';
+        return;
+    }
     ticketData = data;
     renderAll();
 }
 
 function renderAll() {
     const t = ticketData;
-    document.getElementById('ticketTitle').textContent =
-        `Commessa N° ${t.commessa} — Ticket N° ${t.progressivo}`;
+    const isConcluso = !!t.is_concluso;
 
-    // Info grid
-    document.getElementById('infoGrid').innerHTML =
-        infoRow('Reparto', t.reparto || '—') +
-        infoRow('Commessa', t.commessa || '—') +
-        infoRow('Esecutore', t.esecutore?.nome_completo || '—') +
-        infoRow('Cliente', t.cliente || '—') +
-        infoRow('Revisore', t.revisore?.nome_completo || '—') +
-        infoRow('Descrizione', t.descrizione_commessa || '—') +
-        infoRow('Approvatore', t.approvatore?.nome_completo || '—');
+    const html = `
+        <!-- Hero -->
+        <div class="td-hero">
+            <div class="td-hero-left">
+                <div class="td-hero-eyebrow">Ticket #${esc(t.progressivo)}</div>
+                <h1 class="td-hero-title">${esc(t.nome || ('Commessa ' + t.commessa))}</h1>
+                <div class="td-hero-meta">
+                    <span class="td-hero-meta-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>
+                        <strong>${esc(t.commessa || '—')}</strong>
+                    </span>
+                    <span class="td-hero-sep">·</span>
+                    <span class="td-hero-meta-item">${esc(t.cliente || 'Cliente non specificato')}</span>
+                    ${t.reparto ? `<span class="td-hero-sep">·</span><span class="td-hero-meta-item">Reparto <strong>${esc(t.reparto)}</strong></span>` : ''}
+                </div>
+                <div class="td-hero-actions">
+                    <button class="td-action-btn primary" onclick="openNotesModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Commenta
+                    </button>
+                    <button class="td-action-btn danger" onclick="confirmDelete()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        Elimina
+                    </button>
+                </div>
+            </div>
+            <div class="td-hero-status ${isConcluso ? '' : 'attivo'}">
+                <span class="dot"></span>
+                ${isConcluso ? 'Concluso' : 'In corso'}
+            </div>
+        </div>
 
-    // Azioni — ora solo Commenta + Elimina
-    const list = document.getElementById('azioniList');
-    list.innerHTML = '';
-    const commentBtn = document.createElement('button');
-    commentBtn.className = 'btn-azione';
-    commentBtn.textContent = 'Commenta';
-    commentBtn.onclick = openNotesModal;
-    list.appendChild(commentBtn);
+        <!-- Info grid -->
+        <div class="td-grid">
+            <div class="td-info-card">
+                <div class="td-info-card-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Descrizione commessa
+                </div>
+                <div class="td-info-card-content">${esc(t.descrizione_commessa || '—')}</div>
+            </div>
+            <div class="td-info-card">
+                <div class="td-info-card-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    Team
+                </div>
+                <div class="td-info-card-content">
+                    <div class="td-people">
+                        ${personRow('esec', 'Esecutore', t.esecutore?.nome_completo)}
+                        ${personRow('rev', 'Revisore', t.revisore?.nome_completo)}
+                        ${personRow('app', 'Approvatore', t.approvatore?.nome_completo)}
+                    </div>
+                </div>
+            </div>
+            <div class="td-info-card">
+                <div class="td-info-card-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    Avanzamento
+                </div>
+                <div class="td-info-card-content">
+                    ${renderProgress(t)}
+                </div>
+            </div>
+        </div>
 
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn-azione delete';
-    delBtn.textContent = 'Elimina ticket';
-    delBtn.onclick = confirmDelete;
-    list.appendChild(delBtn);
+        <!-- Revisioni -->
+        <div class="td-rev-card">
+            <div class="td-rev-header">
+                <div class="td-rev-header-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                    Documenti collegati
+                    <span class="td-rev-header-count">${(t.revisioni||[]).length}</span>
+                </div>
+            </div>
+            ${renderRevisioniBody(t)}
+        </div>
+    `;
 
-    // Revisioni
+    document.getElementById('ticketBody').innerHTML = html;
+}
+
+function personRow(kind, role, name) {
+    const safeName = name || '—';
+    return `<div class="td-person">
+        <div class="td-avatar ${kind === 'esec' ? '' : kind}">${esc(initials(safeName))}</div>
+        <div class="td-person-info">
+            <div class="td-person-role">${esc(role)}</div>
+            <div class="td-person-name">${esc(safeName)}</div>
+        </div>
+    </div>`;
+}
+
+function renderProgress(t) {
+    const counts = t.status_counts || {};
+    const total = (t.revisioni || []).length;
+    if (!total) return '<div style="color:#9CA3AF;font-size:0.88rem;">Nessuna revisione.</div>';
+    const concluse = (counts.ricevuto || 0) + (counts.inviato_al_cliente || 0);
+    const pct = Math.round((concluse / total) * 100);
+    return `
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.85rem;font-weight:600;color:#111827;margin-bottom:0.4rem;">
+            <span>${concluse} / ${total} concluse</span>
+            <span style="color:#6B7280;">${pct}%</span>
+        </div>
+        <div style="height:6px;background:#F3F4F6;border-radius:99px;overflow:hidden;">
+            <div style="height:100%;background:linear-gradient(90deg,#22C55E,#16A34A);width:${pct}%;transition:width .3s;border-radius:99px;"></div>
+        </div>
+    `;
+}
+
+function renderRevisioniBody(t) {
     const revs = t.revisioni || [];
-    document.getElementById('revCount').textContent = `${revs.length}`;
-    const wrap = document.getElementById('revTableWrap');
-    if (revs.length) {
-        wrap.innerHTML = `<table class="rev-table">
-            <thead><tr><th>Commessa</th><th>B&R Doc</th><th>Titolo</th><th>Rev.</th><th>Stato</th><th style="text-align:right;">Azioni</th></tr></thead>
-            <tbody>${revs.map(r => renderRevRow(r, t)).join('')}</tbody>
-        </table>`;
-    } else {
-        wrap.innerHTML = '<div style="padding:1rem 1.2rem;font-size: 0.92rem;color:#9CA3AF;text-align:center;">Nessuna revisione collegata.</div>';
+    if (!revs.length) {
+        return `<div class="rev-empty">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            <div>Nessun documento collegato.</div>
+        </div>`;
     }
+    return `<table class="rev-table">
+        <thead><tr>
+            <th>Commessa</th>
+            <th>B&amp;R Doc</th>
+            <th>Titolo</th>
+            <th>Rev.</th>
+            <th>Invio previsto</th>
+            <th>Stato</th>
+            <th style="text-align:right;">Azioni</th>
+        </tr></thead>
+        <tbody>${revs.map(r => renderRevRow(r, t)).join('')}</tbody>
+    </table>`;
 }
 
 function renderRevRow(r, t) {
@@ -407,6 +581,13 @@ function renderRevRow(r, t) {
     const badge = r.int_status
         ? `<span class="rev-status-badge rss-${css}">${esc(STATUS_LABELS[r.int_status] || r.int_status)}</span>`
         : `<span style="color:#9CA3AF">—</span>`;
+
+    const dateCell = r.dis_plan_date
+        ? `<span class="cell-date">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                ${esc(r.dis_plan_date)}
+           </span>`
+        : `<span class="cell-date empty">—</span>`;
 
     const actions = getRevActions(r.int_status, t)
         .map(([action, label, kind]) => `<button class="rev-action-btn rev-act-${kind}" data-rev="${r.id}" data-action="${action}" data-label="${esc(label)}">${esc(label)}</button>`)
@@ -416,14 +597,14 @@ function renderRevRow(r, t) {
         <td class="cell-mono">${esc(r.job)}</td>
         <td>${esc(r.vendor_doc)||'—'}</td>
         <td class="cell-title" title="${esc(r.doc_title)}">${esc(r.doc_title)||'—'}</td>
-        <td class="rev-num">${r.rev_no??'—'}</td>
+        <td><span class="rev-num">${r.rev_no??'—'}</span></td>
+        <td>${dateCell}</td>
         <td>${badge}</td>
         <td style="text-align:right;white-space:nowrap;">${actions || '<span style="color:#D1D5DB;font-size:0.85rem;">—</span>'}</td>
     </tr>`;
 }
 
 function getRevActions(status, t) {
-    // Returns array of [action, label, kind] available to current user.
     const isEsec = CURRENT_USER_ID === t.esecutore.id;
     const isRev  = CURRENT_USER_ID === t.revisore.id;
     const isApp  = CURRENT_USER_ID === t.approvatore.id;
@@ -434,10 +615,6 @@ function getRevActions(status, t) {
         case 'in_approvazione': return isApp  ? [['accetta','Approva documento','accept'],['rifiuta','Rimanda in lavorazione','reject']] : [];
         default: return [];
     }
-}
-
-function infoRow(label, val) {
-    return `<div class="info-item"><div class="info-label">${label}</div><div class="info-value">${esc(val)}</div></div>`;
 }
 
 // ── Per-revisione transition modal ─────────────────────────────────────────
@@ -479,8 +656,6 @@ document.getElementById('transModalConfirm').addEventListener('click', async () 
     ticketData = data;
     renderAll();
 });
-
-
 
 // ── Notes modal ──────────────────────────────────────────────────────────
 function openNotesModal() {

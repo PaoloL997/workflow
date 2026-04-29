@@ -10,7 +10,8 @@ urlpatterns = [
     path('gestione-documenti/', views.gestione_documenti, name='gestione_documenti'),
     path('gestione-ticket/', views.gestione_ticket, name='gestione_ticket'),
     path('gestione-ticket/<int:pk>/', views.ticket_detail_view, name='ticket_detail'),
-    path('impostazioni/', views.impostazioni, name='impostazioni'),
+    path('chatbot/', views.chatbot, name='chatbot'),
+    path('chatbot/ask/', views.chatbot_ask, name='chatbot_ask'),
     # API — Commesse
     path('api/commesse/', views.commesse_api, name='commesse_api'),
     path('api/commesse/<str:job>/', views.commessa_api_detail, name='commessa_api_detail'),
@@ -22,6 +23,7 @@ urlpatterns = [
     path('api/commesse/<str:job>/documenti/', views.documenti_api, name='documenti_api'),
     path('api/commesse/<str:job>/export/', views.export_documenti, name='export_documenti'),
     path('api/commesse/<str:job>/import-excel/', views.import_documenti_excel, name='import_documenti_excel'),
+    path('api/commesse/<str:job>/genera-da-modelli/', views.genera_documenti_da_modelli_api, name='genera_documenti_da_modelli_api'),
     path('api/documenti/<int:pk>/', views.documento_api_detail, name='documento_api_detail'),
     # API — Reparti (read-only, from User.reparto)
     path('api/reparti/', views.reparti_api, name='reparti_api'),

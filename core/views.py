@@ -9,6 +9,7 @@ from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 import json
 import logging
+import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -25,6 +26,7 @@ from .services.commesse import (
     delete_indirizzo, serialize_indirizzo,
     list_documenti, create_documento, update_documento,
     delete_documento, serialize_documento,
+    genera_documenti_da_modelli,
     list_reparti,
     list_stati_interni,
     list_stati_esterni, create_stato_esterno, update_stato_esterno, delete_stato_esterno,
@@ -83,13 +85,6 @@ def gestione_documenti(request):
     return render(request, 'core/gestione_documenti.html')
 
 
-# ── Page: Impostazioni ────────────────────────────────────────────────────────
-
-@login_required
-def impostazioni(request):
-    return render(request, 'core/impostazioni.html')
-
-
 @login_required
 def gestione_ticket(request):
     return render(request, 'core/gestione_ticket.html')
@@ -98,6 +93,45 @@ def gestione_ticket(request):
 @login_required
 def ticket_detail_view(request, pk):
     return render(request, 'core/ticket_detail.html', {'ticket_id': pk})
+
+
+# ── Page: Chatbot SQL ─────────────────────────────────────────────────────────
+
+_sql_agent = None
+
+
+def _get_sql_agent():
+    global _sql_agent
+    if _sql_agent is None:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+        from sql_agent import SQLAgent
+        _sql_agent = SQLAgent()
+    return _sql_agent
+
+
+@login_required
+def chatbot(request):
+    return render(request, 'core/chatbot.html')
+
+
+@login_required
+@require_http_methods(['POST'])
+def chatbot_ask(request):
+    try:
+        data = json.loads(request.body)
+        user_message = (data.get('message') or '').strip()
+    except (json.JSONDecodeError, KeyError):
+        return JsonResponse({'error': 'Richiesta non valida.'}, status=400)
+    if not user_message:
+        return JsonResponse({'error': 'Messaggio vuoto.'}, status=400)
+    try:
+        agent = _get_sql_agent()
+        response = agent.invoke(user_message)
+    except Exception as e:
+        logger.exception('Errore chatbot SQL')
+        response = f'Si è verificato un errore: {e}'
+    return JsonResponse({'response': response})
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
@@ -575,6 +609,21 @@ _BOOL_TRUE = {'sì', 'si', 'yes', '1', 'true', 'x', 'vero'}
 
 def _parse_bool(val):
     return str(val).strip().lower() in _BOOL_TRUE
+
+
+@login_required
+@require_http_methods(['POST'])
+def genera_documenti_da_modelli_api(request, job):
+    try:
+        creati, saltati = genera_documenti_da_modelli(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({'error': 'Commessa non trovata.'}, status=404)
+    return JsonResponse({
+        'ok': True,
+        'created': len(creati),
+        'skipped': saltati,
+        'documenti': [serialize_documento(d) for d in creati],
+    })
 
 
 @login_required

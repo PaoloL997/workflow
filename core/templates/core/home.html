@@ -11,13 +11,13 @@
     .ov-greeting {
         font-size: 1.75rem;
         font-weight: 700;
-        color: #1C1C1A;
+        color: var(--c-fg);
         letter-spacing: -0.5px;
         margin-bottom: 0.25rem;
     }
     .ov-sub {
         font-size: 0.9rem;
-        color: #6B6B67;
+        color: var(--c-fg-muted);
     }
 
     /* ── Card ── */
@@ -38,13 +38,13 @@
     .ov-card-title {
         font-size: 1.05rem;
         font-weight: 700;
-        color: #1C1C1A;
+        color: var(--c-fg);
     }
     .ov-card-counter {
         font-size: 0.82rem;
         font-weight: 700;
-        color: #6B6B67;
-        background: #F0EFEB;
+        color: var(--c-fg-muted);
+        background: var(--c-surface-2);
         padding: 2px 10px;
         border-radius: 10px;
     }
@@ -65,7 +65,7 @@
         transition: background .12s;
     }
     .ov-item:hover {
-        background: #F5F5F3;
+        background: var(--c-surface-2);
     }
 
     .ov-item-icon {
@@ -97,7 +97,7 @@
     .ov-item-name {
         font-size: 0.88rem;
         font-weight: 600;
-        color: #1C1C1A;
+        color: var(--c-fg);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -127,7 +127,7 @@
         justify-content: center;
     }
     .ov-item-check.active {
-        border-color: #1C1C1A;
+        border-color: var(--c-fg);
         background: #1C1C1A;
     }
     .ov-item-check.active svg {
@@ -138,7 +138,7 @@
 
     .ov-divider {
         height: 1px;
-        background: #F0EFEB;
+        background: var(--c-surface-2);
         margin: 0.15rem 0.8rem;
     }
 
