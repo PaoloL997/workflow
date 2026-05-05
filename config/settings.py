@@ -86,10 +86,6 @@ DATABASES = {
 
 AUTH_USER_MODEL = 'core.User'
 
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
-LOGOUT_REDIRECT_URL = 'login'
-
 # Sessions
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 60 * 60 * 8          # 8 ore

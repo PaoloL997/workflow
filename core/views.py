@@ -1,24 +1,20 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.forms import AuthenticationForm
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
+from functools import wraps
+
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 import json
 import logging
-import os
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 
-from .forms import RegistrazioneForm
 from .models import Testata, IndirSped, Documento, Revisione, StatoEsterno, User
 from src.pdf import genera_trasmittal_pdf
 
 logger = logging.getLogger(__name__)
+
 from .services.commesse import (
     list_commesse, get_commessa, create_commessa, update_commessa,
     delete_commessa, fetch_from_bc, serialize_testata,
@@ -36,107 +32,19 @@ from .services.commesse import (
 )
 
 
-@login_required
-def home(request):
-    return render(request, 'core/home.html')
-
-
-def login_view(request):
-    if request.user.is_authenticated:
-        return redirect('home')
-    if request.method == 'POST':
-        form = AuthenticationForm(data=request.POST)
-        if form.is_valid():
-            user = form.get_user()
-            login(request, user)
-            return redirect('home')
-        else:
-            messages.error(request, 'Credenziali non valide.')
-    else:
-        form = AuthenticationForm()
-    return render(request, 'core/login.html', {'form': form})
-
-
-def logout_view(request):
-    logout(request)
-    return redirect('login')
-
-
-def register_view(request):
-    if request.user.is_authenticated:
-        return redirect('home')
-    if request.method == 'POST':
-        form = RegistrazioneForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            login(request, user)
-            return redirect('home')
-        else:
-            messages.error(request, 'Controlla i dati inseriti. Assicurati che lo username non sia già in uso.')
-    else:
-        form = RegistrazioneForm()
-    return render(request, 'core/register.html', {'form': form})
-
-
-# ── Page: Gestione Documenti ──────────────────────────────────────────────────
-
-@login_required
-def gestione_documenti(request):
-    return render(request, 'core/gestione_documenti.html')
-
-
-@login_required
-def gestione_ticket(request):
-    return render(request, 'core/gestione_ticket.html')
-
-
-@login_required
-def ticket_detail_view(request, pk):
-    return render(request, 'core/ticket_detail.html', {'ticket_id': pk})
-
-
-# ── Page: Chatbot SQL ─────────────────────────────────────────────────────────
-
-_sql_agent = None
-
-
-def _get_sql_agent():
-    global _sql_agent
-    if _sql_agent is None:
-        import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
-        from sql_agent import SQLAgent
-        _sql_agent = SQLAgent()
-    return _sql_agent
-
-
-@login_required
-def chatbot(request):
-    return render(request, 'core/chatbot.html')
-
-
-@login_required
-@require_http_methods(['POST'])
-def chatbot_ask(request):
-    try:
-        data = json.loads(request.body)
-        user_message = (data.get('message') or '').strip()
-    except (json.JSONDecodeError, KeyError):
-        return JsonResponse({'error': 'Richiesta non valida.'}, status=400)
-    if not user_message:
-        return JsonResponse({'error': 'Messaggio vuoto.'}, status=400)
-    try:
-        agent = _get_sql_agent()
-        response = agent.invoke(user_message)
-    except Exception as e:
-        logger.exception('Errore chatbot SQL')
-        response = f'Si è verificato un errore: {e}'
-    return JsonResponse({'response': response})
+def api_login_required(view_func):
+    """Decorator that returns 401 JSON for unauthenticated requests instead of redirecting."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'error': 'Non autenticato.'}, status=401)
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def commesse_api(request):
     if request.method == 'GET':
@@ -155,7 +63,7 @@ def commesse_api(request):
         return JsonResponse({'error': exc.message_dict}, status=422)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'PUT', 'DELETE'])
 def commessa_api_detail(request, job):
     if request.method == 'GET':
@@ -184,7 +92,7 @@ def commessa_api_detail(request, job):
         return JsonResponse({'error': 'Commessa non trovata.'}, status=404)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def erp_api(request):
     job = request.GET.get('job', '').strip()
@@ -204,7 +112,7 @@ def erp_api(request):
 
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def indirizzi_api(request, job):
     if request.method == 'GET':
@@ -225,7 +133,7 @@ def indirizzi_api(request, job):
         return JsonResponse({'error': str(exc)}, status=400)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['PATCH', 'DELETE'])
 def indirizzo_api_detail(request, pk):
     if request.method == 'PATCH':
@@ -249,7 +157,7 @@ def indirizzo_api_detail(request, pk):
 
 # ── API: Documenti ───────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def documenti_api(request, job):
     if request.method == 'GET':
@@ -270,7 +178,7 @@ def documenti_api(request, job):
         return JsonResponse({'error': str(exc)}, status=400)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['PATCH', 'DELETE'])
 def documento_api_detail(request, pk):
     if request.method == 'PATCH':
@@ -294,7 +202,7 @@ def documento_api_detail(request, pk):
 
 # ── API: Reparti ────────────────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def reparti_api(request):
     reparti = list_reparti()
@@ -303,13 +211,13 @@ def reparti_api(request):
 
 # ── API: Stati Interni / Esterni ─────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def stati_interni_api(request):
     return JsonResponse({'stati': list_stati_interni()})
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def stati_esterni_api(request):
     if request.method == 'GET':
@@ -327,7 +235,7 @@ def stati_esterni_api(request):
         return JsonResponse({'error': str(exc)}, status=400)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['PATCH', 'DELETE'])
 def stato_esterno_api_detail(request, pk):
     if request.method == 'PATCH':
@@ -353,7 +261,7 @@ def stato_esterno_api_detail(request, pk):
 
 # ── API: Emissione ───────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def emissione_api(request):
     try:
@@ -373,7 +281,7 @@ def emissione_api(request):
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def trasmittal_pdf_api(request):
     try:
@@ -447,7 +355,7 @@ def trasmittal_pdf_api(request):
 
 # ── API: Ricezione ───────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def ricezione_api(request):
     try:
@@ -467,7 +375,7 @@ def ricezione_api(request):
 
 # ── API: Revisioni ───────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def revisioni_api(request, doc_pk):
     if request.method == 'GET':
@@ -488,7 +396,7 @@ def revisioni_api(request, doc_pk):
         return JsonResponse({'error': str(exc)}, status=400)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['PATCH', 'DELETE'])
 def revisione_api_detail(request, pk):
     if request.method == 'PATCH':
@@ -512,7 +420,7 @@ def revisione_api_detail(request, pk):
 
 # ── Export: Document list as Excel ───────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def export_documenti(request, job):
     try:
@@ -611,7 +519,7 @@ def _parse_bool(val):
     return str(val).strip().lower() in _BOOL_TRUE
 
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def genera_documenti_da_modelli_api(request, job):
     try:
@@ -626,7 +534,7 @@ def genera_documenti_da_modelli_api(request, job):
     })
 
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def import_documenti_excel(request, job):
     try:
@@ -718,7 +626,7 @@ from .services.tickets import (
 )
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def tickets_api(request):
     if request.method == 'GET':
@@ -745,7 +653,7 @@ def tickets_api(request):
             return JsonResponse({'error': str(e)}, status=400)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'PUT', 'DELETE'])
 def ticket_api_detail(request, pk):
     try:
@@ -765,7 +673,7 @@ def ticket_api_detail(request, pk):
         return JsonResponse({'error': str(e)}, status=status)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def revisione_transition_api(request, pk):
     """Per-revisione workflow transition. Body: {action, nota?}."""
@@ -783,7 +691,7 @@ def revisione_transition_api(request, pk):
         return JsonResponse({'error': str(e)}, status=404)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def revisioni_da_emettere_api(request):
     reparto = request.GET.get('reparto', '')
@@ -795,7 +703,7 @@ def revisioni_da_emettere_api(request):
     return JsonResponse(data, safe=False)
 
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def ticket_counts_api(request):
     """Returns badge counts for the sidebar: pending revisions + active tickets per reparto."""
@@ -807,7 +715,7 @@ def ticket_counts_api(request):
 
 # ── API: Ticket Notes ────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET', 'POST'])
 def ticket_note_api(request, pk):
     if request.method == 'GET':
@@ -827,7 +735,7 @@ def ticket_note_api(request, pk):
 
 # ── API: Notifiche ───────────────────────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def notifiche_api(request):
     solo_non_lette = request.GET.get('non_lette', '') == '1'
@@ -836,14 +744,14 @@ def notifiche_api(request):
     return JsonResponse({'notifiche': data, 'non_lette_count': count})
 
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def notifica_leggi_api(request, pk):
     mark_as_read(pk, request.user)
     return JsonResponse({'ok': True})
 
 
-@login_required
+@api_login_required
 @require_http_methods(['POST'])
 def notifiche_leggi_tutte_api(request):
     mark_all_as_read(request.user)
@@ -852,7 +760,7 @@ def notifiche_leggi_tutte_api(request):
 
 # ── API: Overview (user dashboard) ───────────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def overview_api(request):
     data = get_user_overview(request.user)
@@ -861,7 +769,7 @@ def overview_api(request):
 
 # ── API: Users (for ticket assignment) ───────────────────────────────────────
 
-@login_required
+@api_login_required
 @require_http_methods(['GET'])
 def users_api(request):
     """Return list of active users for ticket assignment dropdowns."""

@@ -2,16 +2,6 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('', views.home, name='home'),
-    path('login/', views.login_view, name='login'),
-    path('logout/', views.logout_view, name='logout'),
-    path('registrazione/', views.register_view, name='register'),
-    # Pages
-    path('gestione-documenti/', views.gestione_documenti, name='gestione_documenti'),
-    path('gestione-ticket/', views.gestione_ticket, name='gestione_ticket'),
-    path('gestione-ticket/<int:pk>/', views.ticket_detail_view, name='ticket_detail'),
-    path('chatbot/', views.chatbot, name='chatbot'),
-    path('chatbot/ask/', views.chatbot_ask, name='chatbot_ask'),
     # API — Commesse
     path('api/commesse/', views.commesse_api, name='commesse_api'),
     path('api/commesse/<str:job>/', views.commessa_api_detail, name='commessa_api_detail'),
