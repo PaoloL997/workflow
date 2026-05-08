@@ -186,6 +186,7 @@ def serialize_documento(d):
         'latest_dis_act_date': latest_rev.dis_act_date.isoformat() if (latest_rev and latest_rev.dis_act_date) else None,
         'latest_rec_plan_date': latest_rev.rec_plan_date.isoformat() if (latest_rev and latest_rev.rec_plan_date) else None,
         'latest_rec_act_date': latest_rev.rec_act_date.isoformat() if (latest_rev and latest_rev.rec_act_date) else None,
+        'latest_rev_display': (latest_rev.rev_let if (latest_rev and latest_rev.rev_let) else str(latest_rev.rev_no)) if latest_rev else '—',
     }
 
 

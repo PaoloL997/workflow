@@ -1101,7 +1101,7 @@
                 <div class="docrow {{ doc.urg_class }}">
                   <span class="docrow-dot"></span>
                   <span class="docrow-code">{{ doc.vendor_doc }}</span>
-                  <span class="docrow-rev">Rev.&nbsp;{{ doc.latest_rev_let|default:doc.latest_rev_no|default:"—" }}</span>
+                  <span class="docrow-rev">Rev.&nbsp;{{ doc.latest_rev_display }}</span>
                   <span class="docrow-days">{{ doc.days_label }}</span>
                 </div>
               {% endfor %}
@@ -1137,7 +1137,7 @@
                 <div class="docrow {{ doc.urg_class }}">
                   <span class="docrow-dot"></span>
                   <span class="docrow-code">{{ doc.vendor_doc }}</span>
-                  <span class="docrow-rev">Rev.&nbsp;{{ doc.latest_rev_let|default:doc.latest_rev_no|default:"—" }}</span>
+                  <span class="docrow-rev">Rev.&nbsp;{{ doc.latest_rev_display }}</span>
                   <span class="docrow-days">{{ doc.days_label }}</span>
                 </div>
               {% endfor %}
