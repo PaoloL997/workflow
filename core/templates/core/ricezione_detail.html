@@ -104,11 +104,12 @@
     color: var(--color-text-secondary);
     white-space: nowrap;
   }
-  .ric-table th.col-doc  { width: auto; }
-  .ric-table th.col-date { width: 110px; text-align: center; }
-  .ric-table th.col-sel  { width: 180px; }
-  .ric-table th.col-in   { width: 140px; }
-  .ric-table th.col-note { width: 48px;  text-align: center; }
+  .ric-table th.col-doc    { width: auto; }
+  .ric-table th.col-date   { width: 110px; text-align: center; }
+  .ric-table th.col-sel    { width: 180px; }
+  .ric-table th.col-in     { width: 140px; }
+  .ric-table th.col-toggle { width: 80px;  text-align: center; }
+  .ric-table th.col-note   { width: 48px;  text-align: center; }
 
   /* Body rows */
   .ric-table tbody tr.doc-main-row {
@@ -594,6 +595,12 @@
           <td>
             <input type="date" class="ric-date-input ric-date" data-doc="${d.id}" oninput="onDateChange(this)">
           </td>
+          <td style="text-align:center">
+            <label class="toggle-track">
+              <input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}" checked>
+              <span class="toggle-thumb"></span>
+            </label>
+          </td>
           <td>
             <button class="note-btn" data-doc="${d.id}" onclick="toggleNote(this, ${d.id})" title="Note rientro" aria-label="Note rientro">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -603,16 +610,9 @@
           </td>
         </tr>
         <tr class="doc-note-row" data-for-doc="${d.id}">
-          <td colspan="6">
+          <td colspan="7">
             <div class="note-expand-inner">
               <textarea class="note-textarea ric-note" data-doc="${d.id}" placeholder="Osservazioni del cliente per questo documento…" rows="2" oninput="onNoteChange(this)"></textarea>
-              <label class="toggle-label">
-                Nuova rev.
-                <label class="toggle-track">
-                  <input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}">
-                  <span class="toggle-thumb"></span>
-                </label>
-              </label>
             </div>
           </td>
         </tr>`;
@@ -627,6 +627,7 @@
             <th class="col-date">Rientro prev.</th>
             <th class="col-sel">Stato esterno</th>
             <th class="col-in">Data rientro</th>
+            <th class="col-toggle">Nuova rev.</th>
             <th class="col-note">Note</th>
           </tr>
         </thead>
