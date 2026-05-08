@@ -128,7 +128,7 @@
   .doc-code {
     font-weight: 700;
     font-size: 13px;
-    color: hsl(265, 80%, 68%);
+    color: var(--color-accent);
     letter-spacing: -0.01em;
   }
   .doc-rev-badge {
@@ -173,8 +173,8 @@
   .ric-select:focus,
   .ric-date-input:focus {
     outline: none;
-    border-color: hsl(265, 70%, 65%);
-    box-shadow: 0 0 0 3px hsla(265, 70%, 65%, 0.15);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   .ric-date-input.filled {
     border-color: var(--color-success);
@@ -196,14 +196,14 @@
   }
   .note-btn:hover,
   .note-btn.active {
-    color: hsl(265, 80%, 68%);
-    border-color: hsl(265, 80%, 68%);
-    background: hsla(265, 80%, 68%, 0.08);
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   }
   .note-btn.has-note {
-    color: hsl(265, 80%, 68%);
-    background: hsla(265, 80%, 68%, 0.1);
-    border-color: hsl(265, 70%, 60%);
+    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+    border-color: var(--color-accent);
   }
 
   /* Expanded note row */
@@ -236,8 +236,8 @@
   }
   .note-textarea:focus {
     outline: none;
-    border-color: hsl(265, 70%, 65%);
-    box-shadow: 0 0 0 3px hsla(265, 70%, 65%, 0.15);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   .note-expand-inner label.toggle-label {
     display: flex; flex-direction: column;
@@ -266,7 +266,7 @@
     transition: transform 0.2s, background 0.2s;
   }
   .toggle-track input:checked ~ .toggle-thumb {
-    background: hsl(265, 70%, 60%); border-color: hsl(265, 70%, 60%);
+    background: var(--color-accent); border-color: var(--color-accent);
   }
   .toggle-track input:checked ~ .toggle-thumb::after {
     transform: translateX(16px); background: #fff;
@@ -319,7 +319,7 @@
   .registra-btn {
     padding: 10px 24px;
     border-radius: 10px;
-    background: hsl(265, 70%, 60%);
+    background: var(--color-accent);
     color: #fff;
     font-size: 14px;
     font-weight: 600;
@@ -328,7 +328,7 @@
     cursor: pointer;
     transition: background 0.18s, transform 0.1s;
   }
-  .registra-btn:hover:not(:disabled) { background: hsl(265, 70%, 52%); }
+  .registra-btn:hover:not(:disabled) { background: var(--color-accent-hover); }
   .registra-btn:active:not(:disabled) { transform: scale(0.98); }
   .registra-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -392,8 +392,8 @@
   }
   .modal-textarea:focus {
     outline: none;
-    border-color: hsl(265, 70%, 65%);
-    box-shadow: 0 0 0 3px hsla(265, 70%, 65%, 0.15);
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   .modal-hint {
     font-size: 11px;
@@ -419,14 +419,14 @@
   .btn-confirm {
     padding: 9px 20px;
     border-radius: 9px;
-    background: hsl(265, 70%, 60%);
+    background: var(--color-accent);
     color: #fff;
     font-size: 14px; font-weight: 600;
     border: none;
     cursor: pointer;
     transition: background 0.15s;
   }
-  .btn-confirm:hover { background: hsl(265, 70%, 52%); }
+  .btn-confirm:hover { background: var(--color-accent-hover); }
 
   /* Theme icon helpers */
   @media (prefers-color-scheme: light) {
