@@ -1,0 +1,246 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block title %}Registrati — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Auth page layout ── */
+  .auth-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    background: var(--color-bg);
+  }
+
+  .auth-logo {
+    height: 72px;
+    width: auto;
+    object-fit: contain;
+    margin-bottom: 40px;
+    filter: drop-shadow(0 2px 6px hsla(0,0%,0%,0.12));
+  }
+
+  /* ── Card ── */
+  .auth-card {
+    width: 100%;
+    max-width: 440px;
+    background: var(--color-surface);
+    border-radius: var(--radius-xl);
+    padding: 40px;
+    box-shadow: var(--shadow-elevated);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .auth-card h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    text-align: center;
+    margin-bottom: 4px;
+  }
+
+  .auth-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+
+  /* ── Form fields ── */
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .field label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.01em;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 15px;
+    transition: border-color 0.18s, box-shadow 0.18s;
+    box-shadow:
+      inset 0 1px 3px hsla(0,0%,0%,0.06),
+      inset 0 -1px 1px hsla(0,0%,100%,0.04);
+  }
+
+  .field input:focus {
+    border-color: var(--color-accent);
+    box-shadow:
+      0 0 0 3px hsla(211,100%,50%,0.15),
+      inset 0 1px 3px hsla(0,0%,0%,0.04);
+    background: var(--color-bg);
+  }
+
+  /* ── Divider ── */
+  .field-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 4px 0;
+  }
+
+  /* ── Error banner ── */
+  .auth-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    background: hsla(4,90%,58%,0.10);
+    border: 1px solid hsla(4,90%,58%,0.25);
+    color: var(--color-danger);
+    font-size: 14px;
+  }
+
+  /* ── Submit button ── */
+  .btn-auth {
+    width: 100%;
+    padding: 13px 24px;
+    border-radius: var(--radius-md);
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.01em;
+    background: linear-gradient(180deg, hsl(211,100%,56%), hsl(211,100%,50%));
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.20),
+      0 2px 8px hsla(211,100%,50%,0.35);
+    transition: filter 0.18s, transform 0.12s, box-shadow 0.18s;
+  }
+
+  .btn-auth:hover {
+    filter: brightness(1.08);
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.22),
+      0 4px 16px hsla(211,100%,50%,0.45);
+  }
+
+  .btn-auth:active {
+    transform: scale(0.98);
+    filter: brightness(0.96);
+  }
+
+  /* ── Footer link ── */
+  .auth-footer {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+
+  .auth-footer a {
+    color: var(--color-accent);
+    font-weight: 500;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    .field-row { grid-template-columns: 1fr; }
+    .auth-card { padding: 32px 24px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="auth-page">
+  <img src="{% static 'core/img/logo.png' %}" alt="Workflow" class="auth-logo">
+
+  <div class="auth-card">
+    <div>
+      <h1>Crea un account</h1>
+      <p class="auth-subtitle">Unisciti a Workflow</p>
+    </div>
+
+    {% if error %}
+    <div class="auth-error" role="alert">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <div class="field-group">
+
+        <!-- Nome e cognome -->
+        <div class="field-row">
+          <div class="field">
+            <label for="first_name">Nome</label>
+            <input type="text" id="first_name" name="first_name"
+                   autocomplete="given-name" placeholder="Mario">
+          </div>
+          <div class="field">
+            <label for="last_name">Cognome</label>
+            <input type="text" id="last_name" name="last_name"
+                   autocomplete="family-name" placeholder="Rossi">
+          </div>
+        </div>
+
+        <div class="field-divider"></div>
+
+        <!-- Credenziali -->
+        <div class="field">
+          <label for="username">Username <span style="color:var(--color-danger)">*</span></label>
+          <input type="text" id="username" name="username"
+                 autocomplete="username" required autofocus placeholder="mario.rossi">
+        </div>
+        <div class="field">
+          <label for="email">Email <span style="color:var(--color-danger)">*</span></label>
+          <input type="email" id="email" name="email"
+                 autocomplete="email" required placeholder="mario@azienda.it">
+        </div>
+
+        <div class="field-divider"></div>
+
+        <!-- Password -->
+        <div class="field">
+          <label for="password1">Password <span style="color:var(--color-danger)">*</span></label>
+          <input type="password" id="password1" name="password1"
+                 autocomplete="new-password" required placeholder="Minimo 8 caratteri">
+        </div>
+        <div class="field">
+          <label for="password2">Conferma password <span style="color:var(--color-danger)">*</span></label>
+          <input type="password" id="password2" name="password2"
+                 autocomplete="new-password" required placeholder="Ripeti la password">
+        </div>
+
+      </div>
+      <button type="submit" class="btn-auth" style="margin-top: 8px;">Crea account</button>
+    </form>
+
+    <p class="auth-footer">
+      Hai già un account?
+      <a href="{% url 'login' %}">Accedi</a>
+    </p>
+  </div>
+</main>
+{% endblock %}

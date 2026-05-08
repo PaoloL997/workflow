@@ -85,6 +85,9 @@ DATABASES = {
 }
 
 AUTH_USER_MODEL = 'core.User'
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
 
 # Sessions
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
@@ -133,6 +136,8 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Logging
 LOGGING = {

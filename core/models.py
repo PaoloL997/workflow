@@ -21,6 +21,7 @@ class User(AbstractUser):
     email = models.EmailField(db_column='Email', unique=True)
     ruolo = models.CharField(db_column='Ruolo', max_length=100, blank=True)
     reparto = models.CharField(db_column='Reparto', max_length=100, blank=True)
+    avatar = models.ImageField(db_column='Avatar', upload_to='avatars/', null=True, blank=True)
 
     class Meta:
         managed = True

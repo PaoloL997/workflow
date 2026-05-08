@@ -2,6 +2,20 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # HTML — Auth
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    path('register/', views.register_view, name='register'),
+    # HTML — Home
+    path('', views.home_view, name='home'),
+    path('profilo/', views.profilo_view, name='profilo'),
+    path('commesse/', views.commesse_list_view, name='commesse_list'),
+    path('commesse/<str:job>/', views.commessa_detail_view, name='commessa_detail'),
+    path('commesse/<str:job>/documenti/', views.documenti_list_view, name='documenti_list'),
+    path('commesse/<str:job>/archivio/', views.archivio_detail_view, name='archivio_detail'),
+    path('commesse/<str:job>/emissione/', views.emissione_detail_view, name='emissione_detail'),
+    path('commesse/<str:job>/ricezione/', views.ricezione_detail_view, name='ricezione_detail'),
+    path('commesse/<str:job>/situazione/', views.situazione_detail_view, name='situazione_detail'),
     # API — Commesse
     path('api/commesse/', views.commesse_api, name='commesse_api'),
     path('api/commesse/<str:job>/', views.commessa_api_detail, name='commessa_api_detail'),

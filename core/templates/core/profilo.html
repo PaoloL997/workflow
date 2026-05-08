@@ -1,0 +1,430 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Profilo — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 48px 80px;
+    position: relative;
+  }
+
+  /* ── Back button ── */
+  .back-btn {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 50;
+    transition: color 0.18s;
+  }
+  .back-btn:hover { color: var(--color-text-primary); }
+
+  /* ── Content wrapper ── */
+  .content {
+    width: 100%;
+    max-width: 680px;
+    padding-top: 96px;
+  }
+
+  /* ── Page title ── */
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-primary);
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  /* ── Success banner ── */
+  .success-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    background: hsla(142, 71%, 45%, 0.1);
+    border: 1px solid hsla(142, 71%, 45%, 0.25);
+    color: var(--color-success);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 24px;
+  }
+
+  /* ── Profile card ── */
+  .profile-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    overflow: hidden;
+    display: flex;
+    gap: 0;
+  }
+
+  /* ── Left column: avatar + identity ── */
+  .profile-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 14px;
+    padding: 36px 32px;
+    border-right: 1px solid var(--color-border);
+    min-width: 200px;
+    width: 200px;
+    flex-shrink: 0;
+  }
+
+  .avatar-ring {
+    position: relative;
+    width: 88px;
+    height: 88px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .avatar-circle {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: filter 0.18s;
+    border: 3px solid var(--color-bg);
+    box-shadow: 0 4px 18px hsla(0,0%,0%,0.16);
+  }
+
+  .avatar-ring:hover .avatar-circle { filter: brightness(0.85); }
+
+  .avatar-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .avatar-initial-big {
+    font-size: 34px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+
+  .avatar-edit-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.18s;
+    background: hsla(0,0%,0%,0.38);
+  }
+
+  .avatar-ring:hover .avatar-edit-overlay { opacity: 1; }
+  .avatar-edit-overlay svg { color: #fff; }
+  .avatar-upload-input { display: none; }
+
+  .profile-name {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  .profile-username {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    margin-top: -8px;
+  }
+
+  /* ── Logout button (small, in left column) ── */
+  .btn-logout {
+    margin-top: auto;
+    padding: 7px 18px;
+    border-radius: 999px;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-danger);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, border-color 0.18s;
+  }
+
+  .btn-logout:hover {
+    background: hsla(4, 90%, 58%, 0.08);
+    border-color: var(--color-danger);
+  }
+
+  /* ── Right column: fields ── */
+  .profile-right {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fields-section {
+    padding: 0 28px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .fields-section:last-of-type { border-bottom: none; }
+
+  .fields-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    padding: 22px 0 4px;
+    opacity: 0.7;
+  }
+
+  .arch-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .arch-field:last-of-type { border-bottom: none; }
+
+  .arch-field label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+    min-width: 90px;
+  }
+
+  .field-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 11px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    text-align: right;
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px hsla(211, 100%, 50%, 0.12);
+  }
+
+  .field-input::placeholder { color: var(--color-text-secondary); opacity: 0.45; }
+
+  /* ── Reparto select ── */
+  select.field-input {
+    appearance: none;
+    padding-right: 28px;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+    cursor: pointer;
+  }
+  select.field-input option {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+  }
+
+  .field-error {
+    font-size: 12px;
+    color: var(--color-danger);
+    margin-top: 4px;
+    text-align: right;
+    width: 100%;
+  }
+
+  /* ── Save row ── */
+  .save-row {
+    display: flex;
+    justify-content: flex-end;
+    padding: 20px 28px;
+  }
+
+  .btn-save {
+    padding: 9px 26px;
+    border-radius: 12px;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.18s, transform 0.14s;
+  }
+
+  .btn-save:hover { background: var(--color-accent-hover); }
+  .btn-save:active { transform: scale(0.97); }
+
+  @media (max-width: 640px) {
+    .page { padding: 0 16px 80px; }
+    .profile-card { flex-direction: column; }
+    .profile-left { width: 100%; border-right: none; border-bottom: 1px solid var(--color-border); padding: 28px 24px; flex-direction: row; gap: 18px; align-items: center; }
+    .profile-name, .profile-username { text-align: left; }
+    .btn-logout { margin-top: 0; margin-left: auto; }
+    .fields-section { padding: 0 20px; }
+    .save-row { padding: 16px 20px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Back button ── -->
+  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+
+  <div class="content">
+
+    <h1 class="page-title">Profilo</h1>
+
+    {% if success == 'profile' %}
+    <div class="success-banner" role="alert">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+      Profilo aggiornato con successo.
+    </div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" id="form-profile">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_profile">
+
+      <div class="profile-card">
+
+        <!-- ── Left: avatar + identity + logout ── -->
+        <div class="profile-left">
+
+          <!-- Avatar upload (sub-form, auto-submit on change) -->
+          <label class="avatar-ring" for="avatar-upload" title="Cambia foto profilo">
+            <div class="avatar-circle">
+              {% if user.avatar %}
+                <img src="{{ user.avatar.url }}" alt="Foto profilo">
+              {% else %}
+                <span class="avatar-initial-big">{{ user.first_name|slice:":1"|default:user.username|slice:":1" }}</span>
+              {% endif %}
+            </div>
+            <div class="avatar-edit-overlay">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </div>
+          </label>
+          <input type="file" id="avatar-upload" name="avatar" accept="image/*" class="avatar-upload-input">
+
+          <div class="profile-name">{{ user.get_full_name|default:user.username }}</div>
+          <div class="profile-username">@{{ user.username }}</div>
+
+          <form method="post" action="{% url 'logout' %}" style="margin-top: auto; padding-top: 24px;">
+            {% csrf_token %}
+            <button type="submit" class="btn-logout">Logout</button>
+          </form>
+
+        </div>
+
+        <!-- ── Right: fields ── -->
+        <div class="profile-right">
+
+          <div class="fields-section">
+            <div class="fields-section-title">Dati personali</div>
+
+            <div class="arch-field">
+              <label for="p-first-name">Nome</label>
+              <input id="p-first-name" name="first_name" type="text" class="field-input"
+                     value="{{ user.first_name }}" placeholder="Nome" autocomplete="given-name">
+            </div>
+
+            <div class="arch-field">
+              <label for="p-last-name">Cognome</label>
+              <input id="p-last-name" name="last_name" type="text" class="field-input"
+                     value="{{ user.last_name }}" placeholder="Cognome" autocomplete="family-name">
+            </div>
+
+            <div class="arch-field" style="flex-wrap: wrap;">
+              <label for="p-email">Email</label>
+              <input id="p-email" name="email" type="email" class="field-input"
+                     value="{{ user.email }}" placeholder="nome@azienda.it" autocomplete="email">
+              {% if errors.email %}<span class="field-error">{{ errors.email }}</span>{% endif %}
+            </div>
+          </div>
+
+          <div class="fields-section">
+            <div class="fields-section-title">Dati aziendali</div>
+
+            <div class="arch-field">
+              <label for="p-ruolo">Ruolo</label>
+              <input id="p-ruolo" name="ruolo" type="text" class="field-input"
+                     value="{{ user.ruolo }}" placeholder="es. Progettista">
+            </div>
+
+            <div class="arch-field">
+              <label for="p-reparto">Reparto</label>
+              <select id="p-reparto" name="reparto" class="field-input">
+                <option value="">— Scegli un reparto —</option>
+                {% for rep in reparti %}
+                  <option value="{{ rep.nome }}" {% if user.reparto == rep.nome %}selected{% endif %}>
+                    {{ rep.nome }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="save-row">
+            <button type="submit" class="btn-save">Salva modifiche</button>
+          </div>
+
+        </div>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+<script>
+  /* Auto-submit when avatar file is selected */
+  document.getElementById('avatar-upload').addEventListener('change', function () {
+    if (this.files && this.files[0]) {
+      document.getElementById('form-profile').submit();
+    }
+  });
+</script>
+{% endblock %}

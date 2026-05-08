@@ -1,0 +1,908 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Home — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Layout ── */
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 48px 80px;
+  }
+
+  /* ── Navbar ── */
+  .navbar {
+    width: 100%;
+    max-width: 1280px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 64px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    color: var(--color-text-primary);
+    background: transparent;
+    text-decoration: none;
+  }
+
+  /* Active: accent color + bold, no dot, no background */
+  .nav-item.active {
+    color: var(--color-accent);
+    font-weight: 600;
+    background: transparent;
+  }
+
+  .nav-item svg {
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity 0.18s;
+  }
+
+  .nav-item:hover svg  { opacity: 0.8; }
+  .nav-item.active svg { opacity: 1; }
+
+  .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    margin-left: 2px;
+  }
+
+  /* ── Hero (logo + CTAs) ── */
+  .hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 48px;
+    margin-bottom: 64px;
+  }
+
+  /* ── Logo wrapper ── */
+  .logo-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    animation: logo-in 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    cursor: default;
+  }
+
+  .logo-wrapper:hover {
+    transform: scale(1.05) translateY(-4px);
+  }
+
+  /* Ambient glow behind the logo image */
+  .logo-wrapper::after {
+    content: '';
+    position: absolute;
+    inset: 12%;
+    border-radius: 50%;
+    background: radial-gradient(
+      circle,
+      hsla(211, 100%, 55%, 0.22) 0%,
+      transparent 70%
+    );
+    filter: blur(18px);
+    animation: logo-glow-pulse 3.5s ease-in-out infinite;
+    z-index: 0;
+    transition: filter 0.4s ease, opacity 0.4s ease;
+  }
+
+  .logo-wrapper:hover::after {
+    filter: blur(18px) brightness(1.6);
+    opacity: 1;
+  }
+
+  .hero-logo {
+    width: auto;
+    height: 130px;
+    object-fit: contain;
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 2px 8px hsla(211,100%,30%,0.18));
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), filter 0.4s ease;
+  }
+
+  .logo-wrapper:hover .hero-logo {
+    transform: scale(1.04);
+    filter: drop-shadow(0 6px 22px hsla(211,100%,30%,0.38));
+  }
+
+  @keyframes logo-in {
+    from {
+      opacity: 0;
+      transform: scale(0.78) translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes logo-glow-pulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.96); }
+    50%       { opacity: 1;    transform: scale(1.06); }
+  }
+
+  .cta-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  /* Apple-style primary: filled blue, inset top highlight, tight shadow */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 28px;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(
+      180deg,
+      hsl(211, 100%, 54%) 0%,
+      hsl(211, 100%, 48%) 100%
+    );
+    color: hsl(0, 0%, 100%);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.25),
+      0 1px 3px hsla(211,100%,30%,0.35),
+      0 4px 12px hsla(211,100%,30%,0.25);
+    transition: filter 0.15s, transform 0.1s, box-shadow 0.15s;
+  }
+
+  .btn-primary:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.25),
+      0 2px 6px hsla(211,100%,30%,0.4),
+      0 8px 20px hsla(211,100%,30%,0.3);
+  }
+
+  .btn-primary:active {
+    filter: brightness(0.96);
+    transform: translateY(0);
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.2),
+      0 1px 2px hsla(211,100%,30%,0.3);
+  }
+
+  /* Apple-style secondary: frosted glass pill */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 28px;
+    border-radius: var(--radius-lg);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    border: 1px solid var(--color-border);
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.12),
+      0 1px 3px hsla(0,0%,0%,0.1);
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  }
+
+  .btn-secondary:hover {
+    background: var(--color-surface);
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 hsla(0,0%,100%,0.16),
+      0 2px 8px hsla(0,0%,0%,0.14);
+  }
+
+  .btn-secondary:active {
+    transform: translateY(0);
+    box-shadow: inset 0 1px 0 hsla(0,0%,100%,0.1);
+  }
+
+  .cta-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    letter-spacing: -0.01em;
+  }
+
+  .cta-hint a {
+    color: var(--color-accent);
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .cta-hint a:hover { text-decoration: underline; }
+
+  /* ── Commesse grid ── */  .commesse-grid {
+    width: 100%;
+    max-width: 1280px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 1024px) {
+    .commesse-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  @media (max-width: 720px) {
+    .commesse-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 480px) {
+    .commesse-grid { grid-template-columns: 1fr; }
+  }
+
+  .commessa-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-card);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .commessa-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-elevated);
+    text-decoration: none;
+  }
+
+  .card-job {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: -0.01em;
+  }
+
+  .card-client {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .card-detail {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+
+  .card-footer svg { opacity: 0.6; }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+  }
+
+  /* ── Modal (Apri Commessa) ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: hsla(0,0%,0%,0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-xl);
+    padding: 32px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-elevated);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .btn-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: background 0.15s;
+  }
+
+  .btn-close:hover { background: var(--color-border); }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .form-group.full-width { grid-column: 1 / -1; }
+
+  .form-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .form-label-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .form-label-row .form-label { margin-bottom: 0; }
+
+  .erp-status {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    opacity: 0;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .erp-status.visible  { opacity: 1; }
+  .erp-status.loading  { color: var(--color-text-secondary); }
+  .erp-status.found    { color: var(--color-success); }
+  .erp-status.missing  { color: var(--color-text-secondary); }
+
+  @keyframes erp-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .erp-status.loading svg {
+    animation: erp-spin 0.7s linear infinite;
+  }
+
+  .form-input {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 15px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    box-shadow: inset 0 1px 3px hsla(0,0%,0%,0.08);
+  }
+
+  .form-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: inset 0 1px 3px hsla(0,0%,0%,0.08), 0 0 0 3px hsla(211,100%,50%,0.15);
+  }
+
+  .form-input::placeholder { color: var(--color-text-secondary); opacity: 0.6; }
+
+  .modal-error {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: hsla(4, 90%, 58%, 0.12);
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+    font-size: 13px;
+    display: none;
+  }
+
+  .modal-error.visible { display: block; }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+  }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+    z-index: 50;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-elevated);
+    transform: scale(1.08);
+    color: var(--color-text-primary);
+  }
+
+  .theme-toggle:active { transform: scale(0.96); }
+
+  /* Show correct icon based on current theme */
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+  /* When system is dark and no override: show sun (toggling will force light) */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item active" aria-current="page">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      Home
+    </a>
+    <a href="#" class="nav-item" id="nav-notifiche">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      Notifiche
+      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+    </a>
+    <button class="nav-item" id="nav-cerca" onclick="openSpotlight()" aria-label="Apri ricerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
+    </button>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
+
+  <!-- ── Hero ── -->
+  <div class="hero">
+    <div class="logo-wrapper">
+      <img src="{% static 'core/img/logo.png' %}" alt="Workflow logo" class="hero-logo">
+    </div>
+    <div class="cta-group">
+      <div class="cta-buttons">
+        <button class="btn-primary" onclick="openModal()" aria-haspopup="dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+          </svg>
+          Apri Commessa
+        </button>
+        <button class="btn-secondary" onclick="openSpotlight()" aria-haspopup="dialog">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          </svg>
+          Cerca Commessa
+        </button>
+      </div>
+      <p class="cta-hint">
+        Commesse più recenti qui sotto
+        <span aria-hidden="true">·</span>
+        <a href="{% url 'commesse_list' %}">Visualizza tutte</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Commesse grid ── -->
+  <div class="commesse-grid" id="commesse-grid">
+    <div class="empty-state">Caricamento…</div>
+  </div>
+
+</div><!-- /page -->
+
+
+<!-- ── Modal: Apri Commessa ── -->
+<div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal" role="document">
+    <div class="modal-header">
+      <h2 class="modal-title" id="modal-title">Nuova Commessa</h2>
+      <button class="btn-close" onclick="closeModal()" aria-label="Chiudi">✕</button>
+    </div>
+
+    <div id="modal-error" class="modal-error" role="alert"></div>
+
+    <form id="form-commessa" novalidate>
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="form-group">
+          <div class="form-label-row">
+            <label class="form-label" for="f-job">Job *</label>
+            <span id="erp-status" class="erp-status" aria-live="polite"></span>
+          </div>
+          <input class="form-input" id="f-job" name="job" type="text" required
+                 placeholder="es. 2024-001" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-client">Cliente *</label>
+          <input class="form-input" id="f-client" name="client" type="text" required
+                 placeholder="Nome cliente" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-po-no">PO No.</label>
+          <input class="form-input" id="f-po-no" name="po_no" type="text"
+                 placeholder="Numero ordine cliente" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-requisition">Bid No.</label>
+          <input class="form-input" id="f-requisition" name="requisition" type="text"
+                 placeholder="Numero offerta" autocomplete="off">
+        </div>
+        <div class="form-group full-width">
+          <label class="form-label" for="f-job-detail">Descrizione</label>
+          <input class="form-input" id="f-job-detail" name="job_detail" type="text"
+                 placeholder="Descrizione commessa" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-delivery-date">Data consegna</label>
+          <input class="form-input" id="f-delivery-date" name="delivery_date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="f-delivery-term">Termini consegna</label>
+          <input class="form-input" id="f-delivery-term" name="delivery_term" type="text"
+                 placeholder="es. DDP, FCA…" autocomplete="off">
+        </div>
+      </div>
+    </form>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Annulla</button>
+      <button class="btn-primary" id="btn-salva" onclick="submitCommessa()">
+        <span id="btn-salva-label">Crea commessa</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Theme toggle ── -->
+<button class="theme-toggle" id="theme-toggle" aria-label="Cambia tema">
+  <!-- Moon: shown in light mode → click to go dark -->
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/>
+  </svg>
+  <!-- Sun: shown in dark mode → click to go light -->
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 18a1 1 0 0 1-1-1v-1a1 1 0 0 1 2 0v1a1 1 0 0 1-1 1zm9-9a1 1 0 0 1-1 1h-1a1 1 0 0 1 0-2h1a1 1 0 0 1 1 1zM4 12a1 1 0 0 1-1 1H2a1 1 0 0 1 0-2h1a1 1 0 0 1 1 1zm14.95 5.54a1 1 0 0 1-1.41 0l-.71-.71a1 1 0 1 1 1.41-1.41l.71.71a1 1 0 0 1 0 1.41zM6.76 6.76a1 1 0 0 1-1.41 0l-.71-.71A1 1 0 0 1 6.05 4.64l.71.71a1 1 0 0 1 0 1.41zm11.18 0a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0zM6.05 19.36a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0z"/>
+  </svg>
+</button>
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  /* ──────────────────────────────────────────────
+     Commesse grid
+  ────────────────────────────────────────────── */
+  async function loadCommesse() {
+    const grid = document.getElementById('commesse-grid');
+    try {
+      const res = await fetch('/api/commesse/');
+      if (!res.ok) throw new Error('Errore di rete');
+      const { commesse } = await res.json();
+      renderGrid(commesse.slice(0, 12));
+    } catch {
+      grid.innerHTML = '<div class="empty-state">Impossibile caricare le commesse.</div>';
+    }
+  }
+
+  function renderGrid(commesse) {
+    const grid = document.getElementById('commesse-grid');
+    if (!commesse.length) {
+      grid.innerHTML = '<div class="empty-state">Nessuna commessa trovata.<br>Premi <strong>Apri Commessa</strong> per crearne una.</div>';
+      return;
+    }
+    grid.innerHTML = commesse.map(c => `
+      <a href="/commesse/${encodeURIComponent(c.job)}/" class="commessa-card" aria-label="Commessa ${c.job}">
+        <div class="card-job">${escHtml(c.job)}</div>
+        <div class="card-client">${escHtml(c.client || '—')}</div>
+        ${c.job_detail ? `<div class="card-detail">${escHtml(c.job_detail)}</div>` : ''}
+        <div class="card-footer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+          </svg>
+          ${formatDate(c.delivery_date)}
+        </div>
+      </a>
+    `).join('');
+  }
+
+  /* ──────────────────────────────────────────────
+     Modal: Apri Commessa
+  ────────────────────────────────────────────── */
+  function openModal() {
+    document.getElementById('modal-overlay').classList.add('open');
+    document.getElementById('f-job').focus();
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    document.getElementById('form-commessa').reset();
+    setErpStatus('');
+    hideModalError();
+  }
+
+  /* ── ERP autofill ── */
+  const ERP_MIN_LEN = 3;
+  let erpDebounce = null;
+
+  function setErpStatus(state, text) {
+    const el = document.getElementById('erp-status');
+    el.className = 'erp-status';
+    el.innerHTML = '';
+    if (!state) return;
+    el.classList.add('visible', state);
+    if (state === 'loading') {
+      el.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>`;
+    } else {
+      el.appendChild(document.createTextNode(text));
+    }
+  }
+
+  function fillFromErp(data) {
+    const map = {
+      'f-client':        data.client,
+      'f-po-no':         data.po_no,
+      'f-job-detail':    data.job_detail,
+      'f-delivery-date': data.delivery_date,
+    };
+    Object.entries(map).forEach(([id, val]) => {
+      if (val != null && val !== '') {
+        document.getElementById(id).value = val;
+      }
+    });
+  }
+
+  document.getElementById('f-job').addEventListener('input', function () {
+    clearTimeout(erpDebounce);
+    const val = this.value.trim();
+    if (val.length < ERP_MIN_LEN) { setErpStatus(''); return; }
+    setErpStatus('loading');
+    erpDebounce = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/erp/?job=${encodeURIComponent(val)}`, {
+          headers: { 'X-CSRFToken': CSRF },
+        });
+        const json = await res.json();
+        const data = json.data || {};
+        if (Object.keys(data).length > 0) {
+          fillFromErp(data);
+          setErpStatus('found', '✓ Trovata');
+        } else {
+          setErpStatus('missing', 'Non trovata in ERP');
+        }
+      } catch {
+        setErpStatus('');
+      }
+    }, 600);
+  });
+
+  function showModalError(msg) {
+    const el = document.getElementById('modal-error');
+    el.textContent = typeof msg === 'object' ? Object.values(msg).flat().join(' ') : msg;
+    el.classList.add('visible');
+  }
+
+  function hideModalError() {
+    document.getElementById('modal-error').classList.remove('visible');
+  }
+
+  async function submitCommessa() {
+    hideModalError();
+    const form = document.getElementById('form-commessa');
+    const btn = document.getElementById('btn-salva');
+    const label = document.getElementById('btn-salva-label');
+
+    const job = form.job.value.trim();
+    const client = form.client.value.trim();
+    if (!job || !client) {
+      showModalError('I campi Job e Cliente sono obbligatori.');
+      return;
+    }
+
+    const payload = {
+      job,
+      client,
+      po_no: form.po_no.value.trim(),
+      requisition: form.requisition.value.trim(),
+      job_detail: form.job_detail.value.trim(),
+      delivery_date: form.delivery_date.value || null,
+      delivery_term: form.delivery_term.value.trim(),
+    };
+
+    btn.disabled = true;
+    label.textContent = 'Salvataggio…';
+
+    try {
+      const res = await fetch('/api/commesse/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showModalError(data.error || 'Errore durante la creazione.');
+        return;
+      }
+      closeModal();
+      loadCommesse();
+    } catch {
+      showModalError('Errore di rete. Riprova.');
+    } finally {
+      btn.disabled = false;
+      label.textContent = 'Crea commessa';
+    }
+  }
+
+  /* ──────────────────────────────────────────────
+     Event listeners
+  ────────────────────────────────────────────── */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // Close modal clicking outside
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  // Submit form with Enter on last input
+  document.getElementById('form-commessa').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submitCommessa(); }
+  });
+
+  /* ──────────────────────────────────────────────
+     Theme toggle
+  ────────────────────────────────────────────── */
+  (function () {
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+
+    // Determine effective current theme
+    function effectiveTheme() {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function applyTheme(theme) {
+      root.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+    }
+
+    // Apply on load (before first paint to avoid flash)
+    applyTheme(effectiveTheme());
+
+    btn.addEventListener('click', () => {
+      applyTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
+  /* ──────────────────────────────────────────────
+     Init
+  ────────────────────────────────────────────── */
+  loadCommesse();
+</script>
+{% endblock %}

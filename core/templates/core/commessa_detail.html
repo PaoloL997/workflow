@@ -424,48 +424,58 @@
 
   /* ── Document deadline rows (emissione / ricezione cards) ── */
   .section-body:has(.doc-deadline-list) {
-    padding: 14px 14px 16px;
+    padding: 16px 18px 20px;
     gap: 0;
   }
 
   .doc-deadline-list {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 5px;
     width: 100%;
   }
 
   .docrow {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    border-radius: 7px;
-    border: 1px solid transparent;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 1px 2px hsla(0,0%,0%,0.07), inset 0 1px 0 hsla(0,0%,100%,0.04);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s ease;
   }
 
-  .docrow-icon {
+  .docrow:hover {
+    transform: translateX(3px);
+    box-shadow: 0 2px 10px hsla(0,0%,0%,0.14), inset 0 1px 0 hsla(0,0%,100%,0.05);
+  }
+
+  /* Urgency dot — colored circle on the left */
+  .docrow-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
     flex-shrink: 0;
-    opacity: 0.4;
-    color: var(--color-text-secondary);
-    display: flex;
+    box-shadow: 0 0 5px currentColor;
   }
 
   .docrow-code {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     white-space: nowrap;
     flex-shrink: 0;
     color: hsl(265, 70%, 68%);
   }
 
   [data-theme="light"] .docrow-code {
-    color: hsl(265, 60%, 44%);
+    color: hsl(265, 58%, 44%);
   }
 
   .docrow-title {
-    font-size: 11px;
+    font-size: 11.5px;
     color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -474,46 +484,49 @@
     min-width: 0;
   }
 
+  /* Pill badge for urgency label */
   .docrow-days {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: -0.01em;
+    padding: 3px 8px;
+    border-radius: 999px;
     flex-shrink: 0;
-    margin-left: auto;
+    white-space: nowrap;
   }
 
   .docrow-more {
     font-size: 11px;
     color: var(--color-text-secondary);
-    opacity: 0.45;
+    opacity: 0.4;
     font-style: italic;
     text-align: center;
-    padding: 5px 0 0;
+    padding: 6px 0 0;
   }
 
-  /* Urgency colour variants */
-  .docrow.urg-danger  { background: hsla(4,   85%, 58%, .12); border-color: hsla(4,   85%, 58%, .22); }
-  .docrow.urg-today   { background: hsla(18,  90%, 58%, .12); border-color: hsla(18,  90%, 58%, .22); }
-  .docrow.urg-urgent  { background: hsla(33,  92%, 58%, .10); border-color: hsla(33,  92%, 58%, .18); }
-  .docrow.urg-soon    { background: hsla(44,  88%, 56%, .10); border-color: hsla(44,  88%, 56%, .16); }
-  .docrow.urg-week    { background: hsla(78,  72%, 50%, .09); border-color: hsla(78,  72%, 50%, .15); }
-  .docrow.urg-ok      { background: hsla(142, 68%, 50%, .09); border-color: hsla(142, 68%, 50%, .15); }
-  .docrow.urg-none    { background: var(--color-elevated); border-color: var(--color-border); }
+  /* ── Urgency: dot color + pill background/text ── */
+  .docrow.urg-danger .docrow-dot   { background: hsl(4,   90%, 62%); color: hsl(4,   90%, 62%); }
+  .docrow.urg-today  .docrow-dot   { background: hsl(18,  92%, 62%); color: hsl(18,  92%, 62%); }
+  .docrow.urg-urgent .docrow-dot   { background: hsl(33,  92%, 62%); color: hsl(33,  92%, 62%); }
+  .docrow.urg-soon   .docrow-dot   { background: hsl(44,  88%, 60%); color: hsl(44,  88%, 60%); }
+  .docrow.urg-week   .docrow-dot   { background: hsl(78,  72%, 52%); color: hsl(78,  72%, 52%); }
+  .docrow.urg-ok     .docrow-dot   { background: hsl(142, 68%, 50%); color: hsl(142, 68%, 50%); }
+  .docrow.urg-none   .docrow-dot   { background: var(--color-border); color: transparent; box-shadow: none; }
 
-  .docrow.urg-danger  .docrow-days { color: hsl(4,   92%, 66%); }
-  .docrow.urg-today   .docrow-days { color: hsl(18,  92%, 66%); }
-  .docrow.urg-urgent  .docrow-days { color: hsl(33,  92%, 66%); }
-  .docrow.urg-soon    .docrow-days { color: hsl(44,  88%, 64%); }
-  .docrow.urg-week    .docrow-days { color: hsl(78,  72%, 60%); }
-  .docrow.urg-ok      .docrow-days { color: hsl(142, 60%, 55%); }
-  .docrow.urg-none    .docrow-days { color: var(--color-text-secondary); }
+  .docrow.urg-danger .docrow-days  { background: hsla(4,   85%, 55%, .18); color: hsl(4,   90%, 65%); }
+  .docrow.urg-today  .docrow-days  { background: hsla(18,  90%, 55%, .18); color: hsl(18,  92%, 65%); }
+  .docrow.urg-urgent .docrow-days  { background: hsla(33,  90%, 55%, .16); color: hsl(33,  92%, 65%); }
+  .docrow.urg-soon   .docrow-days  { background: hsla(44,  88%, 55%, .16); color: hsl(44,  88%, 62%); }
+  .docrow.urg-week   .docrow-days  { background: hsla(78,  72%, 50%, .14); color: hsl(78,  72%, 58%); }
+  .docrow.urg-ok     .docrow-days  { background: hsla(142, 68%, 48%, .14); color: hsl(142, 60%, 54%); }
+  .docrow.urg-none   .docrow-days  { background: var(--color-elevated); color: var(--color-text-secondary); }
 
-  [data-theme="light"] .docrow.urg-danger  .docrow-days { color: hsl(4,   80%, 42%); }
-  [data-theme="light"] .docrow.urg-today   .docrow-days { color: hsl(18,  80%, 42%); }
-  [data-theme="light"] .docrow.urg-urgent  .docrow-days { color: hsl(33,  82%, 40%); }
-  [data-theme="light"] .docrow.urg-soon    .docrow-days { color: hsl(44,  78%, 38%); }
-  [data-theme="light"] .docrow.urg-week    .docrow-days { color: hsl(78,  65%, 33%); }
-  [data-theme="light"] .docrow.urg-ok      .docrow-days { color: hsl(142, 55%, 32%); }
+  [data-theme="light"] .docrow.urg-danger .docrow-days  { background: hsla(4,   80%, 55%, .12); color: hsl(4,   78%, 42%); }
+  [data-theme="light"] .docrow.urg-today  .docrow-days  { background: hsla(18,  88%, 55%, .12); color: hsl(18,  78%, 40%); }
+  [data-theme="light"] .docrow.urg-urgent .docrow-days  { background: hsla(33,  88%, 55%, .12); color: hsl(33,  80%, 38%); }
+  [data-theme="light"] .docrow.urg-soon   .docrow-days  { background: hsla(44,  85%, 52%, .12); color: hsl(44,  75%, 36%); }
+  [data-theme="light"] .docrow.urg-week   .docrow-days  { background: hsla(78,  68%, 48%, .12); color: hsl(78,  62%, 32%); }
+  [data-theme="light"] .docrow.urg-ok     .docrow-days  { background: hsla(142, 62%, 45%, .12); color: hsl(142, 55%, 30%); }
 
   /* ── Situazione preview ── */
   .situazione-preview {
@@ -1084,12 +1097,7 @@
             <div class="doc-deadline-list">
               {% for doc in emissione_preview %}
                 <div class="docrow {{ doc.urg_class }}">
-                  <span class="docrow-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                  </span>
+                  <span class="docrow-dot"></span>
                   <span class="docrow-code">{{ doc.vendor_doc }}</span>
                   <span class="docrow-title">{{ doc.doc_title }}</span>
                   <span class="docrow-days">{{ doc.days_label }}</span>
@@ -1125,12 +1133,7 @@
             <div class="doc-deadline-list">
               {% for doc in ricezione_preview %}
                 <div class="docrow {{ doc.urg_class }}">
-                  <span class="docrow-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                      <polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                  </span>
+                  <span class="docrow-dot"></span>
                   <span class="docrow-code">{{ doc.vendor_doc }}</span>
                   <span class="docrow-title">{{ doc.doc_title }}</span>
                   <span class="docrow-days">{{ doc.days_label }}</span>
