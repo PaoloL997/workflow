@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Workflow{% endblock %}</title>
+  {% load static %}
+  <style>
+    /* ── CSS Custom Properties ── */
+    :root {
+      color-scheme: light;
+      --color-bg:             hsl(0, 0%, 100%);
+      --color-surface:        hsl(0, 0%, 95%);
+      --color-elevated:       hsl(0, 0%, 90%);
+      --color-text-primary:   hsl(0, 0%, 0%);
+      --color-text-secondary: hsl(0, 0%, 40%);
+      --color-accent:         hsl(211, 100%, 50%);
+      --color-accent-hover:   hsl(211, 100%, 42%);
+      --color-danger:         hsl(4, 90%, 58%);
+      --color-success:        hsl(142, 71%, 45%);
+      --color-border:         hsl(0, 0%, 88%);
+      --shadow-card:
+        0 0 0 0.5px hsla(0,0%,0%,0.08),
+        0 1px 2px   hsla(0,0%,0%,0.08),
+        0 4px 16px  hsla(0,0%,0%,0.08);
+      --shadow-elevated:
+        0 0 0 0.5px hsla(0,0%,0%,0.1),
+        0 2px 8px   hsla(0,0%,0%,0.12),
+        0 8px 32px  hsla(0,0%,0%,0.12);
+      --radius-sm:   8px;
+      --radius-md:   12px;
+      --radius-lg:   16px;
+      --radius-xl:   20px;
+    }
+
+    /* Dark token set — applied by media query OR manual [data-theme="dark"] */
+    @mixin dark-tokens {
+      --color-bg:             hsl(0, 0%, 0%);
+      --color-surface:        hsl(0, 0%, 11%);
+      --color-elevated:       hsl(0, 0%, 17%);
+      --color-text-primary:   hsl(0, 0%, 100%);
+      --color-text-secondary: hsl(0, 0%, 60%);
+      --color-accent:         hsl(211, 100%, 60%);
+      --color-accent-hover:   hsl(211, 100%, 68%);
+      --color-danger:         hsl(4, 100%, 67%);
+      --color-success:        hsl(142, 60%, 54%);
+      --color-border:         hsl(0, 0%, 22%);
+      --shadow-card:
+        0 0 0 0.5px hsla(0,0%,100%,0.06),
+        0 1px 2px   hsla(0,0%,0%,0.4),
+        0 4px 16px  hsla(0,0%,0%,0.3);
+      --shadow-elevated:
+        0 0 0 0.5px hsla(0,0%,100%,0.08),
+        0 2px 8px   hsla(0,0%,0%,0.5),
+        0 8px 32px  hsla(0,0%,0%,0.4);
+    }
+
+    /* System dark mode (no override set) */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --color-bg:             hsl(0, 0%, 0%);
+        --color-surface:        hsl(0, 0%, 11%);
+        --color-elevated:       hsl(0, 0%, 17%);
+        --color-text-primary:   hsl(0, 0%, 100%);
+        --color-text-secondary: hsl(0, 0%, 60%);
+        --color-accent:         hsl(211, 100%, 60%);
+        --color-accent-hover:   hsl(211, 100%, 68%);
+        --color-danger:         hsl(4, 100%, 67%);
+        --color-success:        hsl(142, 60%, 54%);
+        --color-border:         hsl(0, 0%, 22%);
+        --shadow-card:
+          0 0 0 0.5px hsla(0,0%,100%,0.06),
+          0 1px 2px   hsla(0,0%,0%,0.4),
+          0 4px 16px  hsla(0,0%,0%,0.3);
+        --shadow-elevated:
+          0 0 0 0.5px hsla(0,0%,100%,0.08),
+          0 2px 8px   hsla(0,0%,0%,0.5),
+          0 8px 32px  hsla(0,0%,0%,0.4);
+      }
+    }
+
+    /* Manual dark override */
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --color-bg:             hsl(0, 0%, 0%);
+      --color-surface:        hsl(0, 0%, 11%);
+      --color-elevated:       hsl(0, 0%, 17%);
+      --color-text-primary:   hsl(0, 0%, 100%);
+      --color-text-secondary: hsl(0, 0%, 60%);
+      --color-accent:         hsl(211, 100%, 60%);
+      --color-accent-hover:   hsl(211, 100%, 68%);
+      --color-danger:         hsl(4, 100%, 67%);
+      --color-success:        hsl(142, 60%, 54%);
+      --color-border:         hsl(0, 0%, 22%);
+      --shadow-card:
+        0 0 0 0.5px hsla(0,0%,100%,0.06),
+        0 1px 2px   hsla(0,0%,0%,0.4),
+        0 4px 16px  hsla(0,0%,0%,0.3);
+      --shadow-elevated:
+        0 0 0 0.5px hsla(0,0%,100%,0.08),
+        0 2px 8px   hsla(0,0%,0%,0.5),
+        0 8px 32px  hsla(0,0%,0%,0.4);
+    }
+
+    /* Manual light override (forces light even on dark-system machines) */
+    :root[data-theme="light"] {
+      color-scheme: light;
+      --color-bg:             hsl(0, 0%, 100%);
+      --color-surface:        hsl(0, 0%, 95%);
+      --color-elevated:       hsl(0, 0%, 90%);
+      --color-text-primary:   hsl(0, 0%, 0%);
+      --color-text-secondary: hsl(0, 0%, 40%);
+      --color-accent:         hsl(211, 100%, 50%);
+      --color-accent-hover:   hsl(211, 100%, 42%);
+      --color-danger:         hsl(4, 90%, 58%);
+      --color-success:        hsl(142, 71%, 45%);
+      --color-border:         hsl(0, 0%, 88%);
+      --shadow-card:
+        0 0 0 0.5px hsla(0,0%,0%,0.08),
+        0 1px 2px   hsla(0,0%,0%,0.08),
+        0 4px 16px  hsla(0,0%,0%,0.08);
+      --shadow-elevated:
+        0 0 0 0.5px hsla(0,0%,0%,0.1),
+        0 2px 8px   hsla(0,0%,0%,0.12),
+        0 8px 32px  hsla(0,0%,0%,0.12);
+    }
+
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { font-size: 16px; }
+
+    body {
+      font-family: -apple-system, "SF Pro Text", BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      background-color: var(--color-bg);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    a { color: var(--color-accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      outline: none;
+    }
+
+    input, textarea, select {
+      font-family: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+  <style>
+    /* ── Spotlight (globale) ── */
+    .spotlight-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: hsla(0,0%,0%,0.45);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 200;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 15vh;
+      padding-left: 24px;
+      padding-right: 24px;
+    }
+    .spotlight-overlay.open { display: flex; }
+    .spotlight-box {
+      width: 100%;
+      max-width: 600px;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--shadow-elevated);
+      border: 1px solid var(--color-border);
+    }
+    .spotlight-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--color-surface);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .spotlight-input-wrap svg { color: var(--color-text-secondary); flex-shrink: 0; }
+    .spotlight-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--color-text-primary);
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+    }
+    .spotlight-input::placeholder { color: var(--color-text-secondary); opacity: 0.5; }
+    .spotlight-results {
+      background: var(--color-surface);
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .spotlight-result-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      cursor: pointer;
+      transition: background 0.1s;
+      border-bottom: 1px solid var(--color-border);
+      text-decoration: none;
+      color: inherit;
+    }
+    .spotlight-result-item:last-child { border-bottom: none; }
+    .spotlight-result-item:hover { background: var(--color-elevated); text-decoration: none; }
+    .spotlight-result-left { display: flex; flex-direction: column; gap: 2px; }
+    .spotlight-result-job { font-size: 14px; font-weight: 700; color: var(--color-accent); }
+    .spotlight-result-client { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+    .spotlight-result-detail {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      max-width: 340px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .spotlight-result-date { font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; }
+    .spotlight-empty { padding: 24px 20px; text-align: center; color: var(--color-text-secondary); font-size: 14px; }
+    .spotlight-hint {
+      padding: 10px 20px;
+      background: var(--color-elevated);
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      display: flex;
+      gap: 16px;
+    }
+    .spotlight-hint kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      font-family: inherit;
+      font-size: 11px;
+    }
+
+    /* ── Account Avatar (fisso top-right globale) ── */
+    .account-btn {
+      position: fixed;
+      top: 20px;
+      right: 24px;
+      z-index: 100;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-accent);
+      box-shadow: 0 2px 8px hsla(0,0%,0%,0.18);
+      transition: transform 0.18s, box-shadow 0.18s;
+      border: 2.5px solid var(--color-bg);
+    }
+    .account-btn:hover {
+      transform: scale(1.07);
+      box-shadow: 0 4px 18px hsla(0,0%,0%,0.22);
+      text-decoration: none;
+    }
+    .account-btn img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .account-initial {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      text-transform: uppercase;
+      user-select: none;
+    }
+  </style>
+  <!-- Anti-flash: apply saved theme before first paint -->
+  <script>
+    (function(){
+      var t = localStorage.getItem('theme');
+      if (!t) t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+</head>
+<body>
+  {% block content %}{% endblock %}
+
+  {% if user.is_authenticated %}
+  <a href="/profilo/" class="account-btn" aria-label="Profilo utente" title="{{ user.get_full_name|default:user.username }}">
+    {% if user.avatar %}
+      <img src="{{ user.avatar.url }}" alt="Avatar">
+    {% else %}
+      <span class="account-initial">{{ user.first_name|slice:":1"|default:user.username|slice:":1" }}</span>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  <!-- ── Spotlight: Cerca Commessa (globale) ── -->
+  <div class="spotlight-overlay" id="spotlight-overlay" role="dialog" aria-modal="true" aria-label="Cerca commessa">
+    <div class="spotlight-box">
+      <div class="spotlight-input-wrap">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+        </svg>
+        <input class="spotlight-input" id="spotlight-input" type="search"
+               placeholder="Cerca commessa per job o cliente…" autocomplete="off"
+               aria-label="Campo di ricerca commesse">
+      </div>
+      <div class="spotlight-results" id="spotlight-results" role="listbox" aria-label="Risultati di ricerca"></div>
+      <div class="spotlight-hint" aria-hidden="true">
+        <span><kbd>↵</kbd> apri</span>
+        <span><kbd>Esc</kbd> chiudi</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ── Helpers globali ── */
+    function escHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const [y, m, d] = iso.split('-');
+      return `${d}/${m}/${y}`;
+    }
+
+    /* ── Spotlight ── */
+    let _searchTimer = null;
+
+    function openSpotlight() {
+      document.getElementById('spotlight-overlay').classList.add('open');
+      const input = document.getElementById('spotlight-input');
+      input.value = '';
+      document.getElementById('spotlight-results').innerHTML = '';
+      input.focus();
+    }
+
+    function closeSpotlight() {
+      document.getElementById('spotlight-overlay').classList.remove('open');
+    }
+
+    async function searchCommesse(q) {
+      const results = document.getElementById('spotlight-results');
+      if (!q.trim()) { results.innerHTML = ''; return; }
+      results.innerHTML = '<div class="spotlight-empty">Ricerca…</div>';
+      try {
+        const res = await fetch(`/api/commesse/?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error();
+        const { commesse } = await res.json();
+        if (!commesse.length) {
+          results.innerHTML = '<div class="spotlight-empty">Nessun risultato trovato.</div>';
+          return;
+        }
+        results.innerHTML = commesse.slice(0, 8).map(c => `
+          <a class="spotlight-result-item" href="/commesse/${encodeURIComponent(c.job)}/"
+             role="option" onclick="closeSpotlight()"
+             aria-label="${escHtml(c.job)} — ${escHtml(c.client || '')}">
+            <div class="spotlight-result-left">
+              <span class="spotlight-result-job">${escHtml(c.job)}</span>
+              <span class="spotlight-result-client">${escHtml(c.client || '—')}</span>
+              ${c.job_detail ? `<span class="spotlight-result-detail">${escHtml(c.job_detail)}</span>` : ''}
+            </div>
+            <span class="spotlight-result-date">${formatDate(c.delivery_date)}</span>
+          </a>
+        `).join('');
+      } catch {
+        results.innerHTML = '<div class="spotlight-empty">Errore durante la ricerca.</div>';
+      }
+    }
+
+    document.getElementById('spotlight-input').addEventListener('input', e => {
+      clearTimeout(_searchTimer);
+      _searchTimer = setTimeout(() => searchCommesse(e.target.value), 280);
+    });
+
+    document.getElementById('spotlight-overlay').addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeSpotlight();
+    });
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeSpotlight();
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        openSpotlight();
+      }
+    });
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>
