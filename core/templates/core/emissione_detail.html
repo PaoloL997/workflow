@@ -48,18 +48,19 @@
   .btn-g:disabled { opacity: .35; cursor: not-allowed; }
 
   .btn-p {
-    padding: 9px 20px;
+    padding: 10px 24px;
     border-radius: 10px; border: none;
-    background: var(--ap);
+    background: var(--color-accent);
     color: #fff;
     font-size: 14px; font-weight: 600;
+    letter-spacing: -0.01em;
     cursor: pointer;
-    transition: opacity .15s, transform .1s;
+    transition: background 0.18s, transform 0.1s;
     white-space: nowrap;
   }
-  .btn-p:hover:not(:disabled) { opacity: .88; }
-  .btn-p:active:not(:disabled) { transform: scale(.97); }
-  .btn-p:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-p:hover:not(:disabled) { background: var(--color-accent-hover); }
+  .btn-p:active:not(:disabled) { transform: scale(.98); }
+  .btn-p:disabled { opacity: .4; cursor: not-allowed; }
 
   .back-btn {
     position: fixed; top: 28px; left: 28px;
@@ -173,7 +174,18 @@
   }
   .ep-tbl tbody td:first-child { padding-left: 16px; }
   .ep-tbl tbody td:last-child  { text-align: right; padding-right: 16px; color: var(--color-text-secondary); font-size: 12px; font-weight: 500; }
-  .td-code  { font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
+  .td-code  { font-weight: 700; font-size: 13px; color: var(--color-accent); letter-spacing: -0.01em; white-space: nowrap; }
+  .doc-rev-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 500;
+    vertical-align: middle;
+  }
   .td-title { color: var(--color-text-secondary) !important; }
 
   /* circular checkbox */
@@ -479,12 +491,12 @@
     const tb = document.getElementById('ep-tbody');
     if (!_docs.length) { emptyTbl('Nessun documento pronto per l\'emissione.'); return; }
     tb.innerHTML = _docs.map(function(d) {
-      const rev = d.latest_rev_let != null ? d.latest_rev_let : (d.latest_rev_no != null ? d.latest_rev_no : '\u2014');
+      const rev = (d.latest_rev_let || '') !== '' ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '\u2014');
       return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'
         + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '" onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
         + '<td class="td-code">'  + escHtml(d.vendor_doc || '\u2014') + '</td>'
         + '<td class="td-title">' + escHtml(d.doc_title  || '')        + '</td>'
-        + '<td>' + escHtml(String(rev)) + '</td>'
+        + '<td><span class="doc-rev-badge">Rev. ' + escHtml(rev) + '</span></td>'
         + '</tr>';
     }).join('');
     onRowChk();
