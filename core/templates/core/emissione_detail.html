@@ -13,6 +13,7 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    padding-bottom: 80px;
   }
 
   /* ── Top bar ── */
@@ -122,7 +123,7 @@
   }
   .chip-x:hover { color: var(--color-text-primary); }
 
-  .ep-status { font-size: 13px; color: var(--color-text-secondary); margin-left: auto; }
+  .ep-status { font-size: 13px; color: var(--color-success); min-width: 160px; text-align: right; }
 
   /* ── Table ── */
   .ep-tbl-wrap { flex: 1; overflow-x: auto; padding: 0 40px; }
@@ -183,11 +184,28 @@
 
   .th-chk-wrap, .td-chk-wrap { display: flex; align-items: center; justify-content: center; }
 
-  /* ── Footer ── */
-  .ep-footer {
-    display: flex; align-items: center; justify-content: flex-end;
-    padding: 12px 56px 24px;
-    font-size: 12px; color: var(--color-text-secondary); opacity: .55;
+  /* ── Bottom bar ── */
+  .ep-bottom-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 40px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    z-index: 40;
+    gap: 16px;
+  }
+  .ep-bottom-counter {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .ep-bottom-counter strong { color: var(--color-text-primary); }
+  .ep-bottom-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   /* ── Modal base ── */
@@ -261,8 +279,7 @@
     .ep-topbar > div:first-child { display: none; }
     .ep-ctrl   { padding: 0 16px 16px; }
     .ep-tbl-wrap { padding: 0 16px; }
-    .ep-footer   { padding: 12px 16px 20px; }
-    .ep-actions  { width: 100%; }
+    .ep-bottom-bar { padding: 12px 16px; }
     .btn-g, .btn-p { flex: 1; text-align: center; }
   }
 </style>
@@ -277,10 +294,7 @@
     <div class="ep-title-wrap">
       <div class="ep-title">Gestisci emissione</div>
     </div>
-    <div class="ep-actions">
-      <button class="btn-g" id="print-btn" disabled onclick="soloStampa()">Stampa</button>
-      <button class="btn-p" id="emit-btn"  disabled onclick="apriConferma()">Emetti e scarica</button>
-    </div>
+    <div class="ep-actions"></div>
   </div>
 
   <!-- Controls bar -->
@@ -296,7 +310,6 @@
       <span id="dest-lbl">0 selezionati</span>
     </button>
     <div class="addr-chips" id="addr-chips"></div>
-    <span class="ep-status" id="ep-status"></span>
   </div>
 
   <!-- Table -->
@@ -316,10 +329,18 @@
     </table>
   </div>
 
-  <!-- Footer counter -->
-  <div class="ep-footer"><span id="ep-counter">0 di 0 documenti selezionati</span></div>
 
 </div><!-- /ep -->
+
+<!-- ── Bottom bar ── -->
+<div class="ep-bottom-bar">
+  <span class="ep-bottom-counter" id="ep-counter">0 di 0 documenti selezionati</span>
+  <div class="ep-bottom-right">
+    <span class="ep-status" id="ep-status"></span>
+    <button class="btn-g" id="print-btn" disabled onclick="soloStampa()">Stampa</button>
+    <button class="btn-p" id="emit-btn"  disabled onclick="apriConferma()">Emetti e scarica</button>
+  </div>
+</div>
 
 <!-- ── Address modal ── -->
 <div class="moverlay" id="addr-modal" role="dialog" aria-modal="true">
