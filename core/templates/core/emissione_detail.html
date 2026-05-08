@@ -5,350 +5,685 @@
 
 {% block extra_head %}
 <style>
-  /* ── Purple accent for this page ── */
-  .ep { --ap: hsl(265,55%,65%); --ap-bg: hsla(265,55%,65%,.14); --ap-bd: hsla(265,55%,65%,.35); }
-  [data-theme="light"] .ep { --ap: hsl(265,55%,44%); --ap-bg: hsla(265,55%,44%,.10); --ap-bd: hsla(265,55%,44%,.30); }
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) .icon-moon { display: none; }
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .icon-sun  { display: none; }
+  }
 
-  .ep {
+  .page {
     display: flex;
     flex-direction: column;
+    align-items: center;
     min-height: 100vh;
+    padding: 0 48px 80px;
+    position: relative;
   }
 
-  /* ── Top bar ── */
-  .ep-topbar {
+  .navbar {
+    width: 100%;
+    max-width: 960px;
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 32px 40px 20px;
-    gap: 16px;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 56px;
   }
 
-  .ep-title   { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); line-height: 1.15; }
-  .ep-subtitle{ font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; opacity: .65; }
-
-  .ep-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-top: 6px; }
-
-  .btn-g {
-    padding: 9px 20px;
-    border-radius: 10px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-primary);
-    font-size: 14px; font-weight: 500;
-    cursor: pointer;
-    transition: background .15s;
-    white-space: nowrap;
-  }
-  .btn-g:hover { background: var(--color-elevated); }
-  .btn-g:disabled { opacity: .35; cursor: not-allowed; }
-
-  .btn-p {
-    padding: 9px 20px;
-    border-radius: 10px; border: none;
-    background: var(--ap);
-    color: #fff;
-    font-size: 14px; font-weight: 600;
-    cursor: pointer;
-    transition: opacity .15s, transform .1s;
-    white-space: nowrap;
-  }
-  .btn-p:hover:not(:disabled) { opacity: .88; }
-  .btn-p:active:not(:disabled) { transform: scale(.97); }
-  .btn-p:disabled { opacity: .35; cursor: not-allowed; }
-
-  /* ── Controls bar ── */
-  .ep-ctrl {
+  .nav-item {
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 0 40px 20px;
-    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
   }
 
-  .ctrl-lbl { font-size: 14px; color: var(--color-text-secondary); flex-shrink: 0; }
+  .nav-item:hover { color: var(--color-text-primary); text-decoration: none; }
 
-  .ctrl-date {
+  .nav-badge {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .back-btn {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 50;
+    transition: color 0.18s;
+  }
+
+  .back-btn:hover { color: var(--color-text-primary); }
+
+  .content {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .page-header {
+    margin-bottom: 40px;
+    text-align: center;
+  }
+
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-primary);
+    line-height: 1.1;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+    opacity: 0.6;
+  }
+
+  /* ── Section card ── */
+  .arch-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .arch-section-header {
+    padding: 20px 24px 0;
+  }
+
+  .arch-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+  }
+
+  .arch-section-body {
+    padding: 16px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── Date bar ── */
+  .date-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .date-bar-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  .date-input {
     padding: 7px 12px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
     background: var(--color-elevated);
     color: var(--color-text-primary);
-    font-size: 14px; font-weight: 500;
-    transition: border-color .15s;
+    font-size: 14px;
+    font-weight: 500;
+    transition: border-color 0.15s;
   }
-  .ctrl-date:focus { outline: none; border-color: var(--ap); box-shadow: 0 0 0 3px var(--ap-bg); }
 
-  .ctrl-div { width: 1px; height: 20px; background: var(--color-border); flex-shrink: 0; }
+  .date-input:focus {
+    outline: none;
+    border-color: hsl(265, 70%, 65%);
+    box-shadow: 0 0 0 3px hsla(265, 70%, 65%, 0.15);
+  }
 
-  .btn-dest {
-    display: flex; align-items: center; gap: 6px;
-    padding: 7px 14px;
+  /* ── Destinatari bar ── */
+  .dest-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
+    flex-wrap: wrap;
+  }
+
+  .dest-bar-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    flex-shrink: 0;
+  }
+
+  .btn-dest-open {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
     background: var(--color-elevated);
-    color: var(--color-text-primary);
-    font-size: 13px; font-weight: 500;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background .15s, border-color .15s;
+    transition: border-color 0.15s, color 0.15s;
     flex-shrink: 0;
   }
-  .btn-dest:hover { border-color: var(--ap); background: var(--ap-bg); }
 
-  .dest-badge {
-    background: var(--ap); color: #fff;
-    border-radius: 999px; font-size: 11px; font-weight: 700;
-    padding: 1px 6px; min-width: 18px; text-align: center;
+  .btn-dest-open:hover {
+    border-color: hsl(265, 70%, 65%);
+    color: var(--color-text-primary);
   }
 
-  .addr-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .addr-chips {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
 
   .chip {
-    display: flex; align-items: center; gap: 6px;
-    padding: 5px 10px 5px 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 8px 4px 12px;
     border-radius: 999px;
-    border: 1px solid var(--ap-bd);
-    background: var(--ap-bg);
+    border: 1px solid var(--color-border);
+    background: hsla(265, 50%, 60%, 0.10);
     color: var(--color-text-primary);
-    font-size: 12px; font-weight: 500; white-space: nowrap;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
   }
+
   .chip-x {
-    background: none; border: none;
-    color: var(--color-text-secondary); cursor: pointer;
-    width: 16px; height: 16px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 50%; font-size: 15px; line-height: 1;
-    transition: color .12s; padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.12s;
   }
+
   .chip-x:hover { color: var(--color-text-primary); }
 
-  .ep-status { font-size: 13px; color: var(--color-text-secondary); margin-left: auto; }
-
-  /* ── Table ── */
-  .ep-tbl-wrap { flex: 1; overflow-x: auto; padding: 0 40px; }
-
-  .ep-tbl {
-    width: 100%; border-collapse: collapse; font-size: 13px;
-    box-shadow: inset 0 1px 0 var(--color-border);
+  /* ── Select all bar ── */
+  .select-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 0 4px;
   }
 
-  .ep-tbl thead th {
-    padding: 10px 12px;
-    text-align: left;
-    font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  .select-bar label {
+    font-size: 13px;
+    font-weight: 500;
     color: var(--color-text-secondary);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  /* ── Doc row ── */
+  .doc-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background 0.1s;
+  }
+
+  .doc-row:last-of-type { border-bottom: none; }
+  .doc-row:hover { background: hsla(0, 0%, 50%, 0.04); }
+
+  .doc-checkbox {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    accent-color: hsl(265, 70%, 60%);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .doc-info { flex: 1; min-width: 0; }
+
+  .doc-codice {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: 0.01em;
+  }
+
+  .doc-titolo {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .doc-rev {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Save row ── */
+  .arch-save-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 20px;
+    flex-wrap: wrap;
+  }
+
+  .arch-save-status {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    flex: 1;
+  }
+
+  .arch-save-btn {
+    padding: 10px 26px;
+    border-radius: 12px;
+    background: hsl(265, 70%, 60%);
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .arch-save-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .arch-save-btn:not(:disabled):hover { opacity: 0.88; }
+  .arch-save-btn:not(:disabled):active { transform: scale(0.97); }
+
+  .arch-save-btn-ghost {
+    padding: 10px 26px;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .arch-save-btn-ghost:hover { background: var(--color-elevated); }
+  .arch-save-btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 0;
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+  }
+
+  .empty-state p { font-size: 14px; font-style: italic; margin: 0; }
+
+  /* ── Address modal ── */
+  .addr-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: hsla(0, 0%, 0%, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 150;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .addr-modal-overlay.open { display: flex; }
+
+  .addr-modal {
     background: var(--color-surface);
-    border-bottom: 1px solid var(--color-border);
-    position: sticky; top: 0; z-index: 2;
-    opacity: .75;
-  }
-  .ep-tbl thead th:first-child { padding-left: 16px; width: 44px; border-radius: 8px 0 0 0; }
-  .ep-tbl thead th:last-child  { border-radius: 0 8px 0 0; width: 52px; text-align: right; padding-right: 16px; }
-
-  .ep-tbl tbody tr {
-    border-bottom: 1px solid var(--color-border);
-    transition: background .1s; cursor: pointer;
-  }
-  .ep-tbl tbody tr:hover    { background: hsla(0,0%,50%,.05); }
-  .ep-tbl tbody tr.sel      { background: var(--ap-bg); }
-  .ep-tbl tbody tr:last-child { border-bottom: none; }
-
-  .ep-tbl tbody td {
-    padding: 14px 12px;
-    color: var(--color-text-primary); vertical-align: middle;
-  }
-  .ep-tbl tbody td:first-child { padding-left: 16px; }
-  .ep-tbl tbody td:last-child  { text-align: right; padding-right: 16px; color: var(--color-text-secondary); font-size: 12px; font-weight: 500; }
-  .td-code  { font-weight: 600; letter-spacing: .01em; white-space: nowrap; }
-  .td-title { color: var(--color-text-secondary) !important; }
-
-  /* circular checkbox */
-  .rchk {
-    appearance: none; -webkit-appearance: none;
-    width: 20px; height: 20px; border-radius: 50%;
-    border: 1.5px solid var(--color-border);
-    background: transparent; cursor: pointer;
-    position: relative;
-    transition: border-color .15s, background .15s; flex-shrink: 0;
-  }
-  .rchk:hover  { border-color: var(--ap); }
-  .rchk:checked { border-color: var(--ap); background: var(--ap); }
-  .rchk:checked::after {
-    content: '';
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%,-58%) rotate(45deg);
-    width: 5px; height: 9px;
-    border: 2px solid #fff; border-top: none; border-left: none;
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 440px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 0 0 0.5px hsla(0, 0%, 100%, 0.06), 0 8px 32px hsla(0, 0%, 0%, 0.45);
   }
 
-  .th-chk-wrap, .td-chk-wrap { display: flex; align-items: center; justify-content: center; }
-
-  /* ── Footer ── */
-  .ep-footer {
-    display: flex; align-items: center; justify-content: flex-end;
-    padding: 12px 56px 24px;
-    font-size: 12px; color: var(--color-text-secondary); opacity: .55;
+  .addr-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 16px;
+    color: var(--color-text-primary);
   }
 
-  /* ── Modal base ── */
-  .moverlay {
-    position: fixed; inset: 0;
-    background: hsla(0,0%,0%,.6);
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    z-index: 300;
-    display: flex; align-items: center; justify-content: center; padding: 24px;
-    opacity: 0; pointer-events: none; transition: opacity .2s;
+  .addr-opt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 50vh;
+    overflow-y: auto;
   }
-  .moverlay.open { opacity: 1; pointer-events: auto; }
 
-  .mbox {
+  .addr-opt {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+
+  .addr-opt:hover { background: var(--color-elevated); }
+  .addr-opt.sel   { background: hsla(265, 70%, 60%, 0.10); }
+
+  .addr-opt-check {
+    accent-color: hsl(265, 70%, 60%);
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .addr-opt-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .addr-opt-sub  { font-size: 12px; color: var(--color-text-secondary); opacity: 0.7; margin-top: 2px; }
+
+  .addr-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+
+  .addr-modal-close {
+    padding: 9px 22px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .addr-modal-close:hover { background: var(--color-elevated); }
+
+  /* ── Confirm modal ── */
+  .conf-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: hsla(0, 0%, 0%, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 150;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .conf-overlay.open { display: flex; }
+
+  .conf-modal {
+    background: var(--color-surface);
+    border-radius: 16px;
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 0 0 0.5px hsla(0, 0%, 100%, 0.06), 0 8px 32px hsla(0, 0%, 0%, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .conf-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--color-text-primary);
+  }
+
+  .conf-body { font-size: 14px; color: var(--color-text-secondary); line-height: 1.6; }
+  .conf-body strong { color: var(--color-text-primary); }
+
+  .conf-row {
+    display: flex;
+    gap: 8px;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+
+  .conf-lbl { opacity: 0.65; min-width: 80px; flex-shrink: 0; }
+
+  .conf-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 20px;
-    width: 100%; max-width: 480px;
-    box-shadow: 0 0 0 .5px hsla(0,0%,100%,.08), 0 8px 40px hsla(0,0%,0%,.5);
-    transform: translateY(10px) scale(.98);
-    transition: transform .2s;
-    overflow: hidden;
-  }
-  .moverlay.open .mbox { transform: translateY(0) scale(1); }
-
-  .mhead {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .mhead-title { font-size: 16px; font-weight: 700; letter-spacing: -.02em; color: var(--color-text-primary); }
-  .mclose {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--color-elevated); border: none;
-    color: var(--color-text-secondary); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; transition: background .15s;
-  }
-  .mclose:hover { background: var(--color-border); }
-
-  .mbody { padding: 12px 24px 24px; max-height: 55vh; overflow-y: auto; }
-
-  .mfoot {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 16px 24px;
-    border-top: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px hsla(0, 0%, 0%, 0.2);
+    transition: background 0.18s, box-shadow 0.18s;
+    z-index: 100;
   }
 
-  /* address options */
-  .addr-opt {
-    display: flex; align-items: center; gap: 12px;
-    padding: 12px; border-radius: 12px; cursor: pointer;
-    transition: background .12s; margin-bottom: 4px;
+  .theme-toggle:hover {
+    background: var(--color-elevated);
+    box-shadow: 0 4px 20px hsla(0, 0%, 0%, 0.25);
   }
-  .addr-opt:hover { background: var(--color-elevated); }
-  .addr-opt.chk   { background: var(--ap-bg); }
-  .addr-opt-name  { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
-  .addr-opt-sub   { font-size: 12px; color: var(--color-text-secondary); opacity: .7; margin-top: 2px; }
 
-  /* confirm modal */
-  .cbox { padding: 32px; }
-  .cbox .mhead-title { font-size: 18px; margin-bottom: 8px; }
-  .csum { font-size: 14px; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 24px; }
-  .csum strong { color: var(--color-text-primary); }
-  .crow { display: flex; gap: 8px; margin-top: 8px; font-size: 13px; }
-  .crow .lbl { color: var(--color-text-secondary); opacity: .65; min-width: 80px; flex-shrink: 0; }
-  .cact { display: flex; justify-content: flex-end; gap: 8px; }
+  [data-theme="light"] .icon-moon { display: none; }
+  [data-theme="dark"]  .icon-sun  { display: none; }
 
-  @media (max-width: 640px) {
-    .ep-topbar { padding: 20px 16px 16px; flex-wrap: wrap; }
-    .ep-ctrl   { padding: 0 16px 16px; }
-    .ep-tbl-wrap { padding: 0 16px; }
-    .ep-footer   { padding: 12px 16px 20px; }
-    .ep-actions  { width: 100%; }
-    .btn-g, .btn-p { flex: 1; text-align: center; }
+  @media (max-width: 600px) {
+    .page { padding: 0 16px 80px; }
+    .page-title { font-size: 24px; }
+    .arch-section-header { padding: 16px 18px 0; }
+    .arch-section-body { padding: 12px 18px 20px; }
+    .arch-save-row { flex-direction: column; align-items: stretch; }
+    .arch-save-btn, .arch-save-btn-ghost { text-align: center; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="ep">
+<div class="page">
 
-  <!-- Top bar -->
-  <div class="ep-topbar">
-    <div>
-      <div class="ep-title">Gestisci emissione</div>
-      <div class="ep-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} &mdash; {{ testata.job_detail }}{% endif %}</div>
-    </div>
-    <div class="ep-actions">
-      <button class="btn-g" id="print-btn" disabled onclick="soloStampa()">Stampa</button>
-      <button class="btn-p" id="emit-btn"  disabled onclick="apriConferma()">Emetti e scarica</button>
-    </div>
-  </div>
+  <!-- Back button -->
+  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
 
-  <!-- Controls bar -->
-  <div class="ep-ctrl">
-    <span class="ctrl-lbl">Data:</span>
-    <input type="date" id="ep-data" class="ctrl-date">
-    <div class="ctrl-div"></div>
-    <span class="ctrl-lbl">Destinatari:</span>
-    <button class="btn-dest" onclick="apriModalAddr()">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+  <!-- Navbar -->
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
       </svg>
-      <span id="dest-lbl">0 selezionati</span>
+      Home
+    </a>
+    <a href="#" class="nav-item" id="nav-notifiche">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      Notifiche
+      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+    </a>
+    <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
     </button>
-    <div class="addr-chips" id="addr-chips"></div>
-    <span class="ep-status" id="ep-status"></span>
-  </div>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
 
-  <!-- Table -->
-  <div class="ep-tbl-wrap">
-    <table class="ep-tbl">
-      <thead>
-        <tr>
-          <th><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleAll(this.checked)"></div></th>
-          <th>Codice</th>
-          <th>Titolo</th>
-          <th>Rev</th>
-        </tr>
-      </thead>
-      <tbody id="ep-tbody">
-        <tr><td colspan="4" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <!-- Content -->
+  <div class="content">
 
-  <!-- Footer counter -->
-  <div class="ep-footer"><span id="ep-counter">0 di 0 documenti selezionati</span></div>
+    <header class="page-header">
+      <h1 class="page-title">Gestisci emissione</h1>
+      <p class="page-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} &mdash; {{ testata.job_detail }}{% endif %}</p>
+    </header>
 
-</div><!-- /ep -->
+    <div class="arch-section">
+      <div class="arch-section-header">
+        <div class="arch-section-title">Documenti pronti per l&rsquo;emissione</div>
+      </div>
+      <div class="arch-section-body">
 
-<!-- ── Address modal ── -->
-<div class="moverlay" id="addr-modal" role="dialog" aria-modal="true">
-  <div class="mbox">
-    <div class="mhead">
-      <span class="mhead-title">Seleziona destinatari</span>
-      <button class="mclose" onclick="chiudiModalAddr()" aria-label="Chiudi">&times;</button>
-    </div>
-    <div class="mbody" id="addr-modal-body">
-      <p style="color:var(--color-text-secondary);font-size:13px;font-style:italic;">Caricamento&hellip;</p>
-    </div>
-    <div class="mfoot">
-      <button class="btn-g" onclick="chiudiModalAddr()">Chiudi</button>
-    </div>
-  </div>
-</div>
+        <!-- Date bar -->
+        <div class="date-bar">
+          <span class="date-bar-label">Data di invio</span>
+          <input type="date" id="em-data" class="date-input">
+        </div>
 
-<!-- ── Confirm modal ── -->
-<div class="moverlay" id="conf-modal" role="dialog" aria-modal="true">
-  <div class="mbox">
-    <div class="cbox">
-      <div class="mhead-title">Conferma emissione</div>
-      <div class="csum" id="conf-body"></div>
-      <div class="cact">
-        <button class="btn-g" onclick="chiudiConferma()">Annulla</button>
-        <button class="btn-p" id="conf-ok" onclick="eseguiEmissione()">Conferma ed emetti</button>
+        <!-- Destinatari bar -->
+        <div class="dest-bar">
+          <span class="dest-bar-label">Destinatari</span>
+          <button class="btn-dest-open" type="button" onclick="apriModalAddr()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+            </svg>
+            <span id="dest-count">Seleziona destinatari</span>
+          </button>
+          <div class="addr-chips" id="addr-chips"></div>
+        </div>
+
+        <!-- Select all -->
+        <div class="select-bar">
+          <input type="checkbox" id="sel-all" class="doc-checkbox" onchange="toggleAll(this.checked)">
+          <label for="sel-all">Seleziona tutti</label>
+        </div>
+
+        <!-- Doc list -->
+        <div id="doc-list">
+          <div class="empty-state"><p>Caricamento&hellip;</p></div>
+        </div>
+
+        <!-- Save row -->
+        <div class="arch-save-row">
+          <span class="arch-save-status" id="em-status"></span>
+          <button class="arch-save-btn-ghost" id="print-btn" type="button" disabled onclick="soloStampa()">Stampa trasmittal</button>
+          <button class="arch-save-btn"      id="emit-btn"  type="button" disabled onclick="apriConferma()">Emetti e scarica</button>
+        </div>
+
       </div>
     </div>
+
+  </div><!-- /content -->
+</div><!-- /page -->
+
+<!-- Address selection modal -->
+<div class="addr-modal-overlay" id="addr-modal-overlay" role="dialog" aria-modal="true">
+  <div class="addr-modal">
+    <div class="addr-modal-title">Seleziona destinatari</div>
+    <div class="addr-opt-list" id="addr-opt-list">
+      <p style="font-size:13px;color:var(--color-text-secondary);font-style:italic;">Caricamento&hellip;</p>
+    </div>
+    <div class="addr-modal-actions">
+      <button class="addr-modal-close" onclick="chiudiModalAddr()">Chiudi</button>
+    </div>
   </div>
 </div>
+
+<!-- Confirm modal -->
+<div class="conf-overlay" id="conf-overlay" role="dialog" aria-modal="true">
+  <div class="conf-modal">
+    <div class="conf-title">Conferma emissione</div>
+    <div class="conf-body" id="conf-body"></div>
+    <div class="conf-actions">
+      <button class="arch-save-btn-ghost" onclick="chiudiConferma()">Annulla</button>
+      <button class="arch-save-btn" id="conf-ok" onclick="eseguiEmissione()">Conferma ed emetti</button>
+    </div>
+  </div>
+</div>
+
+<!-- Theme toggle -->
+<button class="theme-toggle" onclick="toggleTheme()" aria-label="Cambia tema">
+  <svg class="icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0z"/>
+  </svg>
+  <svg class="icon-moon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+</button>
 
 <script>
 (function () {
@@ -357,152 +692,165 @@
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
 
-  let _docs  = [];
   let _addrs = [];
 
-  /* ── init ── */
+  /* ── Theme ── */
+  window.toggleTheme = function () {
+    const html = document.documentElement;
+    const cur  = html.getAttribute('data-theme');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (_) {}
+  };
+
+  /* ── Init ── */
   async function init() {
-    document.getElementById('ep-data').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('em-data').value = new Date().toISOString().slice(0, 10);
     await Promise.all([loadAddrs(), loadDocs()]);
   }
 
-  /* ── addresses ── */
+  /* ── Addresses ── */
   async function loadAddrs() {
     try {
-      const r = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/indirizzi/');
+      const r = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/indirizzi/`);
       if (!r.ok) return;
       const d = await r.json();
-      _addrs = (d.indirizzi || []).map(function(a) { return Object.assign({}, a, { sel: false }); });
-      renderAddrModal();
-      renderChips();
-    } catch {}
+      _addrs = (d.indirizzi || []).map(a => ({ ...a, sel: false }));
+      renderAddrList();
+    } catch (_) {}
   }
 
-  function renderAddrModal() {
-    const b = document.getElementById('addr-modal-body');
+  function renderAddrList() {
+    const el = document.getElementById('addr-opt-list');
     if (!_addrs.length) {
-      b.innerHTML = '<p style="color:var(--color-text-secondary);font-size:13px;font-style:italic;">Nessun indirizzo configurato.</p>';
+      el.innerHTML = '<p style="font-size:13px;color:var(--color-text-secondary);font-style:italic;">Nessun indirizzo configurato per questa commessa.</p>';
       return;
     }
-    b.innerHTML = _addrs.map(function(a, i) {
+    el.innerHTML = _addrs.map((a, i) => {
       const sub = [a.city, a.country].filter(Boolean).join(', ');
-      return '<label class="addr-opt' + (a.sel ? ' chk' : '') + '" id="aopt-' + a.id + '">'
-        + '<input type="checkbox" class="rchk" ' + (a.sel ? 'checked' : '') + ' onchange="toggleAddr(' + i + ',this.checked)">'
-        + '<div><div class="addr-opt-name">' + escHtml(a.consignee || '\u2014') + '</div>'
-        + (sub ? '<div class="addr-opt-sub">' + escHtml(sub) + '</div>' : '')
-        + '</div></label>';
+      return `<label class="addr-opt${a.sel ? ' sel' : ''}" id="aopt-${a.id}">
+        <input type="checkbox" class="addr-opt-check"${a.sel ? ' checked' : ''} onchange="toggleAddr(${i},this.checked)">
+        <div>
+          <div class="addr-opt-name">${escHtml(a.consignee || '\u2014')}</div>
+          ${sub ? `<div class="addr-opt-sub">${escHtml(sub)}</div>` : ''}
+        </div>
+      </label>`;
     }).join('');
   }
 
-  window.toggleAddr = function(i, v) {
+  window.toggleAddr = function (i, v) {
     _addrs[i].sel = v;
-    const el = document.getElementById('aopt-' + _addrs[i].id);
-    if (el) el.classList.toggle('chk', v);
+    const el = document.getElementById(`aopt-${_addrs[i].id}`);
+    if (el) el.classList.toggle('sel', v);
     renderChips();
   };
 
   function renderChips() {
-    const sel = _addrs.filter(function(a) { return a.sel; });
-    document.getElementById('dest-lbl').textContent = sel.length + ' selezionat' + (sel.length === 1 ? 'o' : 'i');
-    document.getElementById('addr-chips').innerHTML = sel.map(function(a) {
-      return '<span class="chip">' + escHtml(a.consignee || '\u2014')
-        + '<button class="chip-x" onclick="removeAddr(' + a.id + ')" aria-label="Rimuovi">\u00d7</button></span>';
-    }).join('');
+    const sel = _addrs.filter(a => a.sel);
+    document.getElementById('dest-count').textContent =
+      sel.length ? `${sel.length} selezionat${sel.length === 1 ? 'o' : 'i'}` : 'Seleziona destinatari';
+    document.getElementById('addr-chips').innerHTML = sel.map(a =>
+      `<span class="chip">${escHtml(a.consignee || '\u2014')}
+        <button class="chip-x" onclick="removeAddr(${a.id})" type="button" aria-label="Rimuovi">&times;</button>
+      </span>`
+    ).join('');
   }
 
-  window.removeAddr = function(id) {
-    const i = _addrs.findIndex(function(a) { return a.id === id; });
+  window.removeAddr = function (id) {
+    const i = _addrs.findIndex(a => a.id === id);
     if (i >= 0) { _addrs[i].sel = false; }
-    renderAddrModal(); renderChips();
+    renderAddrList();
+    renderChips();
   };
 
-  window.apriModalAddr   = function() { document.getElementById('addr-modal').classList.add('open'); };
-  window.chiudiModalAddr = function() { document.getElementById('addr-modal').classList.remove('open'); };
-  document.getElementById('addr-modal').addEventListener('click', function(e) { if (e.target === this) chiudiModalAddr(); });
+  window.apriModalAddr   = () => document.getElementById('addr-modal-overlay').classList.add('open');
+  window.chiudiModalAddr = () => document.getElementById('addr-modal-overlay').classList.remove('open');
+  document.getElementById('addr-modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) chiudiModalAddr(); });
 
-  function selAddrIds() { return _addrs.filter(function(a) { return a.sel; }).map(function(a) { return a.id; }); }
+  const selAddrIds = () => _addrs.filter(a => a.sel).map(a => a.id);
 
-  /* ── documents ── */
+  /* ── Documents ── */
   async function loadDocs() {
     try {
-      const r = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/documenti/');
-      if (!r.ok) { emptyTbl('Errore nel caricamento.'); return; }
+      const r = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`);
+      if (!r.ok) { showEmpty('Errore nel caricamento.'); return; }
       const d = await r.json();
-      _docs = (d.documenti || []).filter(function(x) { return x.latest_int_status === 'da_emettere'; });
-      renderTbl();
-    } catch { emptyTbl('Errore di rete.'); }
+      const docs = (d.documenti || []).filter(x => x.latest_int_status === 'da_emettere');
+      renderDocs(docs);
+    } catch (_) { showEmpty('Errore di rete.'); }
   }
 
-  function renderTbl() {
-    const tb = document.getElementById('ep-tbody');
-    if (!_docs.length) { emptyTbl('Nessun documento pronto per l\'emissione.'); return; }
-    tb.innerHTML = _docs.map(function(d) {
+  function renderDocs(docs) {
+    const el = document.getElementById('doc-list');
+    if (!docs.length) {
+      el.innerHTML = `<div class="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+        <p>Nessun documento pronto per l&rsquo;emissione</p>
+      </div>`;
+      updBtns(0);
+      return;
+    }
+    el.innerHTML = docs.map(d => {
       const rev = d.latest_rev_let != null ? d.latest_rev_let : (d.latest_rev_no != null ? d.latest_rev_no : '\u2014');
-      return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'
-        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '" onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
-        + '<td class="td-code">'  + escHtml(d.vendor_doc || '\u2014') + '</td>'
-        + '<td class="td-title">' + escHtml(d.doc_title  || '')        + '</td>'
-        + '<td>' + escHtml(String(rev)) + '</td>'
-        + '</tr>';
+      return `<div class="doc-row" onclick="toggleRow(${d.id})" id="dr-${d.id}">
+        <input type="checkbox" class="doc-checkbox doc-chk" id="dc-${d.id}" value="${d.id}"
+          onclick="event.stopPropagation()" onchange="onChk()">
+        <div class="doc-info">
+          <div class="doc-codice">${escHtml(d.vendor_doc || '\u2014')}</div>
+          <div class="doc-titolo">${escHtml(d.doc_title || '')}</div>
+        </div>
+        <span class="doc-rev">Rev.&nbsp;${escHtml(String(rev))}</span>
+      </div>`;
     }).join('');
-    onRowChk();
+    onChk();
   }
 
-  function emptyTbl(msg) {
-    document.getElementById('ep-tbody').innerHTML =
-      '<tr><td colspan="4" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
-    updBtns(0); updCounter(0);
+  function showEmpty(msg) {
+    document.getElementById('doc-list').innerHTML = `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
+    updBtns(0);
   }
 
-  window.toggleRow = function(id) {
-    const c = document.getElementById('c-' + id);
-    if (c) { c.checked = !c.checked; onRowChk(); }
+  window.toggleRow = id => {
+    const c = document.getElementById(`dc-${id}`);
+    if (c) { c.checked = !c.checked; onChk(); }
   };
 
-  window.onRowChk = function() {
-    const all = document.querySelectorAll('.doc-c');
-    const chk = document.querySelectorAll('.doc-c:checked');
-    all.forEach(function(c) {
-      const tr = document.getElementById('tr-' + c.value);
-      if (tr) tr.classList.toggle('sel', c.checked);
-    });
-    const sa = document.getElementById('sel-all');
-    sa.checked = all.length > 0 && chk.length === all.length;
+  window.onChk = function () {
+    const all = document.querySelectorAll('.doc-chk');
+    const chk = document.querySelectorAll('.doc-chk:checked');
+    const sa  = document.getElementById('sel-all');
+    sa.checked       = all.length > 0 && chk.length === all.length;
     sa.indeterminate = chk.length > 0 && chk.length < all.length;
-    updBtns(chk.length); updCounter(chk.length);
+    updBtns(chk.length);
   };
 
-  window.toggleAll = function(v) {
-    document.querySelectorAll('.doc-c').forEach(function(c) { c.checked = v; });
-    onRowChk();
+  window.toggleAll = v => { document.querySelectorAll('.doc-chk').forEach(c => c.checked = v); onChk(); };
+
+  const selDocIds = () => Array.from(document.querySelectorAll('.doc-chk:checked')).map(c => parseInt(c.value, 10));
+  const updBtns   = n  => {
+    document.getElementById('emit-btn').disabled  = n === 0;
+    document.getElementById('print-btn').disabled = n === 0;
   };
 
-  function selDocIds() { return Array.from(document.querySelectorAll('.doc-c:checked')).map(function(c) { return parseInt(c.value, 10); }); }
-
-  function updBtns(n) { document.getElementById('emit-btn').disabled = document.getElementById('print-btn').disabled = n === 0; }
-  function updCounter(n) {
-    const t = _docs.length;
-    document.getElementById('ep-counter').textContent = n + ' di ' + t + ' document' + (t === 1 ? 'o' : 'i') + ' selezionat' + (n === 1 ? 'o' : 'i');
-  }
-
-  /* ── confirm modal ── */
-  window.apriConferma = function() {
-    const date = document.getElementById('ep-data').value;
+  /* ── Confirm modal ── */
+  window.apriConferma = function () {
+    const date = document.getElementById('em-data').value;
     if (!date) { alert('Inserisci la data di invio.'); return; }
     const ids = selDocIds(); if (!ids.length) return;
-    const names = _addrs.filter(function(a) { return a.sel; }).map(function(a) { return a.consignee || ('#' + a.id); });
+    const names = _addrs.filter(a => a.sel).map(a => a.consignee || `#${a.id}`);
     const n = ids.length;
     document.getElementById('conf-body').innerHTML =
-      '<div class="crow"><span class="lbl">Documenti</span><strong>' + n + ' document' + (n===1?'o':'i') + '</strong></div>'
-      + '<div class="crow"><span class="lbl">Data invio</span><strong>' + escHtml(date) + '</strong></div>'
-      + '<div class="crow"><span class="lbl">Destinatari</span><span>' + (names.length ? escHtml(names.join(', ')) : '<em style="opacity:.5">Nessuno</em>') + '</span></div>';
+      `<div class="conf-row"><span class="conf-lbl">Documenti</span><strong>${n} document${n === 1 ? 'o' : 'i'}</strong></div>` +
+      `<div class="conf-row"><span class="conf-lbl">Data invio</span><strong>${escHtml(date)}</strong></div>` +
+      `<div class="conf-row"><span class="conf-lbl">Destinatari</span><span>${names.length ? escHtml(names.join(', ')) : '<em style="opacity:.5">Nessuno</em>'}</span></div>`;
     document.getElementById('conf-ok').disabled = false;
-    document.getElementById('conf-modal').classList.add('open');
+    document.getElementById('conf-overlay').classList.add('open');
   };
-  window.chiudiConferma = function() { document.getElementById('conf-modal').classList.remove('open'); };
-  document.getElementById('conf-modal').addEventListener('click', function(e) { if (e.target === this) chiudiConferma(); });
 
-  /* ── PDF helper ── */
+  window.chiudiConferma = () => document.getElementById('conf-overlay').classList.remove('open');
+  document.getElementById('conf-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) chiudiConferma(); });
+
+  /* ── PDF download ── */
   async function dlPdf(docIds, addrIds, date) {
     try {
       const r = await fetch('/api/trasmittal/pdf/', {
@@ -510,27 +858,27 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body: JSON.stringify({ doc_ids: docIds, addr_ids: addrIds, date: date, job: JOB }),
       });
-      if (!r.ok) { setStatus('Errore PDF: ' + r.status); return; }
+      if (!r.ok) { setStatus(`Errore PDF: ${r.status}`); return; }
       const blob = await r.blob();
       const url  = URL.createObjectURL(blob);
-      const a    = Object.assign(document.createElement('a'), { href: url, download: 'trasmittal_' + JOB + '_' + date + '.pdf' });
+      const a    = Object.assign(document.createElement('a'), { href: url, download: `trasmittal_${JOB}_${date}.pdf` });
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
-    } catch { setStatus('Errore durante il download.'); }
+    } catch (_) { setStatus('Errore durante il download.'); }
   }
 
-  function setStatus(m) { document.getElementById('ep-status').textContent = m; }
+  const setStatus = m => { document.getElementById('em-status').textContent = m; };
 
-  /* ── emit ── */
-  window.eseguiEmissione = async function() {
-    const date   = document.getElementById('ep-data').value;
+  /* ── Emit ── */
+  window.eseguiEmissione = async function () {
+    const date   = document.getElementById('em-data').value;
     const docIds = selDocIds();
     const adrIds = selAddrIds();
     if (!docIds.length || !date) return;
     document.getElementById('conf-ok').disabled = true;
     chiudiConferma();
     setStatus('Emissione in corso\u2026');
-    document.getElementById('emit-btn').disabled = document.getElementById('print-btn').disabled = true;
+    updBtns(0);
     try {
       const r = await fetch('/api/emissione/', {
         method: 'POST',
@@ -538,30 +886,26 @@
         body: JSON.stringify({ doc_ids: docIds, dis_act_date: date }),
       });
       if (!r.ok) {
-        const e = await r.json().catch(function(){ return {}; });
-        setStatus(e.error || 'Errore durante l\'emissione.');
-        document.getElementById('emit-btn').disabled = document.getElementById('print-btn').disabled = false;
-        return;
+        const e = await r.json().catch(() => ({}));
+        setStatus(e.error || "Errore durante l'emissione.");
+        updBtns(1); return;
       }
       const n = docIds.length;
-      setStatus('\u2713 ' + n + ' document' + (n===1?'o':'i') + ' emess' + (n===1?'o':'i'));
+      setStatus(`\u2713 ${n} document${n === 1 ? 'o' : 'i'} emess${n === 1 ? 'o' : 'i'}`);
       await dlPdf(docIds, adrIds, date);
       await loadDocs();
-      setTimeout(function() { setStatus(''); }, 4000);
-    } catch {
-      setStatus('Errore di rete.');
-      document.getElementById('emit-btn').disabled = document.getElementById('print-btn').disabled = false;
-    }
+      setTimeout(() => setStatus(''), 4000);
+    } catch (_) { setStatus('Errore di rete.'); updBtns(1); }
   };
 
-  /* ── print only ── */
-  window.soloStampa = async function() {
-    const date = document.getElementById('ep-data').value;
+  /* ── Print only ── */
+  window.soloStampa = async function () {
+    const date = document.getElementById('em-data').value;
     if (!date) { alert('Inserisci la data.'); return; }
     const ids = selDocIds(); if (!ids.length) return;
     setStatus('Generazione PDF\u2026');
     await dlPdf(ids, selAddrIds(), date);
-    setTimeout(function() { setStatus(''); }, 2000);
+    setTimeout(() => setStatus(''), 2000);
   };
 
   init();
