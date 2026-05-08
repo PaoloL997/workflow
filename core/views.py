@@ -1,8 +1,12 @@
+from datetime import date as _date
 from functools import wraps
 
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import JsonResponse, HttpResponse
+from django.shortcuts import render, redirect
 from django.views.decorators.http import require_http_methods
 import json
 import logging
@@ -31,6 +35,8 @@ from .services.commesse import (
     esegui_emissione, esegui_ricezione,
 )
 
+from .models import Notifica
+
 
 def api_login_required(view_func):
     """Decorator that returns 401 JSON for unauthenticated requests instead of redirecting."""
@@ -40,6 +46,260 @@ def api_login_required(view_func):
             return JsonResponse({'error': 'Non autenticato.'}, status=401)
         return view_func(request, *args, **kwargs)
     return wrapper
+
+
+# ── HTML: Auth ───────────────────────────────────────────────────────────────
+
+def login_view(request):
+    if request.user.is_authenticated:
+        return redirect('home')
+    error = None
+    if request.method == 'POST':
+        username = request.POST.get('username', '').strip()
+        password = request.POST.get('password', '')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return redirect(request.GET.get('next', 'home'))
+        error = 'Credenziali non valide. Riprova.'
+    return render(request, 'core/login.html', {'error': error})
+
+
+def logout_view(request):
+    logout(request)
+    return redirect('login')
+
+
+def register_view(request):
+    if request.user.is_authenticated:
+        return redirect('home')
+    error = None
+    if request.method == 'POST':
+        username   = request.POST.get('username', '').strip()
+        email      = request.POST.get('email', '').strip()
+        first_name = request.POST.get('first_name', '').strip()
+        last_name  = request.POST.get('last_name', '').strip()
+        password1  = request.POST.get('password1', '')
+        password2  = request.POST.get('password2', '')
+        if not username or not email or not password1:
+            error = 'Username, email e password sono obbligatori.'
+        elif password1 != password2:
+            error = 'Le password non coincidono.'
+        elif len(password1) < 8:
+            error = 'La password deve essere di almeno 8 caratteri.'
+        elif User.objects.filter(username=username).exists():
+            error = 'Username già in uso.'
+        elif User.objects.filter(email=email).exists():
+            error = 'Email già registrata.'
+        else:
+            try:
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password1,
+                    first_name=first_name,
+                    last_name=last_name,
+                )
+                login(request, user)
+                return redirect('home')
+            except Exception as e:
+                error = 'Errore durante la registrazione. Riprova.'
+    return render(request, 'core/register.html', {'error': error})
+
+
+# ── HTML: Home ───────────────────────────────────────────────────────────────
+
+@login_required
+def commesse_list_view(request):
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/commesse_list.html', {'notifiche_count': notifiche_count})
+
+
+@login_required
+def commessa_detail_view(request, job):
+    from django.http import Http404
+    from .models import Testata
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    archivio_completo = (
+        testata.time_cli_doc_rev is not None and
+        testata.time_ven_doc_rev is not None
+    )
+    indirizzi_all = list_indirizzi(job)
+    # Preview data for section cards
+    STATI_DA_EMETTERE = ('da_iniziare', 'in_lavorazione', 'in_revisione', 'in_approvazione', 'da_emettere')
+    documenti_all = list_documenti(job) if archivio_completo else []
+    emissione_count = sum(1 for d in documenti_all if d['latest_int_status'] in STATI_DA_EMETTERE)
+    ricezione_count = sum(1 for d in documenti_all if d['latest_int_status'] == 'inviato_al_cliente')
+    situazione_totale = len(documenti_all)
+    situazione_emessi = sum(1 for d in documenti_all if d['latest_int_status'] in ('inviato_al_cliente', 'ricevuto'))
+    situazione_ricevuti = sum(1 for d in documenti_all if d['latest_int_status'] == 'ricevuto')
+    # Documenti preview: first 4, assign cycling color class
+    _TILE_COLORS = ['tile-c0', 'tile-c1', 'tile-c2', 'tile-c3', 'tile-c4']
+    for i, d in enumerate(documenti_all):
+        d['tile_color'] = _TILE_COLORS[i % len(_TILE_COLORS)]
+    documenti_preview = documenti_all[:7]
+    documenti_extra = max(0, len(documenti_all) - 7)
+
+    # Deadline previews for emissione / ricezione cards
+    def _urgency(delta):
+        if delta is None:
+            return 'urg-none', '—'
+        if delta < -1:
+            return 'urg-danger', f'{abs(delta)}gg fa'
+        if delta == -1:
+            return 'urg-danger', 'Ieri'
+        if delta == 0:
+            return 'urg-today', 'Oggi'
+        if delta == 1:
+            return 'urg-urgent', 'Domani'
+        if delta <= 3:
+            return 'urg-soon', f'{delta}gg'
+        if delta <= 7:
+            return 'urg-week', f'{delta}gg'
+        return 'urg-ok', f'{delta}gg'
+
+    _today = _date.today()
+
+    def _enrich(d, date_key):
+        raw = d.get(date_key)
+        delta = (_date.fromisoformat(raw) - _today).days if raw else None
+        urg, label = _urgency(delta)
+        return {**d, 'days_label': label, 'urg_class': urg, '_sort': delta if delta is not None else 99999}
+
+    _emissione_all = sorted(
+        [_enrich(d, 'latest_dis_plan_date') for d in documenti_all if d['latest_int_status'] == 'da_emettere'],
+        key=lambda x: x['_sort'],
+    )
+    emissione_preview = _emissione_all[:4]
+    emissione_extra = max(0, len(_emissione_all) - 4)
+
+    _ricezione_all = sorted(
+        [_enrich(d, 'latest_rec_plan_date') for d in documenti_all if d['latest_int_status'] == 'inviato_al_cliente'],
+        key=lambda x: x['_sort'],
+    )
+    ricezione_preview = _ricezione_all[:4]
+    ricezione_extra = max(0, len(_ricezione_all) - 4)
+
+    return render(request, 'core/commessa_detail.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+        'archivio_completo': archivio_completo,
+        'indirizzi_preview': indirizzi_all[:2],
+        'indirizzi_count': len(indirizzi_all),
+        'emissione_count': emissione_count,
+        'ricezione_count': ricezione_count,
+        'situazione_totale': situazione_totale,
+        'situazione_emessi': situazione_emessi,
+        'situazione_ricevuti': situazione_ricevuti,
+        'documenti_preview': documenti_preview,
+        'documenti_extra': documenti_extra,
+        'emissione_preview': emissione_preview,
+        'emissione_extra': emissione_extra,
+        'ricezione_preview': ricezione_preview,
+        'ricezione_extra': ricezione_extra,
+    })
+
+
+@login_required
+def documenti_list_view(request, job):
+    from django.http import Http404
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    reparti = list_reparti()
+    return render(request, 'core/documenti_list.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+        'reparti': reparti,
+    })
+
+
+@login_required
+def archivio_detail_view(request, job):
+    from django.http import Http404
+    from .models import Testata
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/archivio_detail.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+    })
+
+
+@login_required
+def emissione_detail_view(request, job):
+    from django.http import Http404
+    from .models import Testata
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/emissione_detail.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+    })
+
+
+@login_required
+def ricezione_detail_view(request, job):
+    from django.http import Http404
+    from .models import Testata
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/ricezione_detail.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+    })
+
+
+@login_required
+def situazione_detail_view(request, job):
+    from django.http import Http404
+    from .models import Testata
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/situazione_detail.html', {
+        'testata': testata,
+        'notifiche_count': notifiche_count,
+    })
+
+
+@login_required
+def home_view(request):
+    notifiche_count = Notifica.objects.filter(
+        destinatario=request.user, letta=False
+    ).count()
+    return render(request, 'core/home.html', {'notifiche_count': notifiche_count})
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
@@ -779,4 +1039,68 @@ def users_api(request):
         for u in users
     ]
     return JsonResponse(data, safe=False)
+
+
+# ── HTML: Profilo utente ─────────────────────────────────────────────────────
+
+@login_required
+def profilo_view(request):
+    user = request.user
+    errors = {}
+    success = None
+
+    if request.method == 'POST':
+        action = request.POST.get('action', 'update_profile')
+
+        if action == 'change_password':
+            old_pw = request.POST.get('old_password', '')
+            new_pw1 = request.POST.get('new_password1', '')
+            new_pw2 = request.POST.get('new_password2', '')
+            if not user.check_password(old_pw):
+                errors['password'] = 'La password attuale non è corretta.'
+            elif not new_pw1:
+                errors['password'] = 'Inserisci la nuova password.'
+            elif new_pw1 != new_pw2:
+                errors['password'] = 'Le nuove password non coincidono.'
+            elif len(new_pw1) < 8:
+                errors['password'] = 'La password deve essere di almeno 8 caratteri.'
+            else:
+                user.set_password(new_pw1)
+                user.save()
+                update_session_auth_hash(request, user)
+                success = 'password'
+        else:
+            first_name = request.POST.get('first_name', '').strip()
+            last_name  = request.POST.get('last_name', '').strip()
+            email      = request.POST.get('email', '').strip()
+            ruolo      = request.POST.get('ruolo', '').strip()
+            reparto    = request.POST.get('reparto', '').strip()
+
+            if not email:
+                errors['email'] = 'L\'email è obbligatoria.'
+            elif User.objects.filter(email=email).exclude(pk=user.pk).exists():
+                errors['email'] = 'Email già utilizzata da un altro account.'
+
+            if not errors:
+                user.first_name = first_name
+                user.last_name  = last_name
+                user.email      = email
+                user.ruolo      = ruolo
+                user.reparto    = reparto
+
+                avatar_file = request.FILES.get('avatar')
+                if avatar_file:
+                    if user.avatar:
+                        user.avatar.delete(save=False)
+                    user.avatar = avatar_file
+
+                user.save()
+                success = 'profile'
+
+    reparti = list_reparti()
+    return render(request, 'core/profilo.html', {
+        'errors': errors,
+        'success': success,
+        'reparti': reparti,
+    })
 

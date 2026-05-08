@@ -1,0 +1,1339 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Commessa {{ testata.job }} — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Layout ── */
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 48px 80px;
+    position: relative;
+  }
+
+  /* ── Navbar ── */
+  .navbar {
+    width: 100%;
+    max-width: 1280px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 64px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .nav-item:hover {
+    color: var(--color-text-primary);
+    background: transparent;
+    text-decoration: none;
+  }
+
+  .nav-item.active {
+    color: var(--color-accent);
+    font-weight: 600;
+    background: transparent;
+  }
+
+  .nav-item svg {
+    flex-shrink: 0;
+    opacity: 0.55;
+    transition: opacity 0.18s;
+  }
+
+  .nav-item:hover svg  { opacity: 0.8; }
+  .nav-item.active svg { opacity: 1; }
+
+  .nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    margin-left: 2px;
+  }
+
+  /* ── Back button ── */
+  .back-btn {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: var(--color-text-secondary);
+    background: transparent;
+    border: none;
+    text-decoration: none;
+    transition: color 0.18s, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .back-btn:hover {
+    color: var(--color-text-primary);
+    transform: translateX(-3px);
+    text-decoration: none;
+  }
+
+  .back-btn svg { flex-shrink: 0; }
+
+  /* ── Content wrapper ── */
+  .content {
+    width: 100%;
+    max-width: 1280px;
+  }
+
+  /* ── Header ── */
+  .commessa-header {
+    margin-bottom: 40px;
+    text-align: center;
+  }
+
+  .commessa-client {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    letter-spacing: 0;
+    margin-bottom: 4px;
+  }
+
+  .commessa-title {
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .commessa-desc {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+
+  /* ── Gauge widget — no card, floats on page bg ── */
+  .gauge-card {
+    width: 100%;
+    max-width: 460px;
+    margin: 0 auto 40px;
+  }
+
+  .gauge-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .gauge-track-path {
+    stroke: var(--color-elevated);
+    stroke-dasharray: 18 7;
+  }
+
+  /* #gauge-fill-path: stroke and stroke-dasharray set entirely via JS inline style */
+
+  /* SVG text: date labels at arc endpoints */
+  .gauge-date-label {
+    fill: var(--color-text-secondary);
+    font-family: -apple-system, "SF Pro Text", BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  }
+
+  /* ── Sections grid ── */
+  .sections-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  /* ── Sections grid — pannello unificato stile Basecamp ── */
+  .sections-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* ── Section card ── */
+  .section-card {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.15s;
+  }
+
+  .section-card:hover {
+    background: var(--color-surface);
+    text-decoration: none;
+  }
+
+  /* Rimuovi bordo destro sull'ultima colonna */
+  .section-card:nth-child(3n) { border-right: none; }
+  /* Rimuovi bordo inferiore sull'ultima riga */
+  .section-card:nth-last-child(-n+3) { border-bottom: none; }
+
+  .section-header {
+    padding: 18px 24px 0;
+    text-align: center;
+  }
+
+  .section-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    transition: color 0.15s;
+  }
+
+  .section-card:hover .section-title {
+    color: var(--color-accent);
+  }
+
+  .section-body {
+    padding: 20px 24px 28px;
+    flex: 1;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-body.doc-grid-body {
+    padding: 16px 18px 18px;
+    gap: 0;
+    overflow: visible;
+  }
+
+  .section-empty {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    opacity: 0.45;
+    font-style: italic;
+    margin: auto;
+    text-align: center;
+  }
+
+  /* ── Section card ── */
+  .section-card { position: relative; }
+
+  /* ── Archivio card: preview content ── */
+  .archivio-preview {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+    overflow: visible;
+  }
+
+  .archivio-preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    padding: 14px 14px 12px;
+    box-shadow:
+      0 1px 2px hsla(0,0%,0%,0.08),
+      inset 0 1px 0 hsla(0,0%,100%,0.05);
+    pointer-events: auto;
+    cursor: default;
+    transition:
+      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 0.22s ease;
+    will-change: transform;
+  }
+
+  .archivio-preview-item:hover {
+    transform: scale(1.06) translateY(-2px);
+    box-shadow:
+      0 0 0 0.5px hsla(0,0%,100%,0.12),
+      0 6px 20px hsla(0,0%,0%,0.2),
+      0 12px 32px hsla(0,0%,0%,0.14);
+    z-index: 2;
+  }
+
+  /* Colored circle icon */
+  .archivio-preview-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+    color: #fff;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.18s ease;
+  }
+  .archivio-preview-item:hover .archivio-preview-icon {
+    transform: scale(1.15);
+    filter: brightness(1.2) saturate(1.15);
+  }
+  .archivio-preview-icon svg { display: block; }
+
+  /* Per-card icon colors */
+  .archivio-preview-icon.color-blue   { background: hsl(211, 100%, 50%); }
+  .archivio-preview-icon.color-green  { background: hsl(158, 64%, 40%); }
+  .archivio-preview-icon.color-orange { background: hsl(27, 96%, 55%); }
+  .archivio-preview-icon.color-pink   { background: hsl(340, 82%, 55%); }
+
+  @media (prefers-color-scheme: dark) {
+    .archivio-preview-icon.color-blue   { background: hsl(211, 100%, 60%); }
+    .archivio-preview-icon.color-green  { background: hsl(158, 64%, 45%); }
+    .archivio-preview-icon.color-orange { background: hsl(27, 96%, 58%); }
+    .archivio-preview-icon.color-pink   { background: hsl(340, 82%, 60%); }
+  }
+
+  .archivio-preview-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    margin-bottom: 4px;
+  }
+
+  /* Big value at bottom */
+  .archivio-preview-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .archivio-preview-value small {
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--color-text-secondary);
+    margin-left: 2px;
+  }
+
+  .archivio-addr-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .archivio-addr-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .archivio-addr-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-accent);
+    opacity: 0.5;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+
+  .archivio-addr-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .archivio-addr-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .archivio-addr-city {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+  }
+
+  .archivio-addr-more {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+    font-style: italic;
+    padding-left: 14px;
+  }
+
+  /* ── Preview stat (emissione / ricezione) ── */
+  .section-preview-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin: auto 0;
+  }
+
+  .preview-stat-num {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .preview-stat-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+  }
+
+  /* ── Document deadline rows (emissione / ricezione cards) ── */
+  .section-body:has(.doc-deadline-list) {
+    padding: 14px 14px 16px;
+    gap: 0;
+  }
+
+  .doc-deadline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+  }
+
+  .docrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    border: 1px solid transparent;
+  }
+
+  .docrow-icon {
+    flex-shrink: 0;
+    opacity: 0.4;
+    color: var(--color-text-secondary);
+    display: flex;
+  }
+
+  .docrow-code {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: hsl(265, 70%, 68%);
+  }
+
+  [data-theme="light"] .docrow-code {
+    color: hsl(265, 60%, 44%);
+  }
+
+  .docrow-title {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .docrow-days {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .docrow-more {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.45;
+    font-style: italic;
+    text-align: center;
+    padding: 5px 0 0;
+  }
+
+  /* Urgency colour variants */
+  .docrow.urg-danger  { background: hsla(4,   85%, 58%, .12); border-color: hsla(4,   85%, 58%, .22); }
+  .docrow.urg-today   { background: hsla(18,  90%, 58%, .12); border-color: hsla(18,  90%, 58%, .22); }
+  .docrow.urg-urgent  { background: hsla(33,  92%, 58%, .10); border-color: hsla(33,  92%, 58%, .18); }
+  .docrow.urg-soon    { background: hsla(44,  88%, 56%, .10); border-color: hsla(44,  88%, 56%, .16); }
+  .docrow.urg-week    { background: hsla(78,  72%, 50%, .09); border-color: hsla(78,  72%, 50%, .15); }
+  .docrow.urg-ok      { background: hsla(142, 68%, 50%, .09); border-color: hsla(142, 68%, 50%, .15); }
+  .docrow.urg-none    { background: var(--color-elevated); border-color: var(--color-border); }
+
+  .docrow.urg-danger  .docrow-days { color: hsl(4,   92%, 66%); }
+  .docrow.urg-today   .docrow-days { color: hsl(18,  92%, 66%); }
+  .docrow.urg-urgent  .docrow-days { color: hsl(33,  92%, 66%); }
+  .docrow.urg-soon    .docrow-days { color: hsl(44,  88%, 64%); }
+  .docrow.urg-week    .docrow-days { color: hsl(78,  72%, 60%); }
+  .docrow.urg-ok      .docrow-days { color: hsl(142, 60%, 55%); }
+  .docrow.urg-none    .docrow-days { color: var(--color-text-secondary); }
+
+  [data-theme="light"] .docrow.urg-danger  .docrow-days { color: hsl(4,   80%, 42%); }
+  [data-theme="light"] .docrow.urg-today   .docrow-days { color: hsl(18,  80%, 42%); }
+  [data-theme="light"] .docrow.urg-urgent  .docrow-days { color: hsl(33,  82%, 40%); }
+  [data-theme="light"] .docrow.urg-soon    .docrow-days { color: hsl(44,  78%, 38%); }
+  [data-theme="light"] .docrow.urg-week    .docrow-days { color: hsl(78,  65%, 33%); }
+  [data-theme="light"] .docrow.urg-ok      .docrow-days { color: hsl(142, 55%, 32%); }
+
+  /* ── Situazione preview ── */
+  .situazione-preview {
+    display: flex;
+    gap: 16px;
+    margin: auto 0;
+  }
+
+  .situazione-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .sstat-num {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--color-text-primary);
+    line-height: 1;
+  }
+
+  .sstat-lbl {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  /* ── Documenti preview grid ── */
+  .doc-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .doc-preview-tile {
+    border-radius: 10px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .doc-preview-tile:hover {
+    transform: scale(1.08);
+    z-index: 2;
+  }
+
+  .doc-preview-tile svg { width: 28px; height: 28px; opacity: 0.92; flex-shrink: 0; }
+
+  /* Frosted overlay with doc name */
+  .doc-tile-overlay {
+    position: absolute;
+    inset: 0;
+    background: hsla(0,0%,0%,0.62);
+    backdrop-filter: blur(3px) saturate(0.8);
+    -webkit-backdrop-filter: blur(3px) saturate(0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+  }
+
+  .doc-preview-tile:hover .doc-tile-overlay { opacity: 1; }
+
+  .doc-tile-overlay-text {
+    font-size: 9px;
+    font-weight: 600;
+    color: #fff;
+    text-align: center;
+    line-height: 1.35;
+    word-break: break-word;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+  }
+
+  /* 5 colour slots — same hue family as archivio-preview-icon */
+  .doc-preview-tile.tile-c0 { background: hsl(211,85%,26%); color: hsl(211,100%,76%); }
+  .doc-preview-tile.tile-c1 { background: hsl(158,60%,20%); color: hsl(158,70%,65%); }
+  .doc-preview-tile.tile-c2 { background: hsl(27, 80%,22%); color: hsl(27, 96%,70%); }
+  .doc-preview-tile.tile-c3 { background: hsl(340,60%,22%); color: hsl(340,80%,72%); }
+  .doc-preview-tile.tile-c4 { background: hsl(263,50%,22%); color: hsl(263,70%,72%); }
+
+  [data-theme="light"] .doc-preview-tile.tile-c0 { background: hsl(211,90%,92%); color: hsl(211,100%,38%); }
+  [data-theme="light"] .doc-preview-tile.tile-c1 { background: hsl(158,55%,90%); color: hsl(158,60%,30%); }
+  [data-theme="light"] .doc-preview-tile.tile-c2 { background: hsl(27, 85%,92%); color: hsl(27, 80%,38%); }
+  [data-theme="light"] .doc-preview-tile.tile-c3 { background: hsl(340,65%,92%); color: hsl(340,70%,38%); }
+  [data-theme="light"] .doc-preview-tile.tile-c4 { background: hsl(263,55%,92%); color: hsl(263,60%,40%); }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .doc-preview-tile.tile-c0 { background: hsl(211,90%,92%); color: hsl(211,100%,38%); }
+    :root:not([data-theme="dark"]) .doc-preview-tile.tile-c1 { background: hsl(158,55%,90%); color: hsl(158,60%,30%); }
+    :root:not([data-theme="dark"]) .doc-preview-tile.tile-c2 { background: hsl(27, 85%,92%); color: hsl(27, 80%,38%); }
+    :root:not([data-theme="dark"]) .doc-preview-tile.tile-c3 { background: hsl(340,65%,92%); color: hsl(340,70%,38%); }
+    :root:not([data-theme="dark"]) .doc-preview-tile.tile-c4 { background: hsl(263,55%,92%); color: hsl(263,60%,40%); }
+  }
+
+  .doc-preview-tile.tile-overflow {
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .tile-overflow-num {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-secondary);
+    opacity: 0.45;
+  }
+
+  .doc-preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .doc-preview-name {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+
+  .doc-preview-code {
+    font-size: 9px;
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .section-warning {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    margin-top: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: hsl(42,100%,90%);
+    color: hsl(36,80%,35%);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .section-warning.visible { display: inline-flex; }
+
+  [data-theme="dark"] .section-warning {
+    background: hsl(36,60%,20%);
+    color: hsl(42,90%,70%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .section-warning {
+      background: hsl(36,60%,20%);
+      color: hsl(42,90%,70%);
+    }
+  }
+
+  /* ── Lock overlay ── */
+  .section-lock-overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: hsla(0,0%,98%,0.75);
+    backdrop-filter: blur(6px) saturate(0.6);
+    -webkit-backdrop-filter: blur(6px) saturate(0.6);
+    z-index: 5;
+    border-radius: inherit;
+  }
+
+  [data-theme="dark"] .section-lock-overlay {
+    background: hsla(220,20%,10%,0.80);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .section-lock-overlay {
+      background: hsla(220,20%,10%,0.80);
+    }
+  }
+
+  .lock-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    border-radius: 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 4px 24px hsla(0,0%,0%,0.08);
+  }
+
+  .lock-pill-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+  }
+
+  .lock-pill-msg {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-align: center;
+    max-width: 110px;
+    line-height: 1.45;
+    opacity: 0.7;
+    letter-spacing: 0.01em;
+  }
+
+  .sections-grid.archivio-incompleto .section-card:not(:first-child) { pointer-events: none; }
+
+  .sections-grid.archivio-incompleto .section-card:not(:first-child) .section-lock-overlay {
+    display: flex;
+  }
+
+  /* ── Archivio card: empty state (centro) ── */
+  .archivio-empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    text-align: center;
+    padding: 8px 0;
+  }
+
+  .archivio-empty-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--color-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-accent);
+    opacity: 0.65;
+  }
+
+  .archivio-empty-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+  }
+
+  .archivio-empty-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.4;
+    font-style: italic;
+  }
+
+  /* ── Theme toggle ──*/
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px hsla(0,0%,0%,0.2);
+    transition: background 0.18s, box-shadow 0.18s;
+    z-index: 100;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-elevated);
+    box-shadow: 0 4px 20px hsla(0,0%,0%,0.3);
+  }
+
+  .icon-sun  { display: none; }
+  .icon-moon { display: block; }
+  [data-theme="light"] .icon-sun  { display: block; }
+  [data-theme="light"] .icon-moon { display: none; }
+
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) .icon-sun  { display: block; }
+    html:not([data-theme="dark"]) .icon-moon { display: none; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .sections-grid { grid-template-columns: repeat(2, 1fr); }
+    .section-card:nth-child(3n)        { border-right: 1px solid var(--color-border); }
+    .section-card:nth-last-child(-n+3) { border-bottom: 1px solid var(--color-border); }
+    .section-card:nth-child(2n)        { border-right: none; }
+    .section-card:nth-last-child(-n+2) { border-bottom: none; }
+  }
+
+  @media (max-width: 580px) {
+    .page { padding: 0 20px 80px; }
+    .sections-grid { grid-template-columns: 1fr; }
+    .commessa-title { font-size: 28px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Back button ── -->
+  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      Home
+    </a>
+    <a href="#" class="nav-item" id="nav-notifiche">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      Notifiche
+      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+    </a>
+    <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
+    </button>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <!-- ── Header commessa ── -->
+    <header class="commessa-header">
+      {% if testata.client %}
+      <p class="commessa-client">{{ testata.client }}</p>
+      {% endif %}
+      <h1 class="commessa-title">Commessa {{ testata.job }}</h1>
+      {% if testata.job_detail %}
+      <p class="commessa-desc">{{ testata.job_detail }}</p>
+      {% endif %}
+    </header>
+
+    <!-- ── Gauge stato ── -->
+    <div class="gauge-card" id="gauge-widget" aria-label="Stato commessa">
+      <!--
+        Horizontal segmented bar. x: 24 → 476 (length = 452px).
+        Segments: 18 on / 7 off (cycle 25). BAR_LEN = 452.
+      -->
+      <svg class="gauge-svg" viewBox="0 0 500 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- Status label above bar, centred -->
+        <text id="gauge-status-svg"
+              x="250" y="16"
+              text-anchor="middle"
+              font-size="15"
+              font-weight="700"
+              letter-spacing="-0.3"
+              fill="var(--color-text-primary)">—</text>
+        <!-- Gray dashed track -->
+        <path class="gauge-track-path"
+              d="M 24 34 L 476 34"
+              fill="none" stroke-width="10" stroke-linecap="butt"/>
+        <!-- Colored segmented fill (animated via JS) -->
+        <path id="gauge-fill-path"
+              d="M 24 34 L 476 34"
+              fill="none" stroke-width="10" stroke-linecap="butt"/>
+        <!-- Date labels below bar -->
+        <text id="arc-start-label"
+              class="gauge-date-label"
+              x="24" y="56"
+              text-anchor="start"
+              font-size="13">—</text>
+        <text id="arc-end-label"
+              class="gauge-date-label"
+              x="476" y="56"
+              text-anchor="end"
+              font-size="13">—</text>
+      </svg>
+    </div>
+
+    <!-- ── Sezioni ── -->
+    <section class="sections-grid{% if not archivio_completo %} archivio-incompleto{% endif %}" aria-label="Sezioni commessa">
+
+      <!-- 1. Informazioni archivio commessa -->
+      <a href="{% url 'archivio_detail' testata.job %}" class="section-card" aria-label="Informazioni archivio commessa">
+        <div class="section-header">
+          <div class="section-title">Informazioni archivio</div>
+
+        </div>
+        <div class="section-body">
+          {% if archivio_completo %}
+            <div class="archivio-preview">
+
+              <!-- Rev. cliente -->
+              <div class="archivio-preview-item">
+                <div class="archivio-preview-icon color-blue">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </div>
+                <span class="archivio-preview-label">Giorni revisione cliente</span>
+                <div class="archivio-preview-value">
+                  {{ testata.time_cli_doc_rev }}<small>gg</small>
+                </div>
+              </div>
+
+              <!-- Rev. interna -->
+              <div class="archivio-preview-item">
+                <div class="archivio-preview-icon color-green">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                </div>
+                <span class="archivio-preview-label">Giorni revisione B&amp;R</span>
+                <div class="archivio-preview-value">
+                  {{ testata.time_ven_doc_rev }}<small>gg</small>
+                </div>
+              </div>
+
+              <!-- Revisioni con lettera -->
+              <div class="archivio-preview-item">
+                <div class="archivio-preview-icon color-orange" style="font-size:18px;font-weight:700;font-family:-apple-system,sans-serif;letter-spacing:-0.02em;">
+                  A
+                </div>
+                <span class="archivio-preview-label">Revisioni con lettere</span>
+                <div class="archivio-preview-value">
+                  {% if testata.rev_let_flag %}Sì{% else %}No{% endif %}
+                </div>
+              </div>
+
+              <!-- Indirizzi di consegna -->
+              <div class="archivio-preview-item">
+                <div class="archivio-preview-icon color-pink">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                  </svg>
+                </div>
+                <span class="archivio-preview-label">Indirizzi di consegna</span>
+                <div class="archivio-preview-value">
+                  {{ indirizzi_count }}
+                </div>
+              </div>
+
+            </div>
+
+          {% else %}
+            <div class="archivio-empty-state">
+              <div class="archivio-empty-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="12" y1="11" x2="12" y2="17"/>
+                  <line x1="9" y1="14" x2="15" y2="14"/>
+                </svg>
+              </div>
+              <span class="archivio-empty-label">Clicca per compilare</span>
+              <span class="archivio-empty-hint">Tempi di revisione e indirizzi</span>
+            </div>
+          {% endif %}
+        </div>
+      </a>
+
+      <!-- 2. Elenco documenti -->
+      <a href="{% url 'documenti_list' testata.job %}" class="section-card" aria-label="Elenco documenti">
+        <div class="section-header">
+          <div class="section-title">Elenco documenti</div>
+        </div>
+        <div class="section-body doc-grid-body">
+          {% if documenti_preview %}
+            <div class="doc-preview-grid">
+              {% for doc in documenti_preview %}
+                <div class="doc-preview-item">
+                  <div class="doc-preview-tile {{ doc.tile_color }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="9" y1="13" x2="15" y2="13"/>
+                      <line x1="9" y1="17" x2="12" y2="17"/>
+                    </svg>
+                    <div class="doc-tile-overlay">
+                      <span class="doc-tile-overlay-text">{{ doc.doc_title|default:doc.vendor_doc }}</span>
+                    </div>
+                  </div>
+                  <div class="doc-preview-name">{{ doc.doc_title|default:doc.vendor_doc }}</div>
+                  <div class="doc-preview-code">{{ doc.vendor_doc }}</div>
+                </div>
+              {% endfor %}
+              {% if documenti_extra > 0 %}
+                <div class="doc-preview-item">
+                  <div class="doc-preview-tile tile-overflow">
+                    <span class="tile-overflow-num">+{{ documenti_extra }}</span>
+                  </div>
+                  <div class="doc-preview-name" style="opacity:0.45;text-align:center;">Altri documenti</div>
+                  <div class="doc-preview-code">&nbsp;</div>
+                </div>
+              {% endif %}
+            </div>
+          {% else %}
+            <span class="section-empty">Nessun documento</span>
+          {% endif %}
+        </div>
+        <div class="section-lock-overlay" aria-hidden="true">
+          <div class="lock-pill">
+            <div class="lock-pill-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            </div>
+            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- 3. Gestisci emissione -->
+      <a href="{% url 'emissione_detail' testata.job %}" class="section-card" aria-label="Gestisci emissione">
+        <div class="section-header">
+          <div class="section-title">Gestisci emissione</div>
+        </div>
+        <div class="section-body">
+          {% if emissione_preview %}
+            <div class="doc-deadline-list">
+              {% for doc in emissione_preview %}
+                <div class="docrow {{ doc.urg_class }}">
+                  <span class="docrow-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </span>
+                  <span class="docrow-code">{{ doc.vendor_doc }}</span>
+                  <span class="docrow-title">{{ doc.doc_title }}</span>
+                  <span class="docrow-days">{{ doc.days_label }}</span>
+                </div>
+              {% endfor %}
+              {% if emissione_extra > 0 %}
+                <div class="docrow-more">+{{ emissione_extra }} altr{{ emissione_extra|pluralize:"o,i" }}</div>
+              {% endif %}
+            </div>
+          {% else %}
+            <span class="section-empty">Nessun documento da emettere</span>
+          {% endif %}
+        </div>
+        <div class="section-lock-overlay" aria-hidden="true">
+          <div class="lock-pill">
+            <div class="lock-pill-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            </div>
+            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- 4. Gestisci ricezione -->
+      <a href="{% url 'ricezione_detail' testata.job %}" class="section-card" aria-label="Gestisci ricezione">
+        <div class="section-header">
+          <div class="section-title">Gestisci ricezione</div>
+        </div>
+        <div class="section-body">
+          {% if ricezione_preview %}
+            <div class="doc-deadline-list">
+              {% for doc in ricezione_preview %}
+                <div class="docrow {{ doc.urg_class }}">
+                  <span class="docrow-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                  </span>
+                  <span class="docrow-code">{{ doc.vendor_doc }}</span>
+                  <span class="docrow-title">{{ doc.doc_title }}</span>
+                  <span class="docrow-days">{{ doc.days_label }}</span>
+                </div>
+              {% endfor %}
+              {% if ricezione_extra > 0 %}
+                <div class="docrow-more">+{{ ricezione_extra }} altr{{ ricezione_extra|pluralize:"o,i" }}</div>
+              {% endif %}
+            </div>
+          {% else %}
+            <span class="section-empty">Nessun documento in attesa</span>
+          {% endif %}
+        </div>
+        <div class="section-lock-overlay" aria-hidden="true">
+          <div class="lock-pill">
+            <div class="lock-pill-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            </div>
+            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- 5. Gestisci revisioni -->
+      <a href="#" class="section-card" aria-label="Gestisci revisioni">
+        <div class="section-header">
+          <div class="section-title">Gestisci revisioni</div>
+        </div>
+        <div class="section-body">
+          <span class="section-empty">Nessuna revisione</span>
+        </div>
+        <div class="section-lock-overlay" aria-hidden="true">
+          <div class="lock-pill">
+            <div class="lock-pill-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            </div>
+            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
+          </div>
+        </div>
+      </a>
+
+      <!-- 6. Situazione documenti -->
+      <a href="{% url 'situazione_detail' testata.job %}" class="section-card" aria-label="Visualizza situazione documenti">
+        <div class="section-header">
+          <div class="section-title">Situazione documenti</div>
+        </div>
+        <div class="section-body">
+          {% if situazione_totale %}
+            <div class="situazione-preview">
+              <div class="situazione-stat">
+                <span class="sstat-num">{{ situazione_totale }}</span>
+                <span class="sstat-lbl">totali</span>
+              </div>
+              <div class="situazione-stat">
+                <span class="sstat-num">{{ situazione_emessi }}</span>
+                <span class="sstat-lbl">emessi</span>
+              </div>
+              <div class="situazione-stat">
+                <span class="sstat-num">{{ situazione_ricevuti }}</span>
+                <span class="sstat-lbl">ricevuti</span>
+              </div>
+            </div>
+          {% else %}
+            <span class="section-empty">Nessun documento</span>
+          {% endif %}
+        </div>
+        <div class="section-lock-overlay" aria-hidden="true">
+          <div class="lock-pill">
+            <div class="lock-pill-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+            </div>
+            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
+          </div>
+        </div>
+      </a>
+
+    </section>
+  </div><!-- /content -->
+
+</div><!-- /page -->
+
+<!-- ── Theme toggle ──-->
+<button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.38-1.41 0z"/>
+  </svg>
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Theme toggle ── */
+  var btn = document.getElementById('theme-toggle-btn');
+  btn.addEventListener('click', function () {
+    var current = document.documentElement.getAttribute('data-theme');
+    var isDark = current === 'dark' ||
+      (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+})();
+</script>
+
+<script>
+/* ── Gauge widget ── */
+(function () {
+  'use strict';
+
+  /* --- Dates from Django context --- */
+  var deliveryDateStr = "{{ testata.delivery_date|date:'Y-m-d'|default:'' }}";
+
+  var now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  /* startDate = 1 year ago from today — always in the past so progress is never 0 */
+  var startDate = new Date(now.getTime() - 365 * 86400000);
+  startDate.setHours(0, 0, 0, 0);
+
+  var endDate = deliveryDateStr
+    ? new Date(deliveryDateStr)
+    : new Date(now.getTime() + 365 * 86400000);
+  endDate.setHours(0, 0, 0, 0);
+
+  /* Progress = (today − startDate) / (endDate − startDate) × 100 */
+  var totalMs   = endDate - startDate;
+  var elapsedMs = now   - startDate;
+  var progress  = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
+
+  /* Arc length: horizontal bar x:24→476 */
+  var ARC_LEN   = 452; /* 476 - 24 */
+  var targetLen = (progress / 100) * ARC_LEN;
+
+  /* Status: date-based stages */
+  var statusInfo;
+  if (now > endDate) {
+    statusInfo = { label: 'In ritardo',  color: 'var(--color-danger)'  };
+  } else if (!deliveryDateStr) {
+    statusInfo = { label: 'Da iniziare', color: 'var(--color-accent)'  };
+  } else {
+    statusInfo = { label: 'In corso',    color: 'var(--color-success)' };
+  }
+
+  /*
+   * buildDasharray(len) — produces an SVG stroke-dasharray string that draws
+   * exactly the first `len` pixels of the segmented bar (18 on / 7 off)
+   * and hides everything after.
+   */
+  function buildDasharray(len) {
+    var on = 18, off = 7, cycle = 25;
+    var n    = Math.floor(len / cycle);
+    var rem  = len - n * cycle;
+    var dash = Math.min(rem, on);
+    var parts = [];
+    for (var i = 0; i < n; i++) parts.push(on + ' ' + off);
+    parts.push((dash > 0 ? dash.toFixed(1) : 0) + ' 10000');
+    return parts.join(' ');
+  }
+
+  /* --- DOM refs --- */
+  var fillPath     = document.getElementById('gauge-fill-path');
+  var statusSvgEl  = document.getElementById('gauge-status-svg');
+  var startLabelEl = document.getElementById('arc-start-label');
+  var endLabelEl   = document.getElementById('arc-end-label');
+
+  /* --- Apply status — use inline style to override CSS rules --- */
+  fillPath.style.stroke = statusInfo.color;
+  statusSvgEl.setAttribute('fill', statusInfo.color);
+  statusSvgEl.textContent = statusInfo.label;
+
+  /* --- Date labels (day month short + year) --- */
+  var fmt = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+  startLabelEl.textContent = fmt.format(startDate);
+  endLabelEl.textContent   = fmt.format(endDate);
+
+  /* --- Easing --- */
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  var dur = 900;
+  var fillStart = null;
+
+  /* --- Animate segmented fill bar --- */
+  function animateFill(ts) {
+    if (!fillStart) fillStart = ts;
+    var t  = Math.min(1, (ts - fillStart) / dur);
+    var ea = easeOutCubic(t);
+    fillPath.style.strokeDasharray = buildDasharray(targetLen * ea);
+    if (t < 1) requestAnimationFrame(animateFill);
+  }
+  requestAnimationFrame(animateFill);
+
+})();
+</script>
+{% endblock %}

@@ -182,6 +182,7 @@ def serialize_documento(d):
         'latest_ext_status': latest_rev.ext_status_id if latest_rev else None,
         'latest_ext_status_label': latest_rev.ext_status.nome if (latest_rev and latest_rev.ext_status) else '',
         'latest_ext_status_colore': latest_rev.ext_status.colore if (latest_rev and latest_rev.ext_status) else '',
+        'latest_dis_plan_date': latest_rev.dis_plan_date.isoformat() if (latest_rev and latest_rev.dis_plan_date) else None,
         'latest_dis_act_date': latest_rev.dis_act_date.isoformat() if (latest_rev and latest_rev.dis_act_date) else None,
         'latest_rec_plan_date': latest_rev.rec_plan_date.isoformat() if (latest_rev and latest_rev.rec_plan_date) else None,
         'latest_rec_act_date': latest_rev.rec_act_date.isoformat() if (latest_rev and latest_rev.rec_act_date) else None,
