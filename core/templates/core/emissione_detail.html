@@ -20,13 +20,12 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: flex-start;
-    padding: 44px 40px 20px;
+    padding: 104px 40px 20px;
     gap: 16px;
   }
 
   .ep-title-wrap { text-align: center; }
   .ep-title   { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); line-height: 1.15; }
-  .ep-subtitle{ font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; opacity: .65; }
 
   .ep-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; padding-top: 6px; justify-content: flex-end; }
 
@@ -277,7 +276,6 @@
     <div></div>
     <div class="ep-title-wrap">
       <div class="ep-title">Gestisci emissione</div>
-      <div class="ep-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} &mdash; {{ testata.job_detail }}{% endif %}</div>
     </div>
     <div class="ep-actions">
       <button class="btn-g" id="print-btn" disabled onclick="soloStampa()">Stampa</button>
