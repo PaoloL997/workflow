@@ -1,0 +1,549 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Situazione documenti — Commessa {{ testata.job }} — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 48px 80px;
+    position: relative;
+  }
+
+  .navbar {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 48px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .nav-item:hover { color: var(--color-text-primary); text-decoration: none; }
+
+  .nav-badge {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .back-btn {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 50;
+    transition: color 0.18s;
+  }
+
+  .back-btn:hover { color: var(--color-text-primary); }
+
+  .content {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .page-header {
+    margin-bottom: 36px;
+    text-align: center;
+  }
+
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-primary);
+    line-height: 1.1;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+    opacity: 0.6;
+  }
+
+  /* ── Summary stats ── */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    flex: 1;
+    min-width: 120px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .stat-num {
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-primary);
+    line-height: 1;
+  }
+
+  .stat-lbl {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+  }
+
+  .stat-card.accent .stat-num { color: var(--color-accent); }
+
+  /* ── Filter bar ── */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .filter-select {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    min-width: 160px;
+  }
+
+  .filter-select:focus { outline: none; border-color: var(--color-accent); }
+
+  .filter-reset {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .filter-reset:hover { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
+
+  /* ── Table card ── */
+  .arch-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .arch-section-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-x: auto;
+  }
+
+  /* ── Doc row ── */
+  .doc-row {
+    display: grid;
+    grid-template-columns: minmax(160px,2fr) 60px 1fr 1fr 110px 110px;
+    gap: 0;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s;
+  }
+
+  .doc-row:last-of-type { border-bottom: none; }
+
+  .doc-row.header-row {
+    background: var(--color-elevated);
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .doc-row:not(.header-row):hover { background: hsla(0,0%,50%,0.04); }
+
+  .col-header {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-secondary);
+    opacity: 0.65;
+  }
+
+  .doc-codice {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .doc-titolo {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+
+  .doc-rev {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    text-align: center;
+  }
+
+  .doc-stato-int, .doc-stato-ext {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.01em;
+    display: inline-block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .doc-date {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    opacity: 0.8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Int status badge colors ── */
+  .stato-da-iniziare    { background: hsl(220,14%,22%); color: hsl(220,10%,70%); }
+  .stato-in-lavorazione { background: hsl(210,80%,20%); color: hsl(210,80%,70%); }
+  .stato-in-revisione   { background: hsl(42,80%,18%);  color: hsl(42,90%,72%);  }
+  .stato-in-approvazione{ background: hsl(30,80%,18%);  color: hsl(30,90%,70%);  }
+  .stato-da-emettere    { background: hsl(270,60%,20%); color: hsl(270,80%,75%); }
+  .stato-inviato        { background: hsl(200,70%,18%); color: hsl(200,80%,72%); }
+  .stato-ricevuto       { background: hsl(145,55%,16%); color: hsl(145,60%,68%); }
+
+  [data-theme="light"] .stato-da-iniziare    { background: hsl(220,14%,90%); color: hsl(220,10%,40%); }
+  [data-theme="light"] .stato-in-lavorazione { background: hsl(210,80%,88%); color: hsl(210,80%,30%); }
+  [data-theme="light"] .stato-in-revisione   { background: hsl(42,80%,88%);  color: hsl(42,60%,30%);  }
+  [data-theme="light"] .stato-in-approvazione{ background: hsl(30,80%,88%);  color: hsl(30,60%,30%);  }
+  [data-theme="light"] .stato-da-emettere    { background: hsl(270,60%,88%); color: hsl(270,50%,35%); }
+  [data-theme="light"] .stato-inviato        { background: hsl(200,70%,88%); color: hsl(200,60%,30%); }
+  [data-theme="light"] .stato-ricevuto       { background: hsl(145,55%,88%); color: hsl(145,45%,28%); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 0;
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+  }
+
+  .empty-state p { font-size: 14px; font-style: italic; margin: 0; }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px hsla(0,0%,0%,0.2);
+    transition: background 0.18s, box-shadow 0.18s;
+    z-index: 100;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-elevated);
+    box-shadow: 0 4px 20px hsla(0,0%,0%,0.25);
+  }
+
+  [data-theme="light"] .icon-moon { display: none; }
+  [data-theme="dark"]  .icon-sun  { display: none; }
+
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) .icon-moon { display: none; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .icon-sun { display: none; }
+  }
+
+  @media (max-width: 700px) {
+    .page { padding: 0 12px 80px; }
+    .page-title { font-size: 24px; }
+    .doc-row {
+      grid-template-columns: minmax(120px,2fr) 50px 1fr 90px;
+    }
+    .col-stato-ext, .doc-stato-ext,
+    .col-date-ric, .doc-date-ric { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Back button ── -->
+  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      Home
+    </a>
+    <a href="#" class="nav-item" id="nav-notifiche">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      Notifiche
+      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+    </a>
+    <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
+    </button>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <header class="page-header">
+      <h1 class="page-title">Situazione documenti</h1>
+      <p class="page-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} — {{ testata.job_detail }}{% endif %}</p>
+    </header>
+
+    <!-- ── Summary ── -->
+    <div class="stats-row" id="stats-row">
+      <div class="stat-card"><div class="stat-num" id="stat-totale">—</div><div class="stat-lbl">Totali</div></div>
+      <div class="stat-card accent"><div class="stat-num" id="stat-emessi">—</div><div class="stat-lbl">Emessi</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-ricevuti">—</div><div class="stat-lbl">Ricevuti</div></div>
+      <div class="stat-card"><div class="stat-num" id="stat-attesa">—</div><div class="stat-lbl">In attesa</div></div>
+    </div>
+
+    <!-- ── Filters ── -->
+    <div class="filter-bar">
+      <select class="filter-select" id="filter-stato" onchange="applyFilters()">
+        <option value="">Tutti gli stati</option>
+        <option value="da_iniziare">Da iniziare</option>
+        <option value="in_lavorazione">In lavorazione</option>
+        <option value="in_revisione">In revisione</option>
+        <option value="in_approvazione">In approvazione</option>
+        <option value="da_emettere">Da emettere</option>
+        <option value="inviato_al_cliente">Inviato al cliente</option>
+        <option value="ricevuto">Ricevuto</option>
+      </select>
+      <button class="filter-reset" onclick="resetFilters()">Azzera filtri</button>
+    </div>
+
+    <!-- ── Table ── -->
+    <div class="arch-section">
+      <div class="arch-section-body">
+        <!-- Header -->
+        <div class="doc-row header-row">
+          <span class="col-header">Documento</span>
+          <span class="col-header">Rev.</span>
+          <span class="col-header">Stato interno</span>
+          <span class="col-header col-stato-ext">Stato esterno</span>
+          <span class="col-header">Data emissione</span>
+          <span class="col-header col-date-ric">Data rientro</span>
+        </div>
+        <div id="doc-list">
+          <div class="empty-state"><p>Caricamento…</p></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /page -->
+
+<script>
+(function () {
+  'use strict';
+
+  const JOB = "{{ testata.job }}";
+
+  const STATI_LABEL = {
+    da_iniziare:       'Da iniziare',
+    in_lavorazione:    'In lavorazione',
+    in_revisione:      'In revisione',
+    in_approvazione:   'In approvazione',
+    da_emettere:       'Da emettere',
+    inviato_al_cliente:'Inviato al cliente',
+    ricevuto:          'Ricevuto',
+  };
+
+  const STATI_CLASS = {
+    da_iniziare:       'stato-da-iniziare',
+    in_lavorazione:    'stato-in-lavorazione',
+    in_revisione:      'stato-in-revisione',
+    in_approvazione:   'stato-in-approvazione',
+    da_emettere:       'stato-da-emettere',
+    inviato_al_cliente:'stato-inviato',
+    ricevuto:          'stato-ricevuto',
+  };
+
+  let _allDocs = [];
+
+  function fmtDate(d) {
+    if (!d) return '—';
+    const [y, m, g] = d.split('-');
+    return `${g}/${m}/${y}`;
+  }
+
+  async function loadDocs() {
+    const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`);
+    if (!res.ok) { showEmpty('Errore nel caricamento.'); return; }
+    const data = await res.json();
+    _allDocs = data.documenti || [];
+    updateStats(_allDocs);
+    renderDocs(_allDocs);
+  }
+
+  function updateStats(docs) {
+    document.getElementById('stat-totale').textContent   = docs.length;
+    document.getElementById('stat-emessi').textContent   = docs.filter(d => ['inviato_al_cliente','ricevuto'].includes(d.latest_int_status)).length;
+    document.getElementById('stat-ricevuti').textContent = docs.filter(d => d.latest_int_status === 'ricevuto').length;
+    document.getElementById('stat-attesa').textContent   = docs.filter(d => d.latest_int_status === 'inviato_al_cliente').length;
+  }
+
+  function renderDocs(docs) {
+    const container = document.getElementById('doc-list');
+    if (!docs.length) {
+      container.innerHTML = `<div class="empty-state"><p>Nessun documento trovato</p></div>`;
+      return;
+    }
+
+    container.innerHTML = docs.map(d => {
+      const revLabel   = d.latest_rev_let ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '—');
+      const statoClass = STATI_CLASS[d.latest_int_status] || '';
+      const statoLabel = STATI_LABEL[d.latest_int_status] || d.latest_int_status || '—';
+      const extLabel   = d.latest_ext_status_label || '—';
+      const extColor   = d.latest_ext_status_colore || null;
+      const extStyle   = extColor ? `style="background:${escHtml(extColor)}22;color:${escHtml(extColor)}"` : '';
+      return `
+        <div class="doc-row" data-stato="${escHtml(d.latest_int_status || '')}">
+          <div>
+            <div class="doc-codice">${escHtml(d.vendor_doc || d.doc_code || '—')}</div>
+            <div class="doc-titolo">${escHtml(d.doc_title || '')}</div>
+          </div>
+          <span class="doc-rev">${escHtml(revLabel)}</span>
+          <span class="doc-stato-int ${statoClass}">${escHtml(statoLabel)}</span>
+          <span class="doc-stato-ext col-stato-ext" ${extStyle}>${escHtml(extLabel)}</span>
+          <span class="doc-date">${fmtDate(d.latest_dis_act_date)}</span>
+          <span class="doc-date col-date-ric">${fmtDate(d.latest_rec_act_date || d.latest_rec_plan_date)}</span>
+        </div>`;
+    }).join('');
+  }
+
+  function showEmpty(msg) {
+    document.getElementById('doc-list').innerHTML = `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
+  }
+
+  window.applyFilters = function() {
+    const statoFilter = document.getElementById('filter-stato').value;
+    let filtered = _allDocs;
+    if (statoFilter) filtered = filtered.filter(d => d.latest_int_status === statoFilter);
+    renderDocs(filtered);
+  };
+
+  window.resetFilters = function() {
+    document.getElementById('filter-stato').value = '';
+    renderDocs(_allDocs);
+  };
+
+  loadDocs();
+})();
+</script>
+{% endblock %}

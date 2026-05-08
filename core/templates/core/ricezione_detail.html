@@ -1,0 +1,604 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}Gestisci ricezione — Commessa {{ testata.job }} — Workflow{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 0 48px 80px;
+    position: relative;
+  }
+
+  .navbar {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 48px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .nav-item:hover { color: var(--color-text-primary); text-decoration: none; }
+
+  .nav-badge {
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 5px;
+    min-width: 16px;
+    text-align: center;
+  }
+
+  .back-btn {
+    position: fixed;
+    top: 28px;
+    left: 28px;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 50;
+    transition: color 0.18s;
+  }
+
+  .back-btn:hover { color: var(--color-text-primary); }
+
+  .content {
+    width: 100%;
+    max-width: 760px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .page-header {
+    margin-bottom: 40px;
+    text-align: center;
+  }
+
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--color-text-primary);
+    line-height: 1.1;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-top: 6px;
+    opacity: 0.6;
+  }
+
+  /* ── Section card ── */
+  .arch-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .arch-section-header {
+    padding: 20px 24px 0;
+  }
+
+  .arch-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+  }
+
+  .arch-section-body {
+    padding: 16px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* ── Doc row (ricezione has more fields) ── */
+  .doc-row {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .doc-row:last-of-type { border-bottom: none; }
+
+  .doc-row-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .doc-info { flex: 1; min-width: 0; }
+
+  .doc-codice {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: 0.01em;
+  }
+
+  .doc-titolo {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+  }
+
+  .doc-rev {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    flex-shrink: 0;
+  }
+
+  /* ── Doc fields row ── */
+  .doc-row-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .field-group label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  .field-input {
+    padding: 7px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .field-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px hsla(var(--accent-h,221), 70%, 60%, 0.15);
+  }
+
+  select.field-input { cursor: pointer; }
+
+  /* ── iOS toggle ── */
+  .toggle-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .toggle-wrap label:first-child {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    opacity: 0.7;
+  }
+
+  .toggle-track {
+    position: relative;
+    width: 44px;
+    height: 26px;
+    flex-shrink: 0;
+    display: inline-block;
+  }
+
+  .toggle-track input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+  .toggle-thumb {
+    position: absolute;
+    inset: 0;
+    background: var(--color-border);
+    border-radius: 13px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle-thumb::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px hsla(0,0%,0%,0.25);
+  }
+
+  .toggle-track input:checked + .toggle-thumb { background: var(--color-accent); }
+  .toggle-track input:checked + .toggle-thumb::before { transform: translateX(18px); }
+
+  /* ── Doc metadata (emission + expected return) ── */
+  .doc-meta {
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+  }
+
+  .doc-meta-item { display: flex; gap: 4px; }
+  .doc-meta-item strong { color: var(--color-text-primary); opacity: 1; font-weight: 600; }
+
+  /* ── Note rientro ── */
+  .field-group-full { grid-column: 1 / -1; }
+
+  textarea.field-input {
+    resize: vertical;
+    min-height: 56px;
+    font-family: inherit;
+    line-height: 1.4;
+  }
+
+  /* ── Save row ── */
+  .arch-save-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 20px;
+  }
+
+  .arch-save-btn {
+    padding: 10px 26px;
+    border-radius: 12px;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+  }
+
+  .arch-save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .arch-save-btn:not(:disabled):hover { opacity: 0.88; }
+  .arch-save-btn:not(:disabled):active { transform: scale(0.97); }
+
+  .arch-save-status { font-size: 13px; color: var(--color-text-secondary); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px 0;
+    color: var(--color-text-secondary);
+    opacity: 0.5;
+  }
+
+  .empty-state p { font-size: 14px; font-style: italic; margin: 0; }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 12px hsla(0,0%,0%,0.2);
+    transition: background 0.18s, box-shadow 0.18s;
+    z-index: 100;
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-elevated);
+    box-shadow: 0 4px 20px hsla(0,0%,0%,0.25);
+  }
+
+  [data-theme="light"] .icon-moon { display: none; }
+  [data-theme="dark"]  .icon-sun  { display: none; }
+
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme="dark"]) .icon-moon { display: none; }
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme="light"]) .icon-sun { display: none; }
+  }
+
+  @media (max-width: 600px) {
+    .page { padding: 0 16px 80px; }
+    .page-title { font-size: 24px; }
+    .arch-section-header { padding: 16px 18px 0; }
+    .arch-section-body { padding: 12px 18px 20px; }
+    .doc-row-fields { grid-template-columns: 1fr 1fr; }
+    .toggle-wrap { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Back button ── -->
+  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="15 18 9 12 15 6"/>
+    </svg>
+  </button>
+
+  <!-- ── Navbar ── -->
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      Home
+    </a>
+    <a href="#" class="nav-item" id="nav-notifiche">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+      </svg>
+      Notifiche
+      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+    </a>
+    <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
+    </button>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
+
+  <!-- ── Content ── -->
+  <div class="content">
+
+    <header class="page-header">
+      <h1 class="page-title">Gestisci ricezione</h1>
+      <p class="page-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} — {{ testata.job_detail }}{% endif %}</p>
+    </header>
+
+    <!-- ── Documenti in attesa ── -->
+    <div class="arch-section">
+      <div class="arch-section-header">
+        <div class="arch-section-title">Documenti in attesa risposta</div>
+      </div>
+      <div class="arch-section-body">
+        <div id="doc-list">
+          <div class="empty-state"><p>Caricamento…</p></div>
+        </div>
+        <div class="arch-save-row">
+          <span class="arch-save-status" id="ric-status"></span>
+          <button class="arch-save-btn" id="ric-btn" type="button" disabled onclick="eseguiRicezione()">Registra ricezioni</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /page -->
+
+<script>
+(function () {
+  'use strict';
+
+  const JOB  = "{{ testata.job }}";
+  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  let _statiEsterni = [];
+
+  async function init() {
+    const [docsRes, statiRes] = await Promise.all([
+      fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`),
+      fetch('/api/stati-esterni/'),
+    ]);
+
+    if (statiRes.ok) {
+      const s = await statiRes.json();
+      _statiEsterni = s.stati || [];
+    }
+
+    if (!docsRes.ok) { showEmpty('Errore nel caricamento.'); return; }
+    const data = await docsRes.json();
+    const docs = (data.documenti || []).filter(d => d.latest_int_status === 'inviato_al_cliente');
+
+    renderDocs(docs);
+  }
+
+  function renderDocs(docs) {
+    const container = document.getElementById('doc-list');
+    if (!docs.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+          <p>Nessun documento in attesa di risposta</p>
+        </div>`;
+      document.getElementById('ric-btn').disabled = true;
+      return;
+    }
+
+    const statiOptions = _statiEsterni.map(s =>
+      `<option value="${s.id}">${escHtml(s.nome)}</option>`
+    ).join('');
+
+    container.innerHTML = docs.map(d => {
+      const revLabel = d.latest_rev_let ? `Rev. ${d.latest_rev_let}` : (d.latest_rev_no != null ? `Rev. ${d.latest_rev_no}` : '—');
+      const disDate  = d.latest_dis_act_date ? fmtDate(d.latest_dis_act_date) : null;
+      const recPlan  = d.latest_rec_plan_date ? fmtDate(d.latest_rec_plan_date) : null;
+      const metaHtml = (disDate || recPlan) ? `
+          <div class="doc-meta">
+            ${disDate  ? `<span class="doc-meta-item">Emesso: <strong>${escHtml(disDate)}</strong></span>` : ''}
+            ${recPlan  ? `<span class="doc-meta-item">Rientro previsto: <strong>${escHtml(recPlan)}</strong></span>` : ''}
+          </div>` : '';
+      return `
+        <div class="doc-row">
+          <div class="doc-row-top">
+            <div class="doc-info">
+              <div class="doc-codice">${escHtml(d.vendor_doc || '—')}</div>
+              <div class="doc-titolo">${escHtml(d.doc_title || '')}</div>
+            </div>
+            <span class="doc-rev">${escHtml(revLabel)}</span>
+          </div>
+          ${metaHtml}
+          <div class="doc-row-fields">
+            <div class="field-group">
+              <label>Data rientro</label>
+              <input type="date" class="field-input ric-date" data-doc="${d.id}">
+            </div>
+            <div class="field-group">
+              <label>Stato esterno</label>
+              <select class="field-input ric-stato" data-doc="${d.id}">
+                <option value="">— Seleziona —</option>
+                ${statiOptions}
+              </select>
+            </div>
+            <div class="toggle-wrap">
+              <label>Nuova rev.</label>
+              <label class="toggle-track">
+                <input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}">
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
+            <div class="field-group field-group-full">
+              <label>Note rientro</label>
+              <textarea class="field-input ric-note" data-doc="${d.id}" placeholder="Osservazioni del cliente…" rows="2"></textarea>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('ric-btn').disabled = false;
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function showEmpty(msg) {
+    document.getElementById('doc-list').innerHTML = `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
+    document.getElementById('ric-btn').disabled = true;
+  }
+
+  window.eseguiRicezione = async function() {
+    const entries = [];
+    document.querySelectorAll('.ric-date').forEach(el => {
+      const docId = parseInt(el.dataset.doc, 10);
+      const date  = el.value;
+      if (!date) return;
+      const stato = document.querySelector(`.ric-stato[data-doc="${docId}"]`)?.value || null;
+      const nuova = document.querySelector(`.ric-nuova-rev[data-doc="${docId}"]`)?.checked || false;
+      const note  = document.querySelector(`.ric-note[data-doc="${docId}"]`)?.value.trim() || '';
+      entries.push({
+        doc_id: docId,
+        rec_act_date: date,
+        ext_status_id: stato ? parseInt(stato, 10) : null,
+        crea_nuova_revisione: nuova,
+        note_rientro: note,
+      });
+    });
+
+    if (!entries.length) { alert('Inserisci almeno una data di rientro.'); return; }
+
+    const btn = document.getElementById('ric-btn');
+    const statusEl = document.getElementById('ric-status');
+    btn.disabled = true;
+    statusEl.textContent = 'Registrazione in corso…';
+
+    try {
+      const res = await fetch('/api/ricezione/', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body:    JSON.stringify({ entries }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        statusEl.textContent = err.error || 'Errore durante la registrazione.';
+        btn.disabled = false;
+        return;
+      }
+      statusEl.textContent = `✓ ${entries.length} document${entries.length === 1 ? 'o registrato' : 'i registrati'}`;
+      await init();
+      setTimeout(() => { statusEl.textContent = ''; }, 3000);
+    } catch {
+      statusEl.textContent = 'Errore di rete.';
+      btn.disabled = false;
+    }
+  };
+
+  init();
+})();
+</script>
+{% endblock %}

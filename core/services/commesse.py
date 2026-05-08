@@ -157,7 +157,7 @@ def list_reparti():
 # ── Documento CRUD ───────────────────────────────────────────────────────────────────────────────
 def serialize_documento(d):
     label_map = dict(STATI_INTERNI_CHOICES)
-    latest_rev = d.revisioni.order_by('-rev_no', '-pk').first()
+    latest_rev = d.revisioni.select_related('ext_status').order_by('-rev_no', '-pk').first()
     latest_int_status = latest_rev.int_status if latest_rev else ''
     latest_int_status_label = label_map.get(latest_int_status, latest_int_status) if latest_int_status else ''
     return {
@@ -174,8 +174,17 @@ def serialize_documento(d):
         'reparto': d.reparto,
         'reparto_label': d.reparto,
         'remarks': d.remarks,
+        'latest_rev_id': latest_rev.pk if latest_rev else None,
+        'latest_rev_no': latest_rev.rev_no if latest_rev else None,
+        'latest_rev_let': latest_rev.rev_let if latest_rev else '',
         'latest_int_status': latest_int_status,
         'latest_int_status_label': latest_int_status_label,
+        'latest_ext_status': latest_rev.ext_status_id if latest_rev else None,
+        'latest_ext_status_label': latest_rev.ext_status.nome if (latest_rev and latest_rev.ext_status) else '',
+        'latest_ext_status_colore': latest_rev.ext_status.colore if (latest_rev and latest_rev.ext_status) else '',
+        'latest_dis_act_date': latest_rev.dis_act_date.isoformat() if (latest_rev and latest_rev.dis_act_date) else None,
+        'latest_rec_plan_date': latest_rev.rec_plan_date.isoformat() if (latest_rev and latest_rev.rec_plan_date) else None,
+        'latest_rec_act_date': latest_rev.rec_act_date.isoformat() if (latest_rev and latest_rev.rec_act_date) else None,
     }
 
 
@@ -403,7 +412,7 @@ def esegui_emissione(doc_ids, dis_act_date):
 
 def esegui_ricezione(entries, crea_nuova_revisione=False):
     """
-    entries: list of {doc_id, rec_act_date, ext_status_id, crea_nuova_revisione (optional)}
+    entries: list of {doc_id, rec_act_date, ext_status_id, note_rientro, crea_nuova_revisione (optional)}
     crea_nuova_revisione: bool — global default, overridden per entry if specified.
     Returns list of updated/created revision dicts.
     """
@@ -412,6 +421,7 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         doc_id = entry.get('doc_id')
         rec_act_date_raw = entry.get('rec_act_date', '')
         ext_status_id = entry.get('ext_status_id') or None
+        note_rientro = entry.get('note_rientro', '') or ''
         crea_rev = bool(entry.get('crea_nuova_revisione', crea_nuova_revisione))
 
         if not doc_id or not rec_act_date_raw:
@@ -429,6 +439,7 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
 
         rev.rec_act_date = rec_act_date
         rev.ext_status_id = ext_status_id
+        rev.note_rientro = note_rientro
         rev.int_status = 'ricevuto'
         rev.save()
         result.append(serialize_revisione(rev))
