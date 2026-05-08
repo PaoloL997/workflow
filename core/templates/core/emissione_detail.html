@@ -158,13 +158,14 @@
     white-space: nowrap;
   }
   .ep-tbl thead th:first-child { padding-left: 16px; width: 44px; }
-  .ep-tbl thead th:last-child  { width: 52px; text-align: right; padding-right: 16px; }
+  .ep-tbl thead th.col-doc  { width: auto; }
+  .ep-tbl thead th.col-date { width: 120px; text-align: center; }
 
   .ep-tbl tbody tr {
     border-bottom: 1px solid var(--color-border);
-    transition: background .1s; cursor: pointer;
+    transition: background .12s; cursor: pointer;
   }
-  .ep-tbl tbody tr:hover    { background: hsla(0,0%,50%,.05); }
+  .ep-tbl tbody tr:hover    { background: var(--color-surface); }
   .ep-tbl tbody tr.sel      { background: var(--ap-bg); }
   .ep-tbl tbody tr:last-child { border-bottom: none; }
 
@@ -173,8 +174,15 @@
     color: var(--color-text-primary); vertical-align: middle;
   }
   .ep-tbl tbody td:first-child { padding-left: 16px; }
-  .ep-tbl tbody td:last-child  { text-align: right; padding-right: 16px; color: var(--color-text-secondary); font-size: 12px; font-weight: 500; }
-  .td-code  { font-weight: 700; font-size: 13px; color: var(--color-accent); letter-spacing: -0.01em; white-space: nowrap; }
+
+  /* Document info cell — identical to ricezione */
+  .doc-code {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--color-accent);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
   .doc-rev-badge {
     display: inline-block;
     margin-left: 6px;
@@ -186,12 +194,29 @@
     font-weight: 500;
     vertical-align: middle;
   }
-  .doc-title-small {
+  .doc-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .doc-title-right {
     font-size: 11px;
     color: var(--color-text-secondary);
-    margin-top: 3px;
     letter-spacing: 0.01em;
+    text-align: right;
+    flex-shrink: 1;
+    min-width: 0;
   }
+
+  /* Date cells */
+  .cell-date {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    white-space: nowrap;
+  }
+  .cell-date.overdue { color: var(--color-danger); }
 
   /* circular checkbox */
   .rchk {
@@ -355,11 +380,12 @@
       <thead>
         <tr>
           <th><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleAll(this.checked)"></div></th>
-          <th>Documento</th>
+          <th class="col-doc">Documento</th>
+          <th class="col-date">Data prevista</th>
         </tr>
       </thead>
       <tbody id="ep-tbody">
-        <tr><td colspan="2" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+        <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
       </tbody>
     </table>
   </div>
@@ -490,18 +516,30 @@
     } catch { emptyTbl('Errore di rete.'); }
   }
 
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const [y, m, d] = iso.split('-');
+    return d + '/' + m + '/' + y;
+  }
+
   function renderTbl() {
     const tb = document.getElementById('ep-tbody');
     if (!_docs.length) { emptyTbl('Nessun documento pronto per l\'emissione.'); return; }
+    const today = new Date(); today.setHours(0,0,0,0);
     tb.innerHTML = _docs.map(function(d) {
       const rev = (d.latest_rev_let || '') !== '' ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '\u2014');
+      const planDate = d.latest_dis_plan_date ? fmtDate(d.latest_dis_plan_date) : '—';
+      const isOverdue = d.latest_dis_plan_date && new Date(d.latest_dis_plan_date) < today;
       return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'
         + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '" onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
         + '<td>'
-        +   '<span class="td-code">' + escHtml(d.vendor_doc || '\u2014') + '</span>'
-        +   '<span class="doc-rev-badge">Rev.\u00a0' + escHtml(rev) + '</span>'
-        +   '<div class="doc-title-small">' + escHtml(d.doc_title || '') + '</div>'
+        +   '<div class="doc-info-row">'
+        +     '<div><span class="doc-code">' + escHtml(d.vendor_doc || '\u2014') + '</span>'
+        +     '<span class="doc-rev-badge">Rev.\u00a0' + escHtml(rev) + '</span></div>'
+        +     '<div class="doc-title-right">' + escHtml(d.doc_title || '') + '</div>'
+        +   '</div>'
         + '</td>'
+        + '<td class="cell-date' + (isOverdue ? ' overdue' : '') + '">' + escHtml(planDate) + '</td>'
         + '</tr>';
     }).join('');
     onRowChk();
@@ -509,7 +547,7 @@
 
   function emptyTbl(msg) {
     document.getElementById('ep-tbody').innerHTML =
-      '<tr><td colspan="2" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
     updBtns(0); updCounter(0);
   }
 
