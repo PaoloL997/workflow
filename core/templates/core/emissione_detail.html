@@ -186,7 +186,12 @@
     font-weight: 500;
     vertical-align: middle;
   }
-  .td-title { color: var(--color-text-secondary) !important; }
+  .doc-title-small {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    margin-top: 3px;
+    letter-spacing: 0.01em;
+  }
 
   /* circular checkbox */
   .rchk {
@@ -350,13 +355,11 @@
       <thead>
         <tr>
           <th><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleAll(this.checked)"></div></th>
-          <th>Codice</th>
-          <th>Titolo</th>
-          <th>Rev</th>
+          <th>Documento</th>
         </tr>
       </thead>
       <tbody id="ep-tbody">
-        <tr><td colspan="4" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+        <tr><td colspan="2" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
       </tbody>
     </table>
   </div>
@@ -494,9 +497,11 @@
       const rev = (d.latest_rev_let || '') !== '' ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '\u2014');
       return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'
         + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '" onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
-        + '<td class="td-code">'  + escHtml(d.vendor_doc || '\u2014') + '</td>'
-        + '<td class="td-title">' + escHtml(d.doc_title  || '')        + '</td>'
-        + '<td><span class="doc-rev-badge">Rev. ' + escHtml(rev) + '</span></td>'
+        + '<td>'
+        +   '<span class="td-code">' + escHtml(d.vendor_doc || '\u2014') + '</span>'
+        +   '<span class="doc-rev-badge">Rev.\u00a0' + escHtml(rev) + '</span>'
+        +   '<div class="doc-title-small">' + escHtml(d.doc_title || '') + '</div>'
+        + '</td>'
         + '</tr>';
     }).join('');
     onRowChk();
@@ -504,7 +509,7 @@
 
   function emptyTbl(msg) {
     document.getElementById('ep-tbody').innerHTML =
-      '<tr><td colspan="4" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+      '<tr><td colspan="2" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
     updBtns(0); updCounter(0);
   }
 
