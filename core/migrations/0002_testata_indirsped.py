@@ -5,54 +5,97 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0001_initial'),
+        ("core", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Testata',
+            name="Testata",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('job', models.CharField(db_column='Job', max_length=50, unique=True)),
-                ('vb_job', models.CharField(blank=True, db_column='VBJob', max_length=50)),
-                ('client', models.CharField(blank=True, db_column='Client', max_length=200)),
-                ('po_no', models.CharField(blank=True, db_column='PONo', max_length=100)),
-                ('job_detail', models.CharField(blank=True, db_column='JobDetail', max_length=300)),
-                ('delivery_date', models.DateField(blank=True, db_column='DeliveryDate', null=True)),
-                ('delivery_term', models.CharField(blank=True, db_column='DeliveryTerm', max_length=200)),
-                ('requisition', models.CharField(blank=True, db_column='Requisition', max_length=100)),
-                ('time_cli_doc_rev', models.IntegerField(blank=True, db_column='TimeCliDocRev', help_text='Giorni a disposizione del cliente per revisionare un documento.', null=True)),
-                ('time_ven_doc_rev', models.IntegerField(blank=True, db_column='TimeVenDocRev', help_text='Giorni a nostra disposizione per emettere/revisionare un documento.', null=True)),
-                ('rev_let_flag', models.BooleanField(db_column='RevLetFlag', default=False)),
-                ('transm_flag', models.BooleanField(db_column='TransmFlag', default=False)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("job", models.CharField(db_column="Job", max_length=50, unique=True)),
+                ("vb_job", models.CharField(blank=True, db_column="VBJob", max_length=50)),
+                ("client", models.CharField(blank=True, db_column="Client", max_length=200)),
+                ("po_no", models.CharField(blank=True, db_column="PONo", max_length=100)),
+                ("job_detail", models.CharField(blank=True, db_column="JobDetail", max_length=300)),
+                (
+                    "delivery_date",
+                    models.DateField(blank=True, db_column="DeliveryDate", null=True),
+                ),
+                (
+                    "delivery_term",
+                    models.CharField(blank=True, db_column="DeliveryTerm", max_length=200),
+                ),
+                (
+                    "requisition",
+                    models.CharField(blank=True, db_column="Requisition", max_length=100),
+                ),
+                (
+                    "time_cli_doc_rev",
+                    models.IntegerField(
+                        blank=True,
+                        db_column="TimeCliDocRev",
+                        help_text="Giorni a disposizione del cliente per revisionare un documento.",
+                        null=True,
+                    ),
+                ),
+                (
+                    "time_ven_doc_rev",
+                    models.IntegerField(
+                        blank=True,
+                        db_column="TimeVenDocRev",
+                        help_text="Giorni a nostra disposizione per emettere/revisionare un documento.",
+                        null=True,
+                    ),
+                ),
+                ("rev_let_flag", models.BooleanField(db_column="RevLetFlag", default=False)),
+                ("transm_flag", models.BooleanField(db_column="TransmFlag", default=False)),
             ],
             options={
-                'verbose_name': 'Archivio commessa',
-                'verbose_name_plural': 'Archivi commessa',
-                'db_table': 'testate',
-                'managed': True,
+                "verbose_name": "Archivio commessa",
+                "verbose_name_plural": "Archivi commessa",
+                "db_table": "testate",
+                "managed": True,
             },
         ),
         migrations.CreateModel(
-            name='IndirSped',
+            name="IndirSped",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('consignee', models.CharField(blank=True, db_column='Consignee', max_length=200)),
-                ('address', models.CharField(blank=True, db_column='Address', max_length=300)),
-                ('zip_code', models.CharField(blank=True, db_column='ZipCode', max_length=20)),
-                ('city', models.CharField(blank=True, db_column='City', max_length=100)),
-                ('country', models.CharField(blank=True, db_column='Country', max_length=100)),
-                ('attn', models.CharField(blank=True, db_column='Attn', max_length=200)),
-                ('ph_no', models.CharField(blank=True, db_column='PhNo', max_length=50)),
-                ('testata', models.ForeignKey(db_column='Job', on_delete=django.db.models.deletion.CASCADE, related_name='indirizzi_spedizione', to='core.testata', to_field='job')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("consignee", models.CharField(blank=True, db_column="Consignee", max_length=200)),
+                ("address", models.CharField(blank=True, db_column="Address", max_length=300)),
+                ("zip_code", models.CharField(blank=True, db_column="ZipCode", max_length=20)),
+                ("city", models.CharField(blank=True, db_column="City", max_length=100)),
+                ("country", models.CharField(blank=True, db_column="Country", max_length=100)),
+                ("attn", models.CharField(blank=True, db_column="Attn", max_length=200)),
+                ("ph_no", models.CharField(blank=True, db_column="PhNo", max_length=50)),
+                (
+                    "testata",
+                    models.ForeignKey(
+                        db_column="Job",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="indirizzi_spedizione",
+                        to="core.testata",
+                        to_field="job",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Indirizzo di spedizione',
-                'verbose_name_plural': 'Indirizzi di spedizione',
-                'db_table': 'indirizzi_spedizione',
-                'managed': True,
+                "verbose_name": "Indirizzo di spedizione",
+                "verbose_name_plural": "Indirizzi di spedizione",
+                "db_table": "indirizzi_spedizione",
+                "managed": True,
             },
         ),
     ]

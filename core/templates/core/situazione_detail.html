@@ -1,7 +1,7 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Situazione documenti — Commessa {{ testata.job }} — Workflow{% endblock %}
+{% block title %}Situazione documenti{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -9,8 +9,10 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-height: 100vh;
-    padding: 0 48px 80px;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    padding: 0 48px;
     position: relative;
   }
 
@@ -48,39 +50,16 @@
     position: absolute;
     top: 6px;
     right: 14px;
-    background: var(--color-accent);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    border-radius: 999px;
-    padding: 1px 5px;
-    min-width: 16px;
-    text-align: center;
+    width: 7px;
+    height: 7px;
+    background: var(--color-danger);
+    border-radius: 50%;
   }
-
-  .back-btn {
-    position: fixed;
-    top: 28px;
-    left: 28px;
-    width: 40px;
-    height: 40px;
-    border: none;
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    z-index: 50;
-    transition: color 0.18s;
-  }
-
-  .back-btn:hover { color: var(--color-text-primary); }
 
   .content {
+    flex: 1;
+    min-height: 0;
     width: 100%;
-    max-width: 900px;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -88,7 +67,8 @@
 
   .page-header {
     margin-bottom: 36px;
-    text-align: center;
+    display: block;
+    flex-shrink: 0;
   }
 
   .page-title {
@@ -97,53 +77,8 @@
     letter-spacing: -0.04em;
     color: var(--color-text-primary);
     line-height: 1.1;
+    text-align: center;
   }
-
-  .page-subtitle {
-    font-size: 14px;
-    color: var(--color-text-secondary);
-    margin-top: 6px;
-    opacity: 0.6;
-  }
-
-  /* ── Summary stats ── */
-  .stats-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-  }
-
-  .stat-card {
-    flex: 1;
-    min-width: 120px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 14px;
-    padding: 16px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .stat-num {
-    font-size: 28px;
-    font-weight: 800;
-    letter-spacing: -0.04em;
-    color: var(--color-text-primary);
-    line-height: 1;
-  }
-
-  .stat-lbl {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-text-secondary);
-    opacity: 0.6;
-  }
-
-  .stat-card.accent .stat-num { color: var(--color-accent); }
 
   /* ── Filter bar ── */
   .filter-bar {
@@ -151,149 +86,207 @@
     gap: 8px;
     margin-bottom: 20px;
     flex-wrap: wrap;
+    align-items: center;
+    flex-shrink: 0;
   }
 
-  .filter-select {
-    padding: 8px 12px;
-    border-radius: 10px;
+  /* ── View toggle ── */
+  .view-toggle {
+    display: flex;
     border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
     background: var(--color-elevated);
-    color: var(--color-text-primary);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: border-color 0.15s;
-    min-width: 160px;
+    margin-left: auto;
   }
 
-  .filter-select:focus { outline: none; border-color: var(--color-accent); }
-
-  .filter-reset {
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: 1px solid var(--color-border);
+  .view-btn {
+    padding: 8px 18px;
+    border: none;
     background: transparent;
     color: var(--color-text-secondary);
     font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.15s, background 0.15s;
+    white-space: nowrap;
   }
 
-  .filter-reset:hover { color: var(--color-text-primary); border-color: var(--color-text-secondary); }
+  .view-btn.active { background: var(--color-accent); color: #fff; }
+  .view-btn:not(.active):hover { color: var(--color-text-primary); background: hsla(0,0%,50%,0.08); }
 
   /* ── Table card ── */
-  .arch-section {
+  .sit-card {
+    flex: 1;
+    min-height: 0;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 18px;
-    overflow: hidden;
-    margin-bottom: 16px;
-  }
-
-  .arch-section-body {
-    padding: 0;
+    overflow: clip;
     display: flex;
     flex-direction: column;
-    gap: 0;
-    overflow-x: auto;
+    margin-bottom: 80px;
   }
 
-  /* ── Doc row ── */
-  .doc-row {
-    display: grid;
-    grid-template-columns: minmax(160px,2fr) 60px 1fr 1fr 110px 110px;
-    gap: 0;
-    align-items: center;
-    padding: 14px 24px;
-    border-bottom: 1px solid var(--color-border);
-    transition: background 0.1s;
+  #sit-container {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
-  .doc-row:last-of-type { border-bottom: none; }
+  /* ── Vertical table ── */
+  .sit-table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .sit-table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+  .sit-table-wrap::-webkit-scrollbar-track { background: transparent; margin: 8px; }
+  .sit-table-wrap::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+  .sit-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
 
-  .doc-row.header-row {
+  .sit-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+  }
+
+  .sit-table thead th {
     background: var(--color-elevated);
-    padding: 10px 24px;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .doc-row:not(.header-row):hover { background: hsla(0,0%,50%,0.04); }
-
-  .col-header {
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-text-secondary);
-    opacity: 0.65;
+    padding: 8px 8px;
+    border-bottom: 1px solid var(--color-border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    text-align: left;
   }
 
-  .doc-codice {
-    font-size: 13px;
-    font-weight: 700;
+  .sit-table tbody td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--color-border);
     color: var(--color-text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    vertical-align: middle;
   }
 
-  .doc-titolo {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    opacity: 0.6;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    margin-top: 2px;
+  .sit-table tbody tr:last-child td { border-bottom: none; }
+
+  .sit-table tbody tr {
+    transition: background 0.1s;
+    border-left: 4px solid transparent;
   }
 
-  .doc-rev {
+  .sit-table tbody tr:hover { background: hsla(0,0%,50%,0.04); }
+
+  /* ── Horizontal table ── */
+  .sit-horiz-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .sit-horiz-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+  .sit-horiz-wrap::-webkit-scrollbar-track { background: transparent; margin: 8px; }
+  .sit-horiz-wrap::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+  .sit-horiz-wrap::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
+
+  .sit-horiz {
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    background: var(--color-elevated);
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    padding: 2px 8px;
-    text-align: center;
+    white-space: nowrap;
   }
 
-  .doc-stato-int, .doc-stato-ext {
-    font-size: 11px;
+  .sit-horiz th,
+  .sit-horiz td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    vertical-align: middle;
+    background: var(--color-surface);
+  }
+
+  .sit-horiz thead th {
+    background: var(--color-elevated);
     font-weight: 600;
+    color: var(--color-text-secondary);
+    font-size: 11px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .sit-horiz thead tr:nth-child(2) th { top: 32px; }
+
+  .sit-horiz th.sit-fix,
+  .sit-horiz td.sit-fix {
+    position: sticky;
+    z-index: 3;
+    background: var(--color-elevated);
+  }
+
+  .sit-horiz tbody td.sit-fix {
+    background: var(--color-surface);
+    z-index: 1;
+  }
+
+  .sit-horiz thead th.sit-fix { z-index: 4; }
+
+  .sit-horiz th.sit-rev-group {
+    text-align: center;
+    background: hsla(211, 100%, 55%, 0.12);
+    border-left: 2px solid var(--color-border);
+    color: var(--color-text-primary);
+  }
+
+  .sit-horiz td.sit-rev-first { border-left: 2px solid var(--color-border); }
+
+  .sit-horiz tr:last-child td { border-bottom: none; }
+  .sit-horiz td:last-child,
+  .sit-horiz th:last-child { border-right: none; }
+
+  /* ── Status badges ── */
+  .sit-ext-badge,
+  .sit-int-badge {
+    display: inline-block;
     padding: 3px 10px;
     border-radius: 20px;
-    letter-spacing: 0.01em;
-    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
   }
 
-  .doc-date {
-    font-size: 12px;
-    color: var(--color-text-secondary);
-    opacity: 0.8;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* ── Int status badge colors ── */
-  .stato-da-iniziare    { background: hsl(220,14%,22%); color: hsl(220,10%,70%); }
+  .stato-da-iniziare    { background: hsl(220,12%,20%); color: hsl(220,8%,55%); }
   .stato-in-lavorazione { background: hsl(210,80%,20%); color: hsl(210,80%,70%); }
   .stato-in-revisione   { background: hsl(42,80%,18%);  color: hsl(42,90%,72%);  }
   .stato-in-approvazione{ background: hsl(30,80%,18%);  color: hsl(30,90%,70%);  }
   .stato-da-emettere    { background: hsl(270,60%,20%); color: hsl(270,80%,75%); }
-  .stato-inviato        { background: hsl(200,70%,18%); color: hsl(200,80%,72%); }
+  .stato-inviato        { background: hsl(46,85%,20%); color: hsl(46,95%,72%); }
+  .stato-da-inviare     { background: hsl(220,12%,20%); color: hsl(220,8%,55%); }
   .stato-ricevuto       { background: hsl(145,55%,16%); color: hsl(145,60%,68%); }
+  .ext-commentato       { background: hsl(0,72%,20%); color: hsl(0,86%,74%); }
+  .ext-approvato        { background: hsl(145,55%,16%); color: hsl(145,60%,68%); }
 
   [data-theme="light"] .stato-da-iniziare    { background: hsl(220,14%,90%); color: hsl(220,10%,40%); }
   [data-theme="light"] .stato-in-lavorazione { background: hsl(210,80%,88%); color: hsl(210,80%,30%); }
   [data-theme="light"] .stato-in-revisione   { background: hsl(42,80%,88%);  color: hsl(42,60%,30%);  }
   [data-theme="light"] .stato-in-approvazione{ background: hsl(30,80%,88%);  color: hsl(30,60%,30%);  }
   [data-theme="light"] .stato-da-emettere    { background: hsl(270,60%,88%); color: hsl(270,50%,35%); }
-  [data-theme="light"] .stato-inviato        { background: hsl(200,70%,88%); color: hsl(200,60%,30%); }
+  [data-theme="light"] .stato-inviato        { background: hsl(46,92%,88%); color: hsl(46,70%,30%); }
+  [data-theme="light"] .stato-da-inviare     { background: hsl(220,14%,90%); color: hsl(220,10%,40%); }
   [data-theme="light"] .stato-ricevuto       { background: hsl(145,55%,88%); color: hsl(145,45%,28%); }
+  [data-theme="light"] .ext-commentato       { background: hsl(0,85%,90%); color: hsl(0,62%,34%); }
+  [data-theme="light"] .ext-approvato        { background: hsl(145,55%,88%); color: hsl(145,45%,28%); }
 
   /* ── Empty state ── */
   .empty-state {
@@ -308,6 +301,66 @@
   }
 
   .empty-state p { font-size: 14px; font-style: italic; margin: 0; }
+
+  /* ── Toolbar buttons ── */
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+
+  .toolbar-btn:hover {
+    color: var(--color-text-primary);
+    background: hsla(0,0%,50%,0.08);
+  }
+
+  /* ── Sort indicators ── */
+  .sit-table thead th[data-sort-key] {
+    user-select: none;
+  }
+
+  .sort-label {
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+
+  .sit-table thead th[data-sort-key]:hover .sort-label {
+    color: var(--color-text-primary);
+  }
+
+  .sort-active .sort-label {
+    color: var(--color-accent);
+  }
+
+  /* ── Fullscreen ── */
+  :fullscreen .sit-card,
+  :-webkit-full-screen .sit-card {
+    border-radius: 0;
+    height: 100dvh;
+    margin-bottom: 0;
+  }
+
+  :fullscreen .page,
+  :-webkit-full-screen .page {
+    padding: 0;
+  }
 
   /* ── Theme toggle ── */
   .theme-toggle {
@@ -346,26 +399,15 @@
   }
 
   @media (max-width: 700px) {
-    .page { padding: 0 12px 80px; }
+    .page { padding: 0 12px; }
     .page-title { font-size: 24px; }
-    .doc-row {
-      grid-template-columns: minmax(120px,2fr) 50px 1fr 90px;
-    }
-    .col-stato-ext, .doc-stato-ext,
-    .col-date-ric, .doc-date-ric { display: none; }
+    .view-toggle { margin-left: 0; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page">
-
-  <!-- ── Back button ── -->
-  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  </button>
 
   <!-- ── Navbar ── -->
   <nav class="navbar" aria-label="Navigazione principale">
@@ -375,12 +417,12 @@
       </svg>
       Home
     </a>
-    <a href="#" class="nav-item" id="nav-notifiche">
+    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
       </svg>
       Notifiche
-      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -401,54 +443,69 @@
 
     <header class="page-header">
       <h1 class="page-title">Situazione documenti</h1>
-      <p class="page-subtitle">Commessa {{ testata.job }}{% if testata.job_detail %} — {{ testata.job_detail }}{% endif %}</p>
     </header>
 
-    <!-- ── Summary ── -->
-    <div class="stats-row" id="stats-row">
-      <div class="stat-card"><div class="stat-num" id="stat-totale">—</div><div class="stat-lbl">Totali</div></div>
-      <div class="stat-card accent"><div class="stat-num" id="stat-emessi">—</div><div class="stat-lbl">Emessi</div></div>
-      <div class="stat-card"><div class="stat-num" id="stat-ricevuti">—</div><div class="stat-lbl">Ricevuti</div></div>
-      <div class="stat-card"><div class="stat-num" id="stat-attesa">—</div><div class="stat-lbl">In attesa</div></div>
-    </div>
-
-    <!-- ── Filters ── -->
+    <!-- ── Filter bar ── -->
     <div class="filter-bar">
-      <select class="filter-select" id="filter-stato" onchange="applyFilters()">
-        <option value="">Tutti gli stati</option>
-        <option value="da_iniziare">Da iniziare</option>
-        <option value="in_lavorazione">In lavorazione</option>
-        <option value="in_revisione">In revisione</option>
-        <option value="in_approvazione">In approvazione</option>
-        <option value="da_emettere">Da emettere</option>
-        <option value="inviato_al_cliente">Inviato al cliente</option>
-        <option value="ricevuto">Ricevuto</option>
-      </select>
-      <button class="filter-reset" onclick="resetFilters()">Azzera filtri</button>
+      <button class="toolbar-btn" id="btn-export" onclick="exportCSV()" aria-label="Esporta come CSV">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+        </svg>
+        Esporta CSV
+      </button>
+      <button class="toolbar-btn" id="btn-fullscreen" onclick="toggleFullscreen()" aria-label="Schermo intero" style="padding:8px 10px;">
+        <svg id="fs-icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+        <svg id="fs-icon-shrink" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="display:none">
+          <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
+        </svg>
+      </button>
+      <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
+        <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
+        <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
+      </div>
     </div>
 
     <!-- ── Table ── -->
-    <div class="arch-section">
-      <div class="arch-section-body">
-        <!-- Header -->
-        <div class="doc-row header-row">
-          <span class="col-header">Documento</span>
-          <span class="col-header">Rev.</span>
-          <span class="col-header">Stato interno</span>
-          <span class="col-header col-stato-ext">Stato esterno</span>
-          <span class="col-header">Data emissione</span>
-          <span class="col-header col-date-ric">Data rientro</span>
-        </div>
-        <div id="doc-list">
-          <div class="empty-state"><p>Caricamento…</p></div>
-        </div>
+    <div class="sit-card">
+      <div id="sit-container">
+        <div class="empty-state"><p>Caricamento…</p></div>
       </div>
     </div>
 
   </div><!-- /content -->
 </div><!-- /page -->
 
+<button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.38-1.41 0z"/>
+  </svg>
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+</button>
+{% endblock %}
+
+{% block extra_scripts %}
 <script>
+(function () {
+  'use strict';
+
+  /* ── Theme toggle ── */
+  document.getElementById('theme-toggle-btn').addEventListener('click', function () {
+    var current = document.documentElement.getAttribute('data-theme');
+    var isDark = current === 'dark' ||
+      (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+})();
+</script>
+
+<script>
+/* ── Situazione documenti ── */
 (function () {
   'use strict';
 
@@ -474,74 +531,364 @@
     ricevuto:          'stato-ricevuto',
   };
 
-  let _allDocs = [];
+  function getIntStatusMeta(rev) {
+    const intStatus = rev?.int_status || '';
+    if (!intStatus) {
+      return { label: 'Da inviare', className: 'stato-da-inviare' };
+    }
+    return {
+      label: STATI_LABEL[intStatus] || rev?.int_status_label || '',
+      className: STATI_CLASS[intStatus] || '',
+    };
+  }
+
+  function getExtStatusMeta(rev) {
+    const label = rev?.ext_status_label || '';
+    if (!label) {
+      return { label: '', className: '', style: '' };
+    }
+    const normalized = label.trim().toLowerCase();
+    if (normalized === 'commentato') {
+      return { label, className: 'ext-commentato', style: '' };
+    }
+    if (normalized === 'approvato') {
+      return { label, className: 'ext-approvato', style: '' };
+    }
+    const color = rev?.ext_status_colore || '#9E9E9E';
+    return { label, className: '', style: `background:${escHtml(color)};color:#fff` };
+  }
+
+  function getRowHighlightStyle(rev) {
+    const extColor = rev?.ext_status_colore || '';
+    if (extColor) {
+      return `style="border-left-color:${escHtml(extColor)};background:${escHtml(extColor)}12"`;
+    }
+    if ((rev?.int_status || '') === 'inviato_al_cliente') {
+      return 'style="border-left-color:#FFC000;background:#FFC00012"';
+    }
+    return '';
+  }
+
+  function getDocumentRowHighlightStyle(revs) {
+    const relevantRev = [...(revs || [])].reverse().find(function (rev) {
+      return Boolean(rev?.ext_status_colore) || (rev?.int_status || '') === 'inviato_al_cliente';
+    });
+    return getRowHighlightStyle(relevantRev || null);
+  }
+
+  let _allDocs    = [];
+  let _allDocRevs = [];
+  let _vista      = 'verticale';
+  let _sortKey    = null;
+  let _sortDir    = 1; // 1 = asc, -1 = desc
 
   function fmtDate(d) {
-    if (!d) return '—';
+    if (!d) return '\u2014';
     const [y, m, g] = d.split('-');
     return `${g}/${m}/${y}`;
   }
 
   async function loadDocs() {
-    const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`);
-    if (!res.ok) { showEmpty('Errore nel caricamento.'); return; }
-    const data = await res.json();
-    _allDocs = data.documenti || [];
-    updateStats(_allDocs);
-    renderDocs(_allDocs);
+    showMsg('Caricamento\u2026');
+    try {
+      const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`);
+      if (!res.ok) { showMsg('Errore nel caricamento.'); return; }
+      const data = await res.json();
+      _allDocs = data.documenti || [];
+      _allDocs.sort((a, b) =>
+        (a.item_no || '').localeCompare(b.item_no || '', undefined, { numeric: true }));
+
+      _allDocRevs = await Promise.all(_allDocs.map(async d => {
+        try {
+          const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
+          const { revisioni } = await r.json();
+          return { doc: d, revs: revisioni.sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)) };
+        } catch (e) { return { doc: d, revs: [] }; }
+      }));
+
+      applyFilters();
+    } catch (e) { showMsg('Errore nel caricamento.'); }
   }
 
-  function updateStats(docs) {
-    document.getElementById('stat-totale').textContent   = docs.length;
-    document.getElementById('stat-emessi').textContent   = docs.filter(d => ['inviato_al_cliente','ricevuto'].includes(d.latest_int_status)).length;
-    document.getElementById('stat-ricevuti').textContent = docs.filter(d => d.latest_int_status === 'ricevuto').length;
-    document.getElementById('stat-attesa').textContent   = docs.filter(d => d.latest_int_status === 'inviato_al_cliente').length;
+  window.applyFilters = function () {
+    if (_vista === 'verticale') renderVerticale(_allDocRevs);
+    else renderOrizzontale(_allDocRevs);
+  };
+
+  window.setVista = function (v) {
+    _vista = v;
+    _sortKey = null;
+    _sortDir = 1;
+    document.getElementById('btn-vert').classList.toggle('active', v === 'verticale');
+    document.getElementById('btn-horiz').classList.toggle('active', v === 'orizzontale');
+    applyFilters();
+  };
+
+  function showMsg(msg) {
+    document.getElementById('sit-container').innerHTML =
+      `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
   }
 
-  function renderDocs(docs) {
-    const container = document.getElementById('doc-list');
-    if (!docs.length) {
-      container.innerHTML = `<div class="empty-state"><p>Nessun documento trovato</p></div>`;
-      return;
+  /* ── Sorting ── */
+  function sortedRows(rows) {
+    if (!_sortKey) return rows;
+    return [...rows].sort((a, b) => {
+      let va = getRowVal(a, _sortKey);
+      let vb = getRowVal(b, _sortKey);
+      if (va == null) va = '';
+      if (vb == null) vb = '';
+      // dates: compare as strings YYYY-MM-DD (lexicographic works)
+      const cmp = String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' });
+      return cmp * _sortDir;
+    });
+  }
+
+  function getRowVal({ d, r }, key) {
+    switch (key) {
+      case 'item_no':        return d.item_no || '';
+      case 'vendor_doc':     return d.vendor_doc || '';
+      case 'client_doc_no':  return d.client_doc_no || '';
+      case 'client_doc_class': return d.client_doc_class || '';
+      case 'doc_title':      return d.doc_title || '';
+      case 'reparto_label':  return d.reparto_label || '';
+      case 'rev_no':         return r?.rev_no ?? -1;
+      case 'dis_plan_date':  return r?.dis_plan_date || '';
+      case 'dis_act_date':   return r?.dis_act_date || '';
+      case 'rec_plan_date':  return r?.rec_plan_date || '';
+      case 'rec_act_date':   return r?.rec_act_date || '';
+      case 'int_status':     return getIntStatusMeta(r).label;
+      case 'ext_status':     return r?.ext_status_label || '';
+      default: return '';
+    }
+  }
+
+  function onSortClick(key) {
+    if (_sortKey === key) _sortDir *= -1;
+    else { _sortKey = key; _sortDir = 1; }
+    renderVerticale(_allDocRevs);
+  }
+
+  function thSort(label, key) {
+    const activeClass = _sortKey === key ? ' sort-active' : '';
+    return `<th data-sort-key="${escHtml(key)}" class="${activeClass}"><button type="button" class="sort-label" onclick="onSortClick('${escHtml(key)}')">${label}</button></th>`;
+  }
+
+  /* ── Vista verticale ── */
+  function renderVerticale(docRevs) {
+    const c = document.getElementById('sit-container');
+    if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
+
+    const rawRows = [];
+    for (const { doc: d, revs } of docRevs) {
+      if (revs.length) { for (const r of revs) rawRows.push({ d, r }); }
+      else rawRows.push({ d, r: null });
     }
 
-    container.innerHTML = docs.map(d => {
-      const revLabel   = d.latest_rev_let ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '—');
-      const statoClass = STATI_CLASS[d.latest_int_status] || '';
-      const statoLabel = STATI_LABEL[d.latest_int_status] || d.latest_int_status || '—';
-      const extLabel   = d.latest_ext_status_label || '—';
-      const extColor   = d.latest_ext_status_colore || null;
-      const extStyle   = extColor ? `style="background:${escHtml(extColor)}22;color:${escHtml(extColor)}"` : '';
-      return `
-        <div class="doc-row" data-stato="${escHtml(d.latest_int_status || '')}">
-          <div>
-            <div class="doc-codice">${escHtml(d.vendor_doc || d.doc_code || '—')}</div>
-            <div class="doc-titolo">${escHtml(d.doc_title || '')}</div>
-          </div>
-          <span class="doc-rev">${escHtml(revLabel)}</span>
-          <span class="doc-stato-int ${statoClass}">${escHtml(statoLabel)}</span>
-          <span class="doc-stato-ext col-stato-ext" ${extStyle}>${escHtml(extLabel)}</span>
-          <span class="doc-date">${fmtDate(d.latest_dis_act_date)}</span>
-          <span class="doc-date col-date-ric">${fmtDate(d.latest_rec_act_date || d.latest_rec_plan_date)}</span>
-        </div>`;
+    const rows = sortedRows(rawRows);
+
+    const trs = rows.map(({ d, r }) => {
+      const extMeta = getExtStatusMeta(r);
+      const rowStyle = getRowHighlightStyle(r);
+      const extBadge = extMeta.label
+        ? `<span class="sit-ext-badge ${escHtml(extMeta.className)}"${extMeta.style ? ` style="${extMeta.style}"` : ''}>${escHtml(extMeta.label)}</span>`
+        : `<span style="opacity:.35">\u2014</span>`;
+      const intMeta   = getIntStatusMeta(r);
+      const intLabel  = intMeta.label;
+      const intClass  = intMeta.className;
+      const intBadge  = intLabel
+        ? `<span class="sit-int-badge ${escHtml(intClass)}">${escHtml(intLabel)}</span>`
+        : `<span style="opacity:.35">\u2014</span>`;
+      const rev = r ? `${r.rev_no ?? ''}${r.rev_let || ''}` : '\u2014';
+
+      return `<tr ${rowStyle}>
+        <td>${escHtml(d.item_no || '\u2014')}</td>
+        <td><strong>${escHtml(d.vendor_doc || '\u2014')}</strong></td>
+        <td>${escHtml(d.client_doc_no || '\u2014')}</td>
+        <td>${escHtml(d.client_doc_class || '\u2014')}</td>
+        <td style="white-space:normal;min-width:150px;max-width:280px;" title="${escHtml(d.doc_title || '')}">${escHtml(d.doc_title || '\u2014')}</td>
+        <td>${escHtml(d.reparto_acronimo || d.reparto_label || '\u2014')}</td>
+        <td style="text-align:center">${d.doc_penalty ? 'Sì' : 'No'}</td>
+        <td style="text-align:center">${d.doc_payment ? 'Sì' : 'No'}</td>
+        <td style="text-align:center;font-weight:600">${escHtml(rev)}</td>
+        <td>${fmtDate(r?.dis_plan_date)}</td>
+        <td>${fmtDate(r?.dis_act_date)}</td>
+        <td>${fmtDate(r?.rec_plan_date)}</td>
+        <td>${fmtDate(r?.rec_act_date)}</td>
+        <td>${intBadge}</td>
+        <td>${extBadge}</td>
+      </tr>`;
     }).join('');
+
+    c.innerHTML = `
+      <div class="sit-table-wrap">
+        <table class="sit-table">
+          <thead><tr>
+            ${thSort('Item', 'item_no')}
+            ${thSort('B&amp;R Doc', 'vendor_doc')}
+            ${thSort('Client Doc N&deg;', 'client_doc_no')}
+            ${thSort('Client Doc Class', 'client_doc_class')}
+            ${thSort('Titolo', 'doc_title')}
+            ${thSort('Reparto', 'reparto_label')}
+            <th>Penale</th>
+            <th>Pagamento</th>
+            ${thSort('Rev.', 'rev_no')}
+            ${thSort('Inv. previsto', 'dis_plan_date')}
+            ${thSort('Inv. effettivo', 'dis_act_date')}
+            ${thSort('Ric. previsto', 'rec_plan_date')}
+            ${thSort('Ric. effettivo', 'rec_act_date')}
+            ${thSort('Stato interno', 'int_status')}
+            ${thSort('Risposta cliente', 'ext_status')}
+          </tr></thead>
+          <tbody>${trs}</tbody>
+        </table>
+      </div>`;
   }
 
-  function showEmpty(msg) {
-    document.getElementById('doc-list').innerHTML = `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
+  /* ── Vista orizzontale ── */
+  function renderOrizzontale(docRevs) {
+    const c = document.getElementById('sit-container');
+    if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
+
+    const FIX = [
+      { label: 'Item',             key: 'item_no'        },
+      { label: 'B&amp;R Doc',      key: 'vendor_doc'     },
+      { label: 'Client Doc N&deg;',key: 'client_doc_no'  },
+      { label: 'Client Doc Class', key: 'client_doc_class'},
+      { label: 'Descrizione',      key: 'doc_title'      },
+      { label: 'Reparto',          key: 'reparto_label'  },
+    ];
+    const fixW  = [80, 110, 130, 130, 240, 100];
+    let leftAcc = 0;
+    const leftOf = fixW.map(w => { const v = leftAcc; leftAcc += w; return v; });
+
+    const maxRevs = Math.max(...docRevs.map(e => e.revs.length), 1);
+    const SUB = ['Inv. prev.', 'Inv. eff.', 'Ric. prev.', 'Ric. eff.'];
+
+    let thead = '<thead><tr>';
+    FIX.forEach((col, i) => {
+      thead += `<th class="sit-fix" rowspan="2" style="left:${leftOf[i]}px;min-width:${fixW[i]}px;">${col.label}</th>`;
+    });
+    for (let r = 0; r < maxRevs; r++) {
+      thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
+    }
+    thead += '</tr><tr>';
+    for (let r = 0; r < maxRevs; r++) {
+      SUB.forEach((sub, si) => {
+        thead += `<th class="${si === 0 ? 'sit-rev-first' : ''}" style="min-width:85px;">${escHtml(sub)}</th>`;
+      });
+    }
+    thead += '</tr></thead>';
+
+    let tbody = '<tbody>';
+    for (const { doc, revs } of docRevs) {
+      tbody += `<tr ${getDocumentRowHighlightStyle(revs)}>`;
+      FIX.forEach((col, i) => {
+        const val   = escHtml(doc[col.key] || '\u2014');
+        const title = col.key === 'doc_title' ? ` title="${escHtml(doc[col.key] || '')}"` : '';
+        tbody += `<td class="sit-fix" style="left:${leftOf[i]}px;min-width:${fixW[i]}px;"${title}>${val}</td>`;
+      });
+      for (let r = 0; r < maxRevs; r++) {
+        const rev = revs[r];
+        if (rev) {
+          tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_plan_date)}</td>`;
+          tbody += `<td>${fmtDate(rev.dis_act_date)}</td>`;
+          tbody += `<td>${fmtDate(rev.rec_plan_date)}</td>`;
+          tbody += `<td>${fmtDate(rev.rec_act_date)}</td>`;
+        } else {
+          tbody += `<td class="sit-rev-first">\u2014</td><td>\u2014</td><td>\u2014</td><td>\u2014</td>`;
+        }
+      }
+      tbody += '</tr>';
+    }
+    tbody += '</tbody>';
+
+    c.innerHTML = `<div class="sit-horiz-wrap"><table class="sit-horiz">${thead}${tbody}</table></div>`;
   }
 
-  window.applyFilters = function() {
-    const statoFilter = document.getElementById('filter-stato').value;
-    let filtered = _allDocs;
-    if (statoFilter) filtered = filtered.filter(d => d.latest_int_status === statoFilter);
-    renderDocs(filtered);
+  /* ── Export CSV ── */
+  function csvField(v) {
+    const s = String(v == null ? '' : v).replace(/"/g, '""');
+    return /[",\n\r]/.test(s) ? `"${s}"` : s;
+  }
+
+  window.exportCSV = function () {
+    if (!_allDocRevs.length) return;
+    let lines = [];
+
+    if (_vista === 'verticale') {
+      lines.push([
+        'Item','B&R Doc','Client Doc No','Client Doc Class','Titolo','Reparto',
+        'Penale','Pagamento','Rev.','Inv. previsto','Inv. effettivo',
+        'Ric. previsto','Ric. effettivo','Stato interno','Risposta cliente',
+      ].map(csvField).join(','));
+
+      const rawRows = [];
+      for (const { doc: d, revs } of _allDocRevs) {
+        if (revs.length) { for (const r of revs) rawRows.push({ d, r }); }
+        else rawRows.push({ d, r: null });
+      }
+      sortedRows(rawRows).forEach(({ d, r }) => {
+        const rev = r ? `${r.rev_no ?? ''}${r.rev_let || ''}` : '';
+        lines.push([
+          d.item_no, d.vendor_doc, d.client_doc_no, d.client_doc_class, d.doc_title, d.reparto_acronimo || d.reparto_label,
+          d.doc_penalty ? 'Sì' : 'No', d.doc_payment ? 'Sì' : 'No',
+          rev, fmtDate(r?.dis_plan_date), fmtDate(r?.dis_act_date),
+          fmtDate(r?.rec_plan_date), fmtDate(r?.rec_act_date),
+          getIntStatusMeta(r).label, r?.ext_status_label || '',
+        ].map(csvField).join(','));
+      });
+    } else {
+      // Orizzontale: fixed cols + one group per rev
+      const maxRevs = Math.max(..._allDocRevs.map(e => e.revs.length), 1);
+      const header = ['Item','B&R Doc','Client Doc No','Client Doc Class','Descrizione','Reparto'];
+      for (let i = 0; i < maxRevs; i++) {
+        header.push(`Rev.${i} Inv.prev.`, `Rev.${i} Inv.eff.`, `Rev.${i} Ric.prev.`, `Rev.${i} Ric.eff.`);
+      }
+      lines.push(header.map(csvField).join(','));
+
+      _allDocRevs.forEach(({ doc: d, revs }) => {
+        const row = [d.item_no, d.vendor_doc, d.client_doc_no, d.client_doc_class, d.doc_title, d.reparto_acronimo || d.reparto_label];
+        for (let i = 0; i < maxRevs; i++) {
+          const r = revs[i];
+          row.push(fmtDate(r?.dis_plan_date), fmtDate(r?.dis_act_date), fmtDate(r?.rec_plan_date), fmtDate(r?.rec_act_date));
+        }
+        lines.push(row.map(csvField).join(','));
+      });
+    }
+
+    const bom = '\uFEFF'; // UTF-8 BOM for Excel
+    const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `situazione_${JOB.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  window.resetFilters = function() {
-    document.getElementById('filter-stato').value = '';
-    renderDocs(_allDocs);
+  /* ── Fullscreen ── */
+  window.toggleFullscreen = function () {
+    const card = document.querySelector('.sit-card');
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      (card.requestFullscreen || card.webkitRequestFullscreen).call(card);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
   };
+
+  document.addEventListener('fullscreenchange', updateFsBtn);
+  document.addEventListener('webkitfullscreenchange', updateFsBtn);
+
+  function updateFsBtn() {
+    const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    document.getElementById('fs-icon-expand').style.display = isFs ? 'none' : '';
+    document.getElementById('fs-icon-shrink').style.display = isFs ? '' : 'none';
+  }
+
+  /* ── expose onSortClick globally ── */
+  window.onSortClick = onSortClick;
 
   loadDocs();
 })();

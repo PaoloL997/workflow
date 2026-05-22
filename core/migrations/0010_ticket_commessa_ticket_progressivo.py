@@ -4,20 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0009_reparto'),
+        ("core", "0009_reparto"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ticket',
-            name='commessa',
-            field=models.CharField(blank=True, db_column='Commessa', default='', help_text='Numero commessa derivato dalle revisioni collegate.', max_length=50),
+            model_name="ticket",
+            name="commessa",
+            field=models.CharField(
+                blank=True,
+                db_column="Commessa",
+                default="",
+                help_text="Numero commessa derivato dalle revisioni collegate.",
+                max_length=50,
+            ),
         ),
         migrations.AddField(
-            model_name='ticket',
-            name='progressivo',
-            field=models.PositiveIntegerField(db_column='Progressivo', default=0, help_text='Progressivo per commessa (auto-generato).'),
+            model_name="ticket",
+            name="progressivo",
+            field=models.PositiveIntegerField(
+                db_column="Progressivo",
+                default=0,
+                help_text="Progressivo per commessa (auto-generato).",
+            ),
         ),
     ]

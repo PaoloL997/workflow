@@ -1,7 +1,7 @@
 {% extends 'core/base.html' %}
 {% load static %}
 
-{% block title %}Elenco Commesse — Workflow{% endblock %}
+{% block title %}Elenco Commesse{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -66,19 +66,14 @@
   .nav-item.active svg { opacity: 1; }
 
   .nav-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
+    display: inline-block;
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    width: 7px;
+    height: 7px;
     background: var(--color-danger);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1;
-    margin-left: 2px;
+    border-radius: 50%;
   }
 
   /* ── Page header ── */
@@ -105,33 +100,6 @@
     font-size: 14px;
     color: var(--color-text-secondary);
   }
-
-  /* ── Back button ── */
-  .back-btn {
-    position: absolute;
-    top: 20px;
-    left: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    color: var(--color-text-secondary);
-    background: transparent;
-    border: none;
-    text-decoration: none;
-    transition: color 0.18s,
-                transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .back-btn:hover {
-    color: var(--color-text-primary);
-    transform: translateX(-3px);
-    text-decoration: none;
-  }
-
-  .back-btn svg { flex-shrink: 0; }
 
   /* ── Grid ── */
   .commesse-grid {
@@ -267,13 +235,6 @@
 {% block content %}
 <div class="page">
 
-  <!-- ── Back button ── -->
-  <a href="{% url 'home' %}" class="back-btn" aria-label="Torna alla home">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  </a>
-
   <!-- ── Navbar ── -->
   <nav class="navbar" aria-label="Navigazione principale">
     <a href="{% url 'home' %}" class="nav-item">
@@ -282,12 +243,12 @@
       </svg>
       Home
     </a>
-    <a href="#" class="nav-item" id="nav-notifiche">
+    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
       </svg>
       Notifiche
-      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

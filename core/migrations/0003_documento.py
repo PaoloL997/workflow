@@ -5,33 +5,60 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0002_testata_indirsped'),
+        ("core", "0002_testata_indirsped"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Documento',
+            name="Documento",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('item_no', models.CharField(blank=True, db_column='ItemNo', max_length=100)),
-                ('vendor_doc', models.CharField(blank=True, db_column='VendorDoc', max_length=200)),
-                ('client_doc_no', models.CharField(blank=True, db_column='ClientDocNo', max_length=200)),
-                ('client_doc_class', models.CharField(blank=True, db_column='ClientDocClass', max_length=200)),
-                ('doc_title', models.CharField(blank=True, db_column='DocTitle', max_length=300)),
-                ('doc_penalty', models.BooleanField(db_column='DocPenalty', default=False)),
-                ('doc_payment', models.BooleanField(db_column='DocPayment', default=False)),
-                ('rev_gen', models.BooleanField(db_column='RevGen', default=False)),
-                ('reparto', models.IntegerField(blank=True, choices=[(1, 'UT'), (2, 'PM'), (3, 'QC'), (4, 'CQ')], db_column='Reparto', null=True)),
-                ('remarks', models.TextField(blank=True, db_column='Remarks')),
-                ('testata', models.ForeignKey(db_column='Job', on_delete=django.db.models.deletion.CASCADE, related_name='documenti', to='core.testata', to_field='job')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("item_no", models.CharField(blank=True, db_column="ItemNo", max_length=100)),
+                ("vendor_doc", models.CharField(blank=True, db_column="VendorDoc", max_length=200)),
+                (
+                    "client_doc_no",
+                    models.CharField(blank=True, db_column="ClientDocNo", max_length=200),
+                ),
+                (
+                    "client_doc_class",
+                    models.CharField(blank=True, db_column="ClientDocClass", max_length=200),
+                ),
+                ("doc_title", models.CharField(blank=True, db_column="DocTitle", max_length=300)),
+                ("doc_penalty", models.BooleanField(db_column="DocPenalty", default=False)),
+                ("doc_payment", models.BooleanField(db_column="DocPayment", default=False)),
+                ("rev_gen", models.BooleanField(db_column="RevGen", default=False)),
+                (
+                    "reparto",
+                    models.IntegerField(
+                        blank=True,
+                        choices=[(1, "UT"), (2, "PM"), (3, "QC"), (4, "CQ")],
+                        db_column="Reparto",
+                        null=True,
+                    ),
+                ),
+                ("remarks", models.TextField(blank=True, db_column="Remarks")),
+                (
+                    "testata",
+                    models.ForeignKey(
+                        db_column="Job",
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="documenti",
+                        to="core.testata",
+                        to_field="job",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'Documento',
-                'verbose_name_plural': 'Documenti',
-                'db_table': 'documenti',
-                'managed': True,
+                "verbose_name": "Documento",
+                "verbose_name_plural": "Documenti",
+                "db_table": "documenti",
+                "managed": True,
             },
         ),
     ]

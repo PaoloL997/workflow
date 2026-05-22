@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0011_remove_vb_job_transm_flag'),
+        ("core", "0011_remove_vb_job_transm_flag"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='reparto',
-            name='acronimo',
-            field=models.CharField(blank=True, db_column='Acronimo', max_length=20),
+            model_name="reparto",
+            name="acronimo",
+            field=models.CharField(blank=True, db_column="Acronimo", max_length=20),
         ),
     ]

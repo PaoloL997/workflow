@@ -1,7 +1,7 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Commessa {{ testata.job }} — Workflow{% endblock %}
+{% block title %}Commessa{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -66,46 +66,15 @@
   .nav-item.active svg { opacity: 1; }
 
   .nav-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
-    background: var(--color-danger);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1;
-    margin-left: 2px;
-  }
-
-  /* ── Back button ── */
-  .back-btn {
+    display: inline-block;
     position: absolute;
-    top: 20px;
-    left: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
+    top: 6px;
+    right: 14px;
+    width: 7px;
+    height: 7px;
+    background: var(--color-danger);
     border-radius: 50%;
-    color: var(--color-text-secondary);
-    background: transparent;
-    border: none;
-    text-decoration: none;
-    transition: color 0.18s, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
   }
-
-  .back-btn:hover {
-    color: var(--color-text-primary);
-    transform: translateX(-3px);
-    text-decoration: none;
-  }
-
-  .back-btn svg { flex-shrink: 0; }
 
   /* ── Content wrapper ── */
   .content {
@@ -143,6 +112,114 @@
     line-height: 1.5;
     max-width: 640px;
     margin: 0 auto;
+  }
+
+  /* ── Delete button ── */
+  .del-commessa-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 14px;
+    padding: 5px 10px;
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: color 0.18s, background 0.18s;
+    opacity: 0.6;
+  }
+  .del-commessa-btn:hover {
+    color: var(--color-danger, #e53e3e);
+    background: rgba(229, 62, 62, 0.07);
+    opacity: 1;
+  }
+
+  /* ── Confirm delete modal ── */
+  .del-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9000;
+    align-items: center;
+    justify-content: center;
+  }
+  .del-modal-overlay.open { display: flex; }
+
+  .del-modal {
+    background: var(--color-surface);
+    border-radius: 16px;
+    padding: 28px 32px 24px;
+    max-width: 420px;
+    width: calc(100% - 32px);
+    box-shadow: 0 24px 60px rgba(0,0,0,0.25);
+  }
+  .del-modal-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(229, 62, 62, 0.1);
+    margin-bottom: 16px;
+    color: var(--color-danger, #e53e3e);
+  }
+  .del-modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .del-modal-body {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    margin-bottom: 24px;
+  }
+  .del-modal-body strong { color: var(--color-text-primary); }
+  .del-modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .del-modal-cancel {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .del-modal-cancel:hover { background: var(--color-elevated); }
+  .del-modal-confirm {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: none;
+    background: var(--color-danger, #e53e3e);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .del-modal-confirm:hover { opacity: 0.88; }
+  .del-modal-confirm:disabled { opacity: 0.5; cursor: default; }
+  .del-modal-error {
+    font-size: 13px;
+    color: var(--color-danger, #e53e3e);
+    margin-top: -16px;
+    margin-bottom: 16px;
+    display: none;
   }
 
   /* ── Gauge widget — no card, floats on page bg ── */
@@ -197,6 +274,7 @@
     border-right: 1px solid var(--color-border);
     border-bottom: 1px solid var(--color-border);
     transition: background 0.15s;
+    min-height: 300px;
   }
 
   .section-card:hover {
@@ -206,12 +284,18 @@
 
   /* Rimuovi bordo destro sull'ultima colonna */
   .section-card:nth-child(3n) { border-right: none; }
+  /* Rimuovi bordo destro sull'ultimo card (grid incompleta) */
+  .section-card:last-child { border-right: none; }
   /* Rimuovi bordo inferiore sull'ultima riga */
   .section-card:nth-last-child(-n+3) { border-bottom: none; }
 
   .section-header {
     padding: 18px 24px 0;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
   }
 
   .section-title {
@@ -530,6 +614,131 @@
   [data-theme="light"] .docrow.urg-week   .docrow-days  { background: hsla(78,  68%, 48%, .12); color: hsl(78,  62%, 32%); }
   [data-theme="light"] .docrow.urg-ok     .docrow-days  { background: hsla(142, 62%, 45%, .12); color: hsl(142, 55%, 30%); }
 
+  /* ── Revisioni Kanban preview ── */
+  .rev-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+  }
+
+  /* ── Revisioni bar ── */
+  .rev-bar {
+    display: flex;
+    height: 10px;
+    border-radius: 999px;
+    overflow: hidden;
+    gap: 2px;
+    width: 100%;
+  }
+
+  .rev-bar-seg {
+    border-radius: 999px;
+    min-width: 6px;
+    transition: flex-grow 0.3s ease;
+  }
+
+  .rev-bar-seg.seg-non-assegnato  { background: hsl(220,15%,55%); }
+  .rev-bar-seg.seg-da-iniziare    { background: hsl(211,90%,52%); }
+  .rev-bar-seg.seg-in-lavorazione { background: hsl(38,95%,52%);  }
+  .rev-bar-seg.seg-in-revisione   { background: hsl(270,75%,60%); }
+  .rev-bar-seg.seg-in-approvazione{ background: hsl(340,80%,55%); }
+  .rev-bar-seg.seg-da-emettere    { background: hsl(145,65%,42%); }
+
+  /* ── Stat grid under the bar ── */
+  .rev-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px 6px;
+    margin-top: 4px;
+  }
+
+  .rev-stat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .rev-stat-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .rev-stat-swatch.seg-non-assegnato  { background: hsl(220,15%,55%); }
+  .rev-stat-swatch.seg-da-iniziare    { background: hsl(211,90%,52%); }
+  .rev-stat-swatch.seg-in-lavorazione { background: hsl(38,95%,52%);  }
+  .rev-stat-swatch.seg-in-revisione   { background: hsl(270,75%,60%); }
+  .rev-stat-swatch.seg-in-approvazione{ background: hsl(340,80%,55%); }
+  .rev-stat-swatch.seg-da-emettere    { background: hsl(145,65%,42%); }
+
+  .rev-stat-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .rev-stat-count {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .rev-stat-label {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ── Rev summary row ── */
+  .rev-summary {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+
+  .rev-summary-total {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+  }
+
+  .rev-summary-label {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+
+  .rev-overdue-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: hsla(4,90%,58%,0.14);
+    border: 1px solid hsla(4,90%,58%,0.3);
+    color: hsl(4,90%,62%);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  [data-theme="light"] .rev-overdue-badge {
+    background: hsla(4,80%,55%,0.1);
+    color: hsl(4,78%,42%);
+    border-color: hsla(4,78%,50%,0.25);
+  }
+
   /* ── Situazione preview ── */
   .situazione-preview {
     display: flex;
@@ -559,6 +768,90 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     opacity: 0.7;
+  }
+
+  /* ── Situazione documenti — illustrazione statica ── */
+  .sit-illus {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0;
+    width: 100%;
+  }
+  /* Column header row */
+  .sit-tbl-head {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px;
+    gap: 8px;
+    padding: 0 0 8px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 4px;
+  }
+  .sit-tbl-head span {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+  }
+  .sit-tbl-head span:nth-child(2),
+  .sit-tbl-head span:nth-child(3) { text-align: center; }
+  /* Rows container — stretches to fill remaining space */
+  .sit-tbl-rows {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    justify-content: space-evenly;
+  }
+  .sit-tbl-row {
+    display: grid;
+    grid-template-columns: 1fr 90px 90px;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--color-border);
+    opacity: 0.9;
+  }
+  .sit-tbl-row:last-child { border-bottom: none; }
+  .sit-doc-ghost {
+    height: 9px;
+    border-radius: 5px;
+    background: var(--color-border);
+    opacity: 0.55;
+  }
+  .sit-badge-wrap {
+    display: flex;
+    justify-content: center;
+  }
+  .sit-badge {
+    flex-shrink: 0;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 99px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .badge-grey   { background: hsl(220,10%,82%,0.35); color: hsl(220,10%,48%); border: 1px solid hsl(220,10%,75%,0.4); }
+  .badge-blue   { background: hsl(211,90%,52%,0.12); color: hsl(211,80%,44%); border: 1px solid hsl(211,80%,52%,0.3); }
+  .badge-orange { background: hsl(38,95%,52%,0.14);  color: hsl(38,85%,38%);  border: 1px solid hsl(38,85%,52%,0.3); }
+  .badge-green  { background: hsl(145,65%,42%,0.13); color: hsl(145,60%,30%); border: 1px solid hsl(145,60%,42%,0.3); }
+  .badge-amber  { background: hsl(28,100%,52%,0.12); color: hsl(28,90%,38%);  border: 1px solid hsl(28,90%,52%,0.3); }
+  .badge-purple { background: hsl(270,75%,60%,0.12); color: hsl(270,60%,45%); border: 1px solid hsl(270,60%,60%,0.3); }
+  [data-theme="dark"] .badge-grey   { background: hsl(220,12%,20%,0.5); color: hsl(220,8%,55%); border-color: hsl(220,10%,26%,0.55); }
+  [data-theme="dark"] .badge-blue   { background: hsl(211,90%,52%,0.18); color: hsl(211,80%,72%); border-color: hsl(211,80%,52%,0.35); }
+  [data-theme="dark"] .badge-orange { background: hsl(38,95%,52%,0.18);  color: hsl(38,85%,72%);  border-color: hsl(38,85%,52%,0.35); }
+  [data-theme="dark"] .badge-green  { background: hsl(145,65%,42%,0.18); color: hsl(145,60%,62%); border-color: hsl(145,60%,42%,0.35); }
+  [data-theme="dark"] .badge-amber  { background: hsl(28,100%,52%,0.18); color: hsl(28,90%,68%);  border-color: hsl(28,90%,52%,0.35); }
+  [data-theme="dark"] .badge-purple { background: hsl(270,75%,60%,0.18); color: hsl(270,65%,78%); border-color: hsl(270,65%,60%,0.35); }
+  .sit-illus-hint {
+    margin: 8px 0 0;
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+    line-height: 1.4;
+    text-align: center;
   }
 
   /* ── Documenti preview grid ── */
@@ -869,13 +1162,6 @@
 {% block content %}
 <div class="page">
 
-  <!-- ── Back button ── -->
-  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  </button>
-
   <!-- ── Navbar ── -->
   <nav class="navbar" aria-label="Navigazione principale">
     <a href="{% url 'home' %}" class="nav-item">
@@ -884,12 +1170,12 @@
       </svg>
       Home
     </a>
-    <a href="#" class="nav-item" id="nav-notifiche">
+    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
       </svg>
       Notifiche
-      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -917,6 +1203,10 @@
       {% if testata.job_detail %}
       <p class="commessa-desc">{{ testata.job_detail }}</p>
       {% endif %}
+      <button class="del-commessa-btn" type="button" onclick="openDeleteModal()" aria-label="Elimina commessa">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        Elimina commessa
+      </button>
     </header>
 
     <!-- ── Gauge stato ── -->
@@ -1125,7 +1415,7 @@
         </div>
       </a>
 
-      <!-- 4. Gestisci ricezione -->
+      <!-- 5. Gestisci ricezione -->
       <a href="{% url 'ricezione_detail' testata.job %}" class="section-card" aria-label="Gestisci ricezione">
         <div class="section-header">
           <div class="section-title">Gestisci ricezione</div>
@@ -1161,50 +1451,58 @@
         </div>
       </a>
 
-      <!-- 5. Gestisci revisioni -->
-      <a href="#" class="section-card" aria-label="Gestisci revisioni">
-        <div class="section-header">
-          <div class="section-title">Gestisci revisioni</div>
-        </div>
-        <div class="section-body">
-          <span class="section-empty">Nessuna revisione</span>
-        </div>
-        <div class="section-lock-overlay" aria-hidden="true">
-          <div class="lock-pill">
-            <div class="lock-pill-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-              </svg>
-            </div>
-            <span class="lock-pill-msg">Completa prima le informazioni archivio</span>
-          </div>
-        </div>
-      </a>
-
       <!-- 6. Situazione documenti -->
       <a href="{% url 'situazione_detail' testata.job %}" class="section-card" aria-label="Visualizza situazione documenti">
         <div class="section-header">
           <div class="section-title">Situazione documenti</div>
         </div>
         <div class="section-body">
-          {% if situazione_totale %}
-            <div class="situazione-preview">
-              <div class="situazione-stat">
-                <span class="sstat-num">{{ situazione_totale }}</span>
-                <span class="sstat-lbl">totali</span>
+          <div class="sit-illus" aria-hidden="true">
+
+            <!-- Header colonne -->
+            <div class="sit-tbl-head">
+              <span>Documento</span>
+              <span>Stato interno</span>
+              <span>Risposta cliente</span>
+            </div>
+
+            <!-- Righe mock -->
+            <div class="sit-tbl-rows">
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:82%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-blue">In lavorazione</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-grey">—</span></div>
               </div>
-              <div class="situazione-stat">
-                <span class="sstat-num">{{ situazione_emessi }}</span>
-                <span class="sstat-lbl">emessi</span>
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:65%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-purple">Da emettere</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-grey">—</span></div>
               </div>
-              <div class="situazione-stat">
-                <span class="sstat-num">{{ situazione_ricevuti }}</span>
-                <span class="sstat-lbl">ricevuti</span>
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:74%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-orange">Al cliente</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-amber">Commentato</span></div>
+              </div>
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:88%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-orange">Al cliente</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-grey">Attesa</span></div>
+              </div>
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:55%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-green">Ricevuto</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-green">Approvato</span></div>
+              </div>
+              <div class="sit-tbl-row">
+                <div class="sit-doc-ghost" style="width:70%"></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-green">Ricevuto</span></div>
+                <div class="sit-badge-wrap"><span class="sit-badge badge-green">Approvato</span></div>
               </div>
             </div>
-          {% else %}
-            <span class="section-empty">Nessun documento</span>
-          {% endif %}
+
+            <p class="sit-illus-hint">Stato emissione e risposta cliente per ogni documento</p>
+
+          </div>
         </div>
         <div class="section-lock-overlay" aria-hidden="true">
           <div class="lock-pill">
@@ -1222,6 +1520,25 @@
   </div><!-- /content -->
 
 </div><!-- /page -->
+
+<!-- ── Elimina commessa: modal ── -->
+<div class="del-modal-overlay" id="del-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="del-modal-title">
+  <div class="del-modal">
+    <div class="del-modal-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+    </div>
+    <div class="del-modal-title" id="del-modal-title">Elimina commessa {{ testata.job }}</div>
+    <div class="del-modal-body">
+      Questa operazione è <strong>irreversibile</strong>. Verranno eliminati tutti i documenti,
+      le revisioni e i dati collegati alla commessa <strong>{{ testata.job }}</strong>.
+    </div>
+    <div class="del-modal-error" id="del-modal-error"></div>
+    <div class="del-modal-actions">
+      <button class="del-modal-cancel" type="button" onclick="closeDeleteModal()">Annulla</button>
+      <button class="del-modal-confirm" type="button" id="del-modal-confirm-btn" onclick="deleteCommessa()">Elimina</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Theme toggle ──-->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
@@ -1339,6 +1656,65 @@
   }
   requestAnimationFrame(animateFill);
 
+})();
+</script>
+
+<script>
+/* ── Delete commessa ── */
+(function () {
+  'use strict';
+
+  var CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  var JOB  = '{{ testata.job }}';
+
+  function openDeleteModal() {
+    document.getElementById('del-modal-error').style.display = 'none';
+    document.getElementById('del-modal-error').textContent   = '';
+    document.getElementById('del-modal-confirm-btn').disabled = false;
+    document.getElementById('del-modal-overlay').classList.add('open');
+  }
+
+  async function deleteCommessa() {
+    var btn = document.getElementById('del-modal-confirm-btn');
+    var err = document.getElementById('del-modal-error');
+    btn.disabled = true;
+    btn.textContent = 'Eliminazione…';
+    err.style.display = 'none';
+
+    try {
+      var res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/', {
+        method:  'DELETE',
+        headers: { 'X-CSRFToken': CSRF },
+      });
+      if (res.ok) {
+        window.location.href = '/';
+      } else {
+        var data = {};
+        try { data = await res.json(); } catch (_) {}
+        err.textContent   = data.error || ('Errore ' + res.status);
+        err.style.display = 'block';
+        btn.disabled      = false;
+        btn.textContent   = 'Elimina';
+      }
+    } catch (e) {
+      err.textContent   = 'Errore di rete. Riprova.';
+      err.style.display = 'block';
+      btn.disabled      = false;
+      btn.textContent   = 'Elimina';
+    }
+  }
+
+  function closeDeleteModal() {
+    document.getElementById('del-modal-overlay').classList.remove('open');
+  }
+
+  document.getElementById('del-modal-overlay').addEventListener('click', function (e) {
+    if (e.target === e.currentTarget) closeDeleteModal();
+  });
+
+  window.openDeleteModal  = openDeleteModal;
+  window.closeDeleteModal = closeDeleteModal;
+  window.deleteCommessa   = deleteCommessa;
 })();
 </script>
 {% endblock %}

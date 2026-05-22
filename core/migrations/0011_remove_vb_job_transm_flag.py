@@ -4,23 +4,24 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0010_ticket_commessa_ticket_progressivo'),
+        ("core", "0010_ticket_commessa_ticket_progressivo"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='testata',
-            name='transm_flag',
+            model_name="testata",
+            name="transm_flag",
         ),
         migrations.RemoveField(
-            model_name='testata',
-            name='vb_job',
+            model_name="testata",
+            name="vb_job",
         ),
         migrations.AlterField(
-            model_name='testata',
-            name='requisition',
-            field=models.CharField(blank=True, db_column='Requisition', max_length=100, verbose_name='Bid no.'),
+            model_name="testata",
+            name="requisition",
+            field=models.CharField(
+                blank=True, db_column="Requisition", max_length=100, verbose_name="Bid no."
+            ),
         ),
     ]

@@ -1,7 +1,7 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Home — Workflow{% endblock %}
+{% block title %}Home{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -66,19 +66,14 @@
   .nav-item.active svg { opacity: 1; }
 
   .nav-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 9px;
+    display: inline-block;
+    position: absolute;
+    top: 6px;
+    right: 14px;
+    width: 7px;
+    height: 7px;
     background: var(--color-danger);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1;
-    margin-left: 2px;
+    border-radius: 50%;
   }
 
   /* ── Hero (logo + CTAs) ── */
@@ -481,6 +476,19 @@
     box-shadow: inset 0 1px 3px hsla(0,0%,0%,0.08), 0 0 0 3px hsla(211,100%,50%,0.15);
   }
 
+  :root[data-theme="dark"] .form-input:focus {
+    box-shadow:
+      inset 0 1px 3px hsla(0,0%,0%,0.08),
+      0 0 0 3px hsl(215 80% 60% / 0.15);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .form-input:focus {
+      box-shadow:
+        inset 0 1px 3px hsla(0,0%,0%,0.08),
+        0 0 0 3px hsl(215 80% 60% / 0.15);
+    }
+  }
+
   .form-input::placeholder { color: var(--color-text-secondary); opacity: 0.6; }
 
   .modal-error {
@@ -555,12 +563,12 @@
       </svg>
       Home
     </a>
-    <a href="#" class="nav-item" id="nav-notifiche">
+    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
       </svg>
       Notifiche
-      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" id="nav-cerca" onclick="openSpotlight()" aria-label="Apri ricerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

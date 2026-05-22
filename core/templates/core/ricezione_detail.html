@@ -1,30 +1,32 @@
 {% extends "core/base.html" %}
 {% load static %}
 
-{% block title %}Gestisci ricezione — Commessa {{ testata.job }} — Workflow{% endblock %}
+{% block title %}Gestisci ricezione{% endblock %}
 
 {% block extra_head %}
 <style>
   /* ─────────────────────────────────────────────
-     PAGE SHELL
+     PAGE SHELL — app-like, no full-page scroll
   ───────────────────────────────────────────── */
   .page {
     display: flex;
     flex-direction: column;
     align-items: center;
-    min-height: 100vh;
-    padding: 0 32px 120px;
+    height: 100vh;
+    overflow: hidden;
+    padding: 0 32px 32px;
     position: relative;
   }
 
   .navbar {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1440px;
     display: flex;
     justify-content: center;
     gap: 4px;
     padding: 28px 0 0;
     margin-bottom: 40px;
+    flex-shrink: 0;
   }
 
   .nav-item {
@@ -47,154 +49,179 @@
   .nav-item:hover { color: var(--color-text-primary); text-decoration: none; }
   .nav-badge {
     position: absolute; top: 6px; right: 14px;
-    background: var(--color-accent); color: #fff;
-    font-size: 10px; font-weight: 700; border-radius: 999px;
-    padding: 1px 5px; min-width: 16px; text-align: center;
+    width: 7px; height: 7px;
+    background: var(--color-danger); border-radius: 50%;
   }
-
-  .back-btn {
-    position: fixed; top: 28px; left: 28px;
-    width: 40px; height: 40px;
-    border: none; background: transparent;
-    color: var(--color-text-secondary); cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    padding: 0; z-index: 50; transition: color 0.18s;
-  }
-  .back-btn:hover { color: var(--color-text-primary); }
 
   .content {
     width: 100%;
-    max-width: 1200px;
+    max-width: 1440px;
+    flex: 1;
+    min-height: 0; /* critical: allows flex child to shrink */
     display: flex;
     flex-direction: column;
   }
 
   .page-header {
     margin-bottom: 32px;
+    flex-shrink: 0;
+    text-align: center;
   }
   .page-title {
     font-size: 28px; font-weight: 800;
     letter-spacing: -0.04em; color: var(--color-text-primary);
-    text-align: center;
   }
+
+  /* ─────────────────────────────────────────────
+     PAGE TOOLBAR (above scrollable list)
+  ───────────────────────────────────────────── */
+  .page-toolbar {
+    flex-shrink: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+  }
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+  .toolbar-counter {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+  }
+  .toolbar-counter strong {
+    color: var(--color-text-primary);
+    font-weight: 700;
+  }
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .status-msg {
+    font-size: 13px;
+    color: var(--color-success);
+    min-width: 160px;
+    text-align: right;
+  }
+
+  /* ─────────────────────────────────────────────
+     DOC CARD — scrollable table container
+  ───────────────────────────────────────────── */
+  .doc-card {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-top: none;
+    border-radius: 0 0 16px 16px;
+    overflow: auto;
+    box-shadow:
+      0 1px 3px hsla(0,0%,0%,0.04),
+      0 6px 24px hsla(0,0%,0%,0.08);
+
+    /* ── Custom scrollbar ── */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .doc-card::-webkit-scrollbar { width: 6px; }
+  .doc-card::-webkit-scrollbar-track { background: transparent; margin: 8px; }
+  .doc-card::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 999px; }
+  .doc-card::-webkit-scrollbar-thumb:hover { background: var(--color-text-secondary); }
 
   /* ─────────────────────────────────────────────
      TABLE
   ───────────────────────────────────────────── */
   .ric-table {
     width: 100%;
+    min-width: 1320px;
     border-collapse: collapse;
     font-size: 13px;
+    table-layout: fixed; /* column widths are enforced exactly */
   }
-
-  /* Header */
-  .ric-table thead tr {
-    border-bottom: 1px solid var(--color-border);
-  }
+  .ric-table thead tr { border-bottom: 1px solid var(--color-border); }
   .ric-table th {
-    padding: 10px 12px;
+    padding: 12px 16px;
     text-align: left;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--color-text-secondary);
-    white-space: nowrap;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--color-text-secondary); white-space: nowrap;
   }
-  .ric-table th.col-doc    { width: auto; }
-  .ric-table th.col-date   { width: 110px; text-align: center; }
-  .ric-table th.col-sel    { width: 180px; }
-  .ric-table th.col-in     { width: 140px; }
-  .ric-table th.col-toggle { width: 80px;  text-align: center; }
-  .ric-table th.col-note   { width: 48px;  text-align: center; }
+  .ric-table th.col-doc    { /* takes all remaining width */ }
+  .ric-table th.col-date   { width: 120px; text-align: center; }
+  .ric-table th.col-sel    { width: 220px; }
+  .ric-table th.col-in     { width: 188px; }
+  .ric-table th.col-toggle { width: 120px; text-align: center; }
+  .ric-table th.col-note   { width: 96px; text-align: center; }
 
-  /* Body rows */
   .ric-table tbody tr.doc-main-row {
     border-bottom: 1px solid var(--color-border);
     transition: background 0.12s;
   }
-  .ric-table tbody tr.doc-main-row:hover {
-    background: var(--color-surface);
-  }
-  .ric-table td {
-    padding: 14px 12px;
-    vertical-align: middle;
-  }
+  .ric-table tbody tr.doc-main-row:hover { background: var(--color-elevated); }
+  .ric-table td { padding: 16px; vertical-align: middle; }
 
   /* Document info cell */
   .doc-code {
-    font-weight: 700;
-    font-size: 13px;
-    color: var(--color-accent);
-    letter-spacing: -0.01em;
+    font-weight: 700; font-size: 13px;
+    color: var(--color-accent); letter-spacing: -0.01em;
   }
   .doc-rev-badge {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 7px;
-    border-radius: 999px;
+    display: inline-block; margin-left: 6px;
+    padding: 1px 7px; border-radius: 999px;
     background: var(--color-elevated);
     color: var(--color-text-secondary);
-    font-size: 11px;
-    font-weight: 500;
-    vertical-align: middle;
+    font-size: 11px; font-weight: 500; vertical-align: middle;
   }
   .doc-title-small {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    margin-top: 3px;
-    letter-spacing: 0.01em;
+    font-size: 11px; color: var(--color-text-secondary);
+    margin-top: 3px; letter-spacing: 0.01em;
   }
 
   /* Date cells */
   .cell-date {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    text-align: center;
-    white-space: nowrap;
+    font-size: 13px; color: var(--color-text-secondary);
+    text-align: center; white-space: nowrap;
   }
   .cell-date.overdue { color: var(--color-danger); }
 
   /* Inputs inside table */
   .ric-select,
   .ric-date-input {
-    width: 100%;
-    padding: 7px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    background: var(--color-elevated);
-    color: var(--color-text-primary);
+    width: 100%; padding: 7px 10px;
+    border-radius: 8px; border: 1px solid var(--color-border);
+    background: var(--color-elevated); color: var(--color-text-primary);
     font-size: 13px;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .ric-select:focus,
   .ric-date-input:focus {
-    outline: none;
-    border-color: var(--color-accent);
+    outline: none; border-color: var(--color-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
-  .ric-date-input.filled {
-    border-color: var(--color-success);
-  }
+  .ric-date-input.filled { border-color: var(--color-success); }
 
-  /* Note toggle button */
+  /* Note button */
   .note-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px; height: 32px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    margin: 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 10px;
+    border: 1px solid var(--color-border); background: transparent;
+    color: var(--color-text-secondary); cursor: pointer; margin: 0 auto;
     transition: color 0.15s, background 0.15s, border-color 0.15s;
   }
-  .note-btn:hover,
-  .note-btn.active {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
+  .note-btn:hover, .note-btn.active {
+    color: var(--color-accent); border-color: var(--color-accent);
     background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   }
   .note-btn.has-note {
@@ -203,7 +230,7 @@
     border-color: var(--color-accent);
   }
 
-  /* Expanded note row */
+  /* Note expand row */
   .doc-note-row { display: none; }
   .doc-note-row.open { display: table-row; }
   .doc-note-row td {
@@ -211,54 +238,36 @@
     border-bottom: 1px solid var(--color-border);
   }
   .note-expand-inner {
-    display: flex;
-    gap: 16px;
-    align-items: flex-start;
-    padding: 12px 16px;
-    background: var(--color-surface);
-    border-radius: 10px;
-    border: 1px solid var(--color-border);
+    display: flex; gap: 16px; align-items: flex-start;
+    padding: 12px 16px; background: var(--color-surface);
+    border-radius: 10px; border: 1px solid var(--color-border);
   }
   .note-textarea {
-    flex: 1;
-    padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid var(--color-border);
-    background: var(--color-elevated);
-    color: var(--color-text-primary);
-    font-size: 13px;
-    resize: vertical;
-    min-height: 60px;
-    transition: border-color 0.15s;
+    flex: 1; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--color-border); background: var(--color-elevated);
+    color: var(--color-text-primary); font-size: 13px;
+    resize: vertical; min-height: 60px; transition: border-color 0.15s;
   }
   .note-textarea:focus {
-    outline: none;
-    border-color: var(--color-accent);
+    outline: none; border-color: var(--color-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
-  .note-expand-inner label.toggle-label {
-    display: flex; flex-direction: column;
-    align-items: center; gap: 6px;
-    font-size: 10px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--color-text-secondary);
-    white-space: nowrap; padding-top: 2px;
-  }
+
+  /* Toggle switch */
   .toggle-track {
     position: relative; display: inline-block;
-    width: 36px; height: 20px; cursor: pointer;
+    width: 40px; height: 22px; cursor: pointer;
   }
   .toggle-track input { opacity: 0; width: 0; height: 0; }
   .toggle-thumb {
     position: absolute; inset: 0;
-    background: var(--color-elevated);
-    border-radius: 999px;
+    background: var(--color-elevated); border-radius: 999px;
     border: 1px solid var(--color-border);
     transition: background 0.2s, border-color 0.2s;
   }
   .toggle-thumb::after {
     content: ''; position: absolute;
-    width: 14px; height: 14px; left: 2px; top: 2px;
+    width: 16px; height: 16px; left: 2px; top: 2px;
     border-radius: 50%; background: var(--color-text-secondary);
     transition: transform 0.2s, background 0.2s;
   }
@@ -266,185 +275,262 @@
     background: var(--color-accent); border-color: var(--color-accent);
   }
   .toggle-track input:checked ~ .toggle-thumb::after {
-    transform: translateX(16px); background: #fff;
+    transform: translateX(18px); background: #fff;
   }
 
   /* ─────────────────────────────────────────────
      EMPTY STATE
   ───────────────────────────────────────────── */
   .empty-state {
-    text-align: center;
-    padding: 64px 24px;
+    text-align: center; padding: 64px 24px;
     color: var(--color-text-secondary);
   }
   .empty-state svg { opacity: 0.4; margin-bottom: 12px; }
   .empty-state p   { font-size: 15px; }
 
   /* ─────────────────────────────────────────────
-     BOTTOM BAR
+     ACTION BUTTONS
   ───────────────────────────────────────────── */
-  .bottom-bar {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 16px 40px;
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-    z-index: 40;
-    gap: 16px;
-  }
-  .bottom-counter {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-  }
-  .bottom-counter strong {
-    color: var(--color-text-primary);
-  }
-  .bottom-right {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .status-msg {
-    font-size: 13px;
-    color: var(--color-success);
-    min-width: 200px;
-    text-align: right;
-  }
   .registra-btn {
-    padding: 10px 24px;
-    border-radius: 10px;
-    background: var(--color-accent);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    border: none;
-    cursor: pointer;
+    padding: 10px 24px; border-radius: 10px;
+    background: var(--color-accent); color: #fff;
+    font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+    border: none; cursor: pointer;
     transition: background 0.18s, transform 0.1s;
   }
-  .registra-btn:hover:not(:disabled) { background: var(--color-accent-hover); }
+  .registra-btn:hover:not(:disabled)  { background: var(--color-accent-hover); }
   .registra-btn:active:not(:disabled) { transform: scale(0.98); }
   .registra-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
   /* ─────────────────────────────────────────────
-     MODAL (nota generica)
+     MODAL
   ───────────────────────────────────────────── */
   .modal-overlay {
-    display: none;
-    position: fixed; inset: 0;
+    display: none; position: fixed; inset: 0;
     background: hsla(0,0%,0%,0.55);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    z-index: 100; align-items: center; justify-content: center; padding: 24px;
   }
   .modal-overlay.open { display: flex; }
-
   .modal-box {
-    width: 100%;
-    max-width: 480px;
-    background: var(--color-surface);
-    border-radius: 16px;
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-elevated);
-    padding: 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    width: 100%; max-width: 480px;
+    background: var(--color-surface); border-radius: 16px;
+    border: 1px solid var(--color-border); box-shadow: var(--shadow-elevated);
+    padding: 28px; display: flex; flex-direction: column; gap: 20px;
   }
-  .modal-header { }
   .modal-title {
     font-size: 18px; font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--color-text-primary);
+    letter-spacing: -0.03em; color: var(--color-text-primary);
   }
-  .modal-subtitle {
-    font-size: 13px;
-    color: var(--color-text-secondary);
-    margin-top: 4px;
-  }
+  .modal-subtitle { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
   .modal-field label {
-    display: block;
-    font-size: 11px; font-weight: 600;
+    display: block; font-size: 11px; font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--color-text-secondary);
-    margin-bottom: 8px;
+    color: var(--color-text-secondary); margin-bottom: 8px;
   }
   .modal-textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--color-border);
-    background: var(--color-elevated);
-    color: var(--color-text-primary);
-    font-size: 13px;
-    resize: vertical;
-    min-height: 80px;
-    transition: border-color 0.15s;
+    width: 100%; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--color-border); background: var(--color-elevated);
+    color: var(--color-text-primary); font-size: 13px;
+    resize: vertical; min-height: 80px; transition: border-color 0.15s;
   }
   .modal-textarea:focus {
-    outline: none;
-    border-color: var(--color-accent);
+    outline: none; border-color: var(--color-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
-  .modal-hint {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    margin-top: 6px;
-  }
-  .modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
+  .modal-hint { font-size: 11px; color: var(--color-text-secondary); margin-top: 6px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .btn-cancel {
-    padding: 9px 20px;
-    border-radius: 9px;
-    background: var(--color-elevated);
-    color: var(--color-text-primary);
-    font-size: 14px; font-weight: 500;
-    border: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: background 0.15s;
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 14px; font-weight: 500; border: 1px solid var(--color-border);
+    cursor: pointer; transition: background 0.15s;
   }
   .btn-cancel:hover { background: var(--color-border); }
   .btn-confirm {
-    padding: 9px 20px;
-    border-radius: 9px;
-    background: var(--color-accent);
-    color: #fff;
-    font-size: 14px; font-weight: 600;
-    border: none;
-    cursor: pointer;
-    transition: background 0.15s;
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-accent); color: #fff;
+    font-size: 14px; font-weight: 600; border: none;
+    cursor: pointer; transition: background 0.15s;
   }
   .btn-confirm:hover { background: var(--color-accent-hover); }
 
-  /* Theme icon helpers */
-  @media (prefers-color-scheme: light) {
-    html:not([data-theme="dark"]) .icon-moon { display: none; }
+  /* ─────────────────────────────────────────────
+     CUSTOM SELECT (stato esterno)
+  ───────────────────────────────────────────── */
+  .csel-wrap { position: relative; width: 100%; }
+
+  .csel-btn {
+    width: 100%; display: flex; align-items: center;
+    justify-content: space-between; gap: 6px;
+    padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 13px; font-family: inherit; cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  @media (prefers-color-scheme: dark) {
-    html:not([data-theme="light"]) .icon-sun { display: none; }
+  .csel-btn:hover {
+    border-color: color-mix(in srgb, var(--color-border) 40%, var(--color-accent));
+  }
+  .csel-btn.open {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
+  }
+  .csel-label {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--color-text-secondary);
+  }
+  .csel-btn.has-value .csel-label { color: var(--color-text-primary); }
+  .csel-chevron { flex-shrink: 0; color: var(--color-text-secondary); transition: transform 0.18s; }
+  .csel-btn.open .csel-chevron { transform: rotate(180deg); }
+
+  /* Portal — appended to body, position: fixed */
+  #csel-portal {
+    position: fixed; z-index: 9999;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    box-shadow:
+      0 2px 4px hsla(0,0%,0%,0.08),
+      0 8px 28px hsla(0,0%,0%,0.18);
+    overflow: hidden; max-height: 220px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--color-border) transparent;
+    opacity: 0; transform: translateY(-4px); pointer-events: none;
+    transition: opacity 0.14s, transform 0.14s;
+    /* width: driven by JS minWidth + content */
+    min-width: 260px;
+    max-width: 380px;
+    width: max-content;
+  }
+  #csel-portal.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  .csel-option {
+    padding: 9px 14px; font-size: 13px; font-family: inherit;
+    color: var(--color-text-primary); cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.1s;
+  }
+  .csel-option.placeholder { color: var(--color-text-secondary); }
+  .csel-option:hover { background: var(--color-elevated); }
+  .csel-option.selected {
+    color: var(--color-accent); font-weight: 600;
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
   }
 
+  /* ─────────────────────────────────────────────
+     CUSTOM DATE PICKER (data rientro)
+     — text input for manual entry + calendar button
+  ───────────────────────────────────────────── */
+  .dp-wrap {
+    display: flex; align-items: center; gap: 4px;
+    width: 100%;
+  }
+
+  .dp-text-input {
+    flex: 1; min-width: 0;
+    padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 13px; font-family: inherit;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .dp-text-input:focus {
+    outline: none; border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
+  }
+  .dp-text-input.filled { border-color: var(--color-success); }
+
+  .dp-cal-btn {
+    flex-shrink: 0;
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; border: 1px solid var(--color-border);
+    background: var(--color-elevated); color: var(--color-text-secondary);
+    cursor: pointer; font-family: inherit;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .dp-cal-btn:hover, .dp-cal-btn.open {
+    color: var(--color-accent); border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  }
+
+  /* Portal */
+  #dp-portal {
+    position: fixed; z-index: 9999;
+    background: var(--color-surface); border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow:
+      0 2px 4px hsla(0,0%,0%,0.08),
+      0 12px 32px hsla(0,0%,0%,0.20);
+    padding: 16px; width: 264px;
+    opacity: 0; transform: translateY(-4px); pointer-events: none;
+    transition: opacity 0.14s, transform 0.14s;
+  }
+  #dp-portal.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  .dp-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .dp-nav-btn {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border: none; background: transparent; border-radius: 7px;
+    color: var(--color-text-secondary); cursor: pointer; font-family: inherit;
+    transition: color 0.15s, background 0.15s;
+  }
+  .dp-nav-btn:hover { color: var(--color-text-primary); background: var(--color-elevated); }
+  .dp-month-lbl {
+    font-size: 13px; font-weight: 600; color: var(--color-text-primary);
+    letter-spacing: -0.01em; text-align: center;
+  }
+  .dp-wdays {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 4px;
+  }
+  .dp-wday {
+    text-align: center; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--color-text-secondary); padding-bottom: 4px;
+  }
+  .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .dp-day {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border-radius: 7px; font-size: 12px; font-family: inherit;
+    cursor: pointer; border: none; background: transparent;
+    color: var(--color-text-primary);
+    transition: background 0.1s, color 0.1s;
+  }
+  .dp-day:hover:not(.empty) { background: var(--color-elevated); }
+  .dp-day.today { color: var(--color-accent); font-weight: 700; }
+  .dp-day.selected { background: var(--color-accent); color: #fff; font-weight: 600; }
+  .dp-day.selected.today { color: #fff; }
+  .dp-day.empty { cursor: default; visibility: hidden; }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed; bottom: 24px; right: 24px;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--color-elevated); border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
+    z-index: 90;
+  }
+  .theme-toggle:hover { box-shadow: var(--shadow-elevated); background: var(--color-surface); }
+  .theme-toggle:active { transform: scale(0.96); }
+  .theme-toggle .icon-moon { display: none; }
+  .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: none; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page">
-
-  <!-- ── Back button ── -->
-  <button class="back-btn" onclick="history.back()" aria-label="Torna indietro">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="15 18 9 12 15 6"/>
-    </svg>
-  </button>
 
   <!-- ── Navbar ── -->
   <nav class="navbar" aria-label="Navigazione principale">
@@ -454,12 +540,12 @@
       </svg>
       Home
     </a>
-    <a href="#" class="nav-item" id="nav-notifiche">
+    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
       </svg>
       Notifiche
-      {% if notifiche_count %}<span class="nav-badge">{{ notifiche_count }}</span>{% endif %}
+      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -482,24 +568,38 @@
       <h1 class="page-title">Gestisci ricezione</h1>
     </header>
 
-    <!-- ── Table ── -->
-    <div id="table-wrap">
-      <div class="empty-state"><p>Caricamento…</p></div>
+    <!-- ── Page toolbar ── -->
+    <div class="page-toolbar">
+      <div class="toolbar-left">
+        <span class="toolbar-counter" id="counter-label">—</span>
+        <span class="status-msg" id="ric-status"></span>
+      </div>
+      <div class="toolbar-right">
+        <button class="registra-btn" id="ric-btn" type="button" disabled onclick="openModal()">Registra ricezioni</button>
+      </div>
+    </div>
+
+    <!-- ── Document card ── -->
+    <div class="doc-card">
+      <div id="table-wrap">
+        <div class="empty-state"><p>Caricamento…</p></div>
+      </div>
     </div>
 
   </div><!-- /content -->
 </div><!-- /page -->
 
-<!-- ── Bottom bar ── -->
-<div class="bottom-bar">
-  <span class="bottom-counter" id="counter-label">—</span>
-  <div class="bottom-right">
-    <span class="status-msg" id="ric-status"></span>
-    <button class="registra-btn" id="ric-btn" type="button" disabled onclick="openModal()">Registra ricezioni</button>
-  </div>
-</div>
+<!-- ── Theme toggle ── -->
+<button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.38-1.41 0z"/>
+  </svg>
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+</button>
 
-<!-- ── Modal: nota generica ── -->
+<!-- ── Modal: nota generica ──-->
 <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal-box">
     <div class="modal-header">
@@ -518,12 +618,47 @@
   </div>
 </div>
 
+<!-- ── Custom select portal ── -->
+<div id="csel-portal" role="listbox"><div id="csel-list"></div></div>
+
+<!-- ── Date picker portal ── -->
+<div id="dp-portal" role="dialog" aria-label="Selezione data">
+  <div class="dp-hdr">
+    <button type="button" class="dp-nav-btn" id="dp-prev" aria-label="Mese precedente">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <span class="dp-month-lbl" id="dp-month-lbl"></span>
+    <button type="button" class="dp-nav-btn" id="dp-next" aria-label="Mese successivo">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+  <div class="dp-wdays">
+    <div class="dp-wday">Lu</div><div class="dp-wday">Ma</div><div class="dp-wday">Me</div>
+    <div class="dp-wday">Gi</div><div class="dp-wday">Ve</div><div class="dp-wday">Sa</div>
+    <div class="dp-wday">Do</div>
+  </div>
+  <div class="dp-grid" id="dp-grid"></div>
+</div>
+
 <script>
 (function () {
   'use strict';
 
   const JOB  = "{{ testata.job }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  /* ── Theme toggle ── */
+  (function () {
+    var btn = document.getElementById('theme-toggle-btn');
+    btn.addEventListener('click', function () {
+      var current = document.documentElement.getAttribute('data-theme');
+      var isDark = current === 'dark' ||
+        (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var next = isDark ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+    });
+  })();
 
   let _statiEsterni = [];
   let _docs = [];
@@ -561,9 +696,7 @@
       return;
     }
 
-    const statiOptions = _statiEsterni.map(s =>
-      `<option value="${s.id}">${escHtml(s.nome)}</option>`
-    ).join('');
+    const statiOptions = ''; // options rendered dynamically in portal
 
     const today = new Date(); today.setHours(0,0,0,0);
 
@@ -583,13 +716,26 @@
           <td class="cell-date">${escHtml(disDate)}</td>
           <td class="cell-date${isOverdue ? ' overdue' : ''}">${escHtml(recPlan)}</td>
           <td>
-            <select class="ric-select ric-stato" data-doc="${d.id}">
-              <option value="">— Seleziona —</option>
-              ${statiOptions}
-            </select>
+            <div class="csel-wrap">
+              <button type="button" class="csel-btn" data-doc="${d.id}" onclick="openCsel(this)">
+                <span class="csel-label">— Seleziona —</span>
+                <svg class="csel-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <input type="hidden" class="ric-stato" data-doc="${d.id}" value="">
+            </div>
           </td>
           <td>
-            <input type="date" class="ric-date-input ric-date" data-doc="${d.id}" oninput="onDateChange(this)">
+            <div class="dp-wrap">
+              <input type="text" class="dp-text-input" data-doc="${d.id}"
+                     maxlength="10" autocomplete="off" spellcheck="false"
+                     placeholder="gg/mm/aaaa"
+                     oninput="onDpTextInput(this)">
+              <button type="button" class="dp-cal-btn" data-doc="${d.id}"
+                      onclick="openDp(this)" title="Apri calendario">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </button>
+              <input type="hidden" class="ric-date" data-doc="${d.id}" value="">
+            </div>
           </td>
           <td style="text-align:center">
             <label class="toggle-track">
@@ -655,10 +801,200 @@
     document.getElementById('ric-btn').disabled = total === 0;
   }
 
-  window.onDateChange = function(el) {
-    el.classList.toggle('filled', !!el.value);
+  /* Manual text input for date (gg/mm/aaaa) */
+  window.onDpTextInput = function(el) {
+    const docId  = el.dataset.doc;
+    const hidden = document.querySelector(`.ric-date[data-doc="${docId}"]`);
+    const val    = el.value.trim();
+    const match  = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (match) {
+      const iso = `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
+      const dt  = new Date(iso + 'T00:00:00');
+      if (!isNaN(dt)) {
+        hidden.value = iso;
+        el.classList.add('filled');
+        updateCounter();
+        return;
+      }
+    }
+    hidden.value = '';
+    el.classList.remove('filled');
     updateCounter();
   };
+
+  /* ── Custom Select ── */
+  let _cselDoc = null;
+
+  window.openCsel = function(btn) {
+    const docId = btn.dataset.doc;
+    const portal = document.getElementById('csel-portal');
+    const list   = document.getElementById('csel-list');
+    const hidden = document.querySelector(`.ric-stato[data-doc="${docId}"]`);
+    const curVal = hidden?.value || '';
+
+    if (_cselDoc === docId && portal.classList.contains('open')) { closeCsel(); return; }
+    closeCsel();
+
+    list.innerHTML = [{ id: '', nome: '— Seleziona —' }, ..._statiEsterni].map(s =>
+      `<div class="csel-option${s.id === '' ? ' placeholder' : ''}${String(s.id) === curVal ? ' selected' : ''}"
+            data-value="${s.id}" data-doc="${docId}"
+            onclick="pickCsel(this)">${escHtml(s.nome)}</div>`
+    ).join('');
+
+    const rect = btn.getBoundingClientRect();
+    portal.style.left     = rect.left + 'px';
+    portal.style.minWidth = rect.width + 'px';
+    portal.style.width    = '';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= 200) {
+      portal.style.top = (rect.bottom + 4) + 'px'; portal.style.bottom = '';
+    } else {
+      portal.style.top = ''; portal.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+    }
+    portal.classList.add('open');
+    btn.classList.add('open');
+    _cselDoc = docId;
+  };
+
+  function closeCsel() {
+    document.getElementById('csel-portal').classList.remove('open');
+    if (_cselDoc) {
+      document.querySelector(`.csel-btn[data-doc="${_cselDoc}"]`)?.classList.remove('open');
+      _cselDoc = null;
+    }
+  }
+
+  window.pickCsel = function(opt) {
+    const docId = opt.dataset.doc;
+    const val   = opt.dataset.value;
+    const nome  = opt.textContent.trim();
+    const hidden = document.querySelector(`.ric-stato[data-doc="${docId}"]`);
+    if (hidden) hidden.value = val;
+    const btn = document.querySelector(`.csel-btn[data-doc="${docId}"]`);
+    if (btn) {
+      btn.querySelector('.csel-label').textContent = nome;
+      btn.classList.toggle('has-value', val !== '');
+    }
+    closeCsel();
+  };
+
+  /* ── Custom Date Picker ── */
+  let _dpDoc = null, _dpYear = null, _dpMonth = null;
+
+  window.openDp = function(btn) {
+    const docId  = btn.dataset.doc;
+    const portal = document.getElementById('dp-portal');
+    const hidden = document.querySelector(`.ric-date[data-doc="${docId}"]`);
+    const curVal = hidden?.value || '';
+
+    if (_dpDoc === docId && portal.classList.contains('open')) { closeDp(); return; }
+    closeDp();
+
+    if (curVal) {
+      const d = new Date(curVal + 'T00:00:00');
+      _dpYear = d.getFullYear(); _dpMonth = d.getMonth();
+    } else {
+      const n = new Date(); _dpYear = n.getFullYear(); _dpMonth = n.getMonth();
+    }
+    renderDpMonth(curVal);
+
+    const rect  = btn.getBoundingClientRect();
+    const popW  = 264;
+    let left = rect.left + rect.width / 2 - popW / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+    portal.style.left  = left + 'px';
+    portal.style.width = popW + 'px';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= 290) {
+      portal.style.top = (rect.bottom + 6) + 'px'; portal.style.bottom = '';
+    } else {
+      portal.style.top = ''; portal.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+    }
+    portal.classList.add('open');
+    btn.classList.add('open');
+    _dpDoc = docId;
+  };
+
+  function closeDp() {
+    document.getElementById('dp-portal').classList.remove('open');
+    if (_dpDoc) {
+      document.querySelector(`.dp-cal-btn[data-doc="${_dpDoc}"]`)?.classList.remove('open');
+      _dpDoc = null;
+    }
+  }
+
+  function renderDpMonth(selectedIso) {
+    const MONTHS = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+                    'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+    document.getElementById('dp-month-lbl').textContent = `${MONTHS[_dpMonth]} ${_dpYear}`;
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const todayIso = today.toISOString().slice(0,10);
+
+    // Monday-first: Sun(0)→6, Mon(1)→0, ..., Sat(6)→5
+    let dow = new Date(_dpYear, _dpMonth, 1).getDay();
+    dow = dow === 0 ? 6 : dow - 1;
+    const dim = new Date(_dpYear, _dpMonth + 1, 0).getDate();
+
+    let html = '';
+    for (let i = 0; i < dow; i++)
+      html += `<button type="button" class="dp-day empty" disabled></button>`;
+    for (let d = 1; d <= dim; d++) {
+      const iso = `${_dpYear}-${String(_dpMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      html += `<button type="button" class="dp-day${iso===todayIso?' today':''}${iso===selectedIso?' selected':''}"
+                       onclick="pickDpDay('${iso}')">${d}</button>`;
+    }
+    document.getElementById('dp-grid').innerHTML = html;
+  }
+
+  window.pickDpDay = function(iso) {
+    if (!_dpDoc) return;
+    const docId = _dpDoc;
+    const hidden    = document.querySelector(`.ric-date[data-doc="${docId}"]`);
+    const textInput = document.querySelector(`.dp-text-input[data-doc="${docId}"]`);
+    if (hidden) hidden.value = iso;
+    if (textInput) {
+      const [y,m,d] = iso.split('-');
+      textInput.value = `${d}/${m}/${y}`;
+      textInput.classList.add('filled');
+    }
+    updateCounter();
+    closeDp();
+  };
+
+  window.clearDpDate = function(e, docId) {
+    e.stopPropagation();
+    const hidden    = document.querySelector(`.ric-date[data-doc="${docId}"]`);
+    const textInput = document.querySelector(`.dp-text-input[data-doc="${docId}"]`);
+    if (hidden) hidden.value = '';
+    if (textInput) { textInput.value = ''; textInput.classList.remove('filled'); }
+    updateCounter();
+  };
+
+  document.getElementById('dp-prev').addEventListener('click', function() {
+    if (!_dpDoc) return;
+    if (--_dpMonth < 0) { _dpMonth = 11; _dpYear--; }
+    renderDpMonth(document.querySelector(`.ric-date[data-doc="${_dpDoc}"]`)?.value || '');
+  });
+  document.getElementById('dp-next').addEventListener('click', function() {
+    if (!_dpDoc) return;
+    if (++_dpMonth > 11) { _dpMonth = 0; _dpYear++; }
+    renderDpMonth(document.querySelector(`.ric-date[data-doc="${_dpDoc}"]`)?.value || '');
+  });
+
+  /* Close portals on outside mousedown */
+  document.addEventListener('mousedown', function(e) {
+    const cp = document.getElementById('csel-portal');
+    const dp = document.getElementById('dp-portal');
+    if (_cselDoc && !cp.contains(e.target)) {
+      const b = document.querySelector(`.csel-btn[data-doc="${_cselDoc}"]`);
+      if (!b || !b.contains(e.target)) closeCsel();
+    }
+    if (_dpDoc && !dp.contains(e.target)) {
+      const wrap = document.querySelector(`.dp-text-input[data-doc="${_dpDoc}"]`)?.closest('.dp-wrap');
+      if (!wrap || !wrap.contains(e.target)) closeDp();
+    }
+  });
 
   window.onNoteChange = function(el) {
     const docId = el.dataset.doc;

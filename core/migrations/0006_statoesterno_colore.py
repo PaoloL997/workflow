@@ -4,15 +4,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0005_statoesterno_statointerno_revisione'),
+        ("core", "0005_statoesterno_statointerno_revisione"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='statoesterno',
-            name='colore',
-            field=models.CharField(blank=True, db_column='Colore', default='', help_text='Colore esadecimale (es. #00B050).', max_length=7),
+            model_name="statoesterno",
+            name="colore",
+            field=models.CharField(
+                blank=True,
+                db_column="Colore",
+                default="",
+                help_text="Colore esadecimale (es. #00B050).",
+                max_length=7,
+            ),
         ),
     ]

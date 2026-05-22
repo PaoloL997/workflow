@@ -4,19 +4,20 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0016_alter_statoesterno_options_user_badge_color_and_more'),
+        ("core", "0016_alter_statoesterno_options_user_badge_color_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='user',
-            name='badge_color',
+            model_name="user",
+            name="badge_color",
         ),
         migrations.AddField(
-            model_name='user',
-            name='avatar',
-            field=models.ImageField(blank=True, db_column='Avatar', null=True, upload_to='avatars/'),
+            model_name="user",
+            name="avatar",
+            field=models.ImageField(
+                blank=True, db_column="Avatar", null=True, upload_to="avatars/"
+            ),
         ),
     ]

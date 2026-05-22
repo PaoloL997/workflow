@@ -4,24 +4,36 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0015_modellodocumento_reparto'),
+        ("core", "0015_modellodocumento_reparto"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='statoesterno',
-            options={'managed': True, 'ordering': ['nome'], 'verbose_name': 'Risposta del cliente', 'verbose_name_plural': 'Risposte del cliente'},
+            name="statoesterno",
+            options={
+                "managed": True,
+                "ordering": ["nome"],
+                "verbose_name": "Risposta del cliente",
+                "verbose_name_plural": "Risposte del cliente",
+            },
         ),
         migrations.AddField(
-            model_name='user',
-            name='badge_color',
-            field=models.CharField(blank=True, db_column='BadgeColor', default='#F59E0B', help_text='Colore esadecimale del badge iniziale utente.', max_length=7),
+            model_name="user",
+            name="badge_color",
+            field=models.CharField(
+                blank=True,
+                db_column="BadgeColor",
+                default="#F59E0B",
+                help_text="Colore esadecimale del badge iniziale utente.",
+                max_length=7,
+            ),
         ),
         migrations.AlterField(
-            model_name='modellodocumento',
-            name='id',
-            field=models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID'),
+            model_name="modellodocumento",
+            name="id",
+            field=models.BigAutoField(
+                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+            ),
         ),
     ]

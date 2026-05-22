@@ -1,57 +1,152 @@
+from django import forms
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from django import forms
-from .models import User, Reparto, StatoEsterno, ModelloDocumento
+
+from .models import (
+    Documento,
+    ModelloDocumento,
+    Notifica,
+    Reparto,
+    Revisione,
+    RevisioneFileLink,
+    Stabilimento,
+    StatoEsterno,
+    Testata,
+    Ticket,
+    TicketNota,
+    User,
+)
+
+
+@admin.register(Stabilimento)
+class StabilimentoAdmin(admin.ModelAdmin):
+    list_display = ("id", "nome")
+    search_fields = ("nome",)
 
 
 @admin.register(Reparto)
 class RepartoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nome', 'acronimo')
-    search_fields = ('nome', 'acronimo')
+    list_display = ("id", "nome", "acronimo")
+    search_fields = ("nome", "acronimo")
 
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (
-        ('Profilo', {'fields': ('ruolo', 'reparto')}),
-    )
+    fieldsets = UserAdmin.fieldsets + (("Profilo", {"fields": ("ruolo", "reparto")}),)
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Profilo', {'fields': ('email', 'ruolo', 'reparto')}),
+        ("Profilo", {"fields": ("email", "ruolo", "reparto")}),
     )
-    list_display = ('username', 'email', 'ruolo', 'reparto', 'is_active', 'is_staff')
-    list_filter = ('is_active', 'is_staff', 'reparto')
-    search_fields = ('username', 'email', 'ruolo')
+    list_display = ("username", "email", "ruolo", "reparto", "is_active", "is_staff")
+    list_filter = ("is_active", "is_staff", "reparto")
+    search_fields = ("username", "email", "ruolo")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
-        choices = [('', '— Nessun reparto —')] + [
-            (r.nome, r.nome) for r in Reparto.objects.order_by('nome')
+        choices = [("", "— Nessun reparto —")] + [
+            (r.nome, r.nome) for r in Reparto.objects.order_by("nome")
         ]
-        if 'reparto' in form.base_fields:
-            form.base_fields['reparto'].widget = forms.Select(choices=choices)
-            form.base_fields['reparto'].required = False
+        if "reparto" in form.base_fields:
+            form.base_fields["reparto"].widget = forms.Select(choices=choices)
+            form.base_fields["reparto"].required = False
         return form
 
 
 @admin.register(StatoEsterno)
 class StatoEsternoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nome', 'colore')
-    search_fields = ('nome',)
+    list_display = ("id", "nome", "colore")
+    search_fields = ("nome",)
 
 
 @admin.register(ModelloDocumento)
 class ModelloDocumentoAdmin(admin.ModelAdmin):
-    list_display = ('doc_title', 'item_no', 'codice_fisso', 'reparto')
-    search_fields = ('doc_title', 'item_no', 'codice_fisso', 'reparto')
+    list_display = ("doc_title", "item_no", "codice_fisso", "reparto")
+    search_fields = ("doc_title", "item_no", "codice_fisso", "reparto")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
-        choices = [('', '— Nessun reparto —')] + [
-            (r.nome, r.nome) for r in Reparto.objects.order_by('nome')
+        choices = [("", "— Nessun reparto —")] + [
+            (r.nome, r.nome) for r in Reparto.objects.order_by("nome")
         ]
-        if 'reparto' in form.base_fields:
-            form.base_fields['reparto'].widget = forms.Select(choices=choices)
-            form.base_fields['reparto'].required = False
+        if "reparto" in form.base_fields:
+            form.base_fields["reparto"].widget = forms.Select(choices=choices)
+            form.base_fields["reparto"].required = False
         return form
 
 
+@admin.register(RevisioneFileLink)
+class RevisioneFileLinkAdmin(admin.ModelAdmin):
+    list_display = ("id", "revisione", "percorso", "created_at", "updated_at")
+    search_fields = ("percorso", "revisione__documento__vendor_doc")
+    raw_id_fields = ("revisione",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Testata)
+class TestataAdmin(admin.ModelAdmin):
+    list_display = (
+        "job",
+        "client",
+        "po_no",
+        "delivery_date",
+        "time_cli_doc_rev",
+        "time_ven_doc_rev",
+    )
+    search_fields = ("job", "client", "po_no")
+    list_filter = ("delivery_date",)
+
+
+@admin.register(Documento)
+class DocumentoAdmin(admin.ModelAdmin):
+    list_display = ("id", "testata", "vendor_doc", "client_doc_no", "doc_title", "reparto")
+    search_fields = ("vendor_doc", "client_doc_no", "doc_title", "testata__job")
+    list_filter = ("reparto",)
+    raw_id_fields = ("testata",)
+
+
+@admin.register(Revisione)
+class RevisioneAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "documento",
+        "rev_no",
+        "int_status",
+        "dis_plan_date",
+        "dis_act_date",
+        "rec_act_date",
+    )
+    search_fields = ("documento__vendor_doc", "documento__testata__job")
+    list_filter = ("int_status",)
+    raw_id_fields = ("documento",)
+
+
+@admin.register(Ticket)
+class TicketAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "nome",
+        "commessa",
+        "reparto",
+        "esecutore",
+        "revisore",
+        "approvatore",
+        "created_at",
+    )
+    search_fields = ("commessa", "reparto", "esecutore__username", "revisore__username")
+    list_filter = ("reparto",)
+    raw_id_fields = ("esecutore", "revisore", "approvatore", "assegnato_da")
+    filter_horizontal = ("revisioni",)
+
+
+@admin.register(TicketNota)
+class TicketNotaAdmin(admin.ModelAdmin):
+    list_display = ("id", "ticket", "autore", "created_at")
+    search_fields = ("testo", "autore__username")
+    raw_id_fields = ("ticket", "autore")
+
+
+@admin.register(Notifica)
+class NotificaAdmin(admin.ModelAdmin):
+    list_display = ("id", "destinatario", "mittente", "letta", "created_at")
+    search_fields = ("testo", "destinatario__username")
+    list_filter = ("letta",)
+    raw_id_fields = ("destinatario", "mittente", "ticket")

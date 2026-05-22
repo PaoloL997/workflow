@@ -9,121 +9,155 @@
     /* ── CSS Custom Properties ── */
     :root {
       color-scheme: light;
-      --color-bg:             hsl(0, 0%, 100%);
-      --color-surface:        hsl(0, 0%, 95%);
-      --color-elevated:       hsl(0, 0%, 90%);
-      --color-text-primary:   hsl(0, 0%, 0%);
-      --color-text-secondary: hsl(0, 0%, 40%);
-      --color-accent:         hsl(211, 100%, 50%);
-      --color-accent-hover:   hsl(211, 100%, 42%);
-      --color-danger:         hsl(4, 90%, 58%);
-      --color-success:        hsl(142, 71%, 45%);
-      --color-border:         hsl(0, 0%, 88%);
+      --bg:                   hsl(220, 20%, 97%);
+      --bg-alt:               hsl(220, 16%, 93%);
+      --surface:              hsl(220, 16%, 93%);
+      --surface-2:            hsl(220, 14%, 88%);
+      --border:               hsl(220, 14%, 84%);
+      --border-focus:         hsl(211, 65%, 48%);
+      --text:                 hsl(220, 15%, 16%);
+      --text-muted:           hsl(220, 10%, 46%);
+      --text-subtle:          hsl(220, 8%, 58%);
+      --accent:               hsl(211, 65%, 48%);
+      --accent-hover:         hsl(211, 65%, 40%);
+      --green:                hsl(142, 42%, 40%);
+      --red:                  hsl(4, 60%, 52%);
+      --amber:                hsl(38, 90%, 50%);
+      --color-bg:             var(--bg);            /* off-white freddo, non abbagliante */
+      --color-surface:        var(--surface);
+      --color-elevated:       var(--surface-2);
+      --color-text-primary:   var(--text);          /* quasi-nero con lieve tinta blu */
+      --color-text-secondary: var(--text-muted);
+      --color-accent:         var(--accent);        /* blu meno saturo, più morbido */
+      --color-accent-hover:   var(--accent-hover);
+      --color-danger:         var(--red);
+      --color-success:        var(--green);
+      --color-border:         var(--border);
       --shadow-card:
-        0 0 0 0.5px hsla(0,0%,0%,0.08),
-        0 1px 2px   hsla(0,0%,0%,0.08),
-        0 4px 16px  hsla(0,0%,0%,0.08);
+        0 0 0 0.5px hsla(220,20%,0%,0.06),
+        0 1px 2px   hsla(220,20%,0%,0.06),
+        0 4px 16px  hsla(220,20%,0%,0.06);
       --shadow-elevated:
-        0 0 0 0.5px hsla(0,0%,0%,0.1),
-        0 2px 8px   hsla(0,0%,0%,0.12),
-        0 8px 32px  hsla(0,0%,0%,0.12);
+        0 0 0 0.5px hsla(220,20%,0%,0.08),
+        0 2px 8px   hsla(220,20%,0%,0.10),
+        0 8px 32px  hsla(220,20%,0%,0.10);
       --radius-sm:   8px;
       --radius-md:   12px;
       --radius-lg:   16px;
       --radius-xl:   20px;
     }
 
-    /* Dark token set — applied by media query OR manual [data-theme="dark"] */
-    @mixin dark-tokens {
-      --color-bg:             hsl(0, 0%, 0%);
-      --color-surface:        hsl(0, 0%, 11%);
-      --color-elevated:       hsl(0, 0%, 17%);
-      --color-text-primary:   hsl(0, 0%, 100%);
-      --color-text-secondary: hsl(0, 0%, 60%);
-      --color-accent:         hsl(211, 100%, 60%);
-      --color-accent-hover:   hsl(211, 100%, 68%);
-      --color-danger:         hsl(4, 100%, 67%);
-      --color-success:        hsl(142, 60%, 54%);
-      --color-border:         hsl(0, 0%, 22%);
-      --shadow-card:
-        0 0 0 0.5px hsla(0,0%,100%,0.06),
-        0 1px 2px   hsla(0,0%,0%,0.4),
-        0 4px 16px  hsla(0,0%,0%,0.3);
-      --shadow-elevated:
-        0 0 0 0.5px hsla(0,0%,100%,0.08),
-        0 2px 8px   hsla(0,0%,0%,0.5),
-        0 8px 32px  hsla(0,0%,0%,0.4);
-    }
-
     /* System dark mode (no override set) */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --color-bg:             hsl(0, 0%, 0%);
-        --color-surface:        hsl(0, 0%, 11%);
-        --color-elevated:       hsl(0, 0%, 17%);
-        --color-text-primary:   hsl(0, 0%, 100%);
-        --color-text-secondary: hsl(0, 0%, 60%);
-        --color-accent:         hsl(211, 100%, 60%);
-        --color-accent-hover:   hsl(211, 100%, 68%);
-        --color-danger:         hsl(4, 100%, 67%);
-        --color-success:        hsl(142, 60%, 54%);
-        --color-border:         hsl(0, 0%, 22%);
+        --bg:                   hsl(220 16% 8%);
+        --bg-alt:               hsl(220 14% 12%);
+        --surface:              hsl(220 14% 16%);
+        --surface-2:            hsl(220 12% 20%);
+        --border:               hsl(220 10% 26%);
+        --border-focus:         hsl(215 80% 60%);
+        --text:                 hsl(220 10% 92%);
+        --text-muted:           hsl(220 8% 55%);
+        --text-subtle:          hsl(220 8% 40%);
+        --accent:               hsl(215 80% 60%);
+        --accent-hover:         hsl(215 80% 50%);
+        --green:                hsl(142 70% 45%);
+        --red:                  hsl(0 72% 51%);
+        --amber:                hsl(38 90% 50%);
+        --color-bg:             var(--bg);
+        --color-surface:        var(--surface);
+        --color-elevated:       var(--surface-2);
+        --color-text-primary:   var(--text);
+        --color-text-secondary: var(--text-muted);
+        --color-accent:         var(--accent);
+        --color-accent-hover:   var(--accent-hover);
+        --color-danger:         var(--red);
+        --color-success:        var(--green);
+        --color-border:         var(--border);
         --shadow-card:
-          0 0 0 0.5px hsla(0,0%,100%,0.06),
-          0 1px 2px   hsla(0,0%,0%,0.4),
-          0 4px 16px  hsla(0,0%,0%,0.3);
+          0 0 0 0.5px hsl(0 0% 100% / 0.06),
+          0 1px 2px   hsl(220 30% 2% / 0.48),
+          0 4px 16px  hsl(220 30% 2% / 0.34);
         --shadow-elevated:
-          0 0 0 0.5px hsla(0,0%,100%,0.08),
-          0 2px 8px   hsla(0,0%,0%,0.5),
-          0 8px 32px  hsla(0,0%,0%,0.4);
+          0 0 0 0.5px hsl(0 0% 100% / 0.08),
+          0 2px 8px   hsl(220 30% 2% / 0.56),
+          0 8px 32px  hsl(220 30% 2% / 0.42);
       }
     }
 
     /* Manual dark override */
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --color-bg:             hsl(0, 0%, 0%);
-      --color-surface:        hsl(0, 0%, 11%);
-      --color-elevated:       hsl(0, 0%, 17%);
-      --color-text-primary:   hsl(0, 0%, 100%);
-      --color-text-secondary: hsl(0, 0%, 60%);
-      --color-accent:         hsl(211, 100%, 60%);
-      --color-accent-hover:   hsl(211, 100%, 68%);
-      --color-danger:         hsl(4, 100%, 67%);
-      --color-success:        hsl(142, 60%, 54%);
-      --color-border:         hsl(0, 0%, 22%);
+      --bg:                   hsl(220 16% 8%);
+      --bg-alt:               hsl(220 14% 12%);
+      --surface:              hsl(220 14% 16%);
+      --surface-2:            hsl(220 12% 20%);
+      --border:               hsl(220 10% 26%);
+      --border-focus:         hsl(215 80% 60%);
+      --text:                 hsl(220 10% 92%);
+      --text-muted:           hsl(220 8% 55%);
+      --text-subtle:          hsl(220 8% 40%);
+      --accent:               hsl(215 80% 60%);
+      --accent-hover:         hsl(215 80% 50%);
+      --green:                hsl(142 70% 45%);
+      --red:                  hsl(0 72% 51%);
+      --amber:                hsl(38 90% 50%);
+      --color-bg:             var(--bg);
+      --color-surface:        var(--surface);
+      --color-elevated:       var(--surface-2);
+      --color-text-primary:   var(--text);
+      --color-text-secondary: var(--text-muted);
+      --color-accent:         var(--accent);
+      --color-accent-hover:   var(--accent-hover);
+      --color-danger:         var(--red);
+      --color-success:        var(--green);
+      --color-border:         var(--border);
       --shadow-card:
-        0 0 0 0.5px hsla(0,0%,100%,0.06),
-        0 1px 2px   hsla(0,0%,0%,0.4),
-        0 4px 16px  hsla(0,0%,0%,0.3);
+        0 0 0 0.5px hsl(0 0% 100% / 0.06),
+        0 1px 2px   hsl(220 30% 2% / 0.48),
+        0 4px 16px  hsl(220 30% 2% / 0.34);
       --shadow-elevated:
-        0 0 0 0.5px hsla(0,0%,100%,0.08),
-        0 2px 8px   hsla(0,0%,0%,0.5),
-        0 8px 32px  hsla(0,0%,0%,0.4);
+        0 0 0 0.5px hsl(0 0% 100% / 0.08),
+        0 2px 8px   hsl(220 30% 2% / 0.56),
+        0 8px 32px  hsl(220 30% 2% / 0.42);
     }
 
     /* Manual light override (forces light even on dark-system machines) */
     :root[data-theme="light"] {
       color-scheme: light;
-      --color-bg:             hsl(0, 0%, 100%);
-      --color-surface:        hsl(0, 0%, 95%);
-      --color-elevated:       hsl(0, 0%, 90%);
-      --color-text-primary:   hsl(0, 0%, 0%);
-      --color-text-secondary: hsl(0, 0%, 40%);
-      --color-accent:         hsl(211, 100%, 50%);
-      --color-accent-hover:   hsl(211, 100%, 42%);
-      --color-danger:         hsl(4, 90%, 58%);
-      --color-success:        hsl(142, 71%, 45%);
-      --color-border:         hsl(0, 0%, 88%);
+      --bg:                   hsl(220, 20%, 97%);
+      --bg-alt:               hsl(220, 16%, 93%);
+      --surface:              hsl(220, 16%, 93%);
+      --surface-2:            hsl(220, 14%, 88%);
+      --border:               hsl(220, 14%, 84%);
+      --border-focus:         hsl(211, 65%, 48%);
+      --text:                 hsl(220, 15%, 16%);
+      --text-muted:           hsl(220, 10%, 46%);
+      --text-subtle:          hsl(220, 8%, 58%);
+      --accent:               hsl(211, 65%, 48%);
+      --accent-hover:         hsl(211, 65%, 40%);
+      --green:                hsl(142, 42%, 40%);
+      --red:                  hsl(4, 60%, 52%);
+      --amber:                hsl(38, 90%, 50%);
+      --color-bg:             var(--bg);
+      --color-surface:        var(--surface);
+      --color-elevated:       var(--surface-2);
+      --color-text-primary:   var(--text);
+      --color-text-secondary: var(--text-muted);
+      --color-accent:         var(--accent);
+      --color-accent-hover:   var(--accent-hover);
+      --color-danger:         var(--red);
+      --color-success:        var(--green);
+      --color-border:         var(--border);
       --shadow-card:
-        0 0 0 0.5px hsla(0,0%,0%,0.08),
-        0 1px 2px   hsla(0,0%,0%,0.08),
-        0 4px 16px  hsla(0,0%,0%,0.08);
+        0 0 0 0.5px hsla(220,20%,0%,0.06),
+        0 1px 2px   hsla(220,20%,0%,0.06),
+        0 4px 16px  hsla(220,20%,0%,0.06);
       --shadow-elevated:
-        0 0 0 0.5px hsla(0,0%,0%,0.1),
-        0 2px 8px   hsla(0,0%,0%,0.12),
-        0 8px 32px  hsla(0,0%,0%,0.12);
+        0 0 0 0.5px hsla(220,20%,0%,0.08),
+        0 2px 8px   hsla(220,20%,0%,0.10),
+        0 8px 32px  hsla(220,20%,0%,0.10);
     }
 
     /* ── Reset & Base ── */
@@ -162,6 +196,7 @@
       font-size: 1rem;
       outline: none;
     }
+
   </style>
   {% block extra_head %}{% endblock %}
   <style>
@@ -257,6 +292,37 @@
       font-size: 11px;
     }
 
+    /* ── App brand (fisso top-left, accanto al back button) ── */
+    .app-brand {
+      position: fixed;
+      top: 28px;
+      left: 44px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 36px;
+      pointer-events: none;
+      user-select: none;
+      line-height: 1;
+    }
+    .app-brand-name {
+      font-weight: 800;
+      font-size: 16px;
+      color: var(--color-text-primary);
+      letter-spacing: -0.02em;
+    }
+    .app-brand-sep {
+      font-weight: 500;
+      font-size: 15px;
+      color: var(--color-text-secondary);
+    }
+    .app-brand-sub {
+      font-weight: 500;
+      font-size: 15px;
+      color: var(--color-text-secondary);
+    }
+
     /* ── Account Avatar (fisso top-right globale) ── */
     .account-btn {
       position: fixed;
@@ -317,6 +383,13 @@
       <span class="account-initial">{{ user.first_name|slice:":1"|default:user.username|slice:":1" }}</span>
     {% endif %}
   </a>
+
+  <!-- ── App brand — always visible next to back button ── -->
+  <div class="app-brand" aria-hidden="true">
+    <span class="app-brand-name">Brembana&amp;Rolle</span>
+    <span class="app-brand-sep">/</span>
+    <span class="app-brand-sub">Gestione di commessa</span>
+  </div>
   {% endif %}
 
   <!-- ── Spotlight: Cerca Commessa (globale) ── -->

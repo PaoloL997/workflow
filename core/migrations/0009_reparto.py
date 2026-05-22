@@ -4,24 +4,28 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('core', '0008_notifica_ticket_ticketnota_delete_reparto_and_more'),
+        ("core", "0008_notifica_ticket_ticketnota_delete_reparto_and_more"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='Reparto',
+            name="Reparto",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('nome', models.CharField(db_column='Nome', max_length=100, unique=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("nome", models.CharField(db_column="Nome", max_length=100, unique=True)),
             ],
             options={
-                'verbose_name': 'Reparto',
-                'verbose_name_plural': 'Reparti',
-                'db_table': 'reparti',
-                'ordering': ['nome'],
-                'managed': True,
+                "verbose_name": "Reparto",
+                "verbose_name_plural": "Reparti",
+                "db_table": "reparti",
+                "ordering": ["nome"],
+                "managed": True,
             },
         ),
     ]

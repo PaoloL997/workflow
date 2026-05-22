@@ -1,45 +1,58 @@
+from datetime import date as date_type
+from datetime import timedelta
+
 from django.db import transaction
 
-from ..models import Testata, IndirSped, Documento, Revisione, StatoEsterno, Ticket, User, Reparto, ModelloDocumento, STATI_INTERNI_CHOICES
-from datetime import timedelta, date as date_type
-
+from ..models import (
+    STATI_INTERNI_CHOICES,
+    Documento,
+    IndirSped,
+    ModelloDocumento,
+    Reparto,
+    Revisione,
+    StatoEsterno,
+    Testata,
+    Ticket,
+)
 
 # ── Serializers ───────────────────────────────────────────────────────────────
 
+
 def serialize_testata(t):
     return {
-        'id': t.pk,
-        'job': t.job,
-        'client': t.client,
-        'po_no': t.po_no,
-        'job_detail': t.job_detail,
-        'delivery_date': t.delivery_date.isoformat() if t.delivery_date else None,
-        'delivery_term': t.delivery_term,
-        'requisition': t.requisition,
-        'time_cli_doc_rev': t.time_cli_doc_rev,
-        'time_ven_doc_rev': t.time_ven_doc_rev,
-        'rev_let_flag': t.rev_let_flag,
+        "id": t.pk,
+        "job": t.job,
+        "client": t.client,
+        "po_no": t.po_no,
+        "job_detail": t.job_detail,
+        "delivery_date": t.delivery_date.isoformat() if t.delivery_date else None,
+        "delivery_term": t.delivery_term,
+        "requisition": t.requisition,
+        "time_cli_doc_rev": t.time_cli_doc_rev,
+        "time_ven_doc_rev": t.time_ven_doc_rev,
+        "rev_let_flag": t.rev_let_flag,
     }
 
 
 def serialize_indirizzo(i):
     return {
-        'id': i.pk,
-        'job': i.testata_id,
-        'consignee': i.consignee,
-        'address': i.address,
-        'zip_code': i.zip_code,
-        'city': i.city,
-        'country': i.country,
-        'attn': i.attn,
-        'ph_no': i.ph_no,
+        "id": i.pk,
+        "job": i.testata_id,
+        "consignee": i.consignee,
+        "address": i.address,
+        "zip_code": i.zip_code,
+        "city": i.city,
+        "country": i.country,
+        "attn": i.attn,
+        "ph_no": i.ph_no,
     }
 
 
 # ── Testata CRUD ──────────────────────────────────────────────────────────────
 
+
 def list_commesse(q=None):
-    qs = Testata.objects.all().order_by('-pk')
+    qs = Testata.objects.all().order_by("-pk")
     if q:
         qs = qs.filter(job__icontains=q) | qs.filter(client__icontains=q)
     return [serialize_testata(t) for t in qs]
@@ -74,8 +87,10 @@ def delete_commessa(job):
 
 # ── ERP fetch ─────────────────────────────────────────────────────────────────
 
+
 def fetch_from_bc(job):
     from src.erp.business_central import BusinessCentral
+
     bc = BusinessCentral()
     try:
         ana = bc.get_commessa_anagrafica(job)
@@ -86,21 +101,22 @@ def fetch_from_bc(job):
     result = {}
     if ana is not None and not ana.empty:
         row = ana.iloc[0]
-        result['job'] = row.get('commessa', '')
-        result['job_detail'] = row.get('descrizione', '')
-        result['client'] = row.get('cliente', '')
+        result["job"] = row.get("commessa", "")
+        result["job_detail"] = row.get("descrizione", "")
+        result["client"] = row.get("cliente", "")
     if com is not None and not com.empty:
         row = com.iloc[0]
-        result['po_no'] = row.get('po_cliente', '')
-        result['delivery_date'] = row.get('data_consegna', None)
+        result["po_no"] = row.get("po_cliente", "")
+        result["delivery_date"] = row.get("data_consegna", None)
     return result
 
 
 # ── IndirSped CRUD ────────────────────────────────────────────────────────────
 
+
 def list_indirizzi(job):
     t = Testata.objects.get(job=job)
-    return [serialize_indirizzo(i) for i in t.indirizzi_spedizione.order_by('pk')]
+    return [serialize_indirizzo(i) for i in t.indirizzi_spedizione.order_by("pk")]
 
 
 def create_indirizzo(job, data):
@@ -127,15 +143,26 @@ def delete_indirizzo(pk):
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 _TESTATA_FIELDS = {
-    'job', 'client', 'po_no', 'job_detail',
-    'delivery_date', 'delivery_term', 'requisition',
-    'time_cli_doc_rev', 'time_ven_doc_rev',
-    'rev_let_flag',
+    "job",
+    "client",
+    "po_no",
+    "job_detail",
+    "delivery_date",
+    "delivery_term",
+    "requisition",
+    "time_cli_doc_rev",
+    "time_ven_doc_rev",
+    "rev_let_flag",
 }
 
 _INDIRIZZO_FIELDS = {
-    'consignee', 'address', 'zip_code', 'city',
-    'country', 'attn', 'ph_no',
+    "consignee",
+    "address",
+    "zip_code",
+    "city",
+    "country",
+    "attn",
+    "ph_no",
 }
 
 
@@ -149,50 +176,78 @@ def _clean_indirizzo_fields(data):
 
 # ── Reparto helpers ───────────────────────────────────────────────────────────
 
+
 def list_reparti():
     """Return reparto names from the Reparto table."""
-    return list(Reparto.objects.values_list('nome', flat=True))
+    return list(Reparto.objects.values_list("nome", flat=True))
 
 
 # ── Documento CRUD ───────────────────────────────────────────────────────────────────────────────
-def serialize_documento(d):
+def serialize_documento(d, reparto_acronimi=None):
     label_map = dict(STATI_INTERNI_CHOICES)
-    latest_rev = d.revisioni.select_related('ext_status').order_by('-rev_no', '-pk').first()
-    latest_int_status = latest_rev.int_status if latest_rev else ''
-    latest_int_status_label = label_map.get(latest_int_status, latest_int_status) if latest_int_status else ''
+    latest_rev = d.revisioni.select_related("ext_status").order_by("-rev_no", "-pk").first()
+    latest_int_status = latest_rev.int_status if latest_rev else ""
+    latest_int_status_label = (
+        label_map.get(latest_int_status, latest_int_status) if latest_int_status else ""
+    )
+    reparto_acronimo = ""
+    if d.reparto:
+        if reparto_acronimi is not None:
+            reparto_acronimo = reparto_acronimi.get(d.reparto, d.reparto)
+        else:
+            obj = Reparto.objects.filter(nome=d.reparto).first()
+            reparto_acronimo = obj.acronimo if (obj and obj.acronimo) else d.reparto
     return {
-        'id': d.pk,
-        'job': d.testata_id,
-        'item_no': d.item_no,
-        'vendor_doc': d.vendor_doc,
-        'client_doc_no': d.client_doc_no,
-        'client_doc_class': d.client_doc_class,
-        'doc_title': d.doc_title,
-        'doc_penalty': d.doc_penalty,
-        'doc_payment': d.doc_payment,
-        'rev_gen': d.rev_gen,
-        'reparto': d.reparto,
-        'reparto_label': d.reparto,
-        'remarks': d.remarks,
-        'latest_rev_id': latest_rev.pk if latest_rev else None,
-        'latest_rev_no': latest_rev.rev_no if latest_rev else None,
-        'latest_rev_let': latest_rev.rev_let if latest_rev else '',
-        'latest_int_status': latest_int_status,
-        'latest_int_status_label': latest_int_status_label,
-        'latest_ext_status': latest_rev.ext_status_id if latest_rev else None,
-        'latest_ext_status_label': latest_rev.ext_status.nome if (latest_rev and latest_rev.ext_status) else '',
-        'latest_ext_status_colore': latest_rev.ext_status.colore if (latest_rev and latest_rev.ext_status) else '',
-        'latest_dis_plan_date': latest_rev.dis_plan_date.isoformat() if (latest_rev and latest_rev.dis_plan_date) else None,
-        'latest_dis_act_date': latest_rev.dis_act_date.isoformat() if (latest_rev and latest_rev.dis_act_date) else None,
-        'latest_rec_plan_date': latest_rev.rec_plan_date.isoformat() if (latest_rev and latest_rev.rec_plan_date) else None,
-        'latest_rec_act_date': latest_rev.rec_act_date.isoformat() if (latest_rev and latest_rev.rec_act_date) else None,
-        'latest_rev_display': (latest_rev.rev_let if (latest_rev and latest_rev.rev_let) else str(latest_rev.rev_no)) if latest_rev else '—',
+        "id": d.pk,
+        "job": d.testata_id,
+        "item_no": d.item_no,
+        "vendor_doc": d.vendor_doc,
+        "client_doc_no": d.client_doc_no,
+        "client_doc_class": d.client_doc_class,
+        "doc_title": d.doc_title,
+        "doc_penalty": d.doc_penalty,
+        "doc_payment": d.doc_payment,
+        "rev_gen": d.rev_gen,
+        "reparto": d.reparto,
+        "reparto_label": d.reparto,
+        "reparto_acronimo": reparto_acronimo,
+        "remarks": d.remarks,
+        "latest_rev_id": latest_rev.pk if latest_rev else None,
+        "latest_rev_no": latest_rev.rev_no if latest_rev else None,
+        "latest_rev_let": latest_rev.rev_let if latest_rev else "",
+        "latest_int_status": latest_int_status,
+        "latest_int_status_label": latest_int_status_label,
+        "latest_ext_status": latest_rev.ext_status_id if latest_rev else None,
+        "latest_ext_status_label": latest_rev.ext_status.nome
+        if (latest_rev and latest_rev.ext_status)
+        else "",
+        "latest_ext_status_colore": latest_rev.ext_status.colore
+        if (latest_rev and latest_rev.ext_status)
+        else "",
+        "latest_dis_plan_date": latest_rev.dis_plan_date.isoformat()
+        if (latest_rev and latest_rev.dis_plan_date)
+        else None,
+        "latest_dis_act_date": latest_rev.dis_act_date.isoformat()
+        if (latest_rev and latest_rev.dis_act_date)
+        else None,
+        "latest_rec_plan_date": latest_rev.rec_plan_date.isoformat()
+        if (latest_rev and latest_rev.rec_plan_date)
+        else None,
+        "latest_rec_act_date": latest_rev.rec_act_date.isoformat()
+        if (latest_rev and latest_rev.rec_act_date)
+        else None,
+        "latest_rev_display": (
+            latest_rev.rev_let if (latest_rev and latest_rev.rev_let) else str(latest_rev.rev_no)
+        )
+        if latest_rev
+        else "—",
     }
 
 
 def list_documenti(job):
     t = Testata.objects.get(job=job)
-    return [serialize_documento(d) for d in t.documenti.order_by('pk')]
+    reparto_acronimi = dict(Reparto.objects.values_list("nome", "acronimo"))
+    return [serialize_documento(d, reparto_acronimi) for d in t.documenti.order_by("pk")]
 
 
 def create_documento(job, data):
@@ -230,9 +285,7 @@ def genera_documenti_da_modelli(job):
     modelli = list(ModelloDocumento.objects.all())
     if not modelli:
         return [], 0
-    existing_vendor = set(
-        v for v in t.documenti.values_list('vendor_doc', flat=True) if v
-    )
+    existing_vendor = set(v for v in t.documenti.values_list("vendor_doc", flat=True) if v)
     creati = []
     saltati = 0
     for m in modelli:
@@ -253,9 +306,16 @@ def genera_documenti_da_modelli(job):
 
 
 _DOCUMENTO_FIELDS = {
-    'item_no', 'vendor_doc', 'client_doc_no', 'client_doc_class',
-    'doc_title', 'doc_penalty', 'doc_payment', 'rev_gen',
-    'reparto', 'remarks',
+    "item_no",
+    "vendor_doc",
+    "client_doc_no",
+    "client_doc_class",
+    "doc_title",
+    "doc_penalty",
+    "doc_payment",
+    "rev_gen",
+    "reparto",
+    "remarks",
 }
 
 
@@ -265,18 +325,20 @@ def _clean_documento_fields(data):
 
 # ── StatoEsterno ─────────────────────────────────────────────────────────────
 
+
 def list_stati_interni():
     """Return hardcoded internal status choices."""
     from ..models import STATI_INTERNI_CHOICES
-    return [{'id': k, 'nome': v} for k, v in STATI_INTERNI_CHOICES]
+
+    return [{"id": k, "nome": v} for k, v in STATI_INTERNI_CHOICES]
 
 
 def list_stati_esterni():
-    return [{'id': s.pk, 'nome': s.nome, 'colore': s.colore} for s in StatoEsterno.objects.all()]
+    return [{"id": s.pk, "nome": s.nome, "colore": s.colore} for s in StatoEsterno.objects.all()]
 
 
 def create_stato_esterno(data):
-    s = StatoEsterno(nome=data.get('nome', '').strip(), colore=data.get('colore', '').strip())
+    s = StatoEsterno(nome=data.get("nome", "").strip(), colore=data.get("colore", "").strip())
     s.full_clean()
     s.save()
     return s
@@ -284,10 +346,10 @@ def create_stato_esterno(data):
 
 def update_stato_esterno(pk, data):
     s = StatoEsterno.objects.get(pk=pk)
-    if 'nome' in data:
-        s.nome = data['nome'].strip()
-    if 'colore' in data:
-        s.colore = data['colore'].strip()
+    if "nome" in data:
+        s.nome = data["nome"].strip()
+    if "colore" in data:
+        s.colore = data["colore"].strip()
     s.full_clean()
     s.save()
     return s
@@ -299,34 +361,38 @@ def delete_stato_esterno(pk):
 
 # ── Revisione CRUD ───────────────────────────────────────────────────────────
 
+
 def serialize_revisione(r):
-    int_status_label = ''
+    int_status_label = ""
     if r.int_status:
         from ..models import STATI_INTERNI_CHOICES
+
         label_map = dict(STATI_INTERNI_CHOICES)
         int_status_label = label_map.get(r.int_status, r.int_status)
     return {
-        'id': r.pk,
-        'documento_id': r.documento_id,
-        'rev_no': r.rev_no,
-        'rev_let': r.rev_let,
-        'dis_plan_date': r.dis_plan_date.isoformat() if r.dis_plan_date else None,
-        'dis_act_date': r.dis_act_date.isoformat() if r.dis_act_date else None,
-        'rec_plan_date': r.rec_plan_date.isoformat() if r.rec_plan_date else None,
-        'rec_act_date': r.rec_act_date.isoformat() if r.rec_act_date else None,
-        'int_status': r.int_status,
-        'int_status_label': int_status_label,
-        'ext_status': r.ext_status_id,
-        'ext_status_label': r.ext_status.nome if r.ext_status else '',
-        'ext_status_colore': r.ext_status.colore if r.ext_status else '',
-        'crea_nuova_rev': r.crea_nuova_rev,
-        'note_rientro': r.note_rientro,
+        "id": r.pk,
+        "documento_id": r.documento_id,
+        "rev_no": r.rev_no,
+        "rev_let": r.rev_let,
+        "dis_plan_date": r.dis_plan_date.isoformat() if r.dis_plan_date else None,
+        "dis_act_date": r.dis_act_date.isoformat() if r.dis_act_date else None,
+        "rec_plan_date": r.rec_plan_date.isoformat() if r.rec_plan_date else None,
+        "rec_act_date": r.rec_act_date.isoformat() if r.rec_act_date else None,
+        "int_status": r.int_status,
+        "int_status_label": int_status_label,
+        "ext_status": r.ext_status_id,
+        "ext_status_label": r.ext_status.nome if r.ext_status else "",
+        "ext_status_colore": r.ext_status.colore if r.ext_status else "",
+        "crea_nuova_rev": r.crea_nuova_rev,
+        "note_rientro": r.note_rientro,
     }
 
 
 def list_revisioni(doc_pk):
     d = Documento.objects.get(pk=doc_pk)
-    return [serialize_revisione(r) for r in d.revisioni.select_related('ext_status').order_by('rev_no')]
+    return [
+        serialize_revisione(r) for r in d.revisioni.select_related("ext_status").order_by("rev_no")
+    ]
 
 
 def create_revisione(doc_pk, data):
@@ -351,11 +417,16 @@ def delete_revisione(pk):
 
 
 _REVISIONE_FIELDS = {
-    'rev_no', 'rev_let',
-    'dis_plan_date', 'dis_act_date',
-    'rec_plan_date', 'rec_act_date',
-    'int_status', 'ext_status',
-    'crea_nuova_rev', 'note_rientro',
+    "rev_no",
+    "rev_let",
+    "dis_plan_date",
+    "dis_act_date",
+    "rec_plan_date",
+    "rec_act_date",
+    "int_status",
+    "ext_status",
+    "crea_nuova_rev",
+    "note_rientro",
 }
 
 
@@ -363,11 +434,11 @@ def _clean_revisione_fields(data):
     cleaned = {}
     for k, v in data.items():
         if k in _REVISIONE_FIELDS:
-            if k == 'ext_status':
-                cleaned[k + '_id'] = v if v else None
-            elif k == 'int_status':
-                cleaned[k] = v or ''
-            elif k.endswith('_date') and v == '':
+            if k == "ext_status":
+                cleaned[k + "_id"] = v if v else None
+            elif k == "int_status":
+                cleaned[k] = v or ""
+            elif k.endswith("_date") and v == "":
                 cleaned[k] = None
             else:
                 cleaned[k] = v
@@ -375,6 +446,7 @@ def _clean_revisione_fields(data):
 
 
 # ── Emissione ────────────────────────────────────────────────────────────────
+
 
 def esegui_emissione(doc_ids, dis_act_date):
     """
@@ -390,13 +462,13 @@ def esegui_emissione(doc_ids, dis_act_date):
     updated = []
 
     for doc_id in doc_ids:
-        doc = Documento.objects.select_related('testata').get(pk=doc_id)
-        rev = doc.revisioni.order_by('-rev_no').first()
+        doc = Documento.objects.select_related("testata").get(pk=doc_id)
+        rev = doc.revisioni.order_by("-rev_no").first()
         if rev is None:
             rev = Revisione.objects.create(documento=doc, rev_no=0)
 
         rev.dis_act_date = dis_act_date
-        rev.int_status = 'inviato_al_cliente'
+        rev.int_status = "inviato_al_cliente"
 
         time_cli = doc.testata.time_cli_doc_rev
         if time_cli:
@@ -412,6 +484,7 @@ def esegui_emissione(doc_ids, dis_act_date):
 
 # ── Ricezione ────────────────────────────────────────────────────────────────
 
+
 def esegui_ricezione(entries, crea_nuova_revisione=False):
     """
     entries: list of {doc_id, rec_act_date, ext_status_id, note_rientro, crea_nuova_revisione (optional)}
@@ -420,11 +493,11 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
     """
     result = []
     for entry in entries:
-        doc_id = entry.get('doc_id')
-        rec_act_date_raw = entry.get('rec_act_date', '')
-        ext_status_id = entry.get('ext_status_id') or None
-        note_rientro = entry.get('note_rientro', '') or ''
-        crea_rev = bool(entry.get('crea_nuova_revisione', crea_nuova_revisione))
+        doc_id = entry.get("doc_id")
+        rec_act_date_raw = entry.get("rec_act_date", "")
+        ext_status_id = entry.get("ext_status_id") or None
+        note_rientro = entry.get("note_rientro", "") or ""
+        crea_rev = bool(entry.get("crea_nuova_revisione", crea_nuova_revisione))
 
         if not doc_id or not rec_act_date_raw:
             continue
@@ -434,15 +507,15 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         else:
             rec_act_date = rec_act_date_raw
 
-        doc = Documento.objects.select_related('testata').get(pk=doc_id)
-        rev = doc.revisioni.order_by('-rev_no').first()
+        doc = Documento.objects.select_related("testata").get(pk=doc_id)
+        rev = doc.revisioni.order_by("-rev_no").first()
         if rev is None:
             continue
 
         rev.rec_act_date = rec_act_date
         rev.ext_status_id = ext_status_id
         rev.note_rientro = note_rientro
-        rev.int_status = 'ricevuto'
+        rev.int_status = "ricevuto"
         rev.save()
         result.append(serialize_revisione(rev))
 
@@ -459,3 +532,116 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
             result.append(serialize_revisione(new_rev))
 
     return result
+
+
+# ── File resolution ───────────────────────────────────────────────────────────
+
+
+def risolvi_file_revisione(revisione_id: int) -> dict:
+    """Attempt to auto-resolve the filesystem path for a revision's file.
+
+    Resolution order:
+    1. Return the manual link if one has been saved in ``RevisioneFileLink``.
+    2. If ``rec_act_date`` is set → look in ``RICEVUTI/{date}/``.
+    3. Else if ``dis_act_date`` is set → look in the base path.
+    4. Otherwise return ``not_found``.
+
+    Matching rule: the filename must start with ``Documento.vendor_doc``
+    (case-insensitive).
+
+    Args:
+        revisione_id: Primary key of the ``Revisione`` to resolve.
+
+    Returns:
+        Dict with keys:
+            - ``status``: ``"found"``, ``"multiple"``, ``"manual_linked"``,
+              or ``"not_found"``.
+            - ``files``: list of dicts (``percorso``, ``nome``, ``estensione``).
+
+    Raises:
+        Revisione.DoesNotExist: If no revision matches ``revisione_id``.
+    """
+    from pathlib import Path as _Path
+
+    from ..models import Reparto, RevisioneFileLink
+    from .fileserver import get_base_path, get_ricevuti_path, trova_file
+
+    rev = Revisione.objects.select_related("documento__testata").get(pk=revisione_id)
+    doc = rev.documento
+    vendor_doc = doc.vendor_doc.strip()
+
+    # 1. Check manual link first
+    try:
+        link = RevisioneFileLink.objects.get(revisione=rev)
+        percorso = link.percorso
+        return {
+            "status": "manual_linked",
+            "files": [
+                {
+                    "percorso": percorso,
+                    "nome": _Path(percorso).name,
+                    "estensione": _Path(percorso).suffix.lstrip(".").lower(),
+                }
+            ],
+        }
+    except RevisioneFileLink.DoesNotExist:
+        pass
+
+    if not vendor_doc:
+        return {"status": "not_found", "files": []}
+
+    # 2. Resolve reparto acronimo
+    reparto_obj = Reparto.objects.filter(nome=doc.reparto).first()
+    if not reparto_obj or not reparto_obj.acronimo:
+        return {"status": "not_found", "files": []}
+    reparto_acronimo = reparto_obj.acronimo
+    commessa = doc.testata.job
+
+    # 3. Determine directory to scan
+    if rev.rec_act_date:
+        data_str = rev.rec_act_date.strftime("%Y-%m-%d")
+        directory = get_ricevuti_path(commessa, reparto_acronimo, data_str)
+    elif rev.dis_act_date:
+        directory = get_base_path(commessa, reparto_acronimo)
+    else:
+        return {"status": "not_found", "files": []}
+
+    files = trova_file(directory, vendor_doc)
+
+    if not files:
+        return {"status": "not_found", "files": []}
+    if len(files) == 1:
+        return {"status": "found", "files": files}
+    return {"status": "multiple", "files": files}
+
+
+def salva_file_link(revisione_id: int, percorso: str) -> object:
+    """Create or update the manual file link for a revision.
+
+    Args:
+        revisione_id: Primary key of the ``Revisione``.
+        percorso: Full filesystem path to the file. Must be inside FILESERVER_JOBS_PATH.
+
+    Returns:
+        The saved ``RevisioneFileLink`` instance.
+
+    Raises:
+        Revisione.DoesNotExist: If no revision matches ``revisione_id``.
+        PermissionError: If the path is outside the JOBS root.
+    """
+    from pathlib import Path
+
+    from ..models import RevisioneFileLink
+    from .fileserver import get_jobs_root
+
+    rev = Revisione.objects.get(pk=revisione_id)
+    percorso_clean = percorso.strip()
+    try:
+        Path(percorso_clean).resolve().relative_to(get_jobs_root().resolve())
+    except ValueError:
+        raise PermissionError("Percorso non autorizzato: fuori dalla cartella JOBS.")
+    link, _ = RevisioneFileLink.objects.update_or_create(
+        revisione=rev,
+        defaults={"percorso": percorso_clean},
+    )
+    return link
