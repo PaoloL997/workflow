@@ -30,6 +30,7 @@ db.sqlite3
 
 # Static files
 /static/
+/staticfiles/
 /media/
 
 # Logs
@@ -43,3 +44,14 @@ Thumbs.db
 
 # Project specific
 /code_template/
+
+# Test / coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Pre-commit
+.pre-commit-cache/
+
+# Translations (compiled)
+*.mo
