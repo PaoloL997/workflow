@@ -446,13 +446,13 @@
   }
   .theme-toggle:hover { background: var(--color-elevated); }
 
-  [data-theme="light"] .icon-moon { display: none; }
-  [data-theme="dark"]  .icon-sun  { display: none; }
-  @media (prefers-color-scheme: light) {
-    html:not([data-theme="dark"]) .icon-moon { display: none; }
-  }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
   @media (prefers-color-scheme: dark) {
-    html:not([data-theme="light"]) .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
 
   @media (max-width: 768px) {
@@ -478,13 +478,6 @@
         <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
       </svg>
       Home
-    </a>
-    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-      </svg>
-      Notifiche
-      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

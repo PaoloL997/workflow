@@ -801,17 +801,15 @@
 
   .theme-toggle:active { transform: scale(0.96); }
 
-  .theme-toggle .icon-moon { display: none; }
-  .theme-toggle .icon-sun  { display: block; }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
 
-  :root[data-theme="dark"] .theme-toggle .icon-moon,
-  :root:not([data-theme="light"]):is([data-theme="dark"]) .theme-toggle .icon-moon { display: block; }
-  :root[data-theme="dark"] .theme-toggle .icon-sun,
-  :root:not([data-theme="light"]):is([data-theme="dark"]) .theme-toggle .icon-sun  { display: none; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: block; }
-    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
   /* ── File browser modal ── */
   .filebrowser-path {
@@ -933,13 +931,6 @@
       </svg>
       Home
     </a>
-    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-      </svg>
-      Notifiche
-      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
-    </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -958,8 +949,9 @@
   <div class="content">
 
     <!-- Page heading -->
-    <div class="page-heading" style="margin-bottom: 0;">
+    <div class="page-heading" style="margin-bottom: 0; position:relative; margin-top:-12px;">
       <h1>Lista documenti</h1>
+      <span style="position:absolute; right:20px; bottom:-12px; font-size:11px; color:var(--color-text-secondary);">Le revisioni vengono visualizzate in sola lettura</span>
     </div>
 
     <!-- Actions — sticky frosted toolbar -->
@@ -1559,6 +1551,8 @@
   modalFileChoice.addEventListener('click', function(e){ if (e.target === modalFileChoice) closeFileChoiceModal(); });
 
   /* ── Modal: file browser ── */
+  var COMMESSA_FOLDER = "{{ commessa_folder|escapejs }}";
+
   var modalFileBrowser = document.getElementById('modal-filebrowser-backdrop');
   var _browserCurrentPath = '';
   var _browserSelectedPath = '';
@@ -1570,7 +1564,7 @@
     document.getElementById('modal-filebrowser-save').disabled = true;
     document.getElementById('modal-filebrowser-error').textContent = '';
     modalFileBrowser.classList.add('show');
-    browseTo('');
+    browseTo(COMMESSA_FOLDER);
   }
 
   function closeFileBrowserModal() {

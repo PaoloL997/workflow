@@ -12,7 +12,6 @@ from ..models import (
     Revisione,
     StatoEsterno,
     Testata,
-    Ticket,
 )
 
 # ── Serializers ───────────────────────────────────────────────────────────────
@@ -81,7 +80,6 @@ def update_commessa(job, data):
 @transaction.atomic
 def delete_commessa(job):
     t = Testata.objects.get(job=job)
-    Ticket.objects.filter(revisioni__documento__testata=t).distinct().delete()
     t.delete()
 
 
@@ -384,7 +382,6 @@ def serialize_revisione(r):
         "ext_status_label": r.ext_status.nome if r.ext_status else "",
         "ext_status_colore": r.ext_status.colore if r.ext_status else "",
         "crea_nuova_rev": r.crea_nuova_rev,
-        "note_rientro": r.note_rientro,
     }
 
 
@@ -426,7 +423,6 @@ _REVISIONE_FIELDS = {
     "int_status",
     "ext_status",
     "crea_nuova_rev",
-    "note_rientro",
 }
 
 
@@ -487,7 +483,7 @@ def esegui_emissione(doc_ids, dis_act_date):
 
 def esegui_ricezione(entries, crea_nuova_revisione=False):
     """
-    entries: list of {doc_id, rec_act_date, ext_status_id, note_rientro, crea_nuova_revisione (optional)}
+    entries: list of {doc_id, rec_act_date, ext_status_id, crea_nuova_revisione (optional)}
     crea_nuova_revisione: bool — global default, overridden per entry if specified.
     Returns list of updated/created revision dicts.
     """
@@ -496,7 +492,6 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         doc_id = entry.get("doc_id")
         rec_act_date_raw = entry.get("rec_act_date", "")
         ext_status_id = entry.get("ext_status_id") or None
-        note_rientro = entry.get("note_rientro", "") or ""
         crea_rev = bool(entry.get("crea_nuova_revisione", crea_nuova_revisione))
 
         if not doc_id or not rec_act_date_raw:
@@ -514,7 +509,6 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
 
         rev.rec_act_date = rec_act_date
         rev.ext_status_id = ext_status_id
-        rev.note_rientro = note_rientro
         rev.int_status = "ricevuto"
         rev.save()
         result.append(serialize_revisione(rev))

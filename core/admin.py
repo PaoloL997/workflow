@@ -5,15 +5,12 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Documento,
     ModelloDocumento,
-    Notifica,
     Reparto,
     Revisione,
     RevisioneFileLink,
     Stabilimento,
     StatoEsterno,
     Testata,
-    Ticket,
-    TicketNota,
     User,
 )
 
@@ -117,36 +114,3 @@ class RevisioneAdmin(admin.ModelAdmin):
     search_fields = ("documento__vendor_doc", "documento__testata__job")
     list_filter = ("int_status",)
     raw_id_fields = ("documento",)
-
-
-@admin.register(Ticket)
-class TicketAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "nome",
-        "commessa",
-        "reparto",
-        "esecutore",
-        "revisore",
-        "approvatore",
-        "created_at",
-    )
-    search_fields = ("commessa", "reparto", "esecutore__username", "revisore__username")
-    list_filter = ("reparto",)
-    raw_id_fields = ("esecutore", "revisore", "approvatore", "assegnato_da")
-    filter_horizontal = ("revisioni",)
-
-
-@admin.register(TicketNota)
-class TicketNotaAdmin(admin.ModelAdmin):
-    list_display = ("id", "ticket", "autore", "created_at")
-    search_fields = ("testo", "autore__username")
-    raw_id_fields = ("ticket", "autore")
-
-
-@admin.register(Notifica)
-class NotificaAdmin(admin.ModelAdmin):
-    list_display = ("id", "destinatario", "mittente", "letta", "created_at")
-    search_fields = ("testo", "destinatario__username")
-    list_filter = ("letta",)
-    raw_id_fields = ("destinatario", "mittente", "ticket")

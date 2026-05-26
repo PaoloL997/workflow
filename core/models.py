@@ -123,12 +123,6 @@ STATI_INTERNI_CHOICES = [
     ("ricevuto", "Ricevuto"),
 ]
 
-# Stati attivi della revisione = workflow del ticket (non concluso)
-STATI_ATTIVI_REV = ("da_iniziare", "in_lavorazione", "in_revisione", "in_approvazione")
-
-# Stati post-workflow = ticket concluso per quella rev
-STATI_CONCLUSI_REV = ("da_emettere", "inviato_al_cliente", "ricevuto")
-
 
 class StatoEsterno(models.Model):
     nome = models.CharField(db_column="Nome", max_length=100, unique=True)
@@ -261,12 +255,6 @@ class Revisione(models.Model):
         default=False,
         help_text="Flag per creare una nuova revisione al rientro dal cliente.",
     )
-    note_rientro = models.TextField(
-        db_column="NoteRientro",
-        blank=True,
-        default="",
-        help_text="Note relative al rientro dal cliente.",
-    )
 
     class Meta:
         managed = True
@@ -306,143 +294,3 @@ class RevisioneFileLink(models.Model):
 
     def __str__(self):
         return f"{self.revisione} → {self.percorso}"
-
-
-class Ticket(models.Model):
-    reparto = models.CharField(db_column="Reparto", max_length=100)
-    commessa = models.CharField(
-        db_column="Commessa",
-        max_length=50,
-        blank=True,
-        default="",
-        help_text="Numero commessa derivato dalle revisioni collegate.",
-    )
-    progressivo = models.PositiveIntegerField(
-        db_column="Progressivo",
-        default=0,
-        help_text="Progressivo per commessa (auto-generato).",
-    )
-    esecutore = models.ForeignKey(
-        User,
-        db_column="Esecutore",
-        on_delete=models.RESTRICT,
-        related_name="ticket_esecutore",
-    )
-    revisore = models.ForeignKey(
-        User,
-        db_column="Revisore",
-        on_delete=models.RESTRICT,
-        related_name="ticket_revisore",
-    )
-    approvatore = models.ForeignKey(
-        User,
-        db_column="Approvatore",
-        on_delete=models.RESTRICT,
-        related_name="ticket_approvatore",
-    )
-    assegnato_da = models.ForeignKey(
-        User,
-        db_column="AssegnatoDa",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="ticket_assegnati",
-        help_text="Utente che ha effettuato (o aggiornato) l'assegnazione del ticket.",
-    )
-    revisioni = models.ManyToManyField(
-        Revisione,
-        related_name="tickets",
-        blank=True,
-        db_table="ticket_revisioni",
-    )
-    note_assegnazione = models.TextField(
-        db_column="NoteAssegnazione",
-        blank=True,
-        default="",
-        help_text="Note relative all'assegnazione del ticket.",
-    )
-    created_at = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
-    updated_at = models.DateTimeField(db_column="UpdatedAt", auto_now=True)
-
-    class Meta:
-        managed = True
-        db_table = "ticket"
-        verbose_name = "Ticket"
-        verbose_name_plural = "Ticket"
-        ordering = ["-created_at"]
-
-    @property
-    def nome(self):
-        if self.commessa and self.progressivo:
-            return f"{self.commessa}-{self.progressivo}"
-        return f"#{self.pk}"
-
-    def __str__(self):
-        return f"{self.nome} — {self.reparto}"
-
-
-class TicketNota(models.Model):
-    ticket = models.ForeignKey(
-        Ticket,
-        db_column="TicketId",
-        on_delete=models.CASCADE,
-        related_name="note",
-    )
-    autore = models.ForeignKey(
-        User,
-        db_column="Autore",
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="note_ticket",
-    )
-    testo = models.TextField(db_column="Testo")
-    created_at = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
-
-    class Meta:
-        managed = True
-        db_table = "ticket_note"
-        verbose_name = "Nota ticket"
-        verbose_name_plural = "Note ticket"
-        ordering = ["created_at"]
-
-    def __str__(self):
-        return f"Nota #{self.pk} su Ticket #{self.ticket_id}"
-
-
-class Notifica(models.Model):
-    destinatario = models.ForeignKey(
-        User,
-        db_column="Destinatario",
-        on_delete=models.CASCADE,
-        related_name="notifiche",
-    )
-    mittente = models.ForeignKey(
-        User,
-        db_column="Mittente",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="notifiche_inviate",
-        help_text="Utente che ha generato la notifica.",
-    )
-    testo = models.CharField(db_column="Testo", max_length=500)
-    ticket = models.ForeignKey(
-        Ticket,
-        db_column="TicketId",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="notifiche",
-    )
-    letta = models.BooleanField(db_column="Letta", default=False)
-    created_at = models.DateTimeField(db_column="CreatedAt", auto_now_add=True)
-
-    class Meta:
-        managed = True
-        db_table = "notifiche"
-        verbose_name = "Notifica"
-        verbose_name_plural = "Notifiche"
-        ordering = ["-created_at"]
-
-    def __str__(self):
-        return f"Notifica per {self.destinatario} — {self.testo[:50]}"

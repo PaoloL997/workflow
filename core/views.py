@@ -19,7 +19,6 @@ from src.pdf import genera_trasmittal_pdf
 from .models import (
     Documento,
     IndirSped,
-    Notifica,
     Revisione,
     Stabilimento,
     StatoEsterno,
@@ -60,12 +59,6 @@ from .services.commesse import (
     update_indirizzo,
     update_revisione,
     update_stato_esterno,
-)
-from .services.tickets import (
-    count_non_lette,
-    list_notifiche,
-    mark_all_as_read,
-    mark_as_read,
 )
 
 logger = logging.getLogger(__name__)
@@ -148,8 +141,7 @@ def register_view(request):
 
 @login_required
 def commesse_list_view(request):
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
-    return render(request, "core/commesse_list.html", {"notifiche_count": notifiche_count})
+    return render(request, "core/commesse_list.html", {})
 
 
 @login_required
@@ -158,12 +150,10 @@ def commessa_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
     archivio_completo = (
         testata.time_cli_doc_rev is not None and testata.time_ven_doc_rev is not None
     )
     indirizzi_all = list_indirizzi(job)
-    # Preview data for section cards
     STATI_EMESSI = ("inviato_al_cliente", "ricevuto")
     documenti_all = list_documenti(job) if archivio_completo else []
     emissione_count = sum(1 for d in documenti_all if d["latest_int_status"] not in STATI_EMESSI)
@@ -240,7 +230,6 @@ def commessa_detail_view(request, job):
         "core/commessa_detail.html",
         {
             "testata": testata,
-            "notifiche_count": notifiche_count,
             "archivio_completo": archivio_completo,
             "indirizzi_preview": indirizzi_all[:2],
             "indirizzi_count": len(indirizzi_all),
@@ -263,19 +252,21 @@ def commessa_detail_view(request, job):
 def documenti_list_view(request, job):
     from django.http import Http404
 
+    from .services.fileserver import get_jobs_root
+
     try:
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
     reparti = list_reparti()
+    commessa_folder = str(get_jobs_root() / job)
     return render(
         request,
         "core/documenti_list.html",
         {
             "testata": testata,
-            "notifiche_count": notifiche_count,
             "reparti": reparti,
+            "commessa_folder": commessa_folder,
         },
     )
 
@@ -286,15 +277,7 @@ def archivio_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
-    return render(
-        request,
-        "core/archivio_detail.html",
-        {
-            "testata": testata,
-            "notifiche_count": notifiche_count,
-        },
-    )
+    return render(request, "core/archivio_detail.html", {"testata": testata})
 
 
 @login_required
@@ -303,15 +286,7 @@ def emissione_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
-    return render(
-        request,
-        "core/emissione_detail.html",
-        {
-            "testata": testata,
-            "notifiche_count": notifiche_count,
-        },
-    )
+    return render(request, "core/emissione_detail.html", {"testata": testata})
 
 
 @login_required
@@ -320,15 +295,7 @@ def ricezione_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
-    return render(
-        request,
-        "core/ricezione_detail.html",
-        {
-            "testata": testata,
-            "notifiche_count": notifiche_count,
-        },
-    )
+    return render(request, "core/ricezione_detail.html", {"testata": testata})
 
 
 @login_required
@@ -337,35 +304,19 @@ def situazione_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
+    from .services.fileserver import get_jobs_root
+
+    commessa_folder = str(get_jobs_root() / job)
     return render(
         request,
         "core/situazione_detail.html",
-        {
-            "testata": testata,
-            "notifiche_count": notifiche_count,
-        },
+        {"testata": testata, "commessa_folder": commessa_folder},
     )
 
 
 @login_required
 def home_view(request):
-    notifiche_count = Notifica.objects.filter(destinatario=request.user, letta=False).count()
-    return render(request, "core/home.html", {"notifiche_count": notifiche_count})
-
-
-@login_required
-def notifiche_view(request):
-    notifiche_list = list_notifiche(request.user)
-    notifiche_count = count_non_lette(request.user)
-    return render(
-        request,
-        "core/notifiche.html",
-        {
-            "notifiche": notifiche_list,
-            "notifiche_count": notifiche_count,
-        },
-    )
+    return render(request, "core/home.html", {})
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
@@ -1158,50 +1109,6 @@ def revisione_file_serve(request, pk):
         as_attachment=True,
         filename=file_path.name,
     )
-
-
-@api_login_required
-@require_http_methods(["GET"])
-def notifiche_api(request):
-    solo_non_lette = request.GET.get("non_lette", "") == "1"
-    data = list_notifiche(request.user, solo_non_lette=solo_non_lette)
-    count = count_non_lette(request.user)
-    return JsonResponse({"notifiche": data, "non_lette_count": count})
-
-
-@api_login_required
-@require_http_methods(["POST"])
-def notifica_leggi_api(request, pk):
-    mark_as_read(pk, request.user)
-    return JsonResponse({"ok": True})
-
-
-@api_login_required
-@require_http_methods(["POST"])
-def notifiche_leggi_tutte_api(request):
-    mark_all_as_read(request.user)
-    return JsonResponse({"ok": True})
-
-
-# ── API: Users ───────────────────────────────────────────────────────────────
-
-
-@api_login_required
-@require_http_methods(["GET"])
-def users_api(request):
-    """Return list of active users for ticket assignment dropdowns."""
-    users = User.objects.filter(is_active=True).order_by("last_name", "first_name", "username")
-    data = [
-        {
-            "id": u.pk,
-            "username": u.username,
-            "nome_completo": u.nome_completo,
-            "ruolo": u.ruolo,
-            "reparto": u.reparto,
-        }
-        for u in users
-    ]
-    return JsonResponse(data, safe=False)
 
 
 # ── HTML: Profilo utente ─────────────────────────────────────────────────────

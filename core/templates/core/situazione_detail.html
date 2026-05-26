@@ -387,15 +387,15 @@
     box-shadow: 0 4px 20px hsla(0,0%,0%,0.25);
   }
 
-  [data-theme="light"] .icon-moon { display: none; }
-  [data-theme="dark"]  .icon-sun  { display: none; }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
 
-  @media (prefers-color-scheme: light) {
-    html:not([data-theme="dark"]) .icon-moon { display: none; }
-  }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
 
   @media (prefers-color-scheme: dark) {
-    html:not([data-theme="light"]) .icon-sun { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
 
   @media (max-width: 700px) {
@@ -403,6 +403,221 @@
     .page-title { font-size: 24px; }
     .view-toggle { margin-left: 0; }
   }
+
+  /* ── Riga cliccabile (vista verticale) ── */
+  .sit-row-clickable { cursor: pointer; transition: filter 0.1s; }
+  .sit-row-clickable:hover { filter: brightness(0.88); }
+  .sit-row-clickable.loading { opacity: 0.5; pointer-events: none; cursor: wait; }
+
+  /* ── Modal backdrop ── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: hsl(220 30% 3% / 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 400;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    padding: 28px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-elevated);
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+  }
+  .modal-close {
+    background: var(--color-elevated);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-secondary);
+    transition: background 0.1s;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: var(--color-border); }
+  .modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 4px;
+  }
+  .modal-error {
+    font-size: 13px;
+    color: var(--color-danger);
+    margin-right: auto;
+    display: none;
+  }
+  .modal-error.show { display: block; }
+
+  /* ── Buttons (inside modals) ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    transition: opacity 0.15s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--color-accent); color: #fff; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-secondary {
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    border: 1px solid var(--color-border);
+  }
+  .btn-secondary:hover { opacity: 0.8; }
+
+  /* ── Toast ── */
+  .sit-toast {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-elevated);
+    z-index: 600;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+  }
+  .sit-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── File browser modal ── */
+  .filebrowser-path {
+    font-size: 12px;
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    color: var(--color-text-secondary);
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 6px 12px;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+  .filebrowser-list {
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    overflow-y: auto;
+    max-height: 280px;
+    background: var(--color-elevated);
+  }
+  .filebrowser-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 14px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .filebrowser-item:last-child { border-bottom: none; }
+  .filebrowser-item:hover { background: var(--color-surface); }
+  .filebrowser-item--selected {
+    background: hsla(211, 100%, 55%, 0.12);
+    color: var(--color-accent);
+  }
+  .filebrowser-item--dir { font-weight: 600; }
+  .filebrowser-item--dir svg { opacity: 0.6; }
+  .filebrowser-item--up { color: var(--color-text-secondary); font-style: italic; }
+  .filebrowser-empty {
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    opacity: 0.6;
+  }
+
+  /* ── File choice modal ── */
+  .filechoice-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .filechoice-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-elevated);
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .filechoice-item:hover {
+    background: var(--color-surface);
+    border-color: var(--color-accent);
+  }
+  .filechoice-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    word-break: break-all;
+  }
+  .filechoice-open-btn {
+    flex-shrink: 0;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .filechoice-open-btn:hover { opacity: 0.85; }
 </style>
 {% endblock %}
 
@@ -416,13 +631,6 @@
         <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
       </svg>
       Home
-    </a>
-    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-      </svg>
-      Notifiche
-      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -477,6 +685,53 @@
   </div><!-- /content -->
 </div><!-- /page -->
 
+<!-- ── Toast ── -->
+<div class="sit-toast" id="sit-toast" role="status" aria-live="polite"></div>
+
+<!-- ── Modal: Scelta file (più file trovati) ── -->
+<div class="modal-backdrop" id="modal-filechoice-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-filechoice-title">
+  <div class="modal" style="max-width: 480px;">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-filechoice-title">Scegli il file da aprire</span>
+      <button class="modal-close" id="modal-filechoice-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <p style="font-size:13px;color:var(--color-text-secondary);margin:0;">Sono stati trovati più file corrispondenti a questa revisione. Seleziona quello da aprire.</p>
+    <div class="filechoice-list" id="filechoice-list"></div>
+  </div>
+</div>
+
+<!-- ── Modal: File browser (link manuale) ── -->
+<div class="modal-backdrop" id="modal-filebrowser-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-filebrowser-title">
+  <div class="modal" style="max-width: 560px;">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-filebrowser-title">Collega un file alla revisione</span>
+      <button class="modal-close" id="modal-filebrowser-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 4px;">Nessun file trovato automaticamente per questa revisione. Naviga il fileserver e seleziona il file corretto.</p>
+    <div class="filebrowser-path" id="filebrowser-path">—</div>
+    <div class="filebrowser-list" id="filebrowser-list">
+      <div class="filebrowser-empty">Caricamento…</div>
+    </div>
+    <div id="filebrowser-selected-wrap" style="display:none;">
+      <div style="font-size:12px;font-weight:600;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.02em;margin-top:12px;margin-bottom:4px;">File selezionato</div>
+      <div class="filebrowser-path" id="filebrowser-selected-path" style="color:var(--color-accent);"></div>
+    </div>
+    <div class="modal-footer" style="margin-top:4px;">
+      <span class="modal-error" id="modal-filebrowser-error"></span>
+      <button class="btn btn-secondary" id="modal-filebrowser-cancel">Annulla</button>
+      <button class="btn btn-primary" id="modal-filebrowser-save" disabled>Salva collegamento</button>
+    </div>
+  </div>
+</div>
+
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
   <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.38-1.41 0z"/>
@@ -510,6 +765,7 @@
   'use strict';
 
   const JOB = "{{ testata.job }}";
+  const COMMESSA_FOLDER = "{{ commessa_folder|escapejs }}";
 
   const STATI_LABEL = {
     da_iniziare:       'Da iniziare',
@@ -700,7 +956,7 @@
         : `<span style="opacity:.35">\u2014</span>`;
       const rev = r ? `${r.rev_no ?? ''}${r.rev_let || ''}` : '\u2014';
 
-      return `<tr ${rowStyle}>
+      return `<tr ${rowStyle}${r ? ` class="sit-row-clickable" onclick="onRevBtnClick(${r.id}, this)"` : ''}>
         <td>${escHtml(d.item_no || '\u2014')}</td>
         <td><strong>${escHtml(d.vendor_doc || '\u2014')}</strong></td>
         <td>${escHtml(d.client_doc_no || '\u2014')}</td>
@@ -889,6 +1145,217 @@
 
   /* ── expose onSortClick globally ── */
   window.onSortClick = onSortClick;
+
+  /* ── File opening (rev button) ── */
+
+  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  function apiFetch(url, opts) {
+    const h = Object.assign({ 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, (opts || {}).headers);
+    return fetch(url, Object.assign({ credentials: 'same-origin' }, opts, { headers: h }));
+  }
+
+  let _toastTimer = null;
+  function showRevToast(msg) {
+    const el = document.getElementById('sit-toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2600);
+  }
+
+  function winPathToUriPath(winPath) {
+    return winPath.replace(/\\/g, '/').split('/').map(function (seg, i) {
+      return i === 0 ? seg : encodeURIComponent(seg);
+    }).join('/');
+  }
+
+  function buildOfficeUri(file) {
+    const encoded = winPathToUriPath(file.percorso);
+    const ext = (file.estensione || '').toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls') return 'ms-excel:ofe|u|file:///' + encoded;
+    if (ext === 'docx' || ext === 'doc') return 'ms-word:ofe|u|file:///' + encoded;
+    return null;
+  }
+
+  let _currentRevId = null;
+
+  function apriFile(file) {
+    const ext = (file.estensione || '').toLowerCase();
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'docx' || ext === 'doc') {
+      const uri = buildOfficeUri(file);
+      const a = document.createElement('a');
+      a.href = uri; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 300);
+      return;
+    }
+    const serveUrl = '/api/revisioni/' + _currentRevId + '/file/serve/?percorso=' + encodeURIComponent(file.percorso);
+    const a = document.createElement('a');
+    a.href = serveUrl; a.download = file.nome || ''; a.style.display = 'none';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 300);
+  }
+
+  window.onRevBtnClick = function (revId, row) {
+    row.classList.add('loading');
+    _currentRevId = revId;
+    apiFetch('/api/revisioni/' + revId + '/file/')
+      .then(function (r) {
+        return r.text().then(function (text) {
+          let body;
+          try { body = JSON.parse(text); } catch (e) {
+            throw new Error('Risposta non valida dal server (status ' + r.status + ')');
+          }
+          return { ok: r.ok, body };
+        });
+      })
+      .then(function (res) {
+        row.classList.remove('loading');
+        if (!res.ok) { showRevToast(res.body.error || 'Errore nel recupero del file.'); return; }
+        const { status, files = [] } = res.body;
+        if (status === 'found' || status === 'manual_linked') {
+          apriFile(files[0]);
+        } else if (status === 'multiple') {
+          openFileChoiceModal(files);
+        } else {
+          openFileBrowserModal(revId);
+        }
+      })
+      .catch(function (err) {
+        row.classList.remove('loading');
+        showRevToast('Errore: ' + (err && err.message ? err.message : 'vedi console (F12)'));
+      });
+  };
+
+  /* ── Modal: scelta file multipla ── */
+  const modalFileChoice = document.getElementById('modal-filechoice-backdrop');
+
+  function openFileChoiceModal(files) {
+    const list = document.getElementById('filechoice-list');
+    list.innerHTML = '';
+    files.forEach(function (file) {
+      const item = document.createElement('div');
+      item.className = 'filechoice-item';
+      const name = document.createElement('span');
+      name.className = 'filechoice-name';
+      name.textContent = file.nome;
+      const openBtn = document.createElement('button');
+      openBtn.className = 'filechoice-open-btn';
+      openBtn.textContent = 'Apri';
+      openBtn.addEventListener('click', function () { closeFileChoiceModal(); apriFile(file); });
+      item.appendChild(name); item.appendChild(openBtn); list.appendChild(item);
+    });
+    modalFileChoice.classList.add('show');
+  }
+
+  function closeFileChoiceModal() { modalFileChoice.classList.remove('show'); }
+
+  document.getElementById('modal-filechoice-close').addEventListener('click', closeFileChoiceModal);
+  modalFileChoice.addEventListener('click', function (e) { if (e.target === modalFileChoice) closeFileChoiceModal(); });
+
+  /* ── Modal: file browser ── */
+  const modalFileBrowser = document.getElementById('modal-filebrowser-backdrop');
+  let _browserSelectedPath = '';
+
+  function openFileBrowserModal(revId) {
+    _currentRevId = revId;
+    _browserSelectedPath = '';
+    document.getElementById('filebrowser-selected-wrap').style.display = 'none';
+    document.getElementById('modal-filebrowser-save').disabled = true;
+    document.getElementById('modal-filebrowser-error').textContent = '';
+    modalFileBrowser.classList.add('show');
+    browseTo(COMMESSA_FOLDER);
+  }
+
+  function closeFileBrowserModal() {
+    modalFileBrowser.classList.remove('show');
+    _browserSelectedPath = '';
+  }
+
+  function browseTo(path) {
+    document.getElementById('filebrowser-path').textContent = path || 'Z:\\JOBS';
+    const list = document.getElementById('filebrowser-list');
+    list.innerHTML = '<div class="filebrowser-empty">Caricamento\u2026</div>';
+    const url = '/api/fileserver/browse/' + (path ? '?path=' + encodeURIComponent(path) : '');
+    apiFetch(url)
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        if (!res.ok) { list.innerHTML = '<div class="filebrowser-empty">' + escHtml(res.body.error || 'Errore.') + '</div>'; return; }
+        renderBrowserList(res.body);
+      })
+      .catch(function () { list.innerHTML = '<div class="filebrowser-empty">Errore di rete.</div>'; });
+  }
+
+  function renderBrowserList(data) {
+    const list = document.getElementById('filebrowser-list');
+    list.innerHTML = '';
+    const items = [];
+    if (data.parent !== null && data.parent !== undefined) {
+      items.push({ type: 'up', name: '\u2191 Su', path: data.parent });
+    }
+    (data.dirs  || []).forEach(function (d) { items.push({ type: 'dir',  name: d.nome, path: d.percorso }); });
+    (data.files || []).forEach(function (f) { items.push({ type: 'file', name: f.nome, path: f.percorso, ext: f.estensione }); });
+    if (!items.length) { list.innerHTML = '<div class="filebrowser-empty">Cartella vuota</div>'; return; }
+    items.forEach(function (item) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'filebrowser-item';
+      if (item.type === 'dir') btn.classList.add('filebrowser-item--dir');
+      if (item.type === 'up')  btn.classList.add('filebrowser-item--up');
+      let icon = '';
+      if (item.type === 'up')        icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>';
+      else if (item.type === 'dir')  icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+      else                           icon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+      btn.innerHTML = icon + '<span>' + escHtml(item.name) + '</span>';
+      if (item.type === 'dir' || item.type === 'up') {
+        btn.addEventListener('click', function () { browseTo(item.path); });
+      } else {
+        if (_browserSelectedPath === item.path) btn.classList.add('filebrowser-item--selected');
+        btn.addEventListener('click', function () {
+          list.querySelectorAll('.filebrowser-item--selected').forEach(function (el) { el.classList.remove('filebrowser-item--selected'); });
+          btn.classList.add('filebrowser-item--selected');
+          _browserSelectedPath = item.path;
+          document.getElementById('filebrowser-selected-path').textContent = item.path;
+          document.getElementById('filebrowser-selected-wrap').style.display = '';
+          document.getElementById('modal-filebrowser-save').disabled = false;
+        });
+      }
+      list.appendChild(btn);
+    });
+  }
+
+  document.getElementById('modal-filebrowser-close').addEventListener('click', closeFileBrowserModal);
+  document.getElementById('modal-filebrowser-cancel').addEventListener('click', closeFileBrowserModal);
+  modalFileBrowser.addEventListener('click', function (e) { if (e.target === modalFileBrowser) closeFileBrowserModal(); });
+
+  document.getElementById('modal-filebrowser-save').addEventListener('click', function () {
+    if (!_browserSelectedPath || !_currentRevId) return;
+    const saveBtn = this;
+    saveBtn.disabled = true;
+    document.getElementById('modal-filebrowser-error').textContent = '';
+    apiFetch('/api/revisioni/' + _currentRevId + '/file/link/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ percorso: _browserSelectedPath }),
+    })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        if (!res.ok) {
+          document.getElementById('modal-filebrowser-error').textContent = res.body.error || 'Errore nel salvataggio.';
+          saveBtn.disabled = false;
+          return;
+        }
+        closeFileBrowserModal();
+        showRevToast('Collegamento salvato.');
+        const ext = _browserSelectedPath.split('.').pop().toLowerCase();
+        apriFile({ percorso: _browserSelectedPath, estensione: ext, nome: _browserSelectedPath.split('\\').pop() });
+      })
+      .catch(function () {
+        document.getElementById('modal-filebrowser-error').textContent = 'Errore di rete.';
+        saveBtn.disabled = false;
+      });
+  });
 
   loadDocs();
 })();

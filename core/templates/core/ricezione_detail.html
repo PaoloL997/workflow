@@ -163,7 +163,6 @@
   .ric-table th.col-sel    { width: 220px; }
   .ric-table th.col-in     { width: 188px; }
   .ric-table th.col-toggle { width: 120px; text-align: center; }
-  .ric-table th.col-note   { width: 96px; text-align: center; }
 
   .ric-table tbody tr.doc-main-row {
     border-bottom: 1px solid var(--color-border);
@@ -211,47 +210,6 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   .ric-date-input.filled { border-color: var(--color-success); }
-
-  /* Note button */
-  .note-btn {
-    display: flex; align-items: center; justify-content: center;
-    width: 36px; height: 36px; border-radius: 10px;
-    border: 1px solid var(--color-border); background: transparent;
-    color: var(--color-text-secondary); cursor: pointer; margin: 0 auto;
-    transition: color 0.15s, background 0.15s, border-color 0.15s;
-  }
-  .note-btn:hover, .note-btn.active {
-    color: var(--color-accent); border-color: var(--color-accent);
-    background: color-mix(in srgb, var(--color-accent) 8%, transparent);
-  }
-  .note-btn.has-note {
-    color: var(--color-accent);
-    background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-    border-color: var(--color-accent);
-  }
-
-  /* Note expand row */
-  .doc-note-row { display: none; }
-  .doc-note-row.open { display: table-row; }
-  .doc-note-row td {
-    padding: 0 12px 14px;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .note-expand-inner {
-    display: flex; gap: 16px; align-items: flex-start;
-    padding: 12px 16px; background: var(--color-surface);
-    border-radius: 10px; border: 1px solid var(--color-border);
-  }
-  .note-textarea {
-    flex: 1; padding: 8px 10px; border-radius: 8px;
-    border: 1px solid var(--color-border); background: var(--color-elevated);
-    color: var(--color-text-primary); font-size: 13px;
-    resize: vertical; min-height: 60px; transition: border-color 0.15s;
-  }
-  .note-textarea:focus {
-    outline: none; border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
-  }
 
   /* Toggle switch */
   .toggle-track {
@@ -323,22 +281,6 @@
     letter-spacing: -0.03em; color: var(--color-text-primary);
   }
   .modal-subtitle { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; }
-  .modal-field label {
-    display: block; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--color-text-secondary); margin-bottom: 8px;
-  }
-  .modal-textarea {
-    width: 100%; padding: 10px 12px; border-radius: 10px;
-    border: 1px solid var(--color-border); background: var(--color-elevated);
-    color: var(--color-text-primary); font-size: 13px;
-    resize: vertical; min-height: 80px; transition: border-color 0.15s;
-  }
-  .modal-textarea:focus {
-    outline: none; border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
-  }
-  .modal-hint { font-size: 11px; color: var(--color-text-secondary); margin-top: 6px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .btn-cancel {
     padding: 9px 20px; border-radius: 9px;
@@ -518,13 +460,13 @@
   }
   .theme-toggle:hover { box-shadow: var(--shadow-elevated); background: var(--color-surface); }
   .theme-toggle:active { transform: scale(0.96); }
-  .theme-toggle .icon-moon { display: none; }
-  .theme-toggle .icon-sun  { display: block; }
-  :root[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
-  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: block; }
-    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: none; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
 </style>
 {% endblock %}
@@ -539,13 +481,6 @@
         <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
       </svg>
       Home
-    </a>
-    <a href="{% url 'notifiche' %}" class="nav-item" id="nav-notifiche">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
-      </svg>
-      Notifiche
-      {% if notifiche_count %}<span class="nav-badge"></span>{% endif %}
     </a>
     <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -599,17 +534,12 @@
   </svg>
 </button>
 
-<!-- ── Modal: nota generica ──-->
+<!-- ── Modal: conferma ricezione ──-->
 <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title" id="modal-title">Registra ricezioni</div>
       <div class="modal-subtitle" id="modal-subtitle"></div>
-    </div>
-    <div class="modal-field">
-      <label for="nota-generica">Nota generale <span style="font-weight:400;text-transform:none;letter-spacing:0">(opzionale)</span></label>
-      <textarea id="nota-generica" class="modal-textarea" placeholder="Verrà applicata a tutti i documenti senza nota individuale…" rows="4"></textarea>
-      <p class="modal-hint">Se un documento ha già una nota individuale, questa nota generale non la sovrascriverà.</p>
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Annulla</button>
@@ -743,20 +673,6 @@
               <span class="toggle-thumb"></span>
             </label>
           </td>
-          <td>
-            <button class="note-btn" data-doc="${d.id}" onclick="toggleNote(this, ${d.id})" title="Note rientro" aria-label="Note rientro">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-              </svg>
-            </button>
-          </td>
-        </tr>
-        <tr class="doc-note-row" data-for-doc="${d.id}">
-          <td colspan="7">
-            <div class="note-expand-inner">
-              <textarea class="note-textarea ric-note" data-doc="${d.id}" placeholder="Osservazioni del cliente per questo documento…" rows="2" oninput="onNoteChange(this)"></textarea>
-            </div>
-          </td>
         </tr>`;
     }).join('');
 
@@ -770,7 +686,6 @@
             <th class="col-sel">Stato esterno</th>
             <th class="col-in">Data rientro</th>
             <th class="col-toggle">Nuova rev.</th>
-            <th class="col-note">Note</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -962,15 +877,6 @@
     closeDp();
   };
 
-  window.clearDpDate = function(e, docId) {
-    e.stopPropagation();
-    const hidden    = document.querySelector(`.ric-date[data-doc="${docId}"]`);
-    const textInput = document.querySelector(`.dp-text-input[data-doc="${docId}"]`);
-    if (hidden) hidden.value = '';
-    if (textInput) { textInput.value = ''; textInput.classList.remove('filled'); }
-    updateCounter();
-  };
-
   document.getElementById('dp-prev').addEventListener('click', function() {
     if (!_dpDoc) return;
     if (--_dpMonth < 0) { _dpMonth = 11; _dpYear--; }
@@ -996,29 +902,13 @@
     }
   });
 
-  window.onNoteChange = function(el) {
-    const docId = el.dataset.doc;
-    const btn = document.querySelector(`.note-btn[data-doc="${docId}"]`);
-    if (btn) btn.classList.toggle('has-note', el.value.trim().length > 0);
-  };
-
-  window.toggleNote = function(btn, docId) {
-    const row = document.querySelector(`.doc-note-row[data-for-doc="${docId}"]`);
-    if (!row) return;
-    const isOpen = row.classList.toggle('open');
-    btn.classList.toggle('active', isOpen);
-    if (isOpen) row.querySelector('textarea')?.focus();
-  };
-
   /* ── Modal ── */
   window.openModal = function() {
     const filled = [...document.querySelectorAll('.ric-date')].filter(el => el.value).length;
     if (!filled) { alert('Inserisci almeno una data di rientro.'); return; }
     document.getElementById('modal-subtitle').textContent =
       `${filled} document${filled === 1 ? 'o verrà registrato' : 'i verranno registrati'}`;
-    document.getElementById('nota-generica').value = '';
     document.getElementById('modal-overlay').classList.add('open');
-    document.getElementById('nota-generica').focus();
   };
 
   window.closeModal = function() {
@@ -1037,7 +927,6 @@
 
   /* ── Confirm & send ── */
   window.confermaRicezione = async function() {
-    const notaGenerica = document.getElementById('nota-generica').value.trim();
     const entries = [];
 
     document.querySelectorAll('.ric-date').forEach(el => {
@@ -1046,15 +935,11 @@
       if (!date) return;
       const stato = document.querySelector(`.ric-stato[data-doc="${docId}"]`)?.value || null;
       const nuova = document.querySelector(`.ric-nuova-rev[data-doc="${docId}"]`)?.checked || false;
-      const noteDoc = document.querySelector(`.ric-note[data-doc="${docId}"]`)?.value.trim() || '';
-      /* nota generica si applica solo se il doc non ha una nota propria */
-      const noteFinale = noteDoc || notaGenerica;
       entries.push({
         doc_id: docId,
         rec_act_date: date,
         ext_status_id: stato ? parseInt(stato, 10) : null,
         crea_nuova_revisione: nuova,
-        note_rientro: noteFinale,
       });
     });
 

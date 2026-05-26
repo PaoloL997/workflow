@@ -1,6 +1,6 @@
 # Workflow — Sistema di Gestione Commesse
 
-Applicazione Django per la gestione di commesse, documenti, revisioni e ticket di lavoro.
+Applicazione Django per la gestione di commesse, documenti e revisioni.
 
 ## 📋 Stato Attuale
 
@@ -15,27 +15,17 @@ Applicazione Django per la gestione di commesse, documenti, revisioni e ticket d
 - **Revisione** — Revisioni dei documenti con tracciamento stati interni/esterni, date pianificate e effettive
 - **StatoEsterno** — Elenco stati esterni (es. "Ricevuto", "In revisione") con colori personalizzabili
 
-**Gestione Ticket e Persone**
-- **Ticket** — Sistema di assegnazione lavoro con esecutore, revisore, approvatore e tracciamento stato
-- **TicketNota** — Note associate ai ticket per comunicazione tra team
-- **User** — Utenti estesi con ruolo, email unica e assegnazione a reparto
-- **Reparto** — Elenchi di reparti/team
-
-**Sistema di Notifiche**
-- **Notifica** — Notifiche per utenti relative a ticket, con stato di lettura
-
 ### Funzionalità
 
 ✅ **Amministrazione Django**
 - Interfaccia admin completa per tutti i modelli
 - Filtri per stato, reparto, responsabile
-- Ricerca avanzata per commesse, documenti, ticket
-- Inline editing per indirizzi e note
+- Ricerca avanzata per commesse e documenti
+- Inline editing per indirizzi di spedizione
 
 ✅ **Tracciamento Flusso di Lavoro**
-- Stati ticket: "Da iniziare" → "In lavorazione" → "In revisione" → "In approvazione" → "Concluso"
 - Stati interni revisioni: "Da iniziare" → "In lavorazione" → "In revisione" → "In approvazione" → "Da emettere" → "Inviato al Cliente" → "Ricevuto"
-- Assegnazione chiara di responsabilità (esecutore, revisore, approvatore)
+- Assegnazione chiara di responsabilità
 
 ✅ **Gestione Commesse**
 - Archivio commesse con cliente, PO number, termini di consegna

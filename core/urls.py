@@ -10,7 +10,6 @@ urlpatterns = [
     # HTML — Home
     path("", views.home_view, name="home"),
     path("profilo/", views.profilo_view, name="profilo"),
-    path("notifiche/", views.notifiche_view, name="notifiche"),
     path("commesse/", views.commesse_list_view, name="commesse_list"),
     path("commesse/<str:job>/", views.commessa_detail_view, name="commessa_detail"),
     path("commesse/<str:job>/documenti/", views.documenti_list_view, name="documenti_list"),
@@ -72,14 +71,4 @@ urlpatterns = [
         name="revisione_file_link_api",
     ),
     path("api/fileserver/browse/", views.fileserver_browse_api, name="fileserver_browse_api"),
-    # API — Notifiche
-    path("api/notifiche/", views.notifiche_api, name="notifiche_api"),
-    path(
-        "api/notifiche/leggi-tutte/",
-        views.notifiche_leggi_tutte_api,
-        name="notifiche_leggi_tutte_api",
-    ),
-    path("api/notifiche/<int:pk>/leggi/", views.notifica_leggi_api, name="notifica_leggi_api"),
-    # API — Users
-    path("api/users/", views.users_api, name="users_api"),
 ]
