@@ -1,91 +1,42 @@
-# Workflow — Sistema di Gestione Commesse
+# Workflow — Gestione Commesse
 
-Applicazione Django per la gestione di commesse, documenti e revisioni.
+Applicazione Django per la gestione di commesse, documenti e revisioni in ambito industriale.
 
-## 📋 Stato Attuale
+## Funzionalità principali
 
-### Modelli Implementati
+- Archivio commesse con cliente, PO, date e termini di consegna
+- Gestione documenti e revisioni per commessa, con stati interni ed esterni
+- Tracciamento del flusso di lavoro per ogni revisione
+- Visualizzazione situazione documenti (lista e vista verticale)
+- Gestione ricezione documenti da cliente
+- Browser file integrato per collegare file alle revisioni (cartelle JOB)
 
-**Archivio Commesse**
-- **Testata** — Archivio principale delle commesse (numero commessa, cliente, PO, date di consegna, termini)
-- **IndirSped** — Indirizzi di spedizione collegati alle commesse
+## Avvio
 
-**Documenti e Revisioni**
-- **Documento** — Documenti di progetto (titolo, numero cliente, classificazione, assegnazione reparto)
-- **Revisione** — Revisioni dei documenti con tracciamento stati interni/esterni, date pianificate e effettive
-- **StatoEsterno** — Elenco stati esterni (es. "Ricevuto", "In revisione") con colori personalizzabili
-
-### Funzionalità
-
-✅ **Amministrazione Django**
-- Interfaccia admin completa per tutti i modelli
-- Filtri per stato, reparto, responsabile
-- Ricerca avanzata per commesse e documenti
-- Inline editing per indirizzi di spedizione
-
-✅ **Tracciamento Flusso di Lavoro**
-- Stati interni revisioni: "Da iniziare" → "In lavorazione" → "In revisione" → "In approvazione" → "Da emettere" → "Inviato al Cliente" → "Ricevuto"
-- Assegnazione chiara di responsabilità
-
-✅ **Gestione Commesse**
-- Archivio commesse con cliente, PO number, termini di consegna
-- Tracciamento documenti e revisioni per commessa
-- Supporto per flag di revisione lettere e trasmissione
-
-## 🚀 Avvio Rapido
-
-### Setup Ambiente
 ```bash
 # Installa dipendenze
 poetry install
 
-# Crea file .env (vedi custom_instruction)
+# Configura .env con le credenziali del database
 # DB_PASSWORD=your_password
 
-# Esegui migrazioni
+# Applica le migrazioni
 python manage.py migrate
 
-# Crea superutente
-python manage.py createsuperuser
-```
-
-### Avvia Server
-```bash
+# Avvia il server
 python manage.py runserver
 ```
 
-Accedi all'admin: `http://localhost:8000/admin`
+Interfaccia admin disponibile su `http://localhost:8000/admin`.
 
-## 📁 Struttura Progetto
+## Database
+
+PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non committare questo file.
+
+## Struttura
 
 ```
-.
-├── config/              # Configurazione Django
-│   ├── settings.py      # Variabili d'ambiente, app registrate
-│   ├── urls.py
-│   └── wsgi.py
-├── core/                # Applicazione principale
-│   ├── models.py        # Tutti i modelli
-│   ├── views.py         # Viste (in sviluppo)
-│   ├── admin.py         # Registrazione admin
-│   ├── urls.py
-│   └── templates/       # Template (in sviluppo)
-├── code_template/       # Codice legacy (SQLite, VBA) — solo riferimento
-├── static/              # File statici
-├── manage.py
-├── db.sqlite3
-└── .env                 # Variabili d'ambiente (non committare)
+config/          Configurazione Django (settings, urls, wsgi)
+core/            App principale: modelli, viste, template, migrazioni
+code_template/   Codice legacy (solo riferimento, non usato)
 ```
-
-## 🗄️ Database
-
-- **Engine**: PostgreSQL (via psycopg2)
-- **Credenziali**: Caricate da `.env`
-- **Stato**: Tabelle esistenti in produzione, modelli Django mappati con `managed = True`
-
-## 📝 Note di Sviluppo
-
-- Tutti i modelli hanno `verbose_name` e `verbose_name_plural` in italiano
-- Chiavi esterne a `User` usano `on_delete=models.RESTRICT` per prevenire cancellazioni accidentali
-- FK a `Testata` usano il campo `job` come `to_field`
-- Date pianificate e effettive sono nullable per supportare attività non ancora iniziate
