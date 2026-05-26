@@ -43,3 +43,8 @@ ignore = [
 "*/migrations/*.py" = ["E", "F", "W", "I", "UP"]
 # Management commands: wildcard imports are common
 "core/management/commands/*.py" = ["F401", "F811"]
+
+[dependency-groups]
+dev = [
+    "ipykernel (>=7.2.0,<8.0.0)"
+]

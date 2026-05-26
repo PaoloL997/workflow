@@ -28,6 +28,11 @@ urlpatterns = [
     path("api/commesse/<str:job>/documenti/", views.documenti_api, name="documenti_api"),
     path("api/commesse/<str:job>/export/", views.export_documenti, name="export_documenti"),
     path(
+        "api/commesse/<str:job>/situazione/export/",
+        views.export_situazione,
+        name="export_situazione",
+    ),
+    path(
         "api/commesse/<str:job>/import-excel/",
         views.import_documenti_excel,
         name="import_documenti_excel",
@@ -71,4 +76,7 @@ urlpatterns = [
         name="revisione_file_link_api",
     ),
     path("api/fileserver/browse/", views.fileserver_browse_api, name="fileserver_browse_api"),
+    # HTML + API — Import from old Access DB
+    path("import-from-old/", views.import_from_old_view, name="import_from_old"),
+    path("api/import-from-old/", views.import_from_old_api, name="import_from_old_api"),
 ]

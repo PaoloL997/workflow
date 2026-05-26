@@ -244,7 +244,8 @@
 
   .sit-horiz th.sit-rev-group {
     text-align: center;
-    background: hsla(211, 100%, 55%, 0.12);
+    /* opaque blend: accent at 12% over elevated — prevents content showing through when sticky */
+    background: color-mix(in hsl, var(--color-accent) 12%, var(--color-elevated));
     border-left: 2px solid var(--color-border);
     color: var(--color-text-primary);
   }
@@ -655,11 +656,11 @@
 
     <!-- ── Filter bar ── -->
     <div class="filter-bar">
-      <button class="toolbar-btn" id="btn-export" onclick="exportCSV()" aria-label="Esporta come CSV">
+      <button class="toolbar-btn" id="btn-export" onclick="exportXLSX()" aria-label="Esporta come Excel">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
         </svg>
-        Esporta CSV
+        Esporta Excel
       </button>
       <button class="toolbar-btn" id="btn-fullscreen" onclick="toggleFullscreen()" aria-label="Schermo intero" style="padding:8px 10px;">
         <svg id="fs-icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -1059,69 +1060,19 @@
     tbody += '</tbody>';
 
     c.innerHTML = `<div class="sit-horiz-wrap"><table class="sit-horiz">${thead}${tbody}</table></div>`;
+    // Correct second sticky row's top offset to the exact height of the first row
+    requestAnimationFrame(() => {
+      const tbl = c.querySelector('.sit-horiz');
+      if (!tbl) return;
+      const firstRowH = tbl.querySelector('thead tr:first-child')?.getBoundingClientRect().height ?? 32;
+      tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th => { th.style.top = firstRowH + 'px'; });
+    });
   }
 
-  /* ── Export CSV ── */
-  function csvField(v) {
-    const s = String(v == null ? '' : v).replace(/"/g, '""');
-    return /[",\n\r]/.test(s) ? `"${s}"` : s;
-  }
-
-  window.exportCSV = function () {
-    if (!_allDocRevs.length) return;
-    let lines = [];
-
-    if (_vista === 'verticale') {
-      lines.push([
-        'Item','B&R Doc','Client Doc No','Client Doc Class','Titolo','Reparto',
-        'Penale','Pagamento','Rev.','Inv. previsto','Inv. effettivo',
-        'Ric. previsto','Ric. effettivo','Stato interno','Risposta cliente',
-      ].map(csvField).join(','));
-
-      const rawRows = [];
-      for (const { doc: d, revs } of _allDocRevs) {
-        if (revs.length) { for (const r of revs) rawRows.push({ d, r }); }
-        else rawRows.push({ d, r: null });
-      }
-      sortedRows(rawRows).forEach(({ d, r }) => {
-        const rev = r ? `${r.rev_no ?? ''}${r.rev_let || ''}` : '';
-        lines.push([
-          d.item_no, d.vendor_doc, d.client_doc_no, d.client_doc_class, d.doc_title, d.reparto_acronimo || d.reparto_label,
-          d.doc_penalty ? 'Sì' : 'No', d.doc_payment ? 'Sì' : 'No',
-          rev, fmtDate(r?.dis_plan_date), fmtDate(r?.dis_act_date),
-          fmtDate(r?.rec_plan_date), fmtDate(r?.rec_act_date),
-          getIntStatusMeta(r).label, r?.ext_status_label || '',
-        ].map(csvField).join(','));
-      });
-    } else {
-      // Orizzontale: fixed cols + one group per rev
-      const maxRevs = Math.max(..._allDocRevs.map(e => e.revs.length), 1);
-      const header = ['Item','B&R Doc','Client Doc No','Client Doc Class','Descrizione','Reparto'];
-      for (let i = 0; i < maxRevs; i++) {
-        header.push(`Rev.${i} Inv.prev.`, `Rev.${i} Inv.eff.`, `Rev.${i} Ric.prev.`, `Rev.${i} Ric.eff.`);
-      }
-      lines.push(header.map(csvField).join(','));
-
-      _allDocRevs.forEach(({ doc: d, revs }) => {
-        const row = [d.item_no, d.vendor_doc, d.client_doc_no, d.client_doc_class, d.doc_title, d.reparto_acronimo || d.reparto_label];
-        for (let i = 0; i < maxRevs; i++) {
-          const r = revs[i];
-          row.push(fmtDate(r?.dis_plan_date), fmtDate(r?.dis_act_date), fmtDate(r?.rec_plan_date), fmtDate(r?.rec_act_date));
-        }
-        lines.push(row.map(csvField).join(','));
-      });
-    }
-
-    const bom = '\uFEFF'; // UTF-8 BOM for Excel
-    const blob = new Blob([bom + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `situazione_${JOB.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  /* ── Export Excel ── */
+  /* ── Export Excel (server-side via openpyxl) ── */
+  window.exportXLSX = function () {
+    window.location.href = '/api/commesse/' + encodeURIComponent(JOB) + '/situazione/export/?vista=' + _vista;
   };
 
   /* ── Fullscreen ── */

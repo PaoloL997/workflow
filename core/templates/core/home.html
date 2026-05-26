@@ -347,6 +347,88 @@
     font-size: 15px;
   }
 
+  /* ── Apri Commessa dropdown ── */
+  .cta-buttons {
+    position: relative;
+  }
+
+  .apri-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    min-width: 220px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-elevated);
+    z-index: 50;
+    overflow: hidden;
+    animation: apri-menu-in 0.12s ease;
+  }
+
+  .apri-menu.open { display: block; }
+
+  @keyframes apri-menu-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .apri-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.12s;
+  }
+
+  .apri-menu-item:hover { background: var(--color-surface); }
+
+  .apri-menu-item svg { flex-shrink: 0; color: var(--color-text-secondary); }
+
+  .apri-menu-separator {
+    height: 1px;
+    background: var(--color-border);
+    margin: 0;
+  }
+
+  /* ── Spinner (riusato nel modal import) ── */
+  .import-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin-modal 0.7s linear infinite;
+    flex-shrink: 0;
+    vertical-align: middle;
+  }
+
+  @keyframes spin-modal { to { transform: rotate(360deg); } }
+
+  .import-modal-status {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    min-height: 24px;
+  }
+
+  .import-modal-status.visible { display: flex; }
+  .import-modal-status.success { color: var(--color-success); }
+  .import-modal-status.error   { color: var(--color-danger); }
+
   /* ── Modal (Apri Commessa) ── */
   .modal-overlay {
     display: none;
@@ -431,7 +513,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 6px;
   }
 
   .form-label-row .form-label { margin-bottom: 0; }
@@ -584,12 +665,29 @@
     </div>
     <div class="cta-group">
       <div class="cta-buttons">
-        <button class="btn-primary" onclick="openModal()" aria-haspopup="dialog">
+        <button class="btn-primary" id="btn-apri-commessa" onclick="openApriMenu(event)" aria-haspopup="menu" aria-expanded="false">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
           </svg>
           Apri Commessa
         </button>
+
+        <!-- Dropdown menu -->
+        <div class="apri-menu" id="apri-menu" role="menu">
+          <button class="apri-menu-item" role="menuitem" onclick="openModalFromMenu()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+            Nuova commessa
+          </button>
+          <div class="apri-menu-separator"></div>
+          <button class="apri-menu-item" role="menuitem" onclick="openImportModal()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5v-2z"/>
+            </svg>
+            Importa da Report
+          </button>
+        </div>
         <button class="btn-secondary" onclick="openSpotlight()" aria-haspopup="dialog">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
@@ -676,6 +774,32 @@
 </div>
 
 
+<!-- ── Modal: Importa da Report ── -->
+<div class="modal-overlay" id="import-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+  <div class="modal" role="document">
+    <div class="modal-header">
+      <h2 class="modal-title" id="import-modal-title">Importa da Report</h2>
+      <button class="btn-close" onclick="closeImportModal()" aria-label="Chiudi">✕</button>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="f-import-job">Numero commessa</label>
+      <input class="form-input" id="f-import-job" type="text"
+             placeholder="es. 2024-001" autocomplete="off">
+    </div>
+
+    <div class="import-modal-status" id="import-modal-status" aria-live="polite"></div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btn-import-cancel" onclick="closeImportModal()">Annulla</button>
+      <button class="btn-primary" id="btn-import-run" onclick="runImportFromHome()">
+        <span id="btn-import-label">Importa</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle" aria-label="Cambia tema">
   <!-- Moon: shown in light mode → click to go dark -->
@@ -728,6 +852,122 @@
         </div>
       </a>
     `).join('');
+  }
+
+  /* ──────────────────────────────────────────────
+     Apri Commessa — dropdown menu
+  ────────────────────────────────────────────── */
+  function openApriMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('apri-menu');
+    const btn  = document.getElementById('btn-apri-commessa');
+    const isOpen = menu.classList.contains('open');
+    if (isOpen) {
+      closeApriMenu();
+    } else {
+      menu.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+  }
+
+  function closeApriMenu() {
+    const menu = document.getElementById('apri-menu');
+    const btn  = document.getElementById('btn-apri-commessa');
+    menu.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function openModalFromMenu() {
+    closeApriMenu();
+    openModal();
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', function(e) {
+    const menu = document.getElementById('apri-menu');
+    if (menu.classList.contains('open') && !menu.contains(e.target)) {
+      closeApriMenu();
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      closeApriMenu();
+      if (document.getElementById('import-modal-overlay').classList.contains('open')) {
+        closeImportModal();
+      }
+    }
+  });
+
+  /* ──────────────────────────────────────────────
+     Modal: Importa da Report
+  ────────────────────────────────────────────── */
+  function openImportModal() {
+    closeApriMenu();
+    const overlay = document.getElementById('import-modal-overlay');
+    overlay.classList.add('open');
+    setImportStatus('');
+    document.getElementById('f-import-job').value = '';
+    document.getElementById('btn-import-run').disabled = false;
+    document.getElementById('btn-import-label').textContent = 'Importa';
+    document.getElementById('btn-import-cancel').disabled = false;
+    setTimeout(() => document.getElementById('f-import-job').focus(), 50);
+  }
+
+  function closeImportModal() {
+    document.getElementById('import-modal-overlay').classList.remove('open');
+  }
+
+  function setImportStatus(type, html) {
+    const el = document.getElementById('import-modal-status');
+    el.className = 'import-modal-status' + (type ? ' visible ' + type : '');
+    el.innerHTML = html || '';
+  }
+
+  document.getElementById('f-import-job').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') runImportFromHome();
+    if (e.key === 'Escape') closeImportModal();
+  });
+
+  async function runImportFromHome() {
+    const job = document.getElementById('f-import-job').value.trim();
+    if (!job) { document.getElementById('f-import-job').focus(); return; }
+
+    const runBtn   = document.getElementById('btn-import-run');
+    const cancelBtn = document.getElementById('btn-import-cancel');
+    const label    = document.getElementById('btn-import-label');
+
+    runBtn.disabled   = true;
+    cancelBtn.disabled = true;
+    label.textContent = 'Importazione…';
+    setImportStatus('', '<span class="import-spinner"></span> Importazione in corso…');
+
+    try {
+      const res = await fetch('{% url "import_from_old_api" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': CSRF,
+        },
+        body: JSON.stringify({ job }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        closeImportModal();
+        loadCommesse();
+      } else {
+        setImportStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));
+        runBtn.disabled   = false;
+        cancelBtn.disabled = false;
+        label.textContent = 'Riprova';
+      }
+    } catch (err) {
+      setImportStatus('error', '❌ Errore di rete: ' + err.message);
+      runBtn.disabled   = false;
+      cancelBtn.disabled = false;
+      label.textContent = 'Riprova';
+    }
   }
 
   /* ──────────────────────────────────────────────

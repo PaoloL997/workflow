@@ -1,0 +1,175 @@
+{% extends "core/base.html" %}
+{% block title %}Importa da Access{% endblock %}
+
+{% block extra_head %}
+<style>
+  .import-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: 48px 24px;
+  }
+
+  .import-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 40px 36px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .import-card h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--color-text-primary);
+  }
+
+  .import-card p {
+    font-size: 14px;
+    color: var(--color-text-secondary);
+    margin-bottom: 28px;
+  }
+
+  .import-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .import-input {
+    flex: 1;
+    padding: 10px 14px;
+    font-size: 15px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-primary);
+    transition: border-color 0.15s;
+  }
+
+  .import-input:focus {
+    border-color: var(--border-focus);
+  }
+
+  .import-btn {
+    padding: 10px 22px;
+    background: var(--color-accent);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    transition: background 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .import-btn:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+  }
+
+  .import-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .import-status {
+    margin-top: 24px;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+  }
+
+  .import-status.success { color: var(--color-success); }
+  .import-status.error   { color: var(--color-danger); }
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="import-page">
+  <div class="import-card">
+    <h1>Importa da Access</h1>
+    <p>Inserisci il numero di commessa per importare i dati dagli archivi Excel.</p>
+
+    <div class="import-row">
+      <input
+        id="jobInput"
+        class="import-input"
+        type="text"
+        placeholder="Numero commessa"
+        autocomplete="off"
+        autofocus
+      />
+      <button id="importBtn" class="import-btn" onclick="runImport()">Get</button>
+    </div>
+
+    <div id="importStatus" class="import-status" hidden></div>
+  </div>
+</div>
+
+<script>
+  const input  = document.getElementById('jobInput');
+  const btn    = document.getElementById('importBtn');
+  const status = document.getElementById('importStatus');
+
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') runImport(); });
+
+  function setStatus(type, html) {
+    status.className = 'import-status ' + (type || '');
+    status.innerHTML = html;
+    status.hidden = !html;
+  }
+
+  async function runImport() {
+    const job = input.value.trim();
+    if (!job) { input.focus(); return; }
+
+    btn.disabled = true;
+    setStatus('', '<div class="spinner"></div> Importazione in corso…');
+
+    try {
+      const res = await fetch('{% url "import_from_old_api" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}',
+        },
+        body: JSON.stringify({ job }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        setStatus('success',
+          `✅ Importazione completata — ${data.documenti} document${data.documenti === 1 ? 'o' : 'i'}, ` +
+          `${data.revisioni} revision${data.revisioni === 1 ? 'e' : 'i'}.`
+        );
+      } else {
+        setStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));
+      }
+    } catch (err) {
+      setStatus('error', '❌ Errore di rete: ' + err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+{% endblock %}

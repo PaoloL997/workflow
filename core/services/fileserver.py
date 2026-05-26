@@ -50,14 +50,16 @@ def get_ricevuti_path(commessa: str, reparto_acronimo: str, data_str: str) -> Pa
 
 
 def trova_file(directory: Path, vendor_doc: str) -> list[dict]:
-    """Find all files in a directory whose name starts with ``vendor_doc``.
+    """Find all files in a directory whose name contains ``vendor_doc``.
 
     The match is case-insensitive. Only regular files (not directories) are
-    returned.
+    returned. Files may be prefixed with conventions such as
+    "Check copy of " or "Check_copy_of_", so a substring match is used
+    rather than a prefix match.
 
     Args:
         directory: Directory to scan. Returns empty list if it does not exist.
-        vendor_doc: Internal document name prefix to match (e.g. ``"25056-QMDBI"``).
+        vendor_doc: Internal document name to match (e.g. ``"25056-QMDBI"``).
 
     Returns:
         List of dicts, each with keys ``percorso``, ``nome``, ``estensione``.
@@ -65,10 +67,10 @@ def trova_file(directory: Path, vendor_doc: str) -> list[dict]:
     if not directory.exists() or not directory.is_dir():
         return []
 
-    prefix = vendor_doc.lower()
+    needle = vendor_doc.lower()
     results = []
     for entry in directory.iterdir():
-        if entry.is_file() and entry.name.lower().startswith(prefix):
+        if entry.is_file() and needle in entry.name.lower():
             results.append(
                 {
                     "percorso": str(entry),
