@@ -14,6 +14,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name: str, default: list[str]) -> list[str]:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -23,16 +37,27 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me-in-producti
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # In production: set DEBUG = False and SESSION_COOKIE_SECURE = True (if using HTTPS).
-DEBUG = True
+DEBUG = env_bool("DEBUG", True)
 
-ALLOWED_HOSTS = ["192.168.0.136", "192.168.0.48", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = env_list(
+    "ALLOWED_HOSTS",
+    ["192.168.0.136", "192.168.0.48", "localhost", "127.0.0.1"],
+)
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://192.168.0.136:8003",
-    "http://192.168.0.136:8002",
-    "http://192.168.0.136",
-    "http://localhost:8003",
-]
+CSRF_TRUSTED_ORIGINS = env_list(
+    "CSRF_TRUSTED_ORIGINS",
+    [
+        "http://192.168.0.136:8003",
+        "http://192.168.0.136:8002",
+        "http://192.168.0.136",
+        "http://localhost:8003",
+    ],
+)
+
+USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST", False)
+
+if env_bool("USE_X_FORWARDED_PROTO", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -100,7 +125,8 @@ SESSION_COOKIE_NAME = "workflow_sessionid"
 CSRF_COOKIE_NAME = "workflow_csrftoken"
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = False  # True solo con HTTPS
+SESSION_COOKIE_SECURE = env_bool("SESSION_COOKIE_SECURE", False)
+CSRF_COOKIE_SECURE = env_bool("CSRF_COOKIE_SECURE", False)
 
 
 # Password validation
