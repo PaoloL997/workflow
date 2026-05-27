@@ -3,6 +3,8 @@ services:
     build:
       context: .
     restart: unless-stopped
+    network_mode: host
+    command: ["/entrypoint.sh", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8004", "--workers", "3", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     env_file:
       - .env
     environment:
@@ -24,6 +26,8 @@ services:
       - web
     ports:
       - "${APP_PORT:-8000}:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - static_data:/static:ro
