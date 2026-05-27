@@ -3,9 +3,6 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    POETRY_VERSION=2.2.1 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_NO_INTERACTION=1 \
     DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /app
@@ -26,16 +23,19 @@ RUN apt-get update \
         > /etc/apt/sources.list.d/microsoft-prod.list \
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 \
-    && pip install "poetry==$POETRY_VERSION" \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml poetry.lock README.md ./
+COPY pyproject.toml README.md ./
+
+RUN pip install pip-tools \
+    && pip-compile pyproject.toml --no-header --output-file /tmp/requirements.txt \
+    && pip install -r /tmp/requirements.txt \
+    && pip uninstall -y pip-tools
+
 COPY config ./config
 COPY core ./core
 COPY src ./src
 COPY manage.py ./
-
-RUN poetry install --only main --no-root
 
 COPY entrypoint.sh /entrypoint.sh
 
