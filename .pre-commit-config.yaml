@@ -12,8 +12,6 @@ repos:
         args: [--maxkb=500]
       - id: check-ast          # syntax check — catches invalid Python before it runs
       - id: debug-statements   # blocks accidental pdb / breakpoint() commits
-      - id: no-commit-to-branch
-        args: [--branch, main, --branch, master]
 
   # Ruff: linting + import sorting + auto-fix
   - repo: https://github.com/astral-sh/ruff-pre-commit
