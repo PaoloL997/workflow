@@ -1143,7 +1143,7 @@
     }
     const serveUrl = '/api/revisioni/' + _currentRevId + '/file/serve/?percorso=' + encodeURIComponent(file.percorso);
     const a = document.createElement('a');
-    a.href = serveUrl; a.download = file.nome || ''; a.style.display = 'none';
+    a.href = serveUrl; a.target = '_blank'; a.style.display = 'none';
     document.body.appendChild(a); a.click();
     setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 300);
   }

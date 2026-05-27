@@ -1373,7 +1373,7 @@ def revisione_file_serve(request, pk):
     return FileResponse(
         open(file_path, "rb"),
         content_type=content_type,
-        as_attachment=True,
+        as_attachment=False,
         filename=file_path.name,
     )
 
