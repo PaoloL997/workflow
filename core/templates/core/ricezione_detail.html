@@ -193,7 +193,30 @@
     font-size: 13px; color: var(--color-text-secondary);
     text-align: center; white-space: nowrap;
   }
-  .cell-date.overdue { color: var(--color-danger); }
+  .cell-date.overdue { color: var(--color-danger); font-weight: 700; }
+  .cell-date.warning { color: var(--amber); }
+
+  /* Row urgency tints */
+  .doc-main-row.row-overdue { background: color-mix(in srgb, var(--color-danger) 6%, transparent); }
+  .doc-main-row.row-warning { background: color-mix(in srgb, var(--amber) 6%, transparent); }
+  .doc-main-row.row-overdue:hover { background: color-mix(in srgb, var(--color-danger) 10%, var(--color-elevated)); }
+  .doc-main-row.row-warning:hover { background: color-mix(in srgb, var(--amber) 10%, var(--color-elevated)); }
+
+  /* Urgency badge inside date cell */
+  .urgency-tag {
+    display: inline-block; margin-top: 3px;
+    padding: 1px 6px; border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .urgency-tag.tag-overdue {
+    background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+    color: var(--color-danger);
+  }
+  .urgency-tag.tag-warning {
+    background: color-mix(in srgb, var(--amber) 14%, transparent);
+    color: var(--amber);
+  }
 
   /* Inputs inside table */
   .ric-select,
@@ -614,6 +637,16 @@
 
   /* ── Render table ── */
   function renderTable(docs) {
+    // Sort: overdue first (oldest date = most urgent), then soonest upcoming, then no date
+    docs = [...docs].sort((a, b) => {
+      const aT = a.latest_rec_plan_date ? new Date(a.latest_rec_plan_date + 'T00:00:00').getTime() : null;
+      const bT = b.latest_rec_plan_date ? new Date(b.latest_rec_plan_date + 'T00:00:00').getTime() : null;
+      if (aT === null && bT === null) return 0;
+      if (aT === null) return 1;
+      if (bT === null) return -1;
+      return aT - bT;
+    });
+
     const wrap = document.getElementById('table-wrap');
     if (!docs.length) {
       wrap.innerHTML = `
@@ -634,17 +667,25 @@
       const revLabel  = d.latest_rev_let ? `Rev. ${d.latest_rev_let}` : (d.latest_rev_no != null ? `Rev. ${d.latest_rev_no}` : '—');
       const disDate   = d.latest_dis_act_date ? fmtDate(d.latest_dis_act_date) : '—';
       const recPlan   = d.latest_rec_plan_date ? fmtDate(d.latest_rec_plan_date) : '—';
-      const isOverdue = d.latest_rec_plan_date && new Date(d.latest_rec_plan_date) < today;
+
+      const recPlanDate = d.latest_rec_plan_date ? new Date(d.latest_rec_plan_date + 'T00:00:00') : null;
+      const isOverdue   = recPlanDate && recPlanDate < today;
+      const diffDays    = recPlanDate ? Math.round((recPlanDate - today) / 86400000) : null;
+      const isWarning   = !isOverdue && diffDays !== null && diffDays <= 7;
+      const rowClass    = isOverdue ? ' row-overdue' : isWarning ? ' row-warning' : '';
+      const urgencyTag  = '';
 
       return `
-        <tr class="doc-main-row" data-doc-id="${d.id}">
+        <tr class="doc-main-row${rowClass}" data-doc-id="${d.id}">
           <td>
             <span class="doc-code">${escHtml(d.vendor_doc || '—')}</span>
             <span class="doc-rev-badge">${escHtml(revLabel)}</span>
             <div class="doc-title-small">${escHtml(d.doc_title || '')}</div>
           </td>
           <td class="cell-date">${escHtml(disDate)}</td>
-          <td class="cell-date${isOverdue ? ' overdue' : ''}">${escHtml(recPlan)}</td>
+          <td class="cell-date${isOverdue ? ' overdue' : isWarning ? ' warning' : ''}">
+            ${escHtml(recPlan)}${urgencyTag}
+          </td>
           <td>
             <div class="csel-wrap">
               <button type="button" class="csel-btn" data-doc="${d.id}" onclick="openCsel(this)">
@@ -682,7 +723,10 @@
           <tr>
             <th class="col-doc">Documento</th>
             <th class="col-date">Emesso</th>
-            <th class="col-date">Rientro prev.</th>
+            <th class="col-date">
+              Rientro prev.
+              <svg style="vertical-align:middle;margin-left:3px;opacity:0.5" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
+            </th>
             <th class="col-sel">Stato esterno</th>
             <th class="col-in">Data rientro</th>
             <th class="col-toggle">Nuova rev.</th>
