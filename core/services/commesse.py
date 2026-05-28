@@ -172,6 +172,18 @@ def _clean_indirizzo_fields(data):
     return {k: v for k, v in data.items() if k in _INDIRIZZO_FIELDS}
 
 
+def _parse_date(value):
+    """Parse an ISO date string (YYYY-MM-DD) or return None for empty/null values."""
+    if not value:
+        return None
+    if isinstance(value, date_type):
+        return value
+    try:
+        return date_type.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
 # ── Reparto helpers ───────────────────────────────────────────────────────────
 
 
@@ -184,6 +196,7 @@ def list_reparti():
 def serialize_documento(d, reparto_acronimi=None):
     label_map = dict(STATI_INTERNI_CHOICES)
     latest_rev = d.revisioni.select_related("ext_status").order_by("-rev_no", "-pk").first()
+    rev0 = d.revisioni.filter(rev_no=0).first()
     latest_int_status = latest_rev.int_status if latest_rev else ""
     latest_int_status_label = (
         label_map.get(latest_int_status, latest_int_status) if latest_int_status else ""
@@ -210,6 +223,7 @@ def serialize_documento(d, reparto_acronimi=None):
         "reparto_label": d.reparto,
         "reparto_acronimo": reparto_acronimo,
         "remarks": d.remarks,
+        "dis_plan_date_rev0": rev0.dis_plan_date.isoformat() if (rev0 and rev0.dis_plan_date) else None,
         "latest_rev_id": latest_rev.pk if latest_rev else None,
         "latest_rev_no": latest_rev.rev_no if latest_rev else None,
         "latest_rev_let": latest_rev.rev_let if latest_rev else "",
@@ -253,7 +267,11 @@ def create_documento(job, data):
     d = Documento(testata=t, **_clean_documento_fields(data))
     d.full_clean()
     d.save()
-    Revisione.objects.create(documento=d, rev_no=0)
+    rev0 = Revisione.objects.create(documento=d, rev_no=0)
+    dis_plan = _parse_date(data.get("dis_plan_date_rev0"))
+    if dis_plan is not None:
+        rev0.dis_plan_date = dis_plan
+        rev0.save(update_fields=["dis_plan_date"])
     return d
 
 
@@ -267,6 +285,12 @@ def update_documento(pk, data):
     # If reparto was just set and no revision exists yet, create rev 0
     if d.reparto and not had_reparto and not d.revisioni.exists():
         Revisione.objects.create(documento=d, rev_no=0)
+    if "dis_plan_date_rev0" in data:
+        dis_plan = _parse_date(data["dis_plan_date_rev0"])
+        rev0 = d.revisioni.filter(rev_no=0).first()
+        if rev0 is not None:
+            rev0.dis_plan_date = dis_plan
+            rev0.save(update_fields=["dis_plan_date"])
     return d
 
 

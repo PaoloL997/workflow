@@ -827,7 +827,7 @@
       const res = await fetch('/api/commesse/');
       if (!res.ok) throw new Error('Errore di rete');
       const { commesse } = await res.json();
-      renderGrid(commesse.slice(0, 12));
+      renderGrid(commesse.slice(0, 8));
     } catch {
       grid.innerHTML = '<div class="empty-state">Impossibile caricare le commesse.</div>';
     }

@@ -638,6 +638,7 @@
     text-transform: uppercase;
   }
   .fg input[type="text"],
+  .fg input[type="date"],
   .fg select,
   .fg textarea {
     padding: 10px 12px;
@@ -1082,6 +1083,10 @@
       <div class="fg full">
         <label for="f-remarks">Note</label>
         <textarea id="f-remarks" placeholder="Note libere…"></textarea>
+      </div>
+      <div class="fg">
+        <label for="f-dis-plan-date-rev0">Data invio prevista (Rev. 0)</label>
+        <input type="date" id="f-dis-plan-date-rev0">
       </div>
     </div>
     <div>
@@ -1722,6 +1727,7 @@
     document.getElementById('f-doc-title').value        = d.doc_title || '';
     document.getElementById('f-reparto').value          = d.reparto || '';
     document.getElementById('f-remarks').value          = d.remarks || '';
+    document.getElementById('f-dis-plan-date-rev0').value = d.dis_plan_date_rev0 || '';
     document.getElementById('f-penalty').checked        = !!d.doc_penalty;
     document.getElementById('f-payment').checked        = !!d.doc_payment;
     document.getElementById('f-rev-gen').checked        = !!d.rev_gen;
@@ -1745,6 +1751,7 @@
     ['f-item-no','f-vendor-doc','f-client-doc-no','f-client-doc-class','f-doc-title','f-remarks']
       .forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('f-reparto').value = '';
+    document.getElementById('f-dis-plan-date-rev0').value = '';
     document.getElementById('f-penalty').checked = false;
     document.getElementById('f-payment').checked = false;
     document.getElementById('f-rev-gen').checked  = false;
@@ -1762,6 +1769,7 @@
       doc_title: document.getElementById('f-doc-title').value.trim(),
       reparto: document.getElementById('f-reparto').value,
       remarks: document.getElementById('f-remarks').value.trim(),
+      dis_plan_date_rev0: document.getElementById('f-dis-plan-date-rev0').value || null,
       doc_penalty: document.getElementById('f-penalty').checked,
       doc_payment: document.getElementById('f-payment').checked,
       rev_gen: document.getElementById('f-rev-gen').checked,
