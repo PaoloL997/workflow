@@ -133,6 +133,12 @@ class StatoEsterno(models.Model):
         default="",
         help_text="Colore esadecimale (es. #00B050).",
     )
+    crea_nuova_rev = models.BooleanField(
+        db_column="CreaNuovaRev",
+        default=True,
+        verbose_name="Crea nuova revisione",
+        help_text="Se attivo, alla ricezione con questa risposta viene creata automaticamente una nuova revisione.",
+    )
 
     class Meta:
         managed = True

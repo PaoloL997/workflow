@@ -356,11 +356,19 @@ def list_stati_interni():
 
 
 def list_stati_esterni():
-    return [{"id": s.pk, "nome": s.nome, "colore": s.colore} for s in StatoEsterno.objects.all()]
+    return [
+        {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}
+        for s in StatoEsterno.objects.all()
+    ]
 
 
 def create_stato_esterno(data):
-    s = StatoEsterno(nome=data.get("nome", "").strip(), colore=data.get("colore", "").strip())
+    s = StatoEsterno(
+        nome=data.get("nome", "").strip(),
+        colore=data.get("colore", "").strip(),
+    )
+    if "crea_nuova_rev" in data:
+        s.crea_nuova_rev = bool(data["crea_nuova_rev"])
     s.full_clean()
     s.save()
     return s
@@ -372,6 +380,8 @@ def update_stato_esterno(pk, data):
         s.nome = data["nome"].strip()
     if "colore" in data:
         s.colore = data["colore"].strip()
+    if "crea_nuova_rev" in data:
+        s.crea_nuova_rev = bool(data["crea_nuova_rev"])
     s.full_clean()
     s.save()
     return s

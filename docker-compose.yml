@@ -18,6 +18,7 @@ services:
       - media_data:/app/media
       - logs_data:/app/logs
       - ${FILESERVER_HOST_PATH}:${FILESERVER_JOBS_PATH:-/app/fileserver}:ro
+      - ./Access:/app/Access:ro
 
   nginx:
     image: nginx:1.27-alpine

@@ -834,6 +834,14 @@
       btn.querySelector('.csel-label').textContent = nome;
       btn.classList.toggle('has-value', val !== '');
     }
+    // Auto-set the "Nuova rev." toggle based on the selected stato's flag
+    if (val !== '') {
+      const stato = _statiEsterni.find(s => String(s.id) === String(val));
+      if (stato !== undefined) {
+        const toggle = document.querySelector(`.ric-nuova-rev[data-doc="${docId}"]`);
+        if (toggle) toggle.checked = stato.crea_nuova_rev;
+      }
+    }
     closeCsel();
   };
 

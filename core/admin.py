@@ -50,7 +50,7 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(StatoEsterno)
 class StatoEsternoAdmin(admin.ModelAdmin):
-    list_display = ("id", "nome", "colore")
+    list_display = ("id", "nome", "colore", "crea_nuova_rev")
     search_fields = ("nome",)
 
 

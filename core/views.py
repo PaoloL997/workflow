@@ -521,7 +521,7 @@ def stati_esterni_api(request):
     try:
         s = create_stato_esterno(data)
         return JsonResponse(
-            {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore}}, status=201
+            {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}}, status=201
         )
     except IntegrityError:
         return JsonResponse({"error": "Esiste già uno stato esterno con questo nome."}, status=409)
@@ -540,7 +540,7 @@ def stato_esterno_api_detail(request, pk):
         try:
             s = update_stato_esterno(pk, data)
             return JsonResponse(
-                {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore}}
+                {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}}
             )
         except StatoEsterno.DoesNotExist:
             return JsonResponse({"error": "Stato esterno non trovato."}, status=404)
