@@ -1050,7 +1050,11 @@
           tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_plan_date)}</td>`;
           tbody += `<td>${fmtDate(rev.dis_act_date)}</td>`;
           tbody += `<td>${fmtDate(rev.rec_plan_date)}</td>`;
-          tbody += `<td>${fmtDate(rev.rec_act_date)}</td>`;
+          if (rev.rec_act_date) {
+            tbody += `<td class="sit-row-clickable" onclick="onRevBtnClick(${rev.id}, this)">${fmtDate(rev.rec_act_date)}</td>`;
+          } else {
+            tbody += `<td>${fmtDate(rev.rec_act_date)}</td>`;
+          }
         } else {
           tbody += `<td class="sit-rev-first">\u2014</td><td>\u2014</td><td>\u2014</td><td>\u2014</td>`;
         }

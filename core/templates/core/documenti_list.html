@@ -1481,7 +1481,7 @@
     var serveUrl = '/api/revisioni/' + _currentRevId + '/file/serve/?percorso=' + encodeURIComponent(file.percorso);
     var a = document.createElement('a');
     a.href = serveUrl;
-    a.download = file.nome || '';
+    a.target = '_blank';
     a.style.display = 'none';
     document.body.appendChild(a);
     a.click();
