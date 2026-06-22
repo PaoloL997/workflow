@@ -368,6 +368,165 @@
     color: var(--color-accent);
   }
 
+  /* ── Column filters ── */
+  .sit-filter-summary {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-left: 4px;
+  }
+
+  .sit-filter-count strong {
+    color: var(--color-text-primary);
+    font-weight: 600;
+  }
+
+  .sit-filter-reset {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--color-accent);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .sit-filter-reset:hover {
+    opacity: 0.85;
+  }
+
+  .th-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 100%;
+  }
+
+  .col-filter-btn {
+    flex-shrink: 0;
+    padding: 2px;
+    border: none;
+    background: none;
+    color: var(--color-text-secondary);
+    opacity: 0;
+    cursor: pointer;
+    border-radius: 4px;
+    line-height: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .sit-table thead th:hover .col-filter-btn,
+  .sit-horiz thead th.sit-fix:hover .col-filter-btn,
+  th.col-filter-active .col-filter-btn {
+    opacity: 0.6;
+  }
+
+  th.col-filter-active .col-filter-btn {
+    opacity: 1;
+    color: var(--color-accent);
+  }
+
+  .col-filter-btn:hover {
+    opacity: 1 !important;
+    color: var(--color-accent);
+    background: hsla(0,0%,50%,0.08);
+  }
+
+  th.col-filter-active {
+    box-shadow: inset 0 -2px 0 var(--color-accent);
+  }
+
+  .col-filter-popover {
+    position: fixed;
+    z-index: 350;
+    width: 220px;
+    padding: 12px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px hsla(0,0%,0%,0.18);
+    display: none;
+  }
+
+  .col-filter-popover.open {
+    display: block;
+  }
+
+  .col-filter-popover-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+  }
+
+  .col-filter-popover-input,
+  .col-filter-popover-select {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+
+  .col-filter-popover-input:focus,
+  .col-filter-popover-select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
+  .col-filter-popover-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .col-filter-popover-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+  }
+
+  .col-filter-popover-btn:hover {
+    color: var(--color-text-primary);
+    background: hsla(0,0%,50%,0.08);
+  }
+
+  .col-filter-popover-btn.primary {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+
+  .col-filter-popover-btn.primary:hover {
+    filter: brightness(1.06);
+  }
+
+  .sit-empty-filter {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    opacity: 0.65;
+  }
+
   /* ── Fullscreen ── */
   :fullscreen .sit-card,
   :-webkit-full-screen .sit-card {
@@ -688,6 +847,7 @@
           <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
         </svg>
       </button>
+      <div class="sit-filter-summary" id="sit-filter-summary"></div>
       <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
         <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
         <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
@@ -702,7 +862,17 @@
     </div>
 
   </div><!-- /content -->
-</div><!-- /page -->
+  </div><!-- /page -->
+
+<!-- ── Column filter popover ── -->
+<div class="col-filter-popover" id="col-filter-popover" role="dialog" aria-modal="true" aria-labelledby="col-filter-popover-title">
+  <div class="col-filter-popover-title" id="col-filter-popover-title"></div>
+  <div id="col-filter-popover-body"></div>
+  <div class="col-filter-popover-actions">
+    <button type="button" class="col-filter-popover-btn" id="col-filter-cancel-btn">Cancella</button>
+    <button type="button" class="col-filter-popover-btn primary" id="col-filter-apply-btn">Applica</button>
+  </div>
+</div>
 
 <!-- ── Toast ── -->
 <div class="sit-toast" id="sit-toast" role="status" aria-live="polite"></div>
@@ -856,6 +1026,263 @@
   let _vista      = 'verticale';
   let _sortKey    = null;
   let _sortDir    = 1; // 1 = asc, -1 = desc
+  let _columnFilters = {};
+  let _openFilterKey = null;
+
+  const FILTER_LABELS = {
+    item_no:          'Item',
+    vendor_doc:       'B&R Doc',
+    client_doc_no:    'Client Doc No',
+    client_doc_class: 'Client Doc Class',
+    doc_title:        'Titolo',
+    reparto_label:    'Reparto',
+    doc_penalty:      'Penale',
+    doc_payment:      'Pagamento',
+    rev_no:           'Rev.',
+    dis_plan_date:    'Inv. previsto',
+    dis_act_date:     'Inv. effettivo',
+    rec_plan_date:    'Ric. previsto',
+    rec_act_date:     'Ric. effettivo',
+    int_status:       'Stato interno',
+    ext_status:       'Risposta cliente',
+  };
+
+  const BOOL_FILTER_KEYS = new Set(['doc_penalty', 'doc_payment']);
+  const SELECT_FILTER_KEYS = new Set(['int_status', 'ext_status']);
+  const DATE_FILTER_KEYS = new Set([
+    'dis_plan_date', 'dis_act_date', 'rec_plan_date', 'rec_act_date',
+  ]);
+
+  const FILTER_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>';
+
+  function activeFilterKeys() {
+    return Object.keys(_columnFilters).filter(function (k) { return _columnFilters[k]; });
+  }
+
+  function filterBtnHtml(key) {
+    const active = Boolean(_columnFilters[key]);
+    return `<button type="button" class="col-filter-btn${active ? ' active' : ''}" `
+      + `onclick="openColumnFilter('${escHtml(key)}', event)" `
+      + `aria-label="Filtra ${escHtml(FILTER_LABELS[key] || key)}" `
+      + `aria-pressed="${active}">${FILTER_ICON}</button>`;
+  }
+
+  function updateFilterSummary(shown, total) {
+    const el = document.getElementById('sit-filter-summary');
+    if (!activeFilterKeys().length) {
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    el.style.display = 'flex';
+    el.innerHTML =
+      '<span class="sit-filter-count"><strong>' + shown + '</strong> di ' + total + ' righe</span>'
+      + '<button type="button" class="sit-filter-reset" onclick="clearColumnFilters()">Azzera filtri</button>';
+  }
+
+  window.clearColumnFilters = function () {
+    _columnFilters = {};
+    closeColumnFilterPopover();
+    applyFilters();
+  };
+
+  function normalizeForFilter(value) {
+    return String(value == null ? '' : value).toLowerCase().trim();
+  }
+
+  function getColumnFilterValue(row, key) {
+    const d = row.d;
+    const r = row.r;
+    switch (key) {
+      case 'doc_penalty': return d.doc_penalty ? 'yes' : 'no';
+      case 'doc_payment': return d.doc_payment ? 'yes' : 'no';
+      case 'rev_no':
+        if (!r) return '';
+        return String(r.rev_no ?? '') + (r.rev_let || '');
+      case 'reparto_label':
+        return d.reparto_acronimo || d.reparto_label || '';
+      case 'dis_plan_date':
+      case 'dis_act_date':
+      case 'rec_plan_date':
+      case 'rec_act_date':
+        return r && r[key] ? fmtDate(r[key]) : '';
+      default:
+        return String(getRowVal(row, key) || '');
+    }
+  }
+
+  function getDocFilterValue(doc, key) {
+    if (key === 'reparto_label') {
+      return doc.reparto_acronimo || doc.reparto_label || '';
+    }
+    return doc[key] || '';
+  }
+
+  function rowMatchesFilters(row) {
+    const keys = activeFilterKeys();
+    if (!keys.length) return true;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const filterVal = _columnFilters[key];
+      const cellVal = getColumnFilterValue(row, key);
+      if (BOOL_FILTER_KEYS.has(key) || SELECT_FILTER_KEYS.has(key)) {
+        if (cellVal !== filterVal) return false;
+      } else if (!normalizeForFilter(cellVal).includes(normalizeForFilter(filterVal))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function docMatchesFilters(entry) {
+    const keys = activeFilterKeys();
+    if (!keys.length) return true;
+    const doc = entry.doc;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      const filterVal = _columnFilters[key];
+      const cellVal = getDocFilterValue(doc, key);
+      if (!normalizeForFilter(cellVal).includes(normalizeForFilter(filterVal))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function getUniqueExtLabels() {
+    const labels = new Set();
+    _allDocRevs.forEach(function (entry) {
+      (entry.revs || []).forEach(function (rev) {
+        if (rev.ext_status_label) labels.add(rev.ext_status_label);
+      });
+    });
+    return Array.from(labels).sort(function (a, b) {
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
+  }
+
+  function getIntStatusOptions() {
+    const opts = ['Da inviare'];
+    Object.keys(STATI_LABEL).forEach(function (k) {
+      if (STATI_LABEL[k]) opts.push(STATI_LABEL[k]);
+    });
+    return opts;
+  }
+
+  function closeColumnFilterPopover() {
+    _openFilterKey = null;
+    const pop = document.getElementById('col-filter-popover');
+    pop.classList.remove('open');
+    pop.style.left = '';
+    pop.style.top = '';
+  }
+
+  function buildFilterPopoverBody(key) {
+    const body = document.getElementById('col-filter-popover-body');
+    const current = _columnFilters[key] || '';
+
+    if (BOOL_FILTER_KEYS.has(key)) {
+      body.innerHTML =
+        '<select class="col-filter-popover-select" id="col-filter-input">'
+        + '<option value="">Tutti</option>'
+        + '<option value="yes"' + (current === 'yes' ? ' selected' : '') + '>Sì</option>'
+        + '<option value="no"' + (current === 'no' ? ' selected' : '') + '>No</option>'
+        + '</select>';
+      return;
+    }
+
+    if (key === 'int_status') {
+      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">Tutti</option>';
+      getIntStatusOptions().forEach(function (label) {
+        html += '<option value="' + escHtml(label) + '"' + (current === label ? ' selected' : '') + '>'
+          + escHtml(label) + '</option>';
+      });
+      body.innerHTML = html + '</select>';
+      return;
+    }
+
+    if (key === 'ext_status') {
+      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">Tutti</option>';
+      getUniqueExtLabels().forEach(function (label) {
+        html += '<option value="' + escHtml(label) + '"' + (current === label ? ' selected' : '') + '>'
+          + escHtml(label) + '</option>';
+      });
+      body.innerHTML = html + '</select>';
+      return;
+    }
+
+    const placeholder = DATE_FILTER_KEYS.has(key) ? 'es. 03/2025' : 'Contiene…';
+    body.innerHTML =
+      '<input type="text" class="col-filter-popover-input" id="col-filter-input" '
+      + 'value="' + escHtml(current) + '" placeholder="' + escHtml(placeholder) + '">';
+  }
+
+  function positionColumnFilterPopover(anchorEl) {
+    const pop = document.getElementById('col-filter-popover');
+    pop.classList.add('open');
+    const rect = anchorEl.getBoundingClientRect();
+    const popW = 220;
+    let left = rect.left;
+    let top = rect.bottom + 6;
+    if (left + popW > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - popW - 12);
+    }
+    if (top + 120 > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - 120);
+    }
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  window.openColumnFilter = function (key, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    _openFilterKey = key;
+    document.getElementById('col-filter-popover-title').textContent = FILTER_LABELS[key] || key;
+    buildFilterPopoverBody(key);
+    positionColumnFilterPopover(event.currentTarget);
+    const input = document.getElementById('col-filter-input');
+    if (input) {
+      input.focus();
+      if (input.select) input.select();
+    }
+  };
+
+  function applyCurrentColumnFilter() {
+    if (!_openFilterKey) return;
+    const input = document.getElementById('col-filter-input');
+    const value = input ? input.value.trim() : '';
+    if (value) _columnFilters[_openFilterKey] = value;
+    else delete _columnFilters[_openFilterKey];
+    closeColumnFilterPopover();
+    applyFilters();
+  }
+
+  function clearCurrentColumnFilter() {
+    if (!_openFilterKey) return;
+    delete _columnFilters[_openFilterKey];
+    closeColumnFilterPopover();
+    applyFilters();
+  }
+
+  document.getElementById('col-filter-apply-btn').addEventListener('click', applyCurrentColumnFilter);
+  document.getElementById('col-filter-cancel-btn').addEventListener('click', clearCurrentColumnFilter);
+  document.addEventListener('click', function (e) {
+    const pop = document.getElementById('col-filter-popover');
+    if (!pop.classList.contains('open')) return;
+    if (pop.contains(e.target) || e.target.closest('.col-filter-btn')) return;
+    closeColumnFilterPopover();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeColumnFilterPopover();
+    if (e.key === 'Enter' && _openFilterKey && document.getElementById('col-filter-popover').classList.contains('open')) {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === 'INPUT') {
+        e.preventDefault();
+        applyCurrentColumnFilter();
+      }
+    }
+  });
 
   function fmtDate(d) {
     if (!d) return '\u2014';
@@ -894,6 +1321,8 @@
     _vista = v;
     _sortKey = null;
     _sortDir = 1;
+    _columnFilters = {};
+    closeColumnFilterPopover();
     document.getElementById('btn-vert').classList.toggle('active', v === 'verticale');
     document.getElementById('btn-horiz').classList.toggle('active', v === 'orizzontale');
     applyFilters();
@@ -940,12 +1369,27 @@
   function onSortClick(key) {
     if (_sortKey === key) _sortDir *= -1;
     else { _sortKey = key; _sortDir = 1; }
-    renderVerticale(_allDocRevs);
+    applyFilters();
+  }
+
+  function thHeader(label, key, sortable) {
+    const filterActive = Boolean(_columnFilters[key]);
+    const sortActive = _sortKey === key;
+    const classes = (sortActive ? ' sort-active' : '') + (filterActive ? ' col-filter-active' : '');
+    const labelHtml = sortable
+      ? `<button type="button" class="sort-label" onclick="onSortClick('${escHtml(key)}')">${label}</button>`
+      : `<span class="sort-label">${label}</span>`;
+    const sortAttr = sortable ? ` data-sort-key="${escHtml(key)}"` : '';
+    return `<th${sortAttr} data-filter-key="${escHtml(key)}" class="${classes.trim()}">`
+      + `<span class="th-inner">${labelHtml}${filterBtnHtml(key)}</span></th>`;
   }
 
   function thSort(label, key) {
-    const activeClass = _sortKey === key ? ' sort-active' : '';
-    return `<th data-sort-key="${escHtml(key)}" class="${activeClass}"><button type="button" class="sort-label" onclick="onSortClick('${escHtml(key)}')">${label}</button></th>`;
+    return thHeader(label, key, true);
+  }
+
+  function thFilter(label, key) {
+    return thHeader(label, key, false);
   }
 
   /* ── Vista verticale ── */
@@ -959,9 +1403,12 @@
       else rawRows.push({ d, r: null });
     }
 
-    const rows = sortedRows(rawRows);
+    const totalRows = rawRows.length;
+    const filteredRows = rawRows.filter(rowMatchesFilters);
+    updateFilterSummary(filteredRows.length, totalRows);
+    const rows = sortedRows(filteredRows);
 
-    const trs = rows.map(({ d, r }) => {
+    const trs = rows.length ? rows.map(({ d, r }) => {
       const extMeta = getExtStatusMeta(r);
       const rowStyle = getRowHighlightStyle(r);
       const extBadge = extMeta.label
@@ -992,7 +1439,7 @@
         <td>${intBadge}</td>
         <td>${extBadge}</td>
       </tr>`;
-    }).join('');
+    }).join('') : '<tr><td colspan="15" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>';
 
     c.innerHTML = `
       <div class="sit-table-wrap">
@@ -1004,8 +1451,8 @@
             ${thSort('Client Doc Class', 'client_doc_class')}
             ${thSort('Titolo', 'doc_title')}
             ${thSort('Reparto', 'reparto_label')}
-            <th>Penale</th>
-            <th>Pagamento</th>
+            ${thFilter('Penale', 'doc_penalty')}
+            ${thFilter('Pagamento', 'doc_payment')}
             ${thSort('Rev.', 'rev_no')}
             ${thSort('Inv. previsto', 'dis_plan_date')}
             ${thSort('Inv. effettivo', 'dis_act_date')}
@@ -1023,6 +1470,10 @@
   function renderOrizzontale(docRevs) {
     const c = document.getElementById('sit-container');
     if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
+
+    const totalRows = docRevs.length;
+    const filteredDocRevs = docRevs.filter(docMatchesFilters);
+    updateFilterSummary(filteredDocRevs.length, totalRows);
 
     const FIX = [
       { label: 'Item',             key: 'item_no'        },
@@ -1045,7 +1496,10 @@
     let thead = '<thead><tr>';
     FIX.forEach((col, i) => {
       const lastCls = i === FIX.length - 1 ? ' sit-fix-last' : '';
-      thead += `<th class="sit-fix${lastCls}" rowspan="2" style="${fixStyle(i)}">${col.label}</th>`;
+      const filterActive = Boolean(_columnFilters[col.key]);
+      const filterCls = filterActive ? ' col-filter-active' : '';
+      thead += `<th class="sit-fix${lastCls}${filterCls}" rowspan="2" data-filter-key="${escHtml(col.key)}" style="${fixStyle(i)}">`
+        + `<span class="th-inner">${col.label}${filterBtnHtml(col.key)}</span></th>`;
     });
     for (let r = 0; r < maxRevs; r++) {
       thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
@@ -1059,7 +1513,11 @@
     thead += '</tr></thead>';
 
     let tbody = '<tbody>';
-    for (const { doc, revs } of docRevs) {
+    if (!filteredDocRevs.length) {
+      const colspan = FIX.length + maxRevs * 4;
+      tbody += `<tr><td colspan="${colspan}" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>`;
+    }
+    for (const { doc, revs } of filteredDocRevs) {
       tbody += `<tr ${getDocumentRowHighlightStyle(revs)}>`;
       FIX.forEach((col, i) => {
         let val;

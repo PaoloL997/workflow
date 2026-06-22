@@ -114,6 +114,7 @@ class TestataAdmin(admin.ModelAdmin):
         "client",
         "po_no",
         "delivery_date",
+        "actual_delivery_date",
         "time_cli_doc_rev",
         "time_ven_doc_rev",
     )
@@ -136,6 +137,7 @@ class RevisioneAdmin(admin.ModelAdmin):
         "documento",
         "rev_no",
         "int_status",
+        "ext_status",
         "dis_plan_date",
         "dis_act_date",
         "rec_act_date",

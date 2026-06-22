@@ -84,7 +84,7 @@
 
   /* ── Header ── */
   .commessa-header {
-    margin-bottom: 40px;
+    margin-bottom: 36px;
     text-align: center;
   }
 
@@ -93,33 +93,86 @@
     font-weight: 400;
     color: var(--color-text-secondary);
     letter-spacing: 0;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
 
   .commessa-title {
-    font-size: 34px;
+    font-size: 32px;
     font-weight: 700;
     color: var(--color-text-primary);
     letter-spacing: -0.03em;
     line-height: 1.1;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
+  }
+
+  .commessa-meta {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 4px 24px;
+    max-width: 640px;
+    margin: 0 auto 8px;
+  }
+
+  .commessa-meta-item {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 13px;
+    line-height: 1.3;
+    white-space: nowrap;
+    margin: 0;
+  }
+
+  .commessa-meta-item dt,
+  .commessa-meta-item dd {
+    margin: 0;
+  }
+
+  .commessa-meta-label {
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    opacity: 0.72;
+    flex-shrink: 0;
+  }
+
+  .commessa-meta-value {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  .commessa-meta-value.empty {
+    color: var(--color-text-secondary);
+    font-weight: 400;
+    font-style: italic;
+    opacity: 0.45;
   }
 
   .commessa-desc {
     font-size: 14px;
     font-weight: 400;
     color: var(--color-text-secondary);
-    line-height: 1.5;
+    line-height: 1.45;
     max-width: 640px;
     margin: 0 auto;
   }
 
-  /* ── Delete button ── */
+  /* ── Header actions (chiudi / elimina) ── */
+  .commessa-header-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+
   .del-commessa-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-top: 14px;
+    margin-top: 0;
     padding: 5px 10px;
     border: none;
     background: transparent;
@@ -135,6 +188,18 @@
     color: var(--color-danger, #e53e3e);
     background: rgba(229, 62, 62, 0.07);
     opacity: 1;
+  }
+
+  .close-commessa-btn:hover {
+    color: var(--color-success, #38a169);
+    background: rgba(56, 161, 105, 0.1);
+  }
+
+  .commessa-closed-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    opacity: 0.75;
   }
 
   /* ── Confirm delete modal ── */
@@ -1154,7 +1219,9 @@
   @media (max-width: 580px) {
     .page { padding: 0 20px 80px; }
     .sections-grid { grid-template-columns: 1fr; }
-    .commessa-title { font-size: 28px; }
+    .commessa-title { font-size: 26px; }
+    .commessa-meta { gap: 4px 16px; }
+    .commessa-meta-item { font-size: 12px; }
   }
 </style>
 {% endblock %}
@@ -1193,13 +1260,37 @@
       <p class="commessa-client">{{ testata.client }}</p>
       {% endif %}
       <h1 class="commessa-title">Commessa {{ testata.job }}</h1>
+      <dl class="commessa-meta" aria-label="Dettagli commessa">
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">PO No.</dt>
+          <dd class="commessa-meta-value{% if not testata.po_no %} empty{% endif %}">{{ testata.po_no|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">Bid No.</dt>
+          <dd class="commessa-meta-value{% if not testata.requisition %} empty{% endif %}">{{ testata.requisition|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">Termini consegna</dt>
+          <dd class="commessa-meta-value{% if not testata.delivery_term %} empty{% endif %}">{{ testata.delivery_term|default:"—" }}</dd>
+        </div>
+      </dl>
       {% if testata.job_detail %}
       <p class="commessa-desc">{{ testata.job_detail }}</p>
       {% endif %}
-      <button class="del-commessa-btn" type="button" onclick="openDeleteModal()" aria-label="Elimina commessa">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-        Elimina commessa
-      </button>
+      <div class="commessa-header-actions">
+        {% if testata.actual_delivery_date %}
+        <span class="commessa-closed-label">Chiusa il {{ testata.actual_delivery_date|date:"j/n/Y" }}</span>
+        {% else %}
+        <button class="del-commessa-btn close-commessa-btn" type="button" id="close-commessa-btn" onclick="closeCommessa()" aria-label="Chiudi commessa">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+          <span id="close-commessa-label">Chiudi commessa</span>
+        </button>
+        {% endif %}
+        <button class="del-commessa-btn" type="button" onclick="openDeleteModal()" aria-label="Elimina commessa">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          Elimina commessa
+        </button>
+      </div>
     </header>
 
     <!-- ── Gauge stato ── -->
@@ -1568,7 +1659,9 @@
   'use strict';
 
   /* --- Dates from Django context --- */
-  var deliveryDateStr = "{{ testata.delivery_date|date:'Y-m-d'|default:'' }}";
+  var deliveryDateStr       = "{{ testata.delivery_date|date:'Y-m-d'|default:'' }}";
+  var actualDeliveryDateStr = "{{ testata.actual_delivery_date|date:'Y-m-d'|default:'' }}";
+  var isClosed              = !!actualDeliveryDateStr;
 
   var now = new Date();
   now.setHours(0, 0, 0, 0);
@@ -1582,10 +1675,17 @@
     : new Date(now.getTime() + 365 * 86400000);
   endDate.setHours(0, 0, 0, 0);
 
+  if (isClosed) {
+    endDate = new Date(actualDeliveryDateStr);
+    endDate.setHours(0, 0, 0, 0);
+  }
+
   /* Progress = (today − startDate) / (endDate − startDate) × 100 */
   var totalMs   = endDate - startDate;
   var elapsedMs = now   - startDate;
-  var progress  = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
+  var progress  = isClosed
+    ? 100
+    : Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
 
   /* Arc length: horizontal bar x:24→476 */
   var ARC_LEN   = 452; /* 476 - 24 */
@@ -1593,7 +1693,9 @@
 
   /* Status: date-based stages */
   var statusInfo;
-  if (now > endDate) {
+  if (isClosed) {
+    statusInfo = { label: 'Completato', color: 'var(--color-success)' };
+  } else if (now > endDate) {
     statusInfo = { label: 'In ritardo',  color: 'var(--color-danger)'  };
   } else if (!deliveryDateStr) {
     statusInfo = { label: 'Da iniziare', color: 'var(--color-accent)'  };
@@ -1708,6 +1810,46 @@
   window.openDeleteModal  = openDeleteModal;
   window.closeDeleteModal = closeDeleteModal;
   window.deleteCommessa   = deleteCommessa;
+})();
+</script>
+
+<script>
+/* ── Chiudi commessa ── */
+(function () {
+  'use strict';
+
+  var CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  var JOB  = '{{ testata.job }}';
+
+  async function closeCommessa() {
+    var btn   = document.getElementById('close-commessa-btn');
+    var label = document.getElementById('close-commessa-label');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    if (label) label.textContent = 'Chiusura…';
+
+    try {
+      var res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/chiudi/', {
+        method:  'POST',
+        headers: { 'X-CSRFToken': CSRF },
+      });
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        var data = {};
+        try { data = await res.json(); } catch (_) {}
+        alert(data.error || 'Impossibile chiudere la commessa.');
+        btn.disabled = false;
+        if (label) label.textContent = 'Chiudi commessa';
+      }
+    } catch (e) {
+      alert('Errore di rete. Riprova.');
+      btn.disabled = false;
+      if (label) label.textContent = 'Chiudi commessa';
+    }
+  }
+
+  window.closeCommessa = closeCommessa;
 })();
 </script>
 {% endblock %}

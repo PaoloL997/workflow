@@ -57,6 +57,7 @@ class Testata(models.Model):
     po_no = models.CharField(db_column="PONo", max_length=100, blank=True)
     job_detail = models.CharField(db_column="JobDetail", max_length=300, blank=True)
     delivery_date = models.DateField(db_column="DeliveryDate", blank=True, null=True)
+    actual_delivery_date = models.DateField(db_column="ActualDeliveryDate", blank=True, null=True)
     delivery_term = models.CharField(db_column="DeliveryTerm", max_length=200, blank=True)
     requisition = models.CharField(
         db_column="Requisition", max_length=100, blank=True, verbose_name="Bid no."

@@ -11,9 +11,23 @@ from fpdf.enums import TableBordersLayout
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
 
-# Column widths (mm): POS | ITEM | DOCUMENT No. | REV. | DOCUMENT | REQUIRED BY
-COL_WIDTHS = [12, 22, 50, 15, 60, 21]
-COL_HEADERS = ["POS.", "ITEM", "DOCUMENT No.", "REV.", "DOCUMENT", "REQUIRED BY"]
+# Column layouts per doc_id_mode (mm): ITEM | … | REV. | DOCUMENT | REQUIRED BY
+_TABLE_LAYOUTS = {
+    "vendor": {
+        "headers": ["ITEM", "VENDOR DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
+        "widths": [20, 45, 12, 83, 20],
+    },
+    "client": {
+        "headers": ["ITEM", "CLIENT DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
+        "widths": [20, 45, 12, 83, 20],
+    },
+    "both": {
+        "headers": ["ITEM", "CLIENT DOC.", "VENDOR DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
+        "widths": [18, 32, 32, 10, 68, 20],
+    },
+}
+
+VALID_DOC_ID_MODES = frozenset(_TABLE_LAYOUTS)
 
 DELIVERY_OPTIONS = [
     ("attached", "In allegato", "Attached"),
@@ -180,39 +194,94 @@ def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
     pdf.ln(line_h + 4)
 
 
-def _build_doc_table(pdf, documents, time_cli_doc_rev):
+def _cell_style_for_text(text, col_width_mm):
+    """Pick a smaller font when cell content is long for the column width."""
+    if not text:
+        return None
+    max_chars_per_line = max(len(line) for line in text.split("\n"))
+    # Rough heuristic: ~1.6mm per char at 8pt Helvetica
+    capacity = max(8, int(col_width_mm / 1.5))
+    if max_chars_per_line > capacity * 1.4:
+        return FontFace(size_pt=6)
+    if max_chars_per_line > capacity:
+        return FontFace(size_pt=7)
+    return None
+
+
+def _doc_id_values(doc, mode):
+    vendor = (doc.get("vendor_doc") or "").strip()
+    client = (doc.get("client_doc_no") or "").strip()
+    if mode == "vendor":
+        return [vendor]
+    if mode == "client":
+        return [client]
+    return [client, vendor]
+
+
+def _build_doc_table(pdf, documents, time_cli_doc_rev, doc_id_mode="both"):
     """Render the documents table."""
+    mode = doc_id_mode if doc_id_mode in VALID_DOC_ID_MODES else "both"
+    layout = _TABLE_LAYOUTS[mode]
+    headers = layout["headers"]
+    widths = layout["widths"]
     required_by = f"{time_cli_doc_rev} DAYS" if time_cli_doc_rev else ""
+
+    # Left-align ID and title columns; keep ITEM/REV centered
+    aligns = []
+    for h in headers:
+        if h in ("CLIENT DOC.", "VENDOR DOC.", "DOCUMENT"):
+            aligns.append("LEFT")
+        else:
+            aligns.append("CENTER")
 
     pdf.set_font("Helvetica", "", 8)
     headings_style = FontFace(emphasis="BOLD", fill_color=(210, 210, 210))
+    heading_size = FontFace(emphasis="BOLD", fill_color=(210, 210, 210), size_pt=7)
     with pdf.table(
-        col_widths=tuple(COL_WIDTHS),
+        col_widths=tuple(widths),
         first_row_as_headings=True,
         headings_style=headings_style,
         borders_layout=TableBordersLayout.ALL,
-        text_align="CENTER",
-        line_height=int(pdf.font_size * 2.8),
+        text_align=tuple(aligns),
+        line_height=int(pdf.font_size * 2.6),
+        padding=(1.2, 1.5),
+        wrapmode="CHAR",
     ) as table:
         header_row = table.row()
-        for col in COL_HEADERS:
-            header_row.cell(col)
-        for pos, doc in enumerate(documents, start=1):
-            vendor = doc.get("vendor_doc", "")
-            client = doc.get("client_doc_no", "")
-            if client and vendor:
-                doc_no = f"{client} / {vendor}"
-            elif vendor:
-                doc_no = vendor
-            else:
-                doc_no = client
+        for col, w in zip(headers, widths):
+            style = heading_size if len(col) > 10 else None
+            header_row.cell(col, style=style)
+
+        id_widths = [w for h, w in zip(headers, widths) if h in ("CLIENT DOC.", "VENDOR DOC.")]
+        title_width = next(w for h, w in zip(headers, widths) if h == "DOCUMENT")
+
+        for doc in documents:
+            id_values = _doc_id_values(doc, mode)
+            title = str(doc.get("doc_title", "") or "").strip()
+            title_style = _cell_style_for_text(title, title_width)
 
             row = table.row()
-            row.cell(str(pos))
             row.cell(str(doc.get("item_no", "")))
-            row.cell(doc_no)
+
+            if mode == "both":
+                client_val, vendor_val = id_values
+                row.cell(
+                    client_val,
+                    style=_cell_style_for_text(client_val, id_widths[0]),
+                )
+                row.cell(
+                    vendor_val,
+                    style=_cell_style_for_text(vendor_val, id_widths[1]),
+                )
+            else:
+                id_val = id_values[0]
+                row.cell(
+                    id_val,
+                    style=_cell_style_for_text(id_val, id_widths[0] if id_widths else widths[1]),
+                )
+
             row.cell(str(doc.get("rev_no", "")))
-            row.cell(str(doc.get("doc_title", "")))
+            row.cell(title, style=title_style)
             row.cell(required_by)
 
 
@@ -225,6 +294,7 @@ def genera_trasmittal_pdf(
     city="",
     delivery_mode="attached",
     brevi_manu_name="",
+    doc_id_mode="both",
 ):
     """
     Generate a trasmittal PDF and return the raw bytes.
@@ -238,6 +308,7 @@ def genera_trasmittal_pdf(
         city: city name for the date header (e.g. 'Schio')
         delivery_mode: one of 'attached', 'mail', 'courier', 'brevi_manu'
         brevi_manu_name: name after "Mr." when delivery_mode is 'brevi_manu'
+        doc_id_mode: 'vendor' | 'client' | 'both' — which document IDs to include in the table
 
     Returns:
         bytes — the PDF content
@@ -269,6 +340,6 @@ def genera_trasmittal_pdf(
     _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name)
 
     # Document table
-    _build_doc_table(pdf, documents, time_cli_doc_rev)
+    _build_doc_table(pdf, documents, time_cli_doc_rev, doc_id_mode=doc_id_mode)
 
     return bytes(pdf.output())

@@ -25,6 +25,9 @@ def serialize_testata(t):
         "po_no": t.po_no,
         "job_detail": t.job_detail,
         "delivery_date": t.delivery_date.isoformat() if t.delivery_date else None,
+        "actual_delivery_date": t.actual_delivery_date.isoformat()
+        if t.actual_delivery_date
+        else None,
         "delivery_term": t.delivery_term,
         "requisition": t.requisition,
         "time_cli_doc_rev": t.time_cli_doc_rev,
@@ -81,6 +84,15 @@ def update_commessa(job, data):
 def delete_commessa(job):
     t = Testata.objects.get(job=job)
     t.delete()
+
+
+def close_commessa(job):
+    t = Testata.objects.get(job=job)
+    if t.actual_delivery_date is not None:
+        raise ValueError("Commessa già chiusa.")
+    t.actual_delivery_date = date_type.today()
+    t.save(update_fields=["actual_delivery_date"])
+    return t
 
 
 # ── ERP fetch ─────────────────────────────────────────────────────────────────
@@ -223,7 +235,9 @@ def serialize_documento(d, reparto_acronimi=None):
         "reparto_label": d.reparto,
         "reparto_acronimo": reparto_acronimo,
         "remarks": d.remarks,
-        "dis_plan_date_rev0": rev0.dis_plan_date.isoformat() if (rev0 and rev0.dis_plan_date) else None,
+        "dis_plan_date_rev0": rev0.dis_plan_date.isoformat()
+        if (rev0 and rev0.dis_plan_date)
+        else None,
         "latest_rev_id": latest_rev.pk if latest_rev else None,
         "latest_rev_no": latest_rev.rev_no if latest_rev else None,
         "latest_rev_let": latest_rev.rev_let if latest_rev else "",

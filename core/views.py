@@ -27,6 +27,7 @@ from .models import (
     User,
 )
 from .services.commesse import (
+    close_commessa,
     create_commessa,
     create_documento,
     create_indirizzo,
@@ -375,6 +376,18 @@ def commessa_api_detail(request, job):
 
 
 @api_login_required
+@require_http_methods(["POST"])
+def commessa_close_api(request, job):
+    try:
+        t = close_commessa(job)
+        return JsonResponse({"ok": True, "data": serialize_testata(t)})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+
+
+@api_login_required
 @require_http_methods(["GET"])
 def erp_api(request):
     job = request.GET.get("job", "").strip()
@@ -523,7 +536,16 @@ def stati_esterni_api(request):
     try:
         s = create_stato_esterno(data)
         return JsonResponse(
-            {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}}, status=201
+            {
+                "ok": True,
+                "data": {
+                    "id": s.pk,
+                    "nome": s.nome,
+                    "colore": s.colore,
+                    "crea_nuova_rev": s.crea_nuova_rev,
+                },
+            },
+            status=201,
         )
     except IntegrityError:
         return JsonResponse({"error": "Esiste già uno stato esterno con questo nome."}, status=409)
@@ -542,7 +564,15 @@ def stato_esterno_api_detail(request, pk):
         try:
             s = update_stato_esterno(pk, data)
             return JsonResponse(
-                {"ok": True, "data": {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}}
+                {
+                    "ok": True,
+                    "data": {
+                        "id": s.pk,
+                        "nome": s.nome,
+                        "colore": s.colore,
+                        "crea_nuova_rev": s.crea_nuova_rev,
+                    },
+                }
             )
         except StatoEsterno.DoesNotExist:
             return JsonResponse({"error": "Stato esterno non trovato."}, status=404)
@@ -609,6 +639,9 @@ def trasmittal_pdf_api(request):
     city = data.get("city", "")
     delivery_mode = data.get("delivery_mode", "attached")
     brevi_manu_name = data.get("brevi_manu_name", "")
+    doc_id_mode = data.get("doc_id_mode", "both")
+    if doc_id_mode not in ("vendor", "client", "both"):
+        doc_id_mode = "both"
 
     if not doc_ids or not job:
         return JsonResponse({"error": "Specificare job e doc_ids."}, status=400)
@@ -672,6 +705,7 @@ def trasmittal_pdf_api(request):
             city=city,
             delivery_mode=delivery_mode,
             brevi_manu_name=brevi_manu_name,
+            doc_id_mode=doc_id_mode,
         )
     except Exception as exc:
         return JsonResponse({"error": f"Errore generazione PDF: {exc}"}, status=500)
