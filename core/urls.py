@@ -45,6 +45,7 @@ urlpatterns = [
     path("api/documenti/<int:pk>/", views.documento_api_detail, name="documento_api_detail"),
     # API — Reparti (read-only, from User.reparto)
     path("api/reparti/", views.reparti_api, name="reparti_api"),
+    path("api/cartelle-modelli/", views.cartelle_modelli_api, name="cartelle_modelli_api"),
     # API — Stati (interni read-only, esterni CRUD)
     path("api/stati-interni/", views.stati_interni_api, name="stati_interni_api"),
     path("api/stati-esterni/", views.stati_esterni_api, name="stati_esterni_api"),

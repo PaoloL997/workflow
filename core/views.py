@@ -42,6 +42,7 @@ from .services.commesse import (
     fetch_from_bc,
     genera_documenti_da_modelli,
     get_commessa,
+    list_cartelle_modelli,
     list_commesse,
     list_documenti,
     list_indirizzi,
@@ -51,6 +52,7 @@ from .services.commesse import (
     list_stati_interni,
     risolvi_file_revisione,
     salva_file_link,
+    serialize_cartella_modello,
     serialize_documento,
     serialize_indirizzo,
     serialize_revisione,
@@ -1126,12 +1128,28 @@ def _parse_bool(val):
 
 
 @api_login_required
+@require_http_methods(["GET"])
+def cartelle_modelli_api(request):
+    cartelle = list_cartelle_modelli()
+    return JsonResponse({"data": [serialize_cartella_modello(c) for c in cartelle]})
+
+
+@api_login_required
 @require_http_methods(["POST"])
 def genera_documenti_da_modelli_api(request, job):
     try:
-        creati, saltati = genera_documenti_da_modelli(job)
+        body = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    cartella_id = body.get("cartella_id")
+    if not cartella_id:
+        return JsonResponse({"error": "Cartella modelli non specificata."}, status=400)
+    try:
+        creati, saltati = genera_documenti_da_modelli(job, cartella_id)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=404)
     return JsonResponse(
         {
             "ok": True,

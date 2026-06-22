@@ -910,6 +910,108 @@
   }
   .filechoice-open-btn:hover { opacity: 0.85; }
 
+  /* ── Modal: genera da modello ── */
+  .modello-cartelle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 52vh;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+  .modello-cartella-item {
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-elevated);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    overflow: hidden;
+  }
+  .modello-cartella-item:hover {
+    border-color: hsl(215 80% 60% / 0.45);
+    background: var(--color-surface);
+  }
+  .modello-cartella-item.selected {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px hsl(215 80% 60% / 0.15);
+    background: var(--color-surface);
+  }
+  .modello-cartella-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .modello-cartella-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    letter-spacing: -0.01em;
+  }
+  .modello-cartella-desc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+  .modello-cartella-badge {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .modello-cartella-item.selected .modello-cartella-badge {
+    color: var(--color-accent);
+    border-color: hsl(215 80% 60% / 0.35);
+    background: hsl(215 80% 60% / 0.08);
+  }
+  .modello-cartella-preview {
+    border-top: 1px solid var(--color-border);
+    padding: 10px 16px 12px;
+    display: none;
+  }
+  .modello-cartella-item.selected .modello-cartella-preview { display: block; }
+  .modello-preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .modello-preview-table th {
+    text-align: left;
+    padding: 4px 8px 4px 0;
+    color: var(--color-text-secondary);
+    font-weight: 600;
+    font-size: 11px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .modello-preview-table td {
+    padding: 5px 8px 5px 0;
+    color: var(--color-text-primary);
+    vertical-align: top;
+  }
+  .modello-cartelle-empty {
+    text-align: center;
+    padding: 28px 16px;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    line-height: 1.5;
+    border: 1px dashed var(--color-border);
+    border-radius: 12px;
+    background: var(--color-elevated);
+  }
+  .modello-cartelle-loading {
+    text-align: center;
+    padding: 24px;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+  }
+
   /* Loading spinner on chips */
   .doc-rev-mini--loading-spin {
     animation: spin 0.9s linear infinite;
@@ -1148,6 +1250,29 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" id="modal-import-cancel">Annulla</button>
       <button class="btn btn-primary" id="modal-import-btn">Importa</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Genera da modello ── -->
+<div class="modal-backdrop" id="modal-modello-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-modello-title">
+  <div class="modal" style="max-width: 640px;">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-modello-title">Genera da modello</span>
+      <button class="modal-close" id="modal-modello-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <p style="font-size:13px;color:var(--color-text-secondary);margin:0;">Scegli una cartella di modelli: verranno creati tutti i documenti predefiniti al suo interno.</p>
+    <div class="modello-cartelle-list" id="modello-cartelle-list">
+      <div class="modello-cartelle-loading">Caricamento cartelle…</div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-error" id="modal-modello-error"></span>
+      <button class="btn btn-secondary" id="modal-modello-cancel">Annulla</button>
+      <button class="btn btn-primary" id="modal-modello-genera" disabled>Genera documenti</button>
     </div>
   </div>
 </div>
@@ -1696,23 +1821,155 @@
 
   document.getElementById('chooser-manual').addEventListener('click', function(){ hideAddChooser(); openAddModal(); });
   document.getElementById('chooser-excel').addEventListener('click',  function(){ hideAddChooser(); openImportModal(); });
-  document.getElementById('chooser-modello').addEventListener('click', function(){ hideAddChooser(); generaDaModello(); });
+  document.getElementById('chooser-modello').addEventListener('click', function(){ hideAddChooser(); openModelloModal(); });
 
   /* ── Genera da modello ── */
-  function generaDaModello() {
-    apiFetch('/api/commesse/' + JOB + '/genera-da-modelli/', { method: 'POST' })
+  var modalModello = document.getElementById('modal-modello-backdrop');
+  var modelloList = document.getElementById('modello-cartelle-list');
+  var modelloGeneraBtn = document.getElementById('modal-modello-genera');
+  var modelloError = document.getElementById('modal-modello-error');
+  var selectedCartellaId = null;
+  var cartelleModelli = [];
+
+  function hideModelloError() { modelloError.classList.remove('show'); modelloError.textContent = ''; }
+  function showModelloError(msg) { modelloError.textContent = msg; modelloError.classList.add('show'); }
+
+  function renderModelloCartelle() {
+    modelloList.innerHTML = '';
+    if (!cartelleModelli.length) {
+      modelloList.innerHTML = '<div class="modello-cartelle-empty">Nessuna cartella modelli configurata.<br>Creane una dal pannello admin.</div>';
+      modelloGeneraBtn.disabled = true;
+      return;
+    }
+    cartelleModelli.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'modello-cartella-item' + (selectedCartellaId === c.id ? ' selected' : '');
+      item.dataset.id = c.id;
+
+      var head = document.createElement('div');
+      head.className = 'modello-cartella-head';
+
+      var info = document.createElement('div');
+      var name = document.createElement('div');
+      name.className = 'modello-cartella-name';
+      name.textContent = c.nome;
+      info.appendChild(name);
+      if (c.descrizione) {
+        var desc = document.createElement('div');
+        desc.className = 'modello-cartella-desc';
+        desc.textContent = c.descrizione;
+        info.appendChild(desc);
+      }
+
+      var badge = document.createElement('span');
+      badge.className = 'modello-cartella-badge';
+      var count = c.modelli_count || 0;
+      badge.textContent = count + ' document' + (count === 1 ? 'o' : 'i');
+
+      head.appendChild(info);
+      head.appendChild(badge);
+      item.appendChild(head);
+
+      if (c.modelli && c.modelli.length) {
+        var preview = document.createElement('div');
+        preview.className = 'modello-cartella-preview';
+        var table = document.createElement('table');
+        table.className = 'modello-preview-table';
+        table.innerHTML = '<thead><tr><th>Titolo</th><th>Item</th><th>Codice</th><th>Reparto</th></tr></thead>';
+        var tbody = document.createElement('tbody');
+        c.modelli.forEach(function(m) {
+          var tr = document.createElement('tr');
+          [['doc_title', m.doc_title || '—'], ['item_no', m.item_no || '—'],
+           ['codice_fisso', m.codice_fisso || '—'], ['reparto', m.reparto || '—']].forEach(function(pair) {
+            var td = document.createElement('td');
+            td.textContent = pair[1];
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        preview.appendChild(table);
+        item.appendChild(preview);
+      }
+
+      item.addEventListener('click', function() {
+        selectedCartellaId = c.id;
+        renderModelloCartelle();
+        modelloGeneraBtn.disabled = !selectedCartellaId;
+        hideModelloError();
+      });
+
+      modelloList.appendChild(item);
+    });
+    modelloGeneraBtn.disabled = !selectedCartellaId;
+  }
+
+  function openModelloModal() {
+    selectedCartellaId = null;
+    hideModelloError();
+    modelloGeneraBtn.disabled = true;
+    modelloGeneraBtn.textContent = 'Genera documenti';
+    modelloList.innerHTML = '<div class="modello-cartelle-loading">Caricamento cartelle…</div>';
+    modalModello.classList.add('show');
+
+    apiFetch('/api/cartelle-modelli/')
       .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
-      .then(function(res){
-        if (!res.ok) { showToast(res.body.error || 'Errore.'); return; }
+      .then(function(res) {
+        if (!res.ok) {
+          modelloList.innerHTML = '<div class="modello-cartelle-empty">Errore nel caricamento delle cartelle.</div>';
+          return;
+        }
+        cartelleModelli = res.body.data || [];
+        renderModelloCartelle();
+      })
+      .catch(function() {
+        modelloList.innerHTML = '<div class="modello-cartelle-empty">Errore di rete.</div>';
+      });
+  }
+
+  function closeModelloModal() {
+    modalModello.classList.remove('show');
+    selectedCartellaId = null;
+    hideModelloError();
+  }
+
+  function generaDaModello() {
+    if (!selectedCartellaId) return;
+    modelloGeneraBtn.disabled = true;
+    modelloGeneraBtn.textContent = 'Generazione…';
+    hideModelloError();
+
+    apiFetch('/api/commesse/' + JOB + '/genera-da-modelli/', {
+      method: 'POST',
+      body: JSON.stringify({ cartella_id: selectedCartellaId }),
+    })
+      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+      .then(function(res) {
+        modelloGeneraBtn.disabled = false;
+        modelloGeneraBtn.textContent = 'Genera documenti';
+        if (!res.ok) {
+          showModelloError(res.body.error || 'Errore.');
+          return;
+        }
         var c = res.body.created || 0, s = res.body.skipped || 0;
-        var msg = 'Creati ' + c + ' document' + (c===1?'o':'i');
+        var msg = 'Creati ' + c + ' document' + (c === 1 ? 'o' : 'i');
         if (s) msg += ' (' + s + ' già presenti)';
-        if (!c && !s) msg = 'Nessun modello configurato.';
+        if (!c && !s) msg = 'La cartella selezionata non contiene modelli.';
+        closeModelloModal();
         showToast(msg);
         loadDocs();
       })
-      .catch(function(){ showToast('Errore di rete.'); });
+      .catch(function() {
+        modelloGeneraBtn.disabled = false;
+        modelloGeneraBtn.textContent = 'Genera documenti';
+        showModelloError('Errore di rete.');
+      });
   }
+
+  document.getElementById('modal-modello-close').addEventListener('click', closeModelloModal);
+  document.getElementById('modal-modello-cancel').addEventListener('click', closeModelloModal);
+  modalModello.addEventListener('click', function(e){ if (e.target === modalModello) closeModelloModal(); });
+  modelloGeneraBtn.addEventListener('click', generaDaModello);
 
   function openEditModalById(id) {
     var d = docs.find(function(x){ return x.id === id; });

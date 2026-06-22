@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 from .models import (
+    CartellaModelloDocumento,
     Documento,
     ModelloDocumento,
     Reparto,
@@ -54,10 +55,38 @@ class StatoEsternoAdmin(admin.ModelAdmin):
     search_fields = ("nome",)
 
 
+class ModelloDocumentoInline(admin.TabularInline):
+    model = ModelloDocumento
+    extra = 1
+    fields = ("doc_title", "item_no", "codice_fisso", "reparto")
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        choices = [("", "— Nessun reparto —")] + [
+            (r.nome, r.nome) for r in Reparto.objects.order_by("nome")
+        ]
+        if "reparto" in formset.form.base_fields:
+            formset.form.base_fields["reparto"].widget = forms.Select(choices=choices)
+            formset.form.base_fields["reparto"].required = False
+        return formset
+
+
+@admin.register(CartellaModelloDocumento)
+class CartellaModelloDocumentoAdmin(admin.ModelAdmin):
+    list_display = ("nome", "modelli_count")
+    search_fields = ("nome", "descrizione")
+    inlines = [ModelloDocumentoInline]
+
+    @admin.display(description="Modelli")
+    def modelli_count(self, obj):
+        return obj.modelli.count()
+
+
 @admin.register(ModelloDocumento)
 class ModelloDocumentoAdmin(admin.ModelAdmin):
-    list_display = ("doc_title", "item_no", "codice_fisso", "reparto")
-    search_fields = ("doc_title", "item_no", "codice_fisso", "reparto")
+    list_display = ("doc_title", "cartella", "item_no", "codice_fisso", "reparto")
+    list_filter = ("cartella",)
+    search_fields = ("doc_title", "item_no", "codice_fisso", "reparto", "cartella__nome")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

@@ -231,16 +231,34 @@
   .sit-horiz th.sit-fix,
   .sit-horiz td.sit-fix {
     position: sticky;
-    z-index: 3;
     background: var(--color-elevated);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .sit-horiz tbody td.sit-fix {
     background: var(--color-surface);
-    z-index: 1;
   }
 
-  .sit-horiz thead th.sit-fix { z-index: 4; }
+  /* Incremental z-index so rightmost fixed columns stack above scrolling revision cells */
+  .sit-horiz tbody td.sit-fix:nth-child(1) { z-index: 1; }
+  .sit-horiz tbody td.sit-fix:nth-child(2) { z-index: 2; }
+  .sit-horiz tbody td.sit-fix:nth-child(3) { z-index: 3; }
+  .sit-horiz tbody td.sit-fix:nth-child(4) { z-index: 4; }
+  .sit-horiz tbody td.sit-fix:nth-child(5) { z-index: 5; }
+  .sit-horiz tbody td.sit-fix:nth-child(6) { z-index: 6; }
+
+  .sit-horiz thead th.sit-fix:nth-child(1) { z-index: 11; }
+  .sit-horiz thead th.sit-fix:nth-child(2) { z-index: 12; }
+  .sit-horiz thead th.sit-fix:nth-child(3) { z-index: 13; }
+  .sit-horiz thead th.sit-fix:nth-child(4) { z-index: 14; }
+  .sit-horiz thead th.sit-fix:nth-child(5) { z-index: 15; }
+  .sit-horiz thead th.sit-fix:nth-child(6) { z-index: 16; }
+
+  .sit-horiz th.sit-fix-last,
+  .sit-horiz td.sit-fix-last {
+    box-shadow: 2px 0 6px hsla(0, 0%, 0%, 0.1);
+  }
 
   .sit-horiz th.sit-rev-group {
     text-align: center;
@@ -1021,9 +1039,13 @@
     const maxRevs = Math.max(...docRevs.map(e => e.revs.length), 1);
     const SUB = ['Inv. prev.', 'Inv. eff.', 'Ric. prev.', 'Ric. eff.'];
 
+    const fixStyle = (i) =>
+      `left:${leftOf[i]}px;width:${fixW[i]}px;min-width:${fixW[i]}px;max-width:${fixW[i]}px;`;
+
     let thead = '<thead><tr>';
     FIX.forEach((col, i) => {
-      thead += `<th class="sit-fix" rowspan="2" style="left:${leftOf[i]}px;min-width:${fixW[i]}px;">${col.label}</th>`;
+      const lastCls = i === FIX.length - 1 ? ' sit-fix-last' : '';
+      thead += `<th class="sit-fix${lastCls}" rowspan="2" style="${fixStyle(i)}">${col.label}</th>`;
     });
     for (let r = 0; r < maxRevs; r++) {
       thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
@@ -1040,9 +1062,19 @@
     for (const { doc, revs } of docRevs) {
       tbody += `<tr ${getDocumentRowHighlightStyle(revs)}>`;
       FIX.forEach((col, i) => {
-        const val   = escHtml(doc[col.key] || '\u2014');
-        const title = col.key === 'doc_title' ? ` title="${escHtml(doc[col.key] || '')}"` : '';
-        tbody += `<td class="sit-fix" style="left:${leftOf[i]}px;min-width:${fixW[i]}px;"${title}>${val}</td>`;
+        let val;
+        if (col.key === 'reparto_label') {
+          val = escHtml(doc.reparto_acronimo || doc.reparto_label || '\u2014');
+        } else {
+          val = escHtml(doc[col.key] || '\u2014');
+        }
+        const titleAttr = col.key === 'doc_title'
+          ? ` title="${escHtml(doc.doc_title || '')}"`
+          : col.key === 'reparto_label'
+            ? ` title="${escHtml(doc.reparto_label || '')}"`
+            : '';
+        const lastCls = i === FIX.length - 1 ? ' sit-fix-last' : '';
+        tbody += `<td class="sit-fix${lastCls}" style="${fixStyle(i)}"${titleAttr}>${val}</td>`;
       });
       for (let r = 0; r < maxRevs; r++) {
         const rev = revs[r];
@@ -1064,12 +1096,27 @@
     tbody += '</tbody>';
 
     c.innerHTML = `<div class="sit-horiz-wrap"><table class="sit-horiz">${thead}${tbody}</table></div>`;
-    // Correct second sticky row's top offset to the exact height of the first row
+    // Align sticky offsets to rendered column widths
     requestAnimationFrame(() => {
       const tbl = c.querySelector('.sit-horiz');
       if (!tbl) return;
       const firstRowH = tbl.querySelector('thead tr:first-child')?.getBoundingClientRect().height ?? 32;
       tbl.querySelectorAll('thead tr:nth-child(2) th').forEach(th => { th.style.top = firstRowH + 'px'; });
+
+      const sampleRow = tbl.querySelector('tbody tr');
+      if (!sampleRow) return;
+      const fixCells = sampleRow.querySelectorAll('td.sit-fix');
+      const headerFix = tbl.querySelectorAll('thead tr:first-child th.sit-fix');
+      let left = 0;
+      fixCells.forEach((cell, i) => {
+        const leftPx = left + 'px';
+        tbl.querySelectorAll('tbody tr').forEach(tr => {
+          const td = tr.querySelectorAll('td.sit-fix')[i];
+          if (td) td.style.left = leftPx;
+        });
+        if (headerFix[i]) headerFix[i].style.left = leftPx;
+        left += cell.offsetWidth;
+      });
     });
   }
 

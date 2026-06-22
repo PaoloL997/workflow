@@ -5,9 +5,9 @@ from django.db import transaction
 
 from ..models import (
     STATI_INTERNI_CHOICES,
+    CartellaModelloDocumento,
     Documento,
     IndirSped,
-    ModelloDocumento,
     Reparto,
     Revisione,
     StatoEsterno,
@@ -299,12 +299,16 @@ def delete_documento(pk):
 
 
 @transaction.atomic
-def genera_documenti_da_modelli(job):
-    """Crea un Documento per ciascun ModelloDocumento, per la commessa indicata.
+def genera_documenti_da_modelli(job, cartella_id):
+    """Crea un Documento per ciascun ModelloDocumento della cartella indicata.
     Se vendor_doc è già presente nella commessa, il modello viene saltato.
     Restituisce (creati, saltati)."""
     t = Testata.objects.get(job=job)
-    modelli = list(ModelloDocumento.objects.all())
+    try:
+        cartella = CartellaModelloDocumento.objects.get(pk=cartella_id)
+    except CartellaModelloDocumento.DoesNotExist:
+        raise ValueError("Cartella modelli non trovata.")
+    modelli = list(cartella.modelli.all())
     if not modelli:
         return [], 0
     existing_vendor = set(v for v in t.documenti.values_list("vendor_doc", flat=True) if v)
@@ -325,6 +329,30 @@ def genera_documenti_da_modelli(job):
         Revisione.objects.create(documento=d, rev_no=0)
         creati.append(d)
     return creati, saltati
+
+
+def list_cartelle_modelli():
+    return CartellaModelloDocumento.objects.prefetch_related("modelli").order_by("nome")
+
+
+def serialize_cartella_modello(c):
+    modelli = list(c.modelli.all())
+    return {
+        "id": c.pk,
+        "nome": c.nome,
+        "descrizione": c.descrizione,
+        "modelli": [
+            {
+                "id": m.pk,
+                "doc_title": m.doc_title,
+                "item_no": m.item_no,
+                "codice_fisso": m.codice_fisso,
+                "reparto": m.reparto,
+            }
+            for m in modelli
+        ],
+        "modelli_count": len(modelli),
+    }
 
 
 _DOCUMENTO_FIELDS = {

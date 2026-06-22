@@ -151,7 +151,38 @@ class StatoEsterno(models.Model):
         return self.nome
 
 
+class CartellaModelloDocumento(models.Model):
+    nome = models.CharField(
+        db_column="Nome",
+        max_length=200,
+        verbose_name="Nome cartella",
+    )
+    descrizione = models.TextField(
+        db_column="Descrizione",
+        blank=True,
+        default="",
+        verbose_name="Descrizione",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "cartelle_modelli_documento"
+        verbose_name = "Cartella modelli documento"
+        verbose_name_plural = "Cartelle modelli documento"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
 class ModelloDocumento(models.Model):
+    cartella = models.ForeignKey(
+        CartellaModelloDocumento,
+        db_column="CartellaId",
+        on_delete=models.CASCADE,
+        related_name="modelli",
+        verbose_name="Cartella",
+    )
     doc_title = models.CharField(
         db_column="DocTitle",
         max_length=300,
@@ -184,7 +215,7 @@ class ModelloDocumento(models.Model):
         db_table = "modelli_documento"
         verbose_name = "Modello documento"
         verbose_name_plural = "Modelli documento"
-        ordering = ["doc_title"]
+        ordering = ["doc_title", "pk"]
 
     def __str__(self):
         return self.doc_title
