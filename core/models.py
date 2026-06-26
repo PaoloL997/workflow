@@ -31,11 +31,23 @@ class Reparto(models.Model):
         return self.nome
 
 
+class Permesso(models.TextChoices):
+    ADMIN = "admin", "Admin"
+    WRITING = "writing", "Scrittura"
+    READING = "reading", "Lettura"
+
+
 class User(AbstractUser):
     email = models.EmailField(db_column="Email", unique=True)
     ruolo = models.CharField(db_column="Ruolo", max_length=100, blank=True)
     reparto = models.CharField(db_column="Reparto", max_length=100, blank=True)
     avatar = models.ImageField(db_column="Avatar", upload_to="avatars/", null=True, blank=True)
+    permesso = models.CharField(
+        db_column="Permesso",
+        max_length=20,
+        choices=Permesso.choices,
+        default=Permesso.READING,
+    )
 
     class Meta:
         managed = True
@@ -49,6 +61,18 @@ class User(AbstractUser):
     @property
     def nome_completo(self):
         return self.get_full_name() or self.username
+
+    @property
+    def can_write(self):
+        return self.permesso in (Permesso.ADMIN, Permesso.WRITING)
+
+    @property
+    def is_app_admin(self):
+        return self.permesso == Permesso.ADMIN
+
+    def save(self, *args, **kwargs):
+        self.is_staff = self.permesso == Permesso.ADMIN
+        super().save(*args, **kwargs)
 
 
 class Testata(models.Model):

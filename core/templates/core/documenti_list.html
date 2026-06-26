@@ -1487,16 +1487,24 @@
       wrap.querySelector('.doc-row-menu-item--edit').addEventListener('click', function(e) {
         e.stopPropagation();
         closeAllRowMenus();
+        if (!requireWrite()) return;
         openEditModalById(rowId);
       });
 
       wrap.querySelector('.doc-row-menu-item--delete').addEventListener('click', function(e) {
         e.stopPropagation();
         closeAllRowMenus();
+        if (!requireWrite()) return;
         if (!confirm('Eliminare questo documento? L\'operazione è irreversibile.')) return;
         apiFetch('/api/documenti/' + rowId + '/', { method: 'DELETE' })
           .then(function(r) {
-            if (!r.ok) throw new Error();
+            return r.json().then(function(b) { return { ok: r.ok, status: r.status, body: b }; });
+          })
+          .then(function(res) {
+            if (!res.ok) {
+              if (isPermissionDeniedResponse(res, res.body)) return;
+              throw new Error();
+            }
             docs = docs.filter(function(d) { return d.id !== rowId; });
             renderList(docs);
             showToast('Documento eliminato.');
@@ -1770,6 +1778,7 @@
   modalFileBrowser.addEventListener('click', function(e){ if (e.target === modalFileBrowser) closeFileBrowserModal(); });
 
   document.getElementById('modal-filebrowser-save').addEventListener('click', function() {
+    if (!requireWrite()) return;
     if (!_browserSelectedPath || !_currentRevId) return;
     var saveBtn = this;
     saveBtn.disabled = true;
@@ -1779,9 +1788,13 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ percorso: _browserSelectedPath })
     })
-      .then(function(r){ return r.json().then(function(b){ return {ok:r.ok, body:b}; }); })
+      .then(function(r){ return r.json().then(function(b){ return {ok:r.ok, status:r.status, body:b}; }); })
       .then(function(res){
         if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) {
+            saveBtn.disabled = false;
+            return;
+          }
           document.getElementById('modal-filebrowser-error').textContent = res.body.error || 'Errore nel salvataggio.';
           saveBtn.disabled = false;
           return;
@@ -1813,6 +1826,7 @@
   function hideAddChooser() { addChooser.classList.remove('show'); }
 
   document.getElementById('btn-add').addEventListener('click', function(e) {
+    if (!requireWrite()) return;
     e.stopPropagation();
     if (addChooser.classList.contains('show')) { hideAddChooser(); return; }
     showAddChooser(this);
@@ -1905,6 +1919,7 @@
   }
 
   function openModelloModal() {
+    if (!requireWrite()) return;
     selectedCartellaId = null;
     hideModelloError();
     modelloGeneraBtn.disabled = true;
@@ -1934,6 +1949,7 @@
   }
 
   function generaDaModello() {
+    if (!requireWrite()) return;
     if (!selectedCartellaId) return;
     modelloGeneraBtn.disabled = true;
     modelloGeneraBtn.textContent = 'Generazione…';
@@ -1943,11 +1959,12 @@
       method: 'POST',
       body: JSON.stringify({ cartella_id: selectedCartellaId }),
     })
-      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, status: r.status, body: b }; }); })
       .then(function(res) {
         modelloGeneraBtn.disabled = false;
         modelloGeneraBtn.textContent = 'Genera documenti';
         if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) return;
           showModelloError(res.body.error || 'Errore.');
           return;
         }
@@ -1972,6 +1989,7 @@
   modelloGeneraBtn.addEventListener('click', generaDaModello);
 
   function openEditModalById(id) {
+    if (!requireWrite()) return;
     var d = docs.find(function(x){ return x.id === id; });
     if (!d) return;
     editDocId = id;
@@ -1997,6 +2015,7 @@
   var modalError = document.getElementById('modal-error');
 
   function openAddModal() {
+    if (!requireWrite()) return;
     editDocId = null;
     document.getElementById('modal-title').textContent = 'Aggiungi documento';
     clearForm();
@@ -2034,15 +2053,17 @@
   }
 
   modalSave.addEventListener('click', function() {
+    if (!requireWrite()) return;
     var data = getFormData();
     var url = editDocId ? '/api/documenti/' + editDocId + '/' : '/api/commesse/' + JOB + '/documenti/';
     var method = editDocId ? 'PATCH' : 'POST';
     modalSave.disabled = true;
     apiFetch(url, { method: method, body: JSON.stringify(data) })
-      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, status: r.status, body: b }; }); })
       .then(function(res){
         modalSave.disabled = false;
         if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) return;
           var msg = res.body.error || 'Errore.';
           if (typeof msg === 'object') msg = Object.values(msg).flat().join(' ');
           showError(msg); return;
@@ -2066,6 +2087,7 @@
   var fileDropZone   = document.getElementById('file-drop-zone');
 
   function openImportModal() {
+    if (!requireWrite()) return;
     importFile.value = '';
     fileDropLabel.textContent = 'Trascina qui il file Excel';
     importResult.className = 'import-result';
@@ -2090,6 +2112,7 @@
   });
 
   importBtn.addEventListener('click', function() {
+    if (!requireWrite()) return;
     if (!importFile.files.length) { showToast('Seleziona un file Excel.'); return; }
     importBtn.disabled = true; importBtn.textContent = 'Importazione…';
     importResult.style.display = 'none';
@@ -2101,10 +2124,11 @@
       credentials: 'same-origin',
       body: fd,
     })
-      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, body: b }; }); })
+      .then(function(r){ return r.json().then(function(b){ return { ok: r.ok, status: r.status, body: b }; }); })
       .then(function(res){
         importBtn.disabled = false; importBtn.textContent = 'Importa';
         if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) return;
           importResult.className = 'import-result err';
           importResult.textContent = res.body.error || 'Errore.';
           importResult.style.display = 'block'; return;

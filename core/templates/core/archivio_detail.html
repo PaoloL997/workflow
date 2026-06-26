@@ -674,6 +674,7 @@
 
   /* ── Save archivio info ── */
   async function saveArchivioInfo() {
+    if (!requireWrite()) return;
     const timeCli = document.getElementById('arch-time-cli').value;
     const timeVen = document.getElementById('arch-time-ven').value;
     const revLet  = document.getElementById('arch-rev-let').checked;
@@ -693,7 +694,13 @@
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
         body:    JSON.stringify(payload),
       });
-      if (!res.ok) { statusEl.textContent = 'Errore durante il salvataggio.'; return; }
+      if (!res.ok) {
+        let data = {};
+        try { data = await res.json(); } catch (_) {}
+        if (isPermissionDeniedResponse(res, data)) return;
+        statusEl.textContent = 'Errore durante il salvataggio.';
+        return;
+      }
       statusEl.textContent = '✓ Salvato';
       setTimeout(() => { statusEl.textContent = ''; }, 2500);
     } catch {
@@ -743,6 +750,7 @@
   }
 
   async function openAddrModal(pk = null) {
+    if (!requireWrite()) return;
     _currentAddrId = pk;
     document.getElementById('addr-modal-title').textContent = pk ? 'Modifica indirizzo' : 'Nuovo indirizzo';
     document.getElementById('addr-modal-form').reset();
@@ -764,6 +772,7 @@
   }
 
   async function saveAddr() {
+    if (!requireWrite()) return;
     const fields = ['consignee', 'address', 'zip_code', 'city', 'country', 'attn', 'ph_no'];
     const data   = {};
     fields.forEach(f => { data[f] = (document.getElementById(`addr-${f}`)?.value || '').trim(); });
@@ -782,18 +791,30 @@
         body:    JSON.stringify(data),
       });
     }
-    if (!res.ok) return;
+    if (!res.ok) {
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (isPermissionDeniedResponse(res, data)) return;
+      return;
+    }
     closeAddrModal();
     loadIndirizzi();
   }
 
   async function deleteAddr(pk) {
+    if (!requireWrite()) return;
     if (!confirm('Eliminare questo indirizzo?')) return;
     const res = await fetch(`/api/indirizzi/${pk}/`, {
       method:  'DELETE',
       headers: { 'X-CSRFToken': CSRF },
     });
-    if (res.ok) loadIndirizzi();
+    if (!res.ok) {
+      let data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (isPermissionDeniedResponse(res, data)) return;
+      return;
+    }
+    loadIndirizzi();
   }
 
   window.openAddrModal  = openAddrModal;

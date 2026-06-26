@@ -362,6 +362,31 @@
       text-transform: uppercase;
       user-select: none;
     }
+
+    .permission-toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(12px);
+      z-index: 10000;
+      max-width: min(92vw, 480px);
+      padding: 12px 18px;
+      border-radius: var(--radius-md, 10px);
+      background: hsl(0 70% 42%);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+      text-align: center;
+      box-shadow: 0 8px 28px hsla(0, 0%, 0%, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .permission-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   </style>
   <!-- Anti-flash: apply saved theme before first paint -->
   <script>
@@ -373,6 +398,11 @@
   </script>
 </head>
 <body>
+  <script>
+    window.USER_CAN_WRITE = {{ user_can_write|yesno:"true,false" }};
+    window.USER_IS_ADMIN = {{ user_is_admin|yesno:"true,false" }};
+  </script>
+  <div id="permission-toast" class="permission-toast" role="alert" aria-live="assertive"></div>
   {% block content %}{% endblock %}
 
   {% if user.is_authenticated %}
@@ -413,6 +443,43 @@
 
   <script>
     /* ── Helpers globali ── */
+    var _permissionToastTimer = null;
+
+    function showPermissionDenied(message) {
+      var el = document.getElementById('permission-toast');
+      if (!el) return;
+      el.textContent = message || 'Non hai i permessi per eseguire questa operazione.';
+      el.classList.add('visible');
+      if (_permissionToastTimer) clearTimeout(_permissionToastTimer);
+      _permissionToastTimer = setTimeout(function () {
+        el.classList.remove('visible');
+      }, 4200);
+    }
+
+    function requireWrite() {
+      if (!window.USER_CAN_WRITE) {
+        showPermissionDenied();
+        return false;
+      }
+      return true;
+    }
+
+    function isPermissionDeniedResponse(res, body) {
+      if (res && res.status === 403) {
+        showPermissionDenied(body && body.error ? body.error : undefined);
+        return true;
+      }
+      return false;
+    }
+
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest('a[href="/admin/"]');
+      if (link && !window.USER_IS_ADMIN) {
+        e.preventDefault();
+        showPermissionDenied('Non hai accesso al pannello amministrazione.');
+      }
+    });
+
     function escHtml(str) {
       return String(str ?? '')
         .replace(/&/g, '&amp;')

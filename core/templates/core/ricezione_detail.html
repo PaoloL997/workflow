@@ -956,6 +956,7 @@
 
   /* ── Modal ── */
   window.openModal = function() {
+    if (!requireWrite()) return;
     const filled = [...document.querySelectorAll('.ric-date')].filter(el => el.value).length;
     if (!filled) { alert('Inserisci almeno una data di rientro.'); return; }
     document.getElementById('modal-subtitle').textContent =
@@ -979,6 +980,7 @@
 
   /* ── Confirm & send ── */
   window.confermaRicezione = async function() {
+    if (!requireWrite()) return;
     const entries = [];
 
     document.querySelectorAll('.ric-date').forEach(el => {
@@ -1010,6 +1012,11 @@
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        if (isPermissionDeniedResponse(res, err)) {
+          btn.disabled = false;
+          statusEl.textContent = '';
+          return;
+        }
         statusEl.textContent = err.error || 'Errore durante la registrazione.';
         btn.disabled = false;
         return;

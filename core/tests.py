@@ -6,7 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
-from .models import Documento, Reparto, Revisione, RevisioneFileLink, Testata
+from .models import Documento, Permesso, Reparto, Revisione, RevisioneFileLink, Testata
 from .services.commesse import risolvi_file_revisione, salva_file_link
 
 User = get_user_model()
@@ -207,7 +207,9 @@ class FileBrowserApiTest(TestCase):
         self.tmp = tempfile.mkdtemp()
         self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
-        self.user = User.objects.create_user("testuser_browse", password="pw")
+        self.user = User.objects.create_user(
+            "testuser_browse", password="pw", permesso=Permesso.WRITING
+        )
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -257,7 +259,9 @@ class RevisioneFileMockApiTest(TestCase):
         self.tmp = tempfile.mkdtemp()
         self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
-        self.user = User.objects.create_user("testuser_api", password="pw")
+        self.user = User.objects.create_user(
+            "testuser_api", password="pw", permesso=Permesso.WRITING
+        )
         self.client = Client()
         self.client.force_login(self.user)
         objs = _make_fixtures_mock()
@@ -414,7 +418,9 @@ class FileserverIntegrationTest(TestCase):
         if not self.fileserver_available:
             self.skipTest(f"Fileserver non raggiungibile: {self.jobs_root}")
         self.fixtures = _make_integration_fixtures()
-        self.user = User.objects.create_user("integration_user", password="pw")
+        self.user = User.objects.create_user(
+            "integration_user", password="pw", permesso=Permesso.WRITING
+        )
         self.client = Client()
         self.client.force_login(self.user)
 
@@ -541,3 +547,73 @@ class FileserverIntegrationTest(TestCase):
         resp2 = self.client.get(f"/api/revisioni/{pk}/file/")
         self.assertEqual(resp2.status_code, 200)
         self.assertEqual(resp2.json()["status"], "manual_linked")
+
+
+class PermessiTestCase(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin_user = User.objects.create_user(
+            "admin_user", "admin@example.com", "pw", permesso=Permesso.ADMIN
+        )
+        self.writing_user = User.objects.create_user(
+            "writing_user", "writing@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.reading_user = User.objects.create_user(
+            "reading_user", "reading@example.com", "pw", permesso=Permesso.READING
+        )
+
+    def test_reading_can_list_commesse(self):
+        self.client.force_login(self.reading_user)
+        response = self.client.get("/api/commesse/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_reading_cannot_create_commessa(self):
+        self.client.force_login(self.reading_user)
+        response = self.client.post(
+            "/api/commesse/",
+            data=json.dumps({"job": "READ-001"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"], "Permesso negato.")
+
+    def test_writing_can_create_commessa(self):
+        self.client.force_login(self.writing_user)
+        response = self.client.post(
+            "/api/commesse/",
+            data=json.dumps({"job": "WRITE-001"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+
+    def test_reading_cannot_access_admin(self):
+        self.client.force_login(self.reading_user)
+        response = self.client.get("/admin/")
+        self.assertIn(response.status_code, (302, 403))
+
+    def test_admin_can_access_admin(self):
+        self.client.force_login(self.admin_user)
+        response = self.client.get("/admin/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_registration_defaults_to_reading(self):
+        response = self.client.post(
+            "/register/",
+            data={
+                "username": "new_reader",
+                "email": "reader@example.com",
+                "first_name": "Nuovo",
+                "last_name": "Lettore",
+                "password1": "securepass123",
+                "password2": "securepass123",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        user = User.objects.get(username="new_reader")
+        self.assertEqual(user.permesso, Permesso.READING)
+        self.assertFalse(user.is_staff)
+
+    def test_admin_syncs_is_staff(self):
+        self.assertTrue(self.admin_user.is_staff)
+        self.assertFalse(self.writing_user.is_staff)
+        self.assertFalse(self.reading_user.is_staff)

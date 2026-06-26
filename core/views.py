@@ -20,12 +20,14 @@ from src.pdf import genera_trasmittal_pdf
 from .models import (
     Documento,
     IndirSped,
+    Permesso,
     Revisione,
     Stabilimento,
     StatoEsterno,
     Testata,
     User,
 )
+from .permissions import api_write_required
 from .services.commesse import (
     close_commessa,
     create_commessa,
@@ -133,6 +135,7 @@ def register_view(request):
                     password=password1,
                     first_name=first_name,
                     last_name=last_name,
+                    permesso=Permesso.READING,
                 )
                 login(request, user)
                 return redirect("home")
@@ -328,6 +331,7 @@ def home_view(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "POST"])
 def commesse_api(request):
     if request.method == "GET":
@@ -347,6 +351,7 @@ def commesse_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "PUT", "DELETE"])
 def commessa_api_detail(request, job):
     if request.method == "GET":
@@ -376,6 +381,7 @@ def commessa_api_detail(request, job):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def commessa_close_api(request, job):
     try:
@@ -411,6 +417,7 @@ def erp_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "POST"])
 def indirizzi_api(request, job):
     if request.method == "GET":
@@ -432,6 +439,7 @@ def indirizzi_api(request, job):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["PATCH", "DELETE"])
 def indirizzo_api_detail(request, pk):
     if request.method == "PATCH":
@@ -457,6 +465,7 @@ def indirizzo_api_detail(request, pk):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "POST"])
 def documenti_api(request, job):
     if request.method == "GET":
@@ -478,6 +487,7 @@ def documenti_api(request, job):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "PATCH", "DELETE"])
 def documento_api_detail(request, pk):
     if request.method == "GET":
@@ -525,6 +535,7 @@ def stati_interni_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "POST"])
 def stati_esterni_api(request):
     if request.method == "GET":
@@ -554,6 +565,7 @@ def stati_esterni_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["PATCH", "DELETE"])
 def stato_esterno_api_detail(request, pk):
     if request.method == "PATCH":
@@ -593,6 +605,7 @@ def stato_esterno_api_detail(request, pk):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def emissione_api(request):
     try:
@@ -624,6 +637,7 @@ def stabilimenti_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def trasmittal_pdf_api(request):
     try:
@@ -720,6 +734,7 @@ def trasmittal_pdf_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def ricezione_api(request):
     try:
@@ -741,6 +756,7 @@ def ricezione_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["GET", "POST"])
 def revisioni_api(request, doc_pk):
     if request.method == "GET":
@@ -762,6 +778,7 @@ def revisioni_api(request, doc_pk):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["PATCH", "DELETE"])
 def revisione_api_detail(request, pk):
     if request.method == "PATCH":
@@ -1169,6 +1186,7 @@ def cartelle_modelli_api(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def genera_documenti_da_modelli_api(request, job):
     try:
@@ -1195,6 +1213,7 @@ def genera_documenti_da_modelli_api(request, job):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def import_documenti_excel(request, job):
     try:
@@ -1299,6 +1318,7 @@ def revisione_file_api(request, pk):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def revisione_file_link_api(request, pk):
     """Save a manual file link for a revision.
@@ -1509,6 +1529,7 @@ def import_from_old_view(request):
 
 
 @api_login_required
+@api_write_required
 @require_http_methods(["POST"])
 def import_from_old_api(request):
     try:

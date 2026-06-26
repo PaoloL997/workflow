@@ -1790,6 +1790,7 @@
   modalFileBrowser.addEventListener('click', function (e) { if (e.target === modalFileBrowser) closeFileBrowserModal(); });
 
   document.getElementById('modal-filebrowser-save').addEventListener('click', function () {
+    if (!requireWrite()) return;
     if (!_browserSelectedPath || !_currentRevId) return;
     const saveBtn = this;
     saveBtn.disabled = true;
@@ -1799,9 +1800,13 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ percorso: _browserSelectedPath }),
     })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, body: b }; }); })
       .then(function (res) {
         if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) {
+            saveBtn.disabled = false;
+            return;
+          }
           document.getElementById('modal-filebrowser-error').textContent = res.body.error || 'Errore nel salvataggio.';
           saveBtn.disabled = false;
           return;

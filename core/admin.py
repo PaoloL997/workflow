@@ -6,6 +6,7 @@ from .models import (
     CartellaModelloDocumento,
     Documento,
     ModelloDocumento,
+    Permesso,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -33,10 +34,24 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (("Profilo", {"fields": ("ruolo", "reparto")}),)
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Profilo", {"fields": ("email", "ruolo", "reparto")}),
+        ("Permessi", {"fields": ("permesso",)}),
     )
-    list_display = ("username", "email", "ruolo", "reparto", "is_active", "is_staff")
-    list_filter = ("is_active", "is_staff", "reparto")
+    list_display = ("username", "email", "permesso", "ruolo", "reparto", "is_active")
+    list_filter = ("permesso", "is_active", "reparto")
     search_fields = ("username", "email", "ruolo")
+    readonly_fields = ("is_staff",)
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = []
+        for title, options in super().get_fieldsets(request, obj):
+            if title == "Permissions":
+                fields = tuple(f for f in options["fields"] if f != "is_staff")
+                if fields:
+                    fieldsets.append((title, {**options, "fields": fields}))
+            else:
+                fieldsets.append((title, options))
+        fieldsets.append(("Permessi app", {"fields": ("permesso", "is_staff")}))
+        return tuple(fieldsets)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -46,6 +61,8 @@ class CustomUserAdmin(UserAdmin):
         if "reparto" in form.base_fields:
             form.base_fields["reparto"].widget = forms.Select(choices=choices)
             form.base_fields["reparto"].required = False
+        if "permesso" in form.base_fields:
+            form.base_fields["permesso"].initial = Permesso.READING
         return form
 
 

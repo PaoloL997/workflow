@@ -139,6 +139,7 @@
   }
 
   async function runImport() {
+    if (!requireWrite()) return;
     const job = input.value.trim();
     if (!job) { input.focus(); return; }
 
@@ -163,6 +164,7 @@
           `${data.revisioni} revision${data.revisioni === 1 ? 'e' : 'i'}.`
         );
       } else {
+        if (isPermissionDeniedResponse(res, data)) return;
         setStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));
       }
     } catch (err) {

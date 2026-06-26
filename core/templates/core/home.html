@@ -858,6 +858,7 @@
      Apri Commessa — dropdown menu
   ────────────────────────────────────────────── */
   function openApriMenu(e) {
+    if (!requireWrite()) return;
     e.stopPropagation();
     const menu = document.getElementById('apri-menu');
     const btn  = document.getElementById('btn-apri-commessa');
@@ -873,6 +874,7 @@
   function closeApriMenu() {
     const menu = document.getElementById('apri-menu');
     const btn  = document.getElementById('btn-apri-commessa');
+    if (!menu || !btn) return;
     menu.classList.remove('open');
     btn.setAttribute('aria-expanded', 'false');
   }
@@ -885,7 +887,7 @@
   // Close dropdown when clicking outside
   document.addEventListener('click', function(e) {
     const menu = document.getElementById('apri-menu');
-    if (menu.classList.contains('open') && !menu.contains(e.target)) {
+    if (menu && menu.classList.contains('open') && !menu.contains(e.target)) {
       closeApriMenu();
     }
   });
@@ -893,7 +895,8 @@
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
       closeApriMenu();
-      if (document.getElementById('import-modal-overlay').classList.contains('open')) {
+      const importOverlay = document.getElementById('import-modal-overlay');
+      if (importOverlay && importOverlay.classList.contains('open')) {
         closeImportModal();
       }
     }
@@ -903,6 +906,7 @@
      Modal: Importa da Report
   ────────────────────────────────────────────── */
   function openImportModal() {
+    if (!requireWrite()) return;
     closeApriMenu();
     const overlay = document.getElementById('import-modal-overlay');
     overlay.classList.add('open');
@@ -930,6 +934,7 @@
   });
 
   async function runImportFromHome() {
+    if (!requireWrite()) return;
     const job = document.getElementById('f-import-job').value.trim();
     if (!job) { document.getElementById('f-import-job').focus(); return; }
 
@@ -957,6 +962,7 @@
         closeImportModal();
         loadCommesse();
       } else {
+        if (isPermissionDeniedResponse(res, data)) return;
         setImportStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));
         runBtn.disabled   = false;
         cancelBtn.disabled = false;
@@ -974,6 +980,7 @@
      Modal: Apri Commessa
   ────────────────────────────────────────────── */
   function openModal() {
+    if (!requireWrite()) return;
     document.getElementById('modal-overlay').classList.add('open');
     document.getElementById('f-job').focus();
   }
@@ -1051,6 +1058,7 @@
   }
 
   async function submitCommessa() {
+    if (!requireWrite()) return;
     hideModalError();
     const form = document.getElementById('form-commessa');
     const btn = document.getElementById('btn-salva');
@@ -1084,6 +1092,7 @@
       });
       const data = await res.json();
       if (!res.ok) {
+        if (isPermissionDeniedResponse(res, data)) return;
         showModalError(data.error || 'Errore durante la creazione.');
         return;
       }

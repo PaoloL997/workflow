@@ -1763,6 +1763,7 @@
   var JOB  = '{{ testata.job }}';
 
   function openDeleteModal() {
+    if (!requireWrite()) return;
     document.getElementById('del-modal-error').style.display = 'none';
     document.getElementById('del-modal-error').textContent   = '';
     document.getElementById('del-modal-confirm-btn').disabled = false;
@@ -1770,6 +1771,7 @@
   }
 
   async function deleteCommessa() {
+    if (!requireWrite()) return;
     var btn = document.getElementById('del-modal-confirm-btn');
     var err = document.getElementById('del-modal-error');
     btn.disabled = true;
@@ -1786,6 +1788,10 @@
       } else {
         var data = {};
         try { data = await res.json(); } catch (_) {}
+        if (isPermissionDeniedResponse(res, data)) {
+          closeDeleteModal();
+          return;
+        }
         err.textContent   = data.error || ('Errore ' + res.status);
         err.style.display = 'block';
         btn.disabled      = false;
@@ -1822,6 +1828,7 @@
   var JOB  = '{{ testata.job }}';
 
   async function closeCommessa() {
+    if (!requireWrite()) return;
     var btn   = document.getElementById('close-commessa-btn');
     var label = document.getElementById('close-commessa-label');
     if (!btn || btn.disabled) return;
@@ -1838,6 +1845,7 @@
       } else {
         var data = {};
         try { data = await res.json(); } catch (_) {}
+        if (isPermissionDeniedResponse(res, data)) return;
         alert(data.error || 'Impossibile chiudere la commessa.');
         btn.disabled = false;
         if (label) label.textContent = 'Chiudi commessa';
