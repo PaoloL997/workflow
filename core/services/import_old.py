@@ -1,12 +1,9 @@
-from pathlib import Path
-
 import pandas as pd
-from django.conf import settings
 from django.db import transaction
 
 from ..models import Documento, IndirSped, Reparto, Revisione, StatoEsterno, Testata
-
-_ACCESS_PATH = Path(settings.BASE_DIR) / "Access"
+from .access_source import fetch_commessa_frames
+from .revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
 
 _STATUS_MAP = {
     "A": {"nome": "Approved", "colore": "#00B050"},
@@ -95,24 +92,26 @@ def _get_stato_esterno(code):
 
 @transaction.atomic
 def importa_commessa_da_access(job: str) -> dict:
-    """Read a job from the Access Excel files and persist it to the database.
+    """Read a job from the Access MDB and persist it to the database.
 
-    Raises ValueError if the job already exists or is not found in the files.
+    Raises ValueError if the job already exists or is not found in Access.
     """
     if Testata.objects.filter(job=job).exists():
         raise ValueError(f'La commessa "{job}" esiste già nel database.')
 
-    path = _ACCESS_PATH
-    testata_df = pd.read_excel(path / "Testata.xlsx")
-    indir_df = pd.read_excel(path / "IndirSped.xlsx")
-    doc_df = pd.read_excel(path / "Dettaglio.xlsx")
-    rev_df = pd.read_excel(path / "Revisioni.xlsx")
+    frames = fetch_commessa_frames(job)
+    testata_df = frames["testata"]
+    indir_df = frames["indirsped"]
+    doc_df = frames["dettaglio"]
+    rev_raw = frames["revisioni"]
 
-    job_rows = testata_df.loc[testata_df["Job"] == job]
-    if job_rows.empty:
-        raise ValueError(f'Commessa "{job}" non trovata nei file Excel.')
+    if testata_df.empty:
+        raise ValueError(f'Commessa "{job}" non trovata nel database Access.')
 
-    r = job_rows.iloc[0]
+    revisioni_orfane_escluse = len(find_orphan_indices(rev_raw))
+    rev_df = drop_orphan_revisioni(rev_raw)
+
+    r = testata_df.iloc[0]
     testata = Testata.objects.create(
         job=_to_str(r["Job"]),
         client=_to_str(r["Client"]),
@@ -126,9 +125,8 @@ def importa_commessa_da_access(job: str) -> dict:
         rev_let_flag=_to_bool(r["RevLetFlag"]),
     )
 
-    indir_rows = indir_df.loc[indir_df["Job"] == job]
-    if not indir_rows.empty:
-        ir = indir_rows.iloc[0]
+    if not indir_df.empty:
+        ir = indir_df.iloc[0]
         IndirSped.objects.create(
             testata=testata,
             consignee=_to_str(ir["Consignee"]),
@@ -140,9 +138,8 @@ def importa_commessa_da_access(job: str) -> dict:
             ph_no=_to_str(ir["PhNo"]),
         )
 
-    doc_rows = doc_df.loc[doc_df["Job"] == job]
     documenti = []
-    for _, d in doc_rows.iterrows():
+    for _, d in doc_df.iterrows():
         doc = Documento.objects.create(
             testata=testata,
             item_no=_to_str(d["ItemNo"]),
@@ -180,4 +177,5 @@ def importa_commessa_da_access(job: str) -> dict:
         "job": testata.job,
         "documenti": len(documenti),
         "revisioni": rev_count,
+        "revisioni_orfane_escluse": revisioni_orfane_escluse,
     }

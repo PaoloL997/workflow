@@ -169,6 +169,15 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 FILESERVER_JOBS_PATH = os.environ.get("FILESERVER_JOBS_PATH", r"Z:\JOBS")
 
+ACCESS_MDB_PATH = os.environ.get(
+    "ACCESS_MDB_PATH",
+    r"Z:\Gestione Documenti\Gestione Documenti 2003.mdb",
+)
+ACCESS_ODBC_DRIVER = os.environ.get(
+    "ACCESS_ODBC_DRIVER",
+    "Microsoft Access Driver (*.mdb, *.accdb)",
+)
+
 # Create the logs directory if it doesn't exist to prevent startup crash.
 os.makedirs(BASE_DIR / "logs", exist_ok=True)
 

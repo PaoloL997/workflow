@@ -166,7 +166,7 @@ Per migrare dati dal database Access legacy:
 2. Inserisci il **numero commessa**.
 3. Clicca **Importa**.
 
-L'importazione recupera testata, documenti, revisioni, indirizzi e stati dal file Excel in `Access/`. Se la commessa esiste già, l'operazione viene rifiutata.
+L'importazione recupera testata, documenti, revisioni, indirizzi e stati direttamente dal database Access configurato in `.env` (`ACCESS_MDB_PATH`). Le revisioni orfane vengono escluse automaticamente. Se la commessa esiste già, l'operazione viene rifiutata.
 
 È disponibile anche la pagina dedicata `/import-from-old/` con la stessa funzione.
 
@@ -727,7 +727,7 @@ Quando crei una nuova commessa e digiti il Job, l'app interroga **Business Centr
 
 ### Come importo dati dal vecchio database Access?
 
-Usa **Apri Commessa → Importa da Report** dalla Home, oppure la pagina `/import-from-old/`. Serve che i file Excel siano presenti nella cartella `Access/` sul server.
+Usa **Apri Commessa → Importa da Report** dalla Home, oppure la pagina `/import-from-old/`. Il server deve avere accesso al database Access indicato in `ACCESS_MDB_PATH` nel file `.env`.
 
 ---
 
