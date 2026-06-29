@@ -601,7 +601,7 @@ class PermessiTestCase(TestCase):
             "/register/",
             data={
                 "username": "new_reader",
-                "email": "reader@example.com",
+                "email": "reader@brembanarolle.com",
                 "first_name": "Nuovo",
                 "last_name": "Lettore",
                 "password1": "securepass123",
@@ -612,6 +612,22 @@ class PermessiTestCase(TestCase):
         user = User.objects.get(username="new_reader")
         self.assertEqual(user.permesso, Permesso.READING)
         self.assertFalse(user.is_staff)
+
+    def test_registration_rejects_non_company_email(self):
+        response = self.client.post(
+            "/register/",
+            data={
+                "username": "external_user",
+                "email": "user@example.com",
+                "first_name": "Esterno",
+                "last_name": "Utente",
+                "password1": "securepass123",
+                "password2": "securepass123",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "@brembanarolle.com")
+        self.assertFalse(User.objects.filter(username="external_user").exists())
 
     def test_admin_syncs_is_staff(self):
         self.assertTrue(self.admin_user.is_staff)

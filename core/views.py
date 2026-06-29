@@ -123,6 +123,8 @@ def register_view(request):
             error = "Le password non coincidono."
         elif len(password1) < 8:
             error = "La password deve essere di almeno 8 caratteri."
+        elif not email.lower().endswith("@brembanarolle.com"):
+            error = "È necessario usare un'email con dominio @brembanarolle.com."
         elif User.objects.filter(username=username).exists():
             error = "Username già in uso."
         elif User.objects.filter(email=email).exists():
