@@ -46,12 +46,7 @@ ALLOWED_HOSTS = env_list(
 
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
-    [
-        "http://192.168.0.136:8003",
-        "http://192.168.0.136:8002",
-        "http://192.168.0.136",
-        "http://localhost:8003",
-    ],
+    None
 )
 
 USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST", False)
