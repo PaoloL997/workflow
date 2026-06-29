@@ -3,11 +3,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+import pandas as pd
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
 from .models import Documento, Permesso, Reparto, Revisione, RevisioneFileLink, Testata
 from .services.commesse import risolvi_file_revisione, salva_file_link
+from .services.import_old import importa_commessa_da_access
+from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
 
 User = get_user_model()
 
@@ -633,3 +636,166 @@ class PermessiTestCase(TestCase):
         self.assertTrue(self.admin_user.is_staff)
         self.assertFalse(self.writing_user.is_staff)
         self.assertFalse(self.reading_user.is_staff)
+
+
+class RevisioniCleanupTests(TestCase):
+    def test_single_orphan_after_approved(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 0,
+                    "DisActDate": "2025-01-01",
+                    "RecActDate": "2025-01-10",
+                    "Status": "C",
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 1,
+                    "DisActDate": "2025-02-01",
+                    "RecActDate": "2025-02-10",
+                    "Status": "A",
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 2,
+                    "DisActDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                },
+            ]
+        )
+        orphans = find_orphan_indices(df)
+        self.assertEqual(orphans, {2})
+        cleaned = drop_orphan_revisioni(df)
+        self.assertEqual(len(cleaned), 2)
+
+    def test_consecutive_orphans_removed(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 0,
+                    "DisActDate": "2025-01-01",
+                    "RecActDate": "2025-01-10",
+                    "Status": "A",
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 1,
+                    "DisActDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 2,
+                    "DisActDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                },
+            ]
+        )
+        orphans = find_orphan_indices(df)
+        self.assertEqual(orphans, {1, 2})
+
+    def test_not_orphan_when_dis_act_date_present(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 0,
+                    "DisActDate": "2025-01-01",
+                    "RecActDate": "2025-01-10",
+                    "Status": "A",
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 1,
+                    "DisActDate": "2025-02-01",
+                    "RecActDate": None,
+                    "Status": None,
+                },
+            ]
+        )
+        self.assertEqual(find_orphan_indices(df), set())
+
+
+class ImportOldTests(TestCase):
+    def _frames(self):
+        return {
+            "testata": pd.DataFrame(
+                [
+                    {
+                        "Job": "99999",
+                        "Client": "Cliente Test",
+                        "POno": "PO-1",
+                        "JobDetail": "Dettaglio",
+                        "DeliveryDate": None,
+                        "DeliveryTerm": "",
+                        "Requisition": "",
+                        "TimeCliDocRev": None,
+                        "TimeVenDocRev": None,
+                        "RevLetFlag": False,
+                    }
+                ]
+            ),
+            "indirsped": pd.DataFrame(),
+            "dettaglio": pd.DataFrame(
+                [
+                    {
+                        "ItemNo": "1",
+                        "VendorDoc": "99999-01",
+                        "ClientDocNo": "",
+                        "ClientDocClass": "",
+                        "DocTitle": "Titolo",
+                        "DocPenalty": False,
+                        "DocPayment": False,
+                        "RevGen": False,
+                        "Reparto": 4,
+                        "Remarks": "",
+                    }
+                ]
+            ),
+            "revisioni": pd.DataFrame(
+                [
+                    {
+                        "VendorDoc": "99999-01",
+                        "RevNo": 0,
+                        "RevLet": "",
+                        "DisPlanDate": None,
+                        "DisActDate": "2025-01-01",
+                        "RecPlanDate": None,
+                        "RecActDate": "2025-01-10",
+                        "Status": "A",
+                    },
+                    {
+                        "VendorDoc": "99999-01",
+                        "RevNo": 1,
+                        "RevLet": "",
+                        "DisPlanDate": None,
+                        "DisActDate": None,
+                        "RecPlanDate": None,
+                        "RecActDate": None,
+                        "Status": None,
+                    },
+                ]
+            ),
+        }
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_excludes_orphan_revisioni(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+        result = importa_commessa_da_access("99999")
+        self.assertEqual(result["documenti"], 1)
+        self.assertEqual(result["revisioni"], 1)
+        self.assertEqual(result["revisioni_orfane_escluse"], 1)
+        self.assertEqual(Revisione.objects.count(), 1)
+        self.assertEqual(Revisione.objects.get().rev_no, 0)
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_rejects_existing_job(self, mock_fetch):
+        Testata.objects.create(job="99999")
+        with self.assertRaises(ValueError):
+            importa_commessa_da_access("99999")
+        mock_fetch.assert_not_called()
