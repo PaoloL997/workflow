@@ -1293,19 +1293,18 @@
   async function loadDocs() {
     showMsg('Caricamento\u2026');
     try {
-      const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`);
+      const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/situazione/`);
       if (!res.ok) { showMsg('Errore nel caricamento.'); return; }
       const data = await res.json();
       _allDocs = data.documenti || [];
       _allDocs.sort((a, b) =>
         (a.item_no || '').localeCompare(b.item_no || '', undefined, { numeric: true }));
 
-      _allDocRevs = await Promise.all(_allDocs.map(async d => {
-        try {
-          const r = await fetch(`/api/documenti/${d.id}/revisioni/`);
-          const { revisioni } = await r.json();
-          return { doc: d, revs: revisioni.sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)) };
-        } catch (e) { return { doc: d, revs: [] }; }
+      const revsByDoc = data.revisioni_by_doc || {};
+      _allDocRevs = _allDocs.map(d => ({
+        doc: d,
+        revs: (revsByDoc[d.id] || revsByDoc[String(d.id)] || [])
+          .sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)),
       }));
 
       applyFilters();

@@ -51,8 +51,10 @@ from .services.commesse import (
     list_indirizzi,
     list_reparti,
     list_revisioni,
+    list_situazione,
     list_stati_esterni,
     list_stati_interni,
+    revisioni_by_doc_for_job,
     risolvi_file_revisione,
     salva_file_link,
     serialize_cartella_modello,
@@ -472,7 +474,10 @@ def indirizzo_api_detail(request, pk):
 def documenti_api(request, job):
     if request.method == "GET":
         try:
-            return JsonResponse({"documenti": list_documenti(job)})
+            payload = {"documenti": list_documenti(job)}
+            if request.GET.get("include_revisioni"):
+                payload["revisioni_by_doc"] = revisioni_by_doc_for_job(job)
+            return JsonResponse(payload)
         except Testata.DoesNotExist:
             return JsonResponse({"error": "Commessa non trovata."}, status=404)
     try:
@@ -486,6 +491,15 @@ def documenti_api(request, job):
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
     except ValidationError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def situazione_api(request, job):
+    try:
+        return JsonResponse(list_situazione(job))
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
 
 
 @api_login_required
@@ -932,18 +946,7 @@ def export_situazione(request, job):
 
     vista = request.GET.get("vista", "verticale")
 
-    # Fetch all revisions in a single query, keyed by document id.
-    from .models import STATI_INTERNI_CHOICES
-
-    label_map = dict(STATI_INTERNI_CHOICES)
-    revisioni_qs = (
-        Revisione.objects.filter(documento__testata_id=job)
-        .select_related("ext_status")
-        .order_by("documento_id", "rev_no")
-    )
-    revs_by_doc: dict[int, list] = {}
-    for r in revisioni_qs:
-        revs_by_doc.setdefault(r.documento_id, []).append(serialize_revisione(r))
+    revs_by_doc = revisioni_by_doc_for_job(job)
 
     def fmt(d):
         """Format an ISO date string as DD/MM/YYYY, or return empty string."""
@@ -1074,7 +1077,7 @@ def export_situazione(request, job):
                     if r["rev_let"]
                     else str(r["rev_no"] if r["rev_no"] is not None else "")
                 )
-                int_label = label_map.get(r["int_status"], r["int_status"] or "")
+                int_label = r["int_status_label"] or ""
                 ws.cell(row=row_idx, column=1, value=d["item_no"])
                 ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
                 ws.cell(row=row_idx, column=3, value=d["client_doc_no"])

@@ -799,3 +799,49 @@ class ImportOldTests(TestCase):
         with self.assertRaises(ValueError):
             importa_commessa_da_access("99999")
         mock_fetch.assert_not_called()
+
+
+class SituazioneApiTestCase(TestCase):
+    """Tests for batch situazione/documenti API endpoints."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "situazione_user",
+            "situazione@brembanarolle.com",
+            "pw",
+            permesso=Permesso.READING,
+        )
+        self.client.force_login(self.user)
+        self.fixtures = _make_fixtures_mock()
+        self.job = self.fixtures["testata"].job
+
+    def test_situazione_api_returns_documenti_and_revisioni(self):
+        response = self.client.get(f"/api/commesse/{self.job}/situazione/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["documenti"]), 2)
+        revs_by_doc = data["revisioni_by_doc"]
+        doc_qmdbi_id = str(self.fixtures["doc_qmdbi"].pk)
+        doc_qcpa_id = str(self.fixtures["doc_qcpa"].pk)
+        self.assertEqual(len(revs_by_doc[doc_qmdbi_id]), 1)
+        self.assertEqual(len(revs_by_doc[doc_qcpa_id]), 3)
+
+    def test_documenti_api_include_revisioni(self):
+        response = self.client.get(
+            f"/api/commesse/{self.job}/documenti/?include_revisioni=1"
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data["documenti"]), 2)
+        doc_qcpa_id = str(self.fixtures["doc_qcpa"].pk)
+        self.assertEqual(len(data["revisioni_by_doc"][doc_qcpa_id]), 3)
+
+    def test_situazione_api_requires_auth(self):
+        self.client.logout()
+        response = self.client.get(f"/api/commesse/{self.job}/situazione/")
+        self.assertEqual(response.status_code, 401)
+
+    def test_situazione_api_not_found(self):
+        response = self.client.get("/api/commesse/INEXISTENT/situazione/")
+        self.assertEqual(response.status_code, 404)

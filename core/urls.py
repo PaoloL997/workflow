@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),
     # API — Documenti
     path("api/commesse/<str:job>/documenti/", views.documenti_api, name="documenti_api"),
+    path("api/commesse/<str:job>/situazione/", views.situazione_api, name="situazione_api"),
     path("api/commesse/<str:job>/export/", views.export_documenti, name="export_documenti"),
     path(
         "api/commesse/<str:job>/situazione/export/",

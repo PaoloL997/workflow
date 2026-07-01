@@ -2,6 +2,7 @@ from datetime import date as date_type
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Prefetch
 
 from ..models import (
     STATI_INTERNI_CHOICES,
@@ -273,7 +274,34 @@ def serialize_documento(d, reparto_acronimi=None):
 def list_documenti(job):
     t = Testata.objects.get(job=job)
     reparto_acronimi = dict(Reparto.objects.values_list("nome", "acronimo"))
-    return [serialize_documento(d, reparto_acronimi) for d in t.documenti.order_by("pk")]
+    docs = t.documenti.prefetch_related(
+        Prefetch(
+            "revisioni",
+            queryset=Revisione.objects.select_related("ext_status").order_by("rev_no"),
+        )
+    ).order_by("pk")
+    return [serialize_documento(d, reparto_acronimi) for d in docs]
+
+
+def revisioni_by_doc_for_job(job: str) -> dict[int, list[dict]]:
+    """Return all revisions for a commessa, grouped by document id."""
+    revs_by_doc: dict[int, list[dict]] = {}
+    revisioni_qs = (
+        Revisione.objects.filter(documento__testata_id=job)
+        .select_related("ext_status")
+        .order_by("documento_id", "rev_no")
+    )
+    for r in revisioni_qs:
+        revs_by_doc.setdefault(r.documento_id, []).append(serialize_revisione(r))
+    return revs_by_doc
+
+
+def list_situazione(job: str) -> dict:
+    """Return documenti and revisioni for situazione views in a single payload."""
+    return {
+        "documenti": list_documenti(job),
+        "revisioni_by_doc": revisioni_by_doc_for_job(job),
+    }
 
 
 def create_documento(job, data):

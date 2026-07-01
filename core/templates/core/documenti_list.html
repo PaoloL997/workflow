@@ -1366,14 +1366,16 @@
 
   /* ── State ── */
   var docs = [];
+  var revisioniByDoc = {};
   var editDocId = null;
 
   /* ── Load ── */
   function loadDocs() {
-    apiFetch('/api/commesse/' + JOB + '/documenti/')
+    apiFetch('/api/commesse/' + JOB + '/documenti/?include_revisioni=1')
       .then(function(r){ return r.json(); })
       .then(function(data){
         docs = data.documenti || [];
+        revisioniByDoc = data.revisioni_by_doc || {};
         renderList(docs);
       })
       .catch(function(){ showToast('Errore nel caricamento.'); });
@@ -1530,10 +1532,8 @@
   /* ── Revision mini-chips fetch ── */
   function fetchAllRevisions(list) {
     list.forEach(function(d) {
-      apiFetch('/api/documenti/' + d.id + '/revisioni/')
-        .then(function(r) { return r.json(); })
-        .then(function(data) { renderRowRevChips(d.id, data.revisioni || []); })
-        .catch(function() { renderRowRevChips(d.id, null); });
+      var revs = revisioniByDoc[d.id] || revisioniByDoc[String(d.id)] || [];
+      renderRowRevChips(d.id, revs);
     });
   }
 
