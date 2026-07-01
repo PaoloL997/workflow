@@ -73,6 +73,79 @@ git pull
 docker compose up --build -d
 ```
 
+## Deploy su Windows Server (IIS + Waitress)
+
+Produzione consigliata: **IIS** come front door HTTP e **Waitress** come server WSGI persistente
+(sostituisce wfastcgi).
+
+```mermaid
+flowchart LR
+    Browser --> IIS
+    IIS -->|"proxy :8000"| Waitress
+    Waitress --> Django
+```
+
+### Prerequisiti
+
+- IIS con sito `workflow` su `C:\inetpub\wwwroot\workflow`
+- Moduli IIS: **URL Rewrite** e **Application Request Routing (ARR)**
+- **NSSM** per il servizio Windows ([nssm.cc](https://nssm.cc/download))
+- Python venv con dipendenze: `poetry install`
+
+### Prima installazione
+
+Eseguire come **Administrator** dalla root del progetto:
+
+```powershell
+# 1. Dipendenze (include waitress)
+powershell -ExecutionPolicy Bypass -File .\deploy\install-waitress-deps.ps1
+
+# 2. Test manuale Waitress (Ctrl+C per fermare)
+powershell -ExecutionPolicy Bypass -File .\deploy\waitress-serve.ps1
+# Verificare: http://127.0.0.1:8000/login/
+# Oppure: powershell -File .\deploy\smoke-waitress.ps1
+
+# 3. Servizio Windows (usa identità app pool per accesso a Z:\ e UNC)
+powershell -ExecutionPolicy Bypass -File .\deploy\install-waitress-service.ps1
+
+# 4. Switch IIS da wfastcgi a reverse proxy Waitress
+powershell -ExecutionPolicy Bypass -File .\deploy\switch-to-waitress.ps1
+
+# 5. Tuning app pool (opzionale)
+powershell -ExecutionPolicy Bypass -File .\deploy\iis-workflow-pool.ps1
+```
+
+### Aggiornamenti codice
+
+```powershell
+git pull
+poetry install
+Restart-Service WorkflowWaitress
+```
+
+**Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
+recycle del pool IIS).
+
+### Rollback a wfastcgi
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\deploy\rollback-wfastcgi.ps1
+```
+
+Script in `deploy/`:
+
+| File | Scopo |
+|------|--------|
+| `install-waitress-deps.ps1` | `pip install waitress` nel venv |
+| `smoke-waitress.ps1` | Test HTTP su `:8000` prima dello switch |
+| `switch-to-waitress.ps1` | Backup web.config, ARR, deploy proxy |
+| `waitress-serve.ps1` | Avvio manuale Waitress |
+| `install-waitress-service.ps1` | Registra servizio `WorkflowWaitress` |
+| `iis-waitress-proxy.ps1` | Abilita ARR reverse proxy |
+| `web.config` | Template IIS → proxy a `127.0.0.1:8000` |
+| `rollback-wfastcgi.ps1` | Ripristina web.config wfastcgi |
+| `iis-workflow-pool.ps1` | AlwaysRunning / idle timeout |
+
 ## Database
 
 PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non committare questo file.
