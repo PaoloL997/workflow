@@ -76,6 +76,7 @@ from .services.revisione_anomalie import (
     ignora_anomalie_revisione,
     serialize_anomalie_gruppi,
 )
+from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -1599,6 +1600,46 @@ def commessa_anomalie_ignora_api(request, job):
         get_commessa(job)
         result = ignora_anomalie_revisione(job, int(revisione_id))
         return JsonResponse({"ok": True, **result})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except Revisione.DoesNotExist:
+        return JsonResponse({"error": "Revisione non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+# ── API: Sblocco revisioni ───────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def commessa_revisioni_sbloccabili_api(request, job):
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    revisioni = list_revisioni_sbloccabili(job)
+    return JsonResponse({"count": len(revisioni), "revisioni": revisioni})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def commessa_revisione_sblocca_api(request, job):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+
+    revisione_id = data.get("revisione_id")
+    if not revisione_id:
+        return JsonResponse({"error": "Specificare revisione_id."}, status=400)
+
+    try:
+        get_commessa(job)
+        result = sblocca_revisione(job, int(revisione_id), data.get("dis_plan_date"))
+        remaining = list_revisioni_sbloccabili(job)
+        return JsonResponse({"ok": True, **result, "count": len(remaining)})
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
     except Revisione.DoesNotExist:

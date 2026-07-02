@@ -90,6 +90,14 @@
     flex-shrink: 0;
   }
 
+  .filter-bar-end {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
   /* ── View toggle ── */
   .view-toggle {
     display: flex;
@@ -97,7 +105,6 @@
     border-radius: 10px;
     overflow: hidden;
     background: var(--color-elevated);
-    margin-left: auto;
   }
 
   .view-btn {
@@ -848,10 +855,13 @@
         </svg>
       </button>
       <div class="sit-filter-summary" id="sit-filter-summary"></div>
-      {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" %}
-      <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
-        <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
-        <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
+      <div class="filter-bar-end">
+        {% include "core/partials/sblocca_revisioni.html" with job=testata.job %}
+        {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" %}
+        <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
+          <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
+          <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
+        </div>
       </div>
     </div>
 
@@ -1823,6 +1833,7 @@
   });
 
   window.onAnomalieResolved = function () { loadDocs(); };
+  window.onRevisioneSbloccata = function () { loadDocs(); };
 
   loadDocs();
 })();

@@ -36,6 +36,16 @@ urlpatterns = [
         views.commessa_anomalie_ignora_api,
         name="commessa_anomalie_ignora_api",
     ),
+    path(
+        "api/commesse/<str:job>/revisioni/sbloccabili/",
+        views.commessa_revisioni_sbloccabili_api,
+        name="commessa_revisioni_sbloccabili_api",
+    ),
+    path(
+        "api/commesse/<str:job>/revisioni/sblocca/",
+        views.commessa_revisione_sblocca_api,
+        name="commessa_revisione_sblocca_api",
+    ),
     path("api/erp/", views.erp_api, name="erp_api"),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),

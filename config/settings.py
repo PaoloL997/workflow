@@ -46,7 +46,14 @@ ALLOWED_HOSTS = env_list(
 
 CSRF_TRUSTED_ORIGINS = env_list(
     "CSRF_TRUSTED_ORIGINS",
-    None
+    [
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://localhost:8001",
+        "http://127.0.0.1:8001",
+        "http://192.168.0.136:8000",
+        "http://workflow.azienda.local:8000",
+    ],
 )
 
 USE_X_FORWARDED_HOST = env_bool("USE_X_FORWARDED_HOST", False)

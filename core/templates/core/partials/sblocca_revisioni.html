@@ -1,0 +1,355 @@
+{# Pulsante + modal sblocco revisioni. Richiede: job #}
+<style>
+  #sbloc-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  #sbloc-modal-backdrop {
+    position: fixed; inset: 0;
+    background: hsl(220 30% 3% / 0.62);
+    backdrop-filter: blur(6px);
+    z-index: 500;
+    display: none; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  #sbloc-modal-backdrop.show { display: flex; }
+  #sbloc-modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    width: 100%;
+    max-width: min(1100px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: hidden;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: var(--shadow-elevated);
+  }
+  #sbloc-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #sbloc-modal-title { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+  #sbloc-modal-close {
+    background: var(--color-elevated); border: none;
+    width: 32px; height: 32px; border-radius: 50%;
+    cursor: pointer; color: var(--color-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #sbloc-modal-body { overflow-y: auto; flex: 1; min-height: 0; }
+  #sbloc-modal-error { font-size: 13px; color: var(--color-danger); display: none; }
+  #sbloc-modal-error.show { display: block; }
+
+  .sbloc-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .sbloc-table th {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sbloc-table td { padding: 14px 12px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+  .sbloc-table th.sbloc-col-doc,
+  .sbloc-table td.sbloc-col-doc,
+  .sbloc-table th.sbloc-col-rev,
+  .sbloc-table td.sbloc-col-rev,
+  .sbloc-table th.sbloc-col-status,
+  .sbloc-table td.sbloc-col-status,
+  .sbloc-table th.sbloc-col-actions,
+  .sbloc-table td.sbloc-col-actions { text-align: center; }
+  .sbloc-doc-code { font-weight: 700; color: var(--color-text-primary); font-size: 15px; }
+  .sbloc-ext-badge {
+    display: inline-block; font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .sbloc-col-actions { white-space: nowrap; width: 1%; }
+
+  #sbloc-confirm-backdrop {
+    position: fixed; inset: 0;
+    background: hsl(220 30% 3% / 0.72);
+    backdrop-filter: blur(6px);
+    z-index: 510;
+    display: none; align-items: center; justify-content: center;
+    padding: 12px;
+  }
+  #sbloc-confirm-backdrop.show { display: flex; }
+  #sbloc-confirm-modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 22px 24px 20px;
+    width: 100%;
+    max-width: min(560px, calc(100vw - 24px));
+    box-shadow: var(--shadow-elevated);
+    position: relative;
+  }
+  #sbloc-confirm-close {
+    position: absolute; top: 14px; right: 14px;
+    background: var(--color-elevated); border: none;
+    width: 36px; height: 36px; border-radius: 50%;
+    cursor: pointer; color: var(--color-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #sbloc-confirm-error {
+    font-size: 14px; color: var(--color-danger);
+    display: none; text-align: center; margin-bottom: 10px;
+  }
+  #sbloc-confirm-error.show { display: block; }
+  .sbloc-confirm-title {
+    font-size: 20px; font-weight: 700; color: var(--color-text-primary);
+    margin: 0 44px 14px 0;
+  }
+  .sbloc-confirm-meta {
+    font-size: 15px; color: var(--color-text-secondary);
+    margin-bottom: 18px; line-height: 1.5;
+  }
+  .sbloc-confirm-meta strong { color: var(--color-text-primary); }
+  .sbloc-confirm-field {
+    display: flex; flex-direction: column; gap: 6px; margin-bottom: 20px;
+  }
+  .sbloc-confirm-field label {
+    font-size: 13px; font-weight: 600; color: var(--color-text-secondary);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sbloc-confirm-field input {
+    padding: 10px 12px; border-radius: 9px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg); color: var(--color-text-primary);
+    font-size: 15px; font-family: inherit;
+  }
+  .sbloc-confirm-actions {
+    display: flex; justify-content: center; gap: 14px;
+    padding-top: 16px; border-top: 1px solid var(--color-border);
+  }
+  .sbloc-confirm-actions .anom-btn {
+    padding: 14px 44px; font-size: 16px; font-weight: 700;
+    min-width: 150px; border-radius: 10px;
+  }
+</style>
+
+<button type="button" class="toolbar-btn" id="sbloc-btn" aria-label="Sblocca revisione">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+  </svg>
+  <span id="sbloc-btn-text">Sblocca revisione</span>
+</button>
+
+<div id="sbloc-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sbloc-modal-title">
+  <div id="sbloc-modal">
+    <div id="sbloc-modal-header">
+      <span id="sbloc-modal-title">Sblocca revisione</span>
+      <button type="button" id="sbloc-modal-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="sbloc-modal-error" role="alert"></div>
+    <div id="sbloc-modal-body"><div class="anom-empty">Caricamento…</div></div>
+  </div>
+</div>
+
+<div id="sbloc-confirm-backdrop" role="dialog" aria-modal="true" aria-label="Conferma sblocco revisione">
+  <div id="sbloc-confirm-modal">
+    <button type="button" id="sbloc-confirm-close" aria-label="Chiudi">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    <div id="sbloc-confirm-error" role="alert"></div>
+    <div id="sbloc-confirm-body"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const JOB = '{{ job|escapejs }}';
+  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  const btn = document.getElementById('sbloc-btn');
+  const btnText = document.getElementById('sbloc-btn-text');
+  const backdrop = document.getElementById('sbloc-modal-backdrop');
+  const body = document.getElementById('sbloc-modal-body');
+  const errEl = document.getElementById('sbloc-modal-error');
+  const confirmBackdrop = document.getElementById('sbloc-confirm-backdrop');
+  const confirmBody = document.getElementById('sbloc-confirm-body');
+  const confirmErrEl = document.getElementById('sbloc-confirm-error');
+
+  if (!btn || !backdrop || !confirmBackdrop) return;
+
+  let _items = [];
+  let _pending = null;
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const p = iso.split('-');
+    return p[2] + '/' + p[1] + '/' + p[0];
+  }
+
+  function updateBtn(count) {
+    btnText.textContent = count > 0
+      ? 'Sblocca revisione (' + count + ')'
+      : 'Sblocca revisione';
+  }
+
+  function showError(msg) {
+    errEl.textContent = msg || '';
+    errEl.classList.toggle('show', Boolean(msg));
+  }
+
+  function showConfirmError(msg) {
+    confirmErrEl.textContent = msg || '';
+    confirmErrEl.classList.toggle('show', Boolean(msg));
+  }
+
+  async function loadSbloccabili() {
+    const res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/revisioni/sbloccabili/');
+    if (!res.ok) throw new Error('Impossibile caricare le revisioni.');
+    const data = await res.json();
+    _items = data.revisioni || [];
+    updateBtn(data.count || 0);
+    return _items;
+  }
+
+  function renderList() {
+    if (!_items.length) {
+      body.innerHTML = '<div class="anom-empty">Nessuna revisione da sbloccare.</div>';
+      return;
+    }
+
+    const rows = _items.map(function (item) {
+      const revLabel = (item.rev_no ?? '') + (item.rev_let || '');
+      const bg = item.ext_status_colore || '#888';
+      const statusBadge = '<span class="sbloc-ext-badge" style="background:' + esc(bg) + '22;color:' + esc(bg) + '">' +
+        esc(item.ext_status_label || '—') + '</span>';
+      return '<tr>' +
+        '<td class="sbloc-col-doc"><div class="sbloc-doc-code">' + esc(item.vendor_doc) + '</div></td>' +
+        '<td class="sbloc-col-rev" style="font-weight:600">' + esc(revLabel || '—') + '</td>' +
+        '<td class="sbloc-col-status">' + statusBadge + '</td>' +
+        '<td class="sbloc-col-rev">' + esc(fmtDate(item.rec_act_date)) + '</td>' +
+        '<td class="sbloc-col-actions">' +
+        '<button type="button" class="anom-btn anom-btn--primary" data-sbloc="' + item.revisione_id + '">Sblocca</button>' +
+        '</td></tr>';
+    }).join('');
+
+    body.innerHTML =
+      '<table class="sbloc-table"><thead><tr>' +
+      '<th class="sbloc-col-doc">Documento</th>' +
+      '<th class="sbloc-col-rev">Revisione</th>' +
+      '<th class="sbloc-col-status">Risposta cliente</th>' +
+      '<th class="sbloc-col-rev">Rientro</th>' +
+      '<th class="sbloc-col-actions">Azioni</th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table>';
+
+    body.querySelectorAll('[data-sbloc]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        const id = parseInt(el.getAttribute('data-sbloc'), 10);
+        const item = _items.find(function (i) { return i.revisione_id === id; });
+        if (item) openConfirm(item);
+      });
+    });
+  }
+
+  function openConfirm(item) {
+    _pending = item;
+    showConfirmError('');
+    const revLabel = (item.rev_no ?? '') + (item.rev_let || '');
+    confirmBody.innerHTML =
+      '<h2 class="sbloc-confirm-title">Sblocca revisione</h2>' +
+      '<p class="sbloc-confirm-meta">Documento <strong>' + esc(item.vendor_doc) + '</strong> · ' +
+      'Revisione <strong>' + esc(revLabel || '—') + '</strong><br>' +
+      'Verrà creata la revisione successiva, vuota e pronta per l\'emissione.</p>' +
+      '<div class="sbloc-confirm-field">' +
+      '<label for="sbloc-dis-plan-date">Data emissione (opzionale)</label>' +
+      '<input type="date" id="sbloc-dis-plan-date">' +
+      '</div>' +
+      '<div class="sbloc-confirm-actions">' +
+      '<button type="button" class="anom-btn" data-cancel-sbloc>Annulla</button>' +
+      '<button type="button" class="anom-btn anom-btn--primary" data-confirm-sbloc>Sblocca</button>' +
+      '</div>';
+
+    confirmBody.querySelector('[data-cancel-sbloc]').addEventListener('click', closeConfirm);
+    confirmBody.querySelector('[data-confirm-sbloc]').addEventListener('click', confirmSblocca);
+    confirmBackdrop.classList.add('show');
+  }
+
+  function closeConfirm() {
+    confirmBackdrop.classList.remove('show');
+    showConfirmError('');
+    confirmBody.innerHTML = '';
+    _pending = null;
+  }
+
+  async function confirmSblocca() {
+    if (typeof requireWrite === 'function' && !requireWrite()) return;
+    if (!_pending) return;
+    showConfirmError('');
+    const confirmBtn = confirmBody.querySelector('[data-confirm-sbloc]');
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    const disPlan = document.getElementById('sbloc-dis-plan-date')?.value || null;
+    const payload = { revisione_id: _pending.revisione_id };
+    if (disPlan) payload.dis_plan_date = disPlan;
+
+    try {
+      const res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/revisioni/sblocca/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (typeof isPermissionDeniedResponse === 'function' && isPermissionDeniedResponse(res, data)) return;
+        showConfirmError(data.error || 'Errore durante lo sblocco.');
+        if (confirmBtn) confirmBtn.disabled = false;
+        return;
+      }
+
+      closeConfirm();
+      await loadSbloccabili();
+      renderList();
+      if (!_items.length) closeListModal();
+      if (typeof window.onRevisioneSbloccata === 'function') window.onRevisioneSbloccata(data);
+    } catch (e) {
+      showConfirmError('Errore di rete. Riprova.');
+      if (confirmBtn) confirmBtn.disabled = false;
+    }
+  }
+
+  function closeListModal() {
+    backdrop.classList.remove('show');
+    showError('');
+  }
+
+  async function openListModal() {
+    showError('');
+    body.innerHTML = '<div class="anom-empty">Caricamento…</div>';
+    backdrop.classList.add('show');
+    try {
+      await loadSbloccabili();
+      renderList();
+    } catch (e) {
+      showError('Impossibile caricare le revisioni.');
+      body.innerHTML = '';
+    }
+  }
+
+  btn.addEventListener('click', openListModal);
+  document.getElementById('sbloc-modal-close').addEventListener('click', closeListModal);
+  document.getElementById('sbloc-confirm-close').addEventListener('click', closeConfirm);
+  backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeListModal(); });
+  confirmBackdrop.addEventListener('click', function (e) { if (e.target === confirmBackdrop) closeConfirm(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (confirmBackdrop.classList.contains('show')) closeConfirm();
+      else if (backdrop.classList.contains('show')) closeListModal();
+    }
+  });
+
+  loadSbloccabili().catch(function () {});
+})();
+</script>

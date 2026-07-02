@@ -26,6 +26,7 @@ from .services.revisione_anomalie import (
     ignora_anomalie_revisione,
     serialize_anomalie_gruppi,
 )
+from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
 
 User = get_user_model()
@@ -985,9 +986,7 @@ class SituazioneApiTestCase(TestCase):
         self.assertEqual(len(revs_by_doc[doc_qcpa_id]), 3)
 
     def test_documenti_api_include_revisioni(self):
-        response = self.client.get(
-            f"/api/commesse/{self.job}/documenti/?include_revisioni=1"
-        )
+        response = self.client.get(f"/api/commesse/{self.job}/documenti/?include_revisioni=1")
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data["documenti"]), 2)
@@ -1002,3 +1001,139 @@ class SituazioneApiTestCase(TestCase):
     def test_situazione_api_not_found(self):
         response = self.client.get("/api/commesse/INEXISTENT/situazione/")
         self.assertEqual(response.status_code, 404)
+
+
+class RevisioneSbloccoTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.approved = StatoEsterno.objects.create(nome="Approved", colore="#00B050")
+        self.rejected = StatoEsterno.objects.create(
+            nome="Rejected - Work can not proceed", colore="#D61D09"
+        )
+        self.testata = Testata.objects.create(job="25012")
+        self.doc = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="25012-01-4005",
+            doc_title="Test doc",
+        )
+        self.writing_user = User.objects.create_user(
+            "sbloc_user", "sbloc@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.reading_user = User.objects.create_user(
+            "sbloc_read", "sbloc-read@example.com", "pw", permesso=Permesso.READING
+        )
+
+    def test_list_includes_latest_with_ext_status(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=2,
+            rec_act_date="2025-06-01",
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        items = list_revisioni_sbloccabili("25012")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["revisione_id"], rev.pk)
+
+    def test_list_excludes_when_successor_exists(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            rec_act_date="2025-01-10",
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        Revisione.objects.create(documento=self.doc, rev_no=1)
+        self.assertEqual(list_revisioni_sbloccabili("25012"), [])
+
+    def test_list_excludes_latest_without_ext_status(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            rec_act_date="2025-01-10",
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        Revisione.objects.create(documento=self.doc, rev_no=1, dis_plan_date="2025-02-01")
+        self.assertEqual(list_revisioni_sbloccabili("25012"), [])
+
+    def test_list_includes_any_ext_status(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            rec_act_date="2025-06-01",
+            ext_status=self.rejected,
+            int_status="ricevuto",
+        )
+        items = list_revisioni_sbloccabili("25012")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["revisione_id"], rev.pk)
+
+    def test_sblocca_creates_next_revision(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=2,
+            rec_act_date="2025-06-01",
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        result = sblocca_revisione("25012", rev.pk, "2025-07-15")
+        new_rev = Revisione.objects.get(pk=result["revisione"]["id"])
+        self.assertEqual(new_rev.rev_no, 3)
+        self.assertEqual(new_rev.dis_plan_date.isoformat(), "2025-07-15")
+        self.assertTrue(new_rev.crea_nuova_rev)
+        self.assertEqual(new_rev.ext_status_id, None)
+
+    def test_sblocca_without_date(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        result = sblocca_revisione("25012", rev.pk)
+        new_rev = Revisione.objects.get(pk=result["revisione"]["id"])
+        self.assertIsNone(new_rev.dis_plan_date)
+
+    def test_sblocca_rejects_non_latest(self):
+        rev0 = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        Revisione.objects.create(documento=self.doc, rev_no=1)
+        with self.assertRaises(ValueError):
+            sblocca_revisione("25012", rev0.pk)
+
+    def test_api_list_and_sblocca(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        self.client.force_login(self.reading_user)
+        list_res = self.client.get("/api/commesse/25012/revisioni/sbloccabili/")
+        self.assertEqual(list_res.status_code, 200)
+        self.assertEqual(list_res.json()["count"], 1)
+
+        self.client.force_login(self.reading_user)
+        post_res = self.client.post(
+            "/api/commesse/25012/revisioni/sblocca/",
+            data=json.dumps({"revisione_id": rev.pk}),
+            content_type="application/json",
+        )
+        self.assertEqual(post_res.status_code, 403)
+
+        self.client.force_login(self.writing_user)
+        post_res = self.client.post(
+            "/api/commesse/25012/revisioni/sblocca/",
+            data=json.dumps({"revisione_id": rev.pk, "dis_plan_date": "2025-08-01"}),
+            content_type="application/json",
+        )
+        self.assertEqual(post_res.status_code, 200)
+        data = post_res.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["count"], 0)
+        self.assertEqual(Revisione.objects.filter(documento=self.doc, rev_no=2).count(), 1)
