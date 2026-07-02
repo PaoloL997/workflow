@@ -7,9 +7,25 @@ import pandas as pd
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
-from .models import Documento, Permesso, Reparto, Revisione, RevisioneFileLink, Testata
+from .models import (
+    Documento,
+    Permesso,
+    Reparto,
+    Revisione,
+    RevisioneFileLink,
+    StatoEsterno,
+    Testata,
+)
 from .services.commesse import risolvi_file_revisione, salva_file_link
 from .services.import_old import importa_commessa_da_access
+from .services.revisione_anomalie import (
+    audit_commessa,
+    audit_commessa_summary,
+    audit_revisione,
+    classifica_revisione,
+    ignora_anomalie_revisione,
+    serialize_anomalie_gruppi,
+)
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
 
 User = get_user_model()
@@ -721,6 +737,147 @@ class RevisioniCleanupTests(TestCase):
         self.assertEqual(find_orphan_indices(df), set())
 
 
+class RevisioneAnomalieTests(TestCase):
+    def setUp(self):
+        self.approved = StatoEsterno.objects.create(nome="Approved", colore="#00B050")
+        self.rejected = StatoEsterno.objects.create(
+            nome="Rejected - Work can not proceed", colore="#D61D09"
+        )
+        self.testata = Testata.objects.create(job="25012", time_cli_doc_rev=21)
+        self.doc = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="25012-01-4005",
+            doc_title="Test doc",
+        )
+
+    def test_empty_revision_not_anomalous(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=1, dis_plan_date="2026-03-01")
+        self.assertEqual(audit_revisione(rev), [])
+
+    def test_risposta_senza_ricezione(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=2,
+            dis_act_date="2026-02-26",
+            ext_status=self.approved,
+        )
+        codes = [a.codice for a in audit_revisione(rev, time_cli=21)]
+        self.assertIn("RISPOSTA_SENZA_RICEZIONE", codes)
+        self.assertIn("DISPATCH_SENZA_RIENTRO_PREV", codes)
+
+    def test_inviato_senza_dispatch(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=4,
+            int_status="inviato_al_cliente",
+        )
+        codes = [a.codice for a in audit_revisione(rev)]
+        self.assertEqual(codes, ["INVIATO_SENZA_DISPATCH"])
+
+    def test_empty_after_approved_not_anomalous(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date="2025-01-01",
+            rec_act_date="2025-01-10",
+            ext_status=self.approved,
+            int_status="ricevuto",
+        )
+        rev1 = Revisione.objects.create(documento=self.doc, rev_no=1)
+        self.assertEqual(audit_revisione(rev1), [])
+        self.assertEqual(audit_commessa("25012"), [])
+
+    def test_post_ricezione_pending_emission_not_anomalous(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date="2025-01-01",
+            rec_act_date="2025-01-10",
+            ext_status=self.rejected,
+            int_status="ricevuto",
+        )
+        rev1 = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            dis_plan_date="2025-01-24",
+        )
+        self.assertEqual(audit_revisione(rev1), [])
+        self.assertEqual(audit_commessa("25012"), [])
+
+    def test_int_status_incongruente_ricevuto_senza_data(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            int_status="ricevuto",
+        )
+        codes = [a.codice for a in audit_revisione(rev)]
+        self.assertIn("INT_STATUS_INCONGRUENTE", codes)
+
+    def test_classifica_conclusi_fixes_risposta_senza_ricezione(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=2,
+            dis_act_date="2026-02-26",
+            ext_status=self.approved,
+        )
+        result = classifica_revisione(
+            "25012",
+            rev.pk,
+            "conclusi",
+            {"rec_act_date": "2026-03-10"},
+        )
+        self.assertEqual(result["revisione"]["int_status"], "ricevuto")
+        self.assertEqual(result["revisione"]["rec_act_date"], "2026-03-10")
+        rev.refresh_from_db()
+        self.assertEqual(audit_revisione(rev, time_cli=21), [])
+
+    def test_classifica_da_emettere_clears_inviato_senza_dispatch(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=4,
+            int_status="inviato_al_cliente",
+        )
+        classifica_revisione("25012", rev.pk, "da_emettere")
+        rev.refresh_from_db()
+        self.assertEqual(rev.int_status, "")
+        self.assertEqual(audit_revisione(rev), [])
+
+    def test_gruppi_marks_latest_revision(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            int_status="ricevuto",
+            rec_act_date="2025-01-10",
+            dis_act_date="2025-01-01",
+            ext_status=self.approved,
+        )
+        rev1 = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            int_status="inviato_al_cliente",
+        )
+        gruppi = serialize_anomalie_gruppi("25012", audit_commessa("25012"))
+        self.assertEqual(len(gruppi), 1)
+        self.assertEqual(gruppi[0]["revisione_id"], rev1.pk)
+        self.assertTrue(gruppi[0]["is_latest"])
+        self.assertEqual(gruppi[0]["suggest_bucket"], "da_ricevere")
+        self.assertEqual(gruppi[0]["situazione_attuale"]["label"], "Da ricevere")
+
+    def test_ignora_anomalie_esclude_revisione(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=2,
+            dis_act_date="2026-02-26",
+            ext_status=self.approved,
+        )
+        self.assertEqual(len(audit_commessa("25012")), 2)
+        ignora_anomalie_revisione("25012", rev.pk)
+        rev.refresh_from_db()
+        self.assertTrue(rev.ignora_anomalie)
+        self.assertEqual(audit_commessa("25012"), [])
+        self.assertEqual(audit_commessa_summary("25012")["count"], 0)
+
+
 class ImportOldTests(TestCase):
     def _frames(self):
         return {
@@ -784,14 +941,14 @@ class ImportOldTests(TestCase):
         }
 
     @patch("core.services.import_old.fetch_commessa_frames")
-    def test_import_excludes_orphan_revisioni(self, mock_fetch):
+    def test_import_includes_all_revisioni_and_reports_orphans(self, mock_fetch):
         mock_fetch.return_value = self._frames()
         result = importa_commessa_da_access("99999")
         self.assertEqual(result["documenti"], 1)
-        self.assertEqual(result["revisioni"], 1)
-        self.assertEqual(result["revisioni_orfane_escluse"], 1)
-        self.assertEqual(Revisione.objects.count(), 1)
-        self.assertEqual(Revisione.objects.get().rev_no, 0)
+        self.assertEqual(result["revisioni"], 2)
+        self.assertEqual(Revisione.objects.count(), 2)
+        self.assertIn("anomalie", result)
+        self.assertEqual(Revisione.objects.filter(rev_no=1).get().int_status, "")
 
     @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_rejects_existing_job(self, mock_fetch):

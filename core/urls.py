@@ -21,6 +21,21 @@ urlpatterns = [
     path("api/commesse/", views.commesse_api, name="commesse_api"),
     path("api/commesse/<str:job>/", views.commessa_api_detail, name="commessa_api_detail"),
     path("api/commesse/<str:job>/chiudi/", views.commessa_close_api, name="commessa_close_api"),
+    path(
+        "api/commesse/<str:job>/anomalie/",
+        views.commessa_anomalie_api,
+        name="commessa_anomalie_api",
+    ),
+    path(
+        "api/commesse/<str:job>/anomalie/risolvi/",
+        views.commessa_anomalie_risolvi_api,
+        name="commessa_anomalie_risolvi_api",
+    ),
+    path(
+        "api/commesse/<str:job>/anomalie/ignora/",
+        views.commessa_anomalie_ignora_api,
+        name="commessa_anomalie_ignora_api",
+    ),
     path("api/erp/", views.erp_api, name="erp_api"),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),

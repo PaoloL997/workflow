@@ -319,6 +319,11 @@ class Revisione(models.Model):
         default=False,
         help_text="Flag per creare una nuova revisione al rientro dal cliente.",
     )
+    ignora_anomalie = models.BooleanField(
+        db_column="IgnoraAnomalie",
+        default=False,
+        help_text="Se attivo, le incongruenze su questa revisione non vengono segnalate.",
+    )
 
     class Meta:
         managed = True

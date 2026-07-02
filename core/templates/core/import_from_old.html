@@ -159,10 +159,10 @@
       const data = await res.json();
 
       if (res.ok && data.ok) {
-        setStatus('success',
-          `✅ Importazione completata — ${data.documenti} document${data.documenti === 1 ? 'o' : 'i'}, ` +
-          `${data.revisioni} revision${data.revisioni === 1 ? 'e' : 'i'}.`
-        );
+        let url = '/commesse/' + encodeURIComponent(job) + '/';
+        if (data.anomalie > 0) url += '?anomalie=1';
+        window.location.href = url;
+        return;
       } else {
         if (isPermissionDeniedResponse(res, data)) return;
         setStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));

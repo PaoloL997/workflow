@@ -69,6 +69,13 @@ from .services.commesse import (
     update_stato_esterno,
 )
 from .services.import_old import importa_commessa_da_access
+from .services.revisione_anomalie import (
+    audit_commessa,
+    audit_commessa_summary,
+    classifica_revisione,
+    ignora_anomalie_revisione,
+    serialize_anomalie_gruppi,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +175,7 @@ def commessa_detail_view(request, job):
     indirizzi_all = list_indirizzi(job)
     STATI_EMESSI = ("inviato_al_cliente", "ricevuto")
     documenti_all = list_documenti(job) if archivio_completo else []
+    anomalie_count = audit_commessa_summary(job)["count"]
     emissione_count = sum(1 for d in documenti_all if d["latest_int_status"] not in STATI_EMESSI)
     ricezione_count = sum(
         1 for d in documenti_all if d["latest_int_status"] == "inviato_al_cliente"
@@ -256,6 +264,7 @@ def commessa_detail_view(request, job):
             "emissione_extra": emissione_extra,
             "ricezione_preview": ricezione_preview,
             "ricezione_extra": ricezione_extra,
+            "anomalie_count": anomalie_count,
         },
     )
 
@@ -1522,6 +1531,80 @@ def profilo_view(request):
             "reparti": reparti,
         },
     )
+
+
+# ── API: Anomalie revisioni ───────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def commessa_anomalie_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    anomalies = audit_commessa(job)
+    gruppi = serialize_anomalie_gruppi(job, anomalies)
+    return JsonResponse(
+        {
+            "count": len(gruppi),
+            "anomalie_totali": len(anomalies),
+            "gruppi": gruppi,
+            "time_cli_doc_rev": testata.time_cli_doc_rev,
+        }
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def commessa_anomalie_risolvi_api(request, job):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+
+    revisione_id = data.get("revisione_id")
+    bucket = (data.get("bucket") or "").strip()
+    if not revisione_id or not bucket:
+        return JsonResponse({"error": "Specificare revisione_id e bucket."}, status=400)
+
+    try:
+        get_commessa(job)
+        result = classifica_revisione(job, int(revisione_id), bucket, data)
+        summary = audit_commessa_summary(job)
+        return JsonResponse({"ok": True, **result, "anomalie_count": summary["count"]})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except Revisione.DoesNotExist:
+        return JsonResponse({"error": "Revisione non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def commessa_anomalie_ignora_api(request, job):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+
+    revisione_id = data.get("revisione_id")
+    if not revisione_id:
+        return JsonResponse({"error": "Specificare revisione_id."}, status=400)
+
+    try:
+        get_commessa(job)
+        result = ignora_anomalie_revisione(job, int(revisione_id))
+        return JsonResponse({"ok": True, **result})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except Revisione.DoesNotExist:
+        return JsonResponse({"error": "Revisione non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 # ── HTML: Import from old Access database ────────────────────────────────────

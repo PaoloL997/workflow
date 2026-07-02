@@ -961,6 +961,9 @@
       if (res.ok && data.ok) {
         closeImportModal();
         loadCommesse();
+        let url = '/commesse/' + encodeURIComponent(job) + '/';
+        if (data.anomalie > 0) url += '?anomalie=1';
+        window.location.href = url;
       } else {
         if (isPermissionDeniedResponse(res, data)) return;
         setImportStatus('error', '❌ ' + (data.error || 'Errore sconosciuto.'));

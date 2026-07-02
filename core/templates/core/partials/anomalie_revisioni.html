@@ -1,0 +1,785 @@
+{# Banner + modal anomalie revisioni. Richiede: job, anomalie_count (opzionale), anomalie_banner_layout (full|compact) #}
+<style>
+  .anom-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 12px;
+    background: hsl(42, 100%, 92%);
+    color: hsl(36, 80%, 28%);
+    border: 1px solid hsl(42, 80%, 78%);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+    text-align: left;
+    width: auto;
+    max-width: max-content;
+  }
+  .anom-banner.visible { display: inline-flex; }
+  .anom-banner--full {
+    margin-top: 14px;
+    margin-bottom: 0;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .anom-banner--compact {
+    width: auto;
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .anom-banner:hover {
+    background: hsl(42, 100%, 88%);
+    box-shadow: 0 2px 8px hsl(42 60% 40% / 0.12);
+  }
+  .anom-banner--highlight { animation: anom-pulse 1.5s ease-in-out 2; }
+  @keyframes anom-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(42 90% 50% / 0); }
+    50% { box-shadow: 0 0 0 4px hsl(42 90% 50% / 0.25); }
+  }
+  [data-theme="dark"] .anom-banner {
+    background: hsl(36, 60%, 18%);
+    color: hsl(42, 90%, 72%);
+    border-color: hsl(36, 50%, 28%);
+  }
+  .anom-banner svg { flex-shrink: 0; opacity: 0.85; }
+
+  #anom-modal-backdrop {
+    position: fixed; inset: 0;
+    background: hsl(220 30% 3% / 0.62);
+    backdrop-filter: blur(6px);
+    z-index: 500;
+    display: none; align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  #anom-modal-backdrop.show { display: flex; }
+  #anom-modal {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 22px 24px;
+    width: 100%;
+    max-width: min(1400px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: hidden;
+    display: flex; flex-direction: column; gap: 12px;
+    box-shadow: var(--shadow-elevated);
+  }
+  #anom-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  #anom-modal-title { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+  #anom-modal-close {
+    background: var(--color-elevated); border: none;
+    width: 32px; height: 32px; border-radius: 50%;
+    cursor: pointer; color: var(--color-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #anom-modal-body { overflow-y: auto; flex: 1; min-height: 0; }
+  #anom-modal-error { font-size: 13px; color: var(--color-danger); display: none; }
+  #anom-modal-error.show { display: block; }
+  .anom-empty { text-align: center; padding: 32px 16px; color: var(--color-text-secondary); font-size: 14px; }
+
+  .anom-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  .anom-table th {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-weight: 600; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .anom-table td { padding: 14px 12px; border-bottom: 1px solid var(--color-border); vertical-align: middle; }
+  .anom-table th.anom-col-rev,
+  .anom-table td.anom-col-rev,
+  .anom-table th.anom-col-doc,
+  .anom-table td.anom-col-doc,
+  .anom-table th.anom-col-problems,
+  .anom-table td.anom-col-problems,
+  .anom-table th.anom-col-situazione,
+  .anom-table td.anom-col-situazione { text-align: center; }
+  .anom-doc-code { font-weight: 700; color: var(--color-text-primary); font-size: 15px; }
+  .anom-msg { color: var(--color-text-primary); line-height: 1.45; font-size: 15px; }
+  .anom-problems { margin: 0; padding: 0; list-style-position: inside; }
+  .anom-problems li { margin-bottom: 4px; color: var(--color-text-primary); line-height: 1.4; }
+  .anom-problems li:last-child { margin-bottom: 0; }
+
+  .anom-badge {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 999px; margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .anom-badge--latest { background: hsl(145 50% 88%); color: hsl(145 45% 28%); }
+  .anom-badge--older { background: hsl(220 15% 90%); color: hsl(220 10% 40%); }
+  [data-theme="dark"] .anom-badge--latest { background: hsl(145 40% 18%); color: hsl(145 50% 72%); }
+  [data-theme="dark"] .anom-badge--older { background: hsl(220 15% 22%); color: hsl(220 10% 72%); }
+
+  .anom-btn {
+    padding: 8px 16px; border-radius: 9px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .anom-btn--primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  .anom-btn--primary:hover { opacity: 0.9; }
+  .anom-btn--ghost {
+    background: transparent;
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  .anom-btn--ghost:hover { color: var(--color-text-primary); background: var(--color-elevated); }
+
+  .anom-col-actions { white-space: nowrap; vertical-align: middle; width: 1%; }
+  .anom-row-actions {
+    display: inline-flex; align-items: center; gap: 8px;
+    flex-wrap: nowrap; justify-content: center;
+  }
+  .anom-row-actions .anom-btn { flex-shrink: 0; }
+
+  .anom-situazione {
+    display: inline-block;
+    font-size: 13px; font-weight: 600;
+    padding: 5px 12px; border-radius: 999px;
+    white-space: nowrap;
+  }
+  .anom-situazione--da_emettere { background: hsl(270 60% 88%); color: hsl(270 50% 32%); }
+  .anom-situazione--da_ricevere { background: hsl(46 92% 88%); color: hsl(46 70% 28%); }
+  .anom-situazione--conclusi { background: hsl(145 55% 88%); color: hsl(145 45% 28%); }
+  [data-theme="dark"] .anom-situazione--da_emettere { background: hsl(270 60% 20%); color: hsl(270 80% 75%); }
+  [data-theme="dark"] .anom-situazione--da_ricevere { background: hsl(46 85% 20%); color: hsl(46 95% 72%); }
+  [data-theme="dark"] .anom-situazione--conclusi { background: hsl(145 55% 16%); color: hsl(145 60% 68%); }
+
+  #anom-resolve-backdrop {
+    position: fixed; inset: 0;
+    background: hsl(220 30% 3% / 0.72);
+    backdrop-filter: blur(6px);
+    z-index: 510;
+    display: none; align-items: center; justify-content: center;
+    padding: 12px;
+  }
+  #anom-resolve-backdrop.show { display: flex; }
+  #anom-resolve-modal {
+    position: relative;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    padding: 22px 24px 20px;
+    width: 100%;
+    max-width: min(1180px, calc(100vw - 24px));
+    max-height: calc(100vh - 24px);
+    overflow: hidden;
+    display: flex; flex-direction: column; gap: 0;
+    box-shadow: var(--shadow-elevated);
+  }
+  #anom-resolve-header {
+    position: absolute; top: 14px; right: 14px; z-index: 2;
+  }
+  #anom-resolve-close {
+    background: var(--color-elevated); border: none;
+    width: 36px; height: 36px; border-radius: 50%;
+    cursor: pointer; color: var(--color-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #anom-resolve-body { overflow-y: auto; flex: 1; min-height: 0; }
+  #anom-resolve-error {
+    font-size: 15px; color: var(--color-danger);
+    display: none; text-align: center; margin-bottom: 10px;
+  }
+  #anom-resolve-error.show { display: block; }
+
+  .anom-resolve-inline {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+    font-size: 19px; color: var(--color-text-primary);
+    margin-bottom: 18px; padding: 0 44px 14px 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .anom-resolve-inline strong { font-weight: 700; }
+  .anom-resolve-inline .anom-badge { margin-top: 0; font-size: 11px; padding: 4px 10px; }
+  .anom-resolve-sep { color: var(--color-text-secondary); font-size: 18px; }
+
+  .anom-resolve-block { margin-bottom: 18px; }
+  .anom-resolve-block:last-of-type { margin-bottom: 0; }
+  .anom-resolve-problems-row {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 10px;
+    margin-bottom: 18px;
+  }
+  .anom-resolve-problems-row .anom-resolve-section-title { margin: 0; flex-shrink: 0; }
+  .anom-resolve-problems-text {
+    font-size: 16px; line-height: 1.45; color: var(--color-text-primary);
+  }
+
+  .anom-resolve-section-title {
+    font-size: 17px; font-weight: 700; color: var(--color-text-primary);
+    margin: 0 0 10px;
+  }
+
+  .anom-resolve-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 14px;
+  }
+  .anom-resolve-field { display: flex; flex-direction: column; gap: 6px; }
+  .anom-resolve-field--check {
+    flex-direction: row; align-items: center; gap: 10px;
+    grid-column: 1 / -1; margin-top: 2px;
+  }
+  .anom-resolve-field label {
+    font-size: 13px; font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+  .anom-resolve-field--check label { font-size: 15px; color: var(--color-text-primary); }
+  .anom-resolve-field input[type="text"],
+  .anom-resolve-field input[type="number"],
+  .anom-resolve-field input[type="date"],
+  .anom-resolve-field select {
+    padding: 11px 12px; border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg); color: var(--color-text-primary);
+    font-size: 16px; width: 100%;
+  }
+  .anom-resolve-field input[type="checkbox"] { width: 18px; height: 18px; }
+  .anom-resolve-field--focus label { color: var(--color-accent); font-weight: 700; }
+  .anom-resolve-field--focus input,
+  .anom-resolve-field--focus select {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+
+  .anom-resolve-buckets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .anom-resolve-bucket {
+    display: flex; align-items: flex-start; gap: 10px;
+    cursor: pointer; padding: 12px 14px;
+    border: 1px solid var(--color-border); border-radius: 10px;
+    background: var(--color-bg);
+  }
+  .anom-resolve-bucket:has(input:checked) {
+    border-color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg));
+  }
+  .anom-resolve-bucket input { width: 18px; height: 18px; margin: 2px 0 0; flex-shrink: 0; }
+  .anom-resolve-bucket-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .anom-resolve-bucket-title { font-size: 16px; font-weight: 700; color: var(--color-text-primary); line-height: 1.3; }
+  .anom-resolve-bucket-desc { font-size: 14px; line-height: 1.4; color: var(--color-text-secondary); }
+  .anom-resolve-bucket:has(input:checked) .anom-resolve-bucket-title { color: var(--color-accent); }
+
+  .anom-resolve-actions {
+    display: flex; justify-content: center; gap: 14px;
+    margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+  }
+  .anom-resolve-actions .anom-btn {
+    padding: 14px 44px; font-size: 16px; font-weight: 700;
+    min-width: 170px; border-radius: 10px;
+  }
+
+  @media (max-width: 860px) {
+    .anom-resolve-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .anom-resolve-buckets { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 520px) {
+    .anom-resolve-form { grid-template-columns: 1fr; }
+    .anom-resolve-inline { font-size: 17px; }
+  }
+</style>
+
+<button
+  type="button"
+  id="anom-banner"
+  class="anom-banner{% if anomalie_banner_layout == 'compact' %} anom-banner--compact{% else %} anom-banner--full{% endif %}{% if anomalie_count %} visible{% endif %}"
+  aria-live="polite"
+>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+  </svg>
+  <span id="anom-banner-text">
+    {% if anomalie_count %}
+      Ci sono {{ anomalie_count }} revision{% if anomalie_count == 1 %}e{% else %}i{% endif %} da risolvere
+    {% else %}
+      Ci sono revisioni da risolvere
+    {% endif %}
+  </span>
+</button>
+
+<div id="anom-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="anom-modal-title">
+  <div id="anom-modal">
+    <div id="anom-modal-header">
+      <span id="anom-modal-title">Revisioni da risolvere</span>
+      <button type="button" id="anom-modal-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="anom-modal-error" role="alert"></div>
+    <div id="anom-modal-body"><div class="anom-empty">Caricamento…</div></div>
+  </div>
+</div>
+
+<div id="anom-resolve-backdrop" role="dialog" aria-modal="true" aria-label="Risolvi revisione">
+  <div id="anom-resolve-modal">
+    <div id="anom-resolve-header">
+      <button type="button" id="anom-resolve-close" aria-label="Chiudi">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="anom-resolve-error" role="alert"></div>
+    <div id="anom-resolve-body"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const JOB = '{{ job|escapejs }}';
+  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  const HIGHLIGHT = new URLSearchParams(window.location.search).get('anomalie') === '1';
+
+  const banner = document.getElementById('anom-banner');
+  const bannerText = document.getElementById('anom-banner-text');
+  const backdrop = document.getElementById('anom-modal-backdrop');
+  const body = document.getElementById('anom-modal-body');
+  const errEl = document.getElementById('anom-modal-error');
+  const resolveBackdrop = document.getElementById('anom-resolve-backdrop');
+  const resolveBody = document.getElementById('anom-resolve-body');
+  const resolveErrEl = document.getElementById('anom-resolve-error');
+
+  if (!banner || !backdrop || !resolveBackdrop) return;
+
+  let _gruppi = [];
+  let _count = {{ anomalie_count|default:0 }};
+  let _timeCli = null;
+  let _statiEsterni = null;
+  let _statiInterni = null;
+
+  const BUCKETS = [
+    { id: 'da_emettere', title: 'Da emettere', desc: 'Documento in attesa di invio al cliente (Emissione).' },
+    { id: 'da_ricevere', title: 'Da ricevere', desc: 'Documento inviato, in attesa risposta cliente (Ricezione).' },
+    { id: 'conclusi', title: 'Conclusi', desc: 'Risposta cliente registrata su questa revisione (Ricevuto).' },
+  ];
+
+  const FIELD_FOCUS = {
+    RISPOSTA_SENZA_RICEZIONE: ['rec_act_date', 'ext_status', 'int_status'],
+    INVIATO_SENZA_DISPATCH: ['dis_act_date', 'int_status'],
+    DISPATCH_SENZA_RIENTRO_PREV: ['rec_plan_date', 'dis_act_date'],
+    INT_STATUS_INCONGRUENTE: ['int_status', 'rec_act_date', 'dis_act_date'],
+  };
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function today() { return new Date().toISOString().slice(0, 10); }
+
+  function addDays(iso, days) {
+    const d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function setFormVal(id, val) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = Boolean(val);
+    else el.value = val == null ? '' : val;
+  }
+
+  function getFormVal(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    if (el.type === 'checkbox') return el.checked;
+    return el.value;
+  }
+
+  function updateBanner(count) {
+    _count = count;
+    if (count > 0) {
+      banner.classList.add('visible');
+      bannerText.textContent = 'Ci sono ' + count + ' revision' + (count === 1 ? 'e' : 'i') + ' da risolvere';
+    } else {
+      banner.classList.remove('visible');
+    }
+    if (typeof window.onAnomalieCountChange === 'function') window.onAnomalieCountChange(count);
+  }
+
+  function showError(msg) {
+    errEl.textContent = msg || '';
+    errEl.classList.toggle('show', Boolean(msg));
+  }
+
+  function showResolveError(msg) {
+    resolveErrEl.textContent = msg || '';
+    resolveErrEl.classList.toggle('show', Boolean(msg));
+  }
+
+  async function loadStatiEsterni() {
+    if (_statiEsterni) return _statiEsterni;
+    const res = await fetch('/api/stati-esterni/');
+    if (!res.ok) return [];
+    const data = await res.json();
+    _statiEsterni = data.stati || data || [];
+    return _statiEsterni;
+  }
+
+  async function loadStatiInterni() {
+    if (_statiInterni) return _statiInterni;
+    const res = await fetch('/api/stati-interni/');
+    if (!res.ok) return [];
+    const data = await res.json();
+    _statiInterni = data.stati || data || [];
+    return _statiInterni;
+  }
+
+  async function loadAnomalie() {
+    const res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/anomalie/');
+    if (!res.ok) throw new Error('Impossibile caricare le anomalie.');
+    const data = await res.json();
+    _gruppi = data.gruppi || [];
+    _timeCli = data.time_cli_doc_rev;
+    updateBanner(data.count || 0);
+    return _gruppi;
+  }
+
+  function focusFieldsForAnomalie(anomalie) {
+    const fields = new Set();
+    (anomalie || []).forEach(function (a) {
+      (FIELD_FOCUS[a.codice] || []).forEach(function (f) { fields.add(f); });
+    });
+    return fields;
+  }
+
+  function renderEditableForm(rev, focusFields) {
+    const intOpts = (_statiInterni || []).map(function (s) {
+      const sel = rev.int_status === s.id ? ' selected' : '';
+      return '<option value="' + esc(s.id) + '"' + sel + '>' + esc(s.nome) + '</option>';
+    }).join('');
+    const extOpts = (_statiEsterni || []).map(function (s) {
+      const sel = rev.ext_status === s.id ? ' selected' : '';
+      return '<option value="' + s.id + '"' + sel + '>' + esc(s.nome) + '</option>';
+    }).join('');
+
+    function field(name, label, html) {
+      const cls = focusFields.has(name) ? ' anom-resolve-field--focus' : '';
+      return '<div class="anom-resolve-field' + cls + '" data-field="' + name + '">' +
+        '<label for="anom-f-' + name + '">' + esc(label) + '</label>' + html + '</div>';
+    }
+
+    return '<div class="anom-resolve-form" id="anom-resolve-form">' +
+      field('rev_no', 'N. revisione', '<input id="anom-f-rev_no" type="number" value="' + esc(rev.rev_no ?? '') + '">') +
+      field('rev_let', 'Lettera revisione', '<input id="anom-f-rev_let" type="text" value="' + esc(rev.rev_let || '') + '" maxlength="10">') +
+      field('dis_plan_date', 'Invio previsto', '<input id="anom-f-dis_plan_date" type="date" value="' + esc(rev.dis_plan_date || '') + '">') +
+      field('dis_act_date', 'Invio effettivo', '<input id="anom-f-dis_act_date" type="date" value="' + esc(rev.dis_act_date || '') + '">') +
+      field('rec_plan_date', 'Rientro previsto', '<input id="anom-f-rec_plan_date" type="date" value="' + esc(rev.rec_plan_date || '') + '">') +
+      field('rec_act_date', 'Rientro effettivo', '<input id="anom-f-rec_act_date" type="date" value="' + esc(rev.rec_act_date || '') + '">') +
+      field('int_status', 'Stato interno', '<select id="anom-f-int_status"><option value="">— Nessuno —</option>' + intOpts + '</select>') +
+      field('ext_status', 'Risposta cliente', '<select id="anom-f-ext_status"><option value="">— Nessuna —</option>' + extOpts + '</select>') +
+      '<div class="anom-resolve-field anom-resolve-field--check">' +
+      '<input id="anom-f-crea_nuova_rev" type="checkbox"' + (rev.crea_nuova_rev ? ' checked' : '') + '>' +
+      '<label for="anom-f-crea_nuova_rev">Crea nuova revisione alla prossima ricezione</label></div>' +
+      '</div>';
+  }
+
+  function renderBucketOptions(revId, selected) {
+    return '<div class="anom-resolve-buckets">' + BUCKETS.map(function (b) {
+      const checked = b.id === selected ? ' checked' : '';
+      return '<label class="anom-resolve-bucket">' +
+        '<input type="radio" name="bucket-' + revId + '" value="' + b.id + '"' + checked + '>' +
+        '<div class="anom-resolve-bucket-text">' +
+        '<span class="anom-resolve-bucket-title">' + esc(b.title) + '</span>' +
+        '<span class="anom-resolve-bucket-desc">' + esc(b.desc) + '</span>' +
+        '</div></label>';
+    }).join('') + '</div>';
+  }
+
+  function applyBucketToForm(bucket) {
+    if (bucket === 'da_emettere') {
+      setFormVal('anom-f-int_status', '');
+      setFormVal('anom-f-ext_status', '');
+      setFormVal('anom-f-dis_act_date', '');
+      setFormVal('anom-f-rec_plan_date', '');
+      setFormVal('anom-f-rec_act_date', '');
+    } else if (bucket === 'da_ricevere') {
+      const dis = getFormVal('anom-f-dis_act_date') || today();
+      setFormVal('anom-f-dis_act_date', dis);
+      setFormVal('anom-f-int_status', 'inviato_al_cliente');
+      setFormVal('anom-f-ext_status', '');
+      setFormVal('anom-f-rec_act_date', '');
+      setFormVal('anom-f-rec_plan_date', _timeCli ? addDays(dis, _timeCli) : getFormVal('anom-f-rec_plan_date') || '');
+    } else if (bucket === 'conclusi') {
+      const dis = getFormVal('anom-f-dis_act_date');
+      const rec = getFormVal('anom-f-rec_act_date') || today();
+      if (!dis) setFormVal('anom-f-dis_act_date', rec);
+      setFormVal('anom-f-rec_act_date', rec);
+      setFormVal('anom-f-int_status', 'ricevuto');
+      const disFinal = getFormVal('anom-f-dis_act_date');
+      if (_timeCli && disFinal && !getFormVal('anom-f-rec_plan_date')) {
+        setFormVal('anom-f-rec_plan_date', addDays(disFinal, _timeCli));
+      }
+    }
+  }
+
+  function renderPanel(gruppo) {
+    const rev = gruppo.revisione || {};
+    const revId = gruppo.revisione_id;
+    const bucket = gruppo.suggest_bucket || 'da_emettere';
+    const focusFields = focusFieldsForAnomalie(gruppo.anomalie);
+    const doc = gruppo.documento || {};
+    const revLabel = (rev.rev_no ?? '') + (rev.rev_let || '');
+    const badge = gruppo.is_latest
+      ? '<span class="anom-badge anom-badge--latest">Ultima revisione</span>'
+      : '<span class="anom-badge anom-badge--older">Revisione precedente</span>';
+    const problemsText = (gruppo.anomalie || []).map(function (a) {
+      return esc(a.messaggio);
+    }).join(' · ');
+
+    return '<div id="anom-resolve-panel">' +
+      '<div class="anom-resolve-inline">' +
+      '<strong>' + esc(doc.vendor_doc) + '</strong>' +
+      '<span class="anom-resolve-sep">·</span>' +
+      '<span>Rev. <strong>' + esc(revLabel || '—') + '</strong></span>' +
+      badge +
+      '</div>' +
+      '<div class="anom-resolve-problems-row">' +
+      '<h3 class="anom-resolve-section-title">Problema/i</h3>' +
+      '<span class="anom-resolve-problems-text">' + problemsText + '</span>' +
+      '</div>' +
+      '<div class="anom-resolve-block">' +
+      '<h3 class="anom-resolve-section-title">Dati revisione</h3>' +
+      renderEditableForm(rev, focusFields) +
+      '</div>' +
+      '<div class="anom-resolve-block">' +
+      '<h3 class="anom-resolve-section-title">Classifica documento</h3>' +
+      renderBucketOptions(revId, bucket) +
+      '</div>' +
+      '<div class="anom-resolve-actions">' +
+      '<button type="button" class="anom-btn" data-cancel-resolve>Annulla</button>' +
+      '<button type="button" class="anom-btn anom-btn--primary" data-confirm-resolve>Risolvi</button>' +
+      '</div></div>';
+  }
+
+  function bindPanelEvents(gruppo) {
+    const revId = gruppo.revisione_id;
+    const panel = document.getElementById('anom-resolve-panel');
+    if (!panel) return;
+
+    panel.querySelectorAll('input[name="bucket-' + revId + '"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (radio.checked) applyBucketToForm(radio.value);
+      });
+    });
+
+    panel.querySelector('[data-cancel-resolve]').addEventListener('click', closeResolveModal);
+    panel.querySelector('[data-confirm-resolve]').addEventListener('click', function () {
+      confirmResolve(gruppo, panel);
+    });
+
+    const focusFields = focusFieldsForAnomalie(gruppo.anomalie);
+    const firstFocus = panel.querySelector('[data-field="' + Array.from(focusFields)[0] + '"] input, [data-field="' + Array.from(focusFields)[0] + '"] select');
+    if (firstFocus) firstFocus.focus();
+  }
+
+  function openResolveModal(gruppo) {
+    showResolveError('');
+    resolveBody.innerHTML = renderPanel(gruppo);
+    resolveBackdrop.classList.add('show');
+    bindPanelEvents(gruppo);
+  }
+
+  function closeResolveModal() {
+    resolveBackdrop.classList.remove('show');
+    showResolveError('');
+    resolveBody.innerHTML = '';
+  }
+
+  function collectFormPayload() {
+    const revNo = getFormVal('anom-f-rev_no');
+    return {
+      rev_no: revNo === '' || revNo == null ? null : parseInt(revNo, 10),
+      rev_let: getFormVal('anom-f-rev_let') || '',
+      dis_plan_date: getFormVal('anom-f-dis_plan_date') || '',
+      dis_act_date: getFormVal('anom-f-dis_act_date') || '',
+      rec_plan_date: getFormVal('anom-f-rec_plan_date') || '',
+      rec_act_date: getFormVal('anom-f-rec_act_date') || '',
+      int_status: getFormVal('anom-f-int_status') || '',
+      ext_status: getFormVal('anom-f-ext_status') || null,
+      crea_nuova_rev: getFormVal('anom-f-crea_nuova_rev'),
+    };
+  }
+
+  async function confirmIgnore(revId, btn) {
+    if (typeof requireWrite === 'function' && !requireWrite()) return;
+    if (!confirm('Ignorare questa revisione? Non comparirà più tra le anomalie da risolvere.')) return;
+    showError('');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/anomalie/ignora/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ revisione_id: revId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (typeof isPermissionDeniedResponse === 'function' && isPermissionDeniedResponse(res, data)) return;
+        showError(data.error || 'Errore durante l\'operazione.');
+        if (btn) btn.disabled = false;
+        return;
+      }
+      await loadAnomalie();
+      renderModal();
+      if (data.anomalie_count === 0) closeAnomalieModal();
+      if (typeof window.onAnomalieResolved === 'function') window.onAnomalieResolved(data);
+    } catch (e) {
+      showError('Errore di rete. Riprova.');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  async function confirmResolve(gruppo, panel) {
+    if (typeof requireWrite === 'function' && !requireWrite()) return;
+    showResolveError('');
+    const revId = gruppo.revisione_id;
+    const btn = panel.querySelector('[data-confirm-resolve]');
+    if (btn) btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/revisioni/' + revId + '/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify(collectFormPayload()),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (typeof isPermissionDeniedResponse === 'function' && isPermissionDeniedResponse(res, data)) return;
+        showResolveError(data.error || 'Errore durante il salvataggio.');
+        if (btn) btn.disabled = false;
+        return;
+      }
+
+      const check = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/anomalie/');
+      const checkData = await check.json();
+      _gruppi = checkData.gruppi || [];
+      updateBanner(checkData.count || 0);
+      const still = _gruppi.some(function (g) { return g.revisione_id === revId; });
+
+      if (still) {
+        showResolveError('Salvato, ma restano incongruenze su questa revisione. Verifica i campi e riprova.');
+        if (btn) btn.disabled = false;
+        if (typeof window.onAnomalieResolved === 'function') window.onAnomalieResolved(data);
+      } else {
+        closeResolveModal();
+        renderModal();
+        if (checkData.count === 0) closeAnomalieModal();
+        if (typeof window.onAnomalieResolved === 'function') window.onAnomalieResolved(data);
+      }
+    } catch (e) {
+      showResolveError('Errore di rete. Riprova.');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function renderModal() {
+    if (!_gruppi.length) {
+      body.innerHTML = '<div class="anom-empty">Nessuna revisione da risolvere.</div>';
+      return;
+    }
+
+    const rows = _gruppi.map(function (g) {
+      const doc = g.documento || {};
+      const rev = g.revisione || {};
+      const revLabel = (rev.rev_no ?? '') + (rev.rev_let || '');
+      const badge = g.is_latest
+        ? '<span class="anom-badge anom-badge--latest">Ultima revisione</span>'
+        : '<span class="anom-badge anom-badge--older">Revisione precedente</span>';
+      const problems = (g.anomalie || []).map(function (a) {
+        return '<li><span class="anom-msg">' + esc(a.messaggio) + '</span></li>';
+      }).join('');
+      const sit = g.situazione_attuale || {};
+      const sitId = sit.id || g.suggest_bucket || 'da_emettere';
+      const sitLabel = sit.label || sitId;
+
+      return '<tr class="anom-row-main">' +
+        '<td class="anom-col-doc"><div class="anom-doc-code">' + esc(doc.vendor_doc) + '</div></td>' +
+        '<td class="anom-col-rev"><div style="font-weight:600">' + esc(revLabel || '—') + '</div>' + badge + '</td>' +
+        '<td class="anom-col-problems"><ul class="anom-problems">' + problems + '</ul></td>' +
+        '<td class="anom-col-situazione"><span class="anom-situazione anom-situazione--' + esc(sitId) + '">' + esc(sitLabel) + '</span></td>' +
+        '<td class="anom-col-actions"><div class="anom-row-actions">' +
+        '<button type="button" class="anom-btn anom-btn--ghost" data-ignore="' + g.revisione_id + '">Ignora</button>' +
+        '<button type="button" class="anom-btn anom-btn--primary" data-open="' + g.revisione_id + '">Risolvi</button>' +
+        '</div></td>' +
+        '</tr>';
+    }).join('');
+
+    body.innerHTML = '<table class="anom-table"><thead><tr>' +
+      '<th class="anom-col-doc">Documento</th><th class="anom-col-rev">Revisione</th><th class="anom-col-problems">Problemi</th><th class="anom-col-situazione">Situazione attuale</th><th></th></tr></thead><tbody>' +
+      rows + '</tbody></table>';
+
+    body.querySelectorAll('[data-open]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = parseInt(btn.dataset.open, 10);
+        const g = _gruppi.find(function (x) { return x.revisione_id === id; });
+        if (g) {
+          Promise.all([loadStatiEsterni(), loadStatiInterni()]).then(function () {
+            openResolveModal(g);
+          });
+        }
+      });
+    });
+
+    body.querySelectorAll('[data-ignore]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        confirmIgnore(parseInt(btn.dataset.ignore, 10), btn);
+      });
+    });
+  }
+
+  async function openAnomalieModal() {
+    showError('');
+    closeResolveModal();
+    backdrop.classList.add('show');
+    body.innerHTML = '<div class="anom-empty">Caricamento…</div>';
+    try {
+      await loadStatiEsterni();
+      await loadStatiInterni();
+      await loadAnomalie();
+      renderModal();
+    } catch (e) {
+      body.innerHTML = '<div class="anom-empty">Errore nel caricamento.</div>';
+    }
+  }
+
+  function closeAnomalieModal() {
+    closeResolveModal();
+    backdrop.classList.remove('show');
+    showError('');
+  }
+
+  banner.addEventListener('click', openAnomalieModal);
+  document.getElementById('anom-modal-close').addEventListener('click', closeAnomalieModal);
+  backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeAnomalieModal(); });
+  document.getElementById('anom-resolve-close').addEventListener('click', closeResolveModal);
+  resolveBackdrop.addEventListener('click', function (e) { if (e.target === resolveBackdrop) closeResolveModal(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (resolveBackdrop.classList.contains('show')) {
+      closeResolveModal();
+      return;
+    }
+    if (backdrop.classList.contains('show')) closeAnomalieModal();
+  });
+
+  if (HIGHLIGHT && _count > 0) banner.classList.add('anom-banner--highlight');
+
+  window.AnomalieRevisioni = { load: loadAnomalie, open: openAnomalieModal, getCount: function () { return _count; } };
+
+  if (!_count) loadAnomalie().catch(function () {});
+})();
+</script>

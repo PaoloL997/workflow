@@ -3,7 +3,7 @@ from django.db import transaction
 
 from ..models import Documento, IndirSped, Reparto, Revisione, StatoEsterno, Testata
 from .access_source import fetch_commessa_frames
-from .revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
+from .revisione_anomalie import audit_commessa_summary
 
 _STATUS_MAP = {
     "A": {"nome": "Approved", "colore": "#00B050"},
@@ -108,8 +108,7 @@ def importa_commessa_da_access(job: str) -> dict:
     if testata_df.empty:
         raise ValueError(f'Commessa "{job}" non trovata nel database Access.')
 
-    revisioni_orfane_escluse = len(find_orphan_indices(rev_raw))
-    rev_df = drop_orphan_revisioni(rev_raw)
+    rev_df = rev_raw
 
     r = testata_df.iloc[0]
     testata = Testata.objects.create(
@@ -159,7 +158,6 @@ def importa_commessa_da_access(job: str) -> dict:
     for doc in documenti:
         doc_revs = rev_df.loc[rev_df["VendorDoc"] == doc.vendor_doc]
         for _, rv in doc_revs.iterrows():
-            int_status = "inviato_al_cliente" if pd.isna(rv["RecActDate"]) else "ricevuto"
             Revisione.objects.create(
                 documento=doc,
                 rev_no=_to_int(rv["RevNo"]),
@@ -168,14 +166,16 @@ def importa_commessa_da_access(job: str) -> dict:
                 dis_act_date=_to_date(rv["DisActDate"]),
                 rec_plan_date=_to_date(rv["RecPlanDate"]),
                 rec_act_date=_to_date(rv["RecActDate"]),
-                int_status=int_status,
+                int_status="",
                 ext_status=_get_stato_esterno(rv["Status"]),
             )
             rev_count += 1
 
+    summary = audit_commessa_summary(testata.job)
     return {
         "job": testata.job,
         "documenti": len(documenti),
         "revisioni": rev_count,
-        "revisioni_orfane_escluse": revisioni_orfane_escluse,
+        "anomalie": summary["count"],
+        "anomalie_per_codice": summary["per_codice"],
     }
