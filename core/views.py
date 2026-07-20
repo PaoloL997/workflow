@@ -1154,6 +1154,21 @@ def export_situazione(request, job):
 
 # ── Import: Document list from Excel ─────────────────────────────────────────
 
+# Ordered column headers for the downloadable import template.
+_DOCUMENTI_IMPORT_HEADERS = [
+    "Item",
+    "B&R Doc",
+    "Client Doc N°",
+    "Client Doc Class",
+    "Titolo documento",
+    "Reparto",
+    "Penale",
+    "Pagamento",
+    "Rev. Generale",
+    "Data invio prevista (Rev. 0)",
+    "Note",
+]
+
 # Column aliases accepted in the uploaded file (case-insensitive, stripped)
 _IMPORT_COL_MAP = {
     "item": "item_no",
@@ -1182,6 +1197,11 @@ _IMPORT_COL_MAP = {
     "rev generale": "rev_gen",
     "rev. generale": "rev_gen",
     "rev_gen": "rev_gen",
+    "data invio prevista (rev. 0)": "dis_plan_date_rev0",
+    "data invio prevista": "dis_plan_date_rev0",
+    "data prima emissione": "dis_plan_date_rev0",
+    "dis_plan_date": "dis_plan_date_rev0",
+    "dis_plan_date_rev0": "dis_plan_date_rev0",
     "note": "remarks",
     "remarks": "remarks",
 }
@@ -1191,6 +1211,33 @@ _BOOL_TRUE = {"sì", "si", "yes", "1", "true", "x", "vero"}
 
 def _parse_bool(val):
     return str(val).strip().lower() in _BOOL_TRUE
+
+
+def _parse_import_date(val):
+    """Parse a date value from an Excel cell.
+
+    Accepts openpyxl native date/datetime objects, ISO strings (YYYY-MM-DD),
+    and Italian-format strings (DD/MM/YYYY). Returns a date or None.
+    """
+    import datetime as _dt
+
+    if val is None or str(val).strip() == "":
+        return None, None
+    if isinstance(val, _dt.datetime):
+        return val.date(), None
+    if isinstance(val, _dt.date):
+        return val, None
+    s = str(val).strip()
+    try:
+        return _dt.date.fromisoformat(s), None
+    except ValueError:
+        pass
+    # Fallback: DD/MM/YYYY
+    try:
+        return _dt.datetime.strptime(s, "%d/%m/%Y").date(), None
+    except ValueError:
+        pass
+    return None, f'data non riconosciuta: "{s}" (usa formato YYYY-MM-DD o GG/MM/AAAA)'
 
 
 @api_login_required
@@ -1285,6 +1332,12 @@ def import_documenti_excel(request, job):
                 else:
                     errors.append(f'Riga {row_num}: reparto "{name}" non trovato, ignorato.')
 
+        dis_plan = None
+        if "dis_plan_date_rev0" in data:
+            dis_plan, date_err = _parse_import_date(data.get("dis_plan_date_rev0"))
+            if date_err:
+                errors.append(f"Riga {row_num}: {date_err}, data ignorata.")
+
         try:
             doc = Documento.objects.create(
                 testata=testata,
@@ -1299,12 +1352,77 @@ def import_documenti_excel(request, job):
                 reparto=reparto_str,
                 remarks=str(data.get("remarks") or "").strip(),
             )
-            Revisione.objects.create(documento=doc, rev_no=0)
+            rev0 = Revisione.objects.create(documento=doc, rev_no=0)
+            if dis_plan is not None:
+                rev0.dis_plan_date = dis_plan
+                rev0.save(update_fields=["dis_plan_date"])
             created.append(doc.pk)
         except Exception as exc:
             errors.append(f"Riga {row_num}: {exc}")
 
     return JsonResponse({"created": len(created), "errors": errors})
+
+
+# ── Template: Import document list ───────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def import_documenti_template(request):
+    """Download a pre-formatted Excel template for document list import."""
+    from io import BytesIO
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Template Lista Documenti"
+
+    header_fill = PatternFill(start_color="1C1C1A", end_color="1C1C1A", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+
+    for col_idx, h in enumerate(_DOCUMENTI_IMPORT_HEADERS, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Column widths: wider for free-text columns
+    _col_widths = {
+        1: 10,  # Item
+        2: 22,  # B&R Doc
+        3: 22,  # Client Doc N°
+        4: 22,  # Client Doc Class
+        5: 45,  # Titolo documento
+        6: 18,  # Reparto
+        7: 10,  # Penale
+        8: 12,  # Pagamento
+        9: 14,  # Rev. Generale
+        10: 28,  # Data invio prevista (Rev. 0)
+        11: 35,  # Note
+    }
+    for col_idx, width in _col_widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+
+    # Apply date format to the date column
+    date_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Data invio prevista (Rev. 0)") + 1
+    for row in range(2, 102):  # pre-format 100 data rows
+        ws.cell(row=row, column=date_col_idx).number_format = "DD/MM/YYYY"
+
+    # Freeze the header row
+    ws.freeze_panes = "A2"
+
+    # Row height for header
+    ws.row_dimensions[1].height = 20
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    response = HttpResponse(
+        buf.read(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="template_lista_documenti.xlsx"'
+    return response
 
 
 # ── API: File revisione ───────────────────────────────────────────────────────

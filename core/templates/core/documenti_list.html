@@ -160,6 +160,17 @@
     border: 1px solid var(--color-border);
   }
   .btn-secondary:hover { opacity: 0.8; }
+  .btn-template {
+    background: var(--color-elevated);
+    color: var(--color-accent);
+    border: 1.5px solid var(--color-accent);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none;
+  }
+  .btn-template:hover { opacity: 0.85; }
   .btn-danger { background: hsl(0 72% 51%); color: #fff; }
   .btn-danger:hover { opacity: 0.88; }
 
@@ -1237,6 +1248,7 @@
           <tr><td>Titolo documento</td><td>Titolo</td></tr>
           <tr><td>Reparto</td><td>Nome reparto (deve esistere)</td></tr>
           <tr><td>Penale / Pagamento / Rev. Generale</td><td>Sì / 1 per attivo</td></tr>
+          <tr><td>Data invio prevista (Rev. 0)</td><td>Data prima emissione (YYYY-MM-DD o GG/MM/AAAA, opzionale)</td></tr>
           <tr><td>Note</td><td>Note libere</td></tr>
         </tbody>
       </table>
@@ -1248,6 +1260,14 @@
     </label>
     <div class="import-result" id="import-result"></div>
     <div class="modal-footer">
+      <a href="/api/import-documenti-template/" class="btn btn-template" style="margin-right:auto;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Scarica template
+      </a>
       <button class="btn btn-secondary" id="modal-import-cancel">Annulla</button>
       <button class="btn btn-primary" id="modal-import-btn">Importa</button>
     </div>

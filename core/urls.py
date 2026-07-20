@@ -65,6 +65,11 @@ urlpatterns = [
         name="import_documenti_excel",
     ),
     path(
+        "api/import-documenti-template/",
+        views.import_documenti_template,
+        name="import_documenti_template",
+    ),
+    path(
         "api/commesse/<str:job>/genera-da-modelli/",
         views.genera_documenti_da_modelli_api,
         name="genera_documenti_da_modelli_api",

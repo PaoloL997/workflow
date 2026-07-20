@@ -1137,3 +1137,131 @@ class RevisioneSbloccoTests(TestCase):
         self.assertTrue(data["ok"])
         self.assertEqual(data["count"], 0)
         self.assertEqual(Revisione.objects.filter(documento=self.doc, rev_no=2).count(), 1)
+
+
+class ImportDocumentiExcelTests(TestCase):
+    """Tests for the Excel import endpoint and the import template download."""
+
+    def setUp(self):
+        self.client = Client()
+        User = get_user_model()
+        self.writing_user = User.objects.create_user(
+            "imp_writer", "w@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.reading_user = User.objects.create_user(
+            "imp_reader", "r@example.com", "pw", permesso=Permesso.READING
+        )
+        Testata.objects.create(job="IMP01")
+
+    def _make_xlsx(self, headers, rows):
+        """Build an in-memory xlsx file and return it as bytes."""
+        import io
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(headers)
+        for row in rows:
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf
+
+    # ── import with date column ──────────────────────────────────────────────
+
+    def test_import_with_date_sets_dis_plan_date(self):
+        self.client.force_login(self.writing_user)
+        xlsx = self._make_xlsx(
+            ["Item", "Titolo documento", "Data invio prevista (Rev. 0)"],
+            [["001", "Doc test", "2026-03-15"]],
+        )
+        resp = self.client.post(
+            "/api/commesse/IMP01/import-excel/",
+            data={"file": xlsx},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["created"], 1)
+        self.assertEqual(body["errors"], [])
+        rev0 = Revisione.objects.filter(documento__testata_id="IMP01", rev_no=0).first()
+        self.assertIsNotNone(rev0)
+        self.assertIsNotNone(rev0.dis_plan_date)
+        self.assertEqual(rev0.dis_plan_date.isoformat(), "2026-03-15")
+
+    def test_import_without_date_column_leaves_dis_plan_date_null(self):
+        self.client.force_login(self.writing_user)
+        xlsx = self._make_xlsx(
+            ["Item", "Titolo documento"],
+            [["002", "Doc senza data"]],
+        )
+        resp = self.client.post(
+            "/api/commesse/IMP01/import-excel/",
+            data={"file": xlsx},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["created"], 1)
+        rev0 = Revisione.objects.filter(documento__testata_id="IMP01", rev_no=0).first()
+        self.assertIsNone(rev0.dis_plan_date)
+
+    def test_import_with_italian_date_format(self):
+        self.client.force_login(self.writing_user)
+        xlsx = self._make_xlsx(
+            ["Item", "Data invio prevista (Rev. 0)"],
+            [["003", "20/07/2026"]],
+        )
+        resp = self.client.post(
+            "/api/commesse/IMP01/import-excel/",
+            data={"file": xlsx},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(body["created"], 1)
+        rev0 = Revisione.objects.filter(documento__testata_id="IMP01", rev_no=0).first()
+        self.assertEqual(rev0.dis_plan_date.isoformat(), "2026-07-20")
+
+    def test_import_with_invalid_date_creates_doc_and_reports_warning(self):
+        self.client.force_login(self.writing_user)
+        xlsx = self._make_xlsx(
+            ["Item", "Data invio prevista (Rev. 0)"],
+            [["004", "not-a-date"]],
+        )
+        resp = self.client.post(
+            "/api/commesse/IMP01/import-excel/",
+            data={"file": xlsx},
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        # Document is still created despite the invalid date
+        self.assertEqual(body["created"], 1)
+        self.assertEqual(len(body["errors"]), 1)
+        self.assertIn("data non riconosciuta", body["errors"][0])
+        rev0 = Revisione.objects.filter(documento__testata_id="IMP01", rev_no=0).first()
+        self.assertIsNone(rev0.dis_plan_date)
+
+    # ── template download ────────────────────────────────────────────────────
+
+    def test_template_download_returns_xlsx(self):
+        self.client.force_login(self.reading_user)
+        resp = self.client.get("/api/import-documenti-template/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(
+            "spreadsheetml",
+            resp.get("Content-Type", ""),
+        )
+
+    def test_template_download_contains_date_column(self):
+        import io
+
+        import openpyxl
+
+        self.client.force_login(self.reading_user)
+        resp = self.client.get("/api/import-documenti-template/")
+        wb = openpyxl.load_workbook(io.BytesIO(resp.content))
+        ws = wb.active
+        headers = [cell.value for cell in ws[1]]
+        self.assertIn("Data invio prevista (Rev. 0)", headers)
+        # All expected columns must be present
+        for col in ["Item", "B&R Doc", "Titolo documento", "Note"]:
+            self.assertIn(col, headers)
