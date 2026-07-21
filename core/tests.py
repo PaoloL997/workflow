@@ -4,8 +4,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
 from django.test import Client, TestCase
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from .models import (
     Documento,
@@ -1299,3 +1303,73 @@ class ImportDocumentiExcelTests(TestCase):
         self.assertEqual(len(validations), 1)
         self.assertEqual(validations[0].type, "list")
         self.assertIn("_Reparti", validations[0].formula1)
+
+
+class PasswordResetTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            username="reset_user",
+            email="reset@brembanarolle.com",
+            password="oldpass123",
+        )
+
+    def test_password_reset_page_renders(self):
+        response = self.client.get("/password-reset/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Recupera password")
+
+    def test_password_reset_sends_email_for_known_user(self):
+        response = self.client.post(
+            "/password-reset/",
+            data={"email": "reset@brembanarolle.com"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, "/password-reset/done/")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("reset@brembanarolle.com", mail.outbox[0].to)
+
+    def test_password_reset_unknown_email_shows_done_without_leak(self):
+        response = self.client.post(
+            "/password-reset/",
+            data={"email": "unknown@brembanarolle.com"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, "/password-reset/done/")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_rejects_non_company_email(self):
+        response = self.client.post(
+            "/password-reset/",
+            data={"email": "user@example.com"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "@brembanarolle.com")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_password_reset_confirm_sets_new_password(self):
+        uid = urlsafe_base64_encode(force_bytes(self.user.pk))
+        token = default_token_generator.make_token(self.user)
+        # Django redirects to .../set-password/ to avoid token leakage via Referer
+        initial_url = f"/reset/{uid}/{token}/"
+        self.client.get(initial_url)  # stores token in session, redirects to set-password
+        confirm_url = f"/reset/{uid}/set-password/"
+        response = self.client.post(
+            confirm_url,
+            data={
+                "new_password1": "newsecurepass123",
+                "new_password2": "newsecurepass123",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, "/reset/done/")
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("newsecurepass123"))
+        self.assertIsNotNone(authenticate(username="reset_user", password="newsecurepass123"))
+
+    def test_login_page_has_reset_link(self):
+        response = self.client.get("/login/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="/password-reset/"')
+        self.assertContains(response, "Recuperala")
