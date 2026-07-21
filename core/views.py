@@ -14,6 +14,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 from src.pdf import genera_trasmittal_pdf
 
@@ -1406,6 +1407,28 @@ def import_documenti_template(request):
     date_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Data invio prevista (Rev. 0)") + 1
     for row in range(2, 102):  # pre-format 100 data rows
         ws.cell(row=row, column=date_col_idx).number_format = "DD/MM/YYYY"
+
+    # Reparto: dropdown with system departments at download time
+    reparto_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Reparto") + 1
+    reparto_col_letter = get_column_letter(reparto_col_idx)
+    reparti = list_reparti()
+    if reparti:
+        ws_reparti = wb.create_sheet("_Reparti")
+        for row_idx, nome in enumerate(reparti, start=1):
+            ws_reparti.cell(row=row_idx, column=1, value=nome)
+        ws_reparti.sheet_state = "hidden"
+        last_reparto_row = len(reparti)
+        dv = DataValidation(
+            type="list",
+            formula1=f"='_Reparti'!$A$1:$A${last_reparto_row}",
+            allow_blank=True,
+        )
+        dv.error = "Seleziona un reparto dalla lista."
+        dv.errorTitle = "Reparto non valido"
+        dv.prompt = "Scegli un reparto presente nel sistema."
+        dv.promptTitle = "Reparto"
+        ws.add_data_validation(dv)
+        dv.add(f"{reparto_col_letter}2:{reparto_col_letter}101")
 
     # Freeze the header row
     ws.freeze_panes = "A2"

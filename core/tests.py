@@ -1265,3 +1265,37 @@ class ImportDocumentiExcelTests(TestCase):
         # All expected columns must be present
         for col in ["Item", "B&R Doc", "Titolo documento", "Note"]:
             self.assertIn(col, headers)
+
+    def test_template_download_reparto_has_dropdown_validation(self):
+        import io
+
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+
+        from core.models import Reparto
+
+        Reparto.objects.create(nome="Qualità e Controllo", acronimo="QC")
+        Reparto.objects.create(nome="Project Management", acronimo="PM")
+
+        self.client.force_login(self.reading_user)
+        resp = self.client.get("/api/import-documenti-template/")
+        wb = openpyxl.load_workbook(io.BytesIO(resp.content))
+
+        self.assertIn("_Reparti", wb.sheetnames)
+        ws_reparti = wb["_Reparti"]
+        reparti_in_sheet = [ws_reparti.cell(row=r, column=1).value for r in range(1, 3)]
+        self.assertEqual(
+            sorted(reparti_in_sheet),
+            ["Project Management", "Qualità e Controllo"],
+        )
+
+        ws = wb.active
+        reparto_col = get_column_letter([cell.value for cell in ws[1]].index("Reparto") + 1)
+        validations = [
+            dv
+            for dv in ws.data_validations.dataValidation
+            if any(reparto_col in str(r) for r in dv.sqref.ranges)
+        ]
+        self.assertEqual(len(validations), 1)
+        self.assertEqual(validations[0].type, "list")
+        self.assertIn("_Reparti", validations[0].formula1)
