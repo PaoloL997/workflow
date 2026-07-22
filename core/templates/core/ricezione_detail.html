@@ -746,6 +746,10 @@
     return `${d}/${m}/${y}`;
   }
 
+  function toLocalIso(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
   function showEmpty(msg) {
     document.getElementById('table-wrap').innerHTML = `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
     document.getElementById('ric-btn').disabled = true;
@@ -896,7 +900,7 @@
     document.getElementById('dp-month-lbl').textContent = `${MONTHS[_dpMonth]} ${_dpYear}`;
 
     const today = new Date(); today.setHours(0,0,0,0);
-    const todayIso = today.toISOString().slice(0,10);
+    const todayIso = toLocalIso(today);
 
     // Monday-first: Sun(0)→6, Mon(1)→0, ..., Sat(6)→5
     let dow = new Date(_dpYear, _dpMonth, 1).getDay();
