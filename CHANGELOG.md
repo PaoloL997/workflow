@@ -7,12 +7,25 @@ e il progetto aderisce al [Semantic Versioning](https://semver.org/lang/it/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-22
+
+### Added
+
+- Colonna data Rev. 0 nel template Excel di import documenti
+- Dropdown reparto nel template Excel di import documenti
+- Flusso di reset password con invio email via SMTP
+- Filtri colonna stile Excel in situazione documenti (lista valori, seleziona tutto, ricerca, contiene)
+- Ordinamento colonne nella visualizzazione orizzontale di situazione documenti
+- File `CHANGELOG.md` del progetto
+
+### Fixed
+
+- Evidenziazione di oggi nel calendario data ricezione (fuso orario locale invece di UTC)
+
 ## [0.1.0] - 2026-07-21
 
 ### Added
 
-- Flusso di reset password con invio email via SMTP
-- Colonna data Rev. 0 e dropdown reparto nel template Excel di import documenti
 - Sblocco manuale delle revisioni nella situazione documenti
 - Audit anomalie revisioni con UI modale per la risoluzione
 - Script di deploy Waitress per migrazione da wfastcgi su IIS (Windows Server)
