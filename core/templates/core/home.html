@@ -618,6 +618,117 @@
 
   .theme-toggle:active { transform: scale(0.96); }
 
+  /* ── Version badge (changelog) ── */
+  .version-badge {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+
+  .version-badge:hover {
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    transform: scale(1.04);
+  }
+
+  .version-badge:active { transform: scale(0.96); }
+
+  .version-badge svg {
+    flex-shrink: 0;
+    color: hsl(18, 90%, 52%);
+  }
+
+  .version-modal {
+    max-width: 560px;
+    gap: 18px;
+  }
+
+  .version-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .version-modal-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .version-modal-heading svg {
+    flex-shrink: 0;
+    color: hsl(18, 90%, 52%);
+  }
+
+  .version-modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+
+  .version-modal-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .version-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .version-modal-section-title {
+    margin: 0 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+
+  .version-modal-list {
+    margin: 0;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .version-modal-list li::marker {
+    color: var(--color-text-secondary);
+  }
+
   /* Show correct icon based on current theme */
   .theme-toggle .icon-sun  { display: none; }
   .theme-toggle .icon-moon { display: block; }
@@ -811,6 +922,50 @@
     <path d="M12 7a5 5 0 1 0 0 10A5 5 0 0 0 12 7zm0-5a1 1 0 0 1 1 1v1a1 1 0 0 1-2 0V3a1 1 0 0 1 1-1zm0 18a1 1 0 0 1-1-1v-1a1 1 0 0 1 2 0v1a1 1 0 0 1-1 1zm9-9a1 1 0 0 1-1 1h-1a1 1 0 0 1 0-2h1a1 1 0 0 1 1 1zM4 12a1 1 0 0 1-1 1H2a1 1 0 0 1 0-2h1a1 1 0 0 1 1 1zm14.95 5.54a1 1 0 0 1-1.41 0l-.71-.71a1 1 0 1 1 1.41-1.41l.71.71a1 1 0 0 1 0 1.41zM6.76 6.76a1 1 0 0 1-1.41 0l-.71-.71A1 1 0 0 1 6.05 4.64l.71.71a1 1 0 0 1 0 1.41zm11.18 0a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0zM6.05 19.36a1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1-1.41 0z"/>
   </svg>
 </button>
+
+<!-- ── Version badge ── -->
+<button type="button" class="version-badge" id="version-badge" aria-haspopup="dialog" aria-controls="version-modal-overlay">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
+  </svg>
+  v0.1.1
+</button>
+
+<!-- ── Modal: Changelog / version ── -->
+<div class="modal-overlay" id="version-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="version-modal-title" hidden>
+  <div class="modal version-modal" role="document">
+    <div class="version-modal-header">
+      <div class="version-modal-heading">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
+        </svg>
+        <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
+        <span class="version-modal-tag">v0.1.1</span>
+      </div>
+      <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="version-modal-body">
+      <section>
+        <h3 class="version-modal-section-title">Aggiunte</h3>
+        <ul class="version-modal-list">
+          <li>Colonna &quot;Data Rev. 0&quot; nel template Excel per l&apos;import documenti</li>
+          <li>Menu a tendina per il reparto nel template Excel per l&apos;import documenti</li>
+          <li>Reset password via email (invio automatico tramite SMTP)</li>
+          <li>Filtri colonna stile Excel nella situazione documenti (lista valori, seleziona tutto, ricerca testuale, &quot;contiene&quot;)</li>
+          <li>Ordinamento delle colonne nella vista orizzontale della situazione documenti</li>
+          <li>Colorazione della cella &quot;Ric. effettivo&quot; in base alla risposta cliente (vista orizzontale)</li>
+          <li>Legenda delle risposte cliente (colori + etichetta) sotto la tabella, in vista orizzontale</li>
+        </ul>
+      </section>
+      <section>
+        <h3 class="version-modal-section-title">Fix</h3>
+        <ul class="version-modal-list">
+          <li>Il giorno corrente nel calendario &quot;data ricezione&quot; ora viene evidenziato usando il fuso orario locale invece di UTC</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 
@@ -1113,12 +1268,36 @@
      Event listeners
   ────────────────────────────────────────────── */
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') closeModal();
+    if (e.key === 'Escape') {
+      closeModal();
+      closeVersionModal();
+    }
   });
 
   // Close modal clicking outside
   document.getElementById('modal-overlay').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
+  });
+
+  /* ──────────────────────────────────────────────
+     Modal: Version / changelog
+  ────────────────────────────────────────────── */
+  function openVersionModal() {
+    const overlay = document.getElementById('version-modal-overlay');
+    overlay.hidden = false;
+    overlay.classList.add('open');
+  }
+
+  function closeVersionModal() {
+    const overlay = document.getElementById('version-modal-overlay');
+    overlay.classList.remove('open');
+    overlay.hidden = true;
+  }
+
+  document.getElementById('version-badge').addEventListener('click', openVersionModal);
+  document.getElementById('version-modal-close').addEventListener('click', closeVersionModal);
+  document.getElementById('version-modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeVersionModal();
   });
 
   // Submit form with Enter on last input

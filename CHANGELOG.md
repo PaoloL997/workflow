@@ -14,6 +14,7 @@
 - File `CHANGELOG.md` del progetto
 - Tintatura della cella «Ric. effettivo» con il colore della risposta cliente nella vista orizzontale di situazione documenti
 - Legenda risposte cliente (swatch + etichetta) sotto la tabella in vista orizzontale
+- Pulsante versione `v0.1.1` in basso a sinistra sulla home con modal novità (aggiunte e fix)
 
 ### Fixed
 
