@@ -2,11 +2,6 @@
 
 ## [Unreleased]
 
-### Added
-
-- Tintatura della cella «Ric. effettivo» con il colore della risposta cliente nella vista orizzontale di situazione documenti
-- Legenda risposte cliente (swatch + etichetta) sotto la tabella in vista orizzontale
-
 ## [0.1.1] - 2026-07-22
 
 ### Added
@@ -17,6 +12,8 @@
 - Filtri colonna stile Excel in situazione documenti (lista valori, seleziona tutto, ricerca, contiene)
 - Ordinamento colonne nella visualizzazione orizzontale di situazione documenti
 - File `CHANGELOG.md` del progetto
+- Tintatura della cella «Ric. effettivo» con il colore della risposta cliente nella vista orizzontale di situazione documenti
+- Legenda risposte cliente (swatch + etichetta) sotto la tabella in vista orizzontale
 
 ### Fixed
 
