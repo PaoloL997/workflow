@@ -133,7 +133,40 @@
     overflow: clip;
     display: flex;
     flex-direction: column;
-    margin-bottom: 80px;
+    margin-bottom: 12px;
+  }
+
+  /* ── Legenda risposte cliente (vista orizzontale) ── */
+  .sit-ext-legend {
+    display: none;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 18px;
+    padding: 4px 2px 24px;
+    margin: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .sit-ext-legend.is-visible {
+    display: flex;
+  }
+
+  .sit-ext-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .sit-ext-legend-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
   }
 
   #sit-container {
@@ -962,6 +995,7 @@
         <div class="empty-state"><p>Caricamento…</p></div>
       </div>
     </div>
+    <div class="sit-ext-legend" id="sit-ext-legend" aria-label="Legenda risposte cliente" hidden></div>
 
   </div><!-- /content -->
   </div><!-- /page -->
@@ -1608,6 +1642,43 @@
   function showMsg(msg) {
     document.getElementById('sit-container').innerHTML =
       `<div class="empty-state"><p>${escHtml(msg)}</p></div>`;
+    hideExtLegend();
+  }
+
+  function hideExtLegend() {
+    const el = document.getElementById('sit-ext-legend');
+    if (!el) return;
+    el.innerHTML = '';
+    el.hidden = true;
+    el.classList.remove('is-visible');
+  }
+
+  function updateExtLegend(docRevs) {
+    const el = document.getElementById('sit-ext-legend');
+    if (!el) return;
+    const byLabel = new Map();
+    for (const { revs } of docRevs || []) {
+      for (const rev of revs || []) {
+        const label = (rev.ext_status_label || '').trim();
+        const color = (rev.ext_status_colore || '').trim();
+        if (!label || !color || byLabel.has(label)) continue;
+        byLabel.set(label, color);
+      }
+    }
+    if (!byLabel.size) {
+      hideExtLegend();
+      return;
+    }
+    const items = [...byLabel.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
+    el.innerHTML = items.map(([label, color]) =>
+      `<span class="sit-ext-legend-item">` +
+        `<span class="sit-ext-legend-swatch" style="background:${escHtml(color)}" aria-hidden="true"></span>` +
+        `<span>${escHtml(label)}</span>` +
+      `</span>`
+    ).join('');
+    el.hidden = false;
+    el.classList.add('is-visible');
   }
 
   /* ── Sorting ── */
@@ -1701,6 +1772,7 @@
   /* ── Vista verticale ── */
   function renderVerticale(docRevs) {
     const c = document.getElementById('sit-container');
+    hideExtLegend();
     if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
 
     const rawRows = [];
@@ -1855,8 +1927,17 @@
           tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_plan_date)}</td>`;
           tbody += `<td>${fmtDate(rev.dis_act_date)}</td>`;
           tbody += `<td>${fmtDate(rev.rec_plan_date)}</td>`;
+          const extColor = (rev.ext_status_colore || '').trim();
+          const extLabel = (rev.ext_status_label || '').trim();
+          // Opaque mix against surface so the tint is not altered by the row highlight underneath.
+          const ricStyle = (rev.rec_act_date && extColor)
+            ? ` style="background:color-mix(in srgb, ${escHtml(extColor)} 7%, var(--color-surface))"`
+            : '';
+          const ricTitle = (rev.rec_act_date && extLabel)
+            ? ` title="${escHtml(extLabel)}"`
+            : '';
           if (rev.rec_act_date) {
-            tbody += `<td class="sit-row-clickable" onclick="onRevBtnClick(${rev.id}, this)">${fmtDate(rev.rec_act_date)}</td>`;
+            tbody += `<td class="sit-row-clickable"${ricStyle}${ricTitle} onclick="onRevBtnClick(${rev.id}, this)">${fmtDate(rev.rec_act_date)}</td>`;
           } else {
             tbody += `<td>${fmtDate(rev.rec_act_date)}</td>`;
           }
@@ -1869,6 +1950,7 @@
     tbody += '</tbody>';
 
     c.innerHTML = `<div class="sit-horiz-wrap"><table class="sit-horiz">${thead}${tbody}</table></div>`;
+    updateExtLegend(docRevs);
     // Align sticky offsets to rendered column widths
     requestAnimationFrame(() => {
       const tbl = c.querySelector('.sit-horiz');
