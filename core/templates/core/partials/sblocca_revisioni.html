@@ -1,4 +1,4 @@
-{# Pulsante + modal sblocco revisioni. Richiede: job #}
+{# Pulsante + modal sblocco revisioni. Richiede: job, rev_let_flag (opzionale) #}
 <style>
   #sbloc-btn {
     flex-shrink: 0;
@@ -164,6 +164,7 @@
   'use strict';
 
   const JOB = '{{ job|escapejs }}';
+  const REV_LET_FLAG = {{ rev_let_flag|default_if_none:False|yesno:"true,false" }};
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
 
   const btn = document.getElementById('sbloc-btn');
@@ -176,6 +177,13 @@
   const confirmErrEl = document.getElementById('sbloc-confirm-error');
 
   if (!btn || !backdrop || !confirmBackdrop) return;
+
+  function formatRevLabel(item) {
+    if (REV_LET_FLAG) {
+      return item.rev_let || (item.rev_no != null ? String(item.rev_no) : '');
+    }
+    return item.rev_no != null ? String(item.rev_no) : '';
+  }
 
   let _items = [];
   let _pending = null;
@@ -222,7 +230,7 @@
     }
 
     const rows = _items.map(function (item) {
-      const revLabel = (item.rev_no ?? '') + (item.rev_let || '');
+      const revLabel = formatRevLabel(item);
       const bg = item.ext_status_colore || '#888';
       const statusBadge = '<span class="sbloc-ext-badge" style="background:' + esc(bg) + '22;color:' + esc(bg) + '">' +
         esc(item.ext_status_label || '—') + '</span>';
@@ -257,7 +265,7 @@
   function openConfirm(item) {
     _pending = item;
     showConfirmError('');
-    const revLabel = (item.rev_no ?? '') + (item.rev_let || '');
+    const revLabel = formatRevLabel(item);
     confirmBody.innerHTML =
       '<h2 class="sbloc-confirm-title">Sblocca revisione</h2>' +
       '<p class="sbloc-confirm-meta">Documento <strong>' + esc(item.vendor_doc) + '</strong> · ' +

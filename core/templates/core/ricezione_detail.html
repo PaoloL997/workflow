@@ -664,7 +664,9 @@
     const today = new Date(); today.setHours(0,0,0,0);
 
     const rows = docs.map(d => {
-      const revLabel  = d.latest_rev_let ? `Rev. ${d.latest_rev_let}` : (d.latest_rev_no != null ? `Rev. ${d.latest_rev_no}` : '—');
+      const revLabel  = d.latest_rev_display && d.latest_rev_display !== '—'
+        ? `Rev. ${d.latest_rev_display}`
+        : (d.latest_rev_display || '—');
       const disDate   = d.latest_dis_act_date ? fmtDate(d.latest_dis_act_date) : '—';
       const recPlan   = d.latest_rec_plan_date ? fmtDate(d.latest_rec_plan_date) : '—';
 

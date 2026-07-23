@@ -262,6 +262,9 @@ class Documento(models.Model):
     item_no = models.CharField(db_column="ItemNo", max_length=100, blank=True)
     vendor_doc = models.CharField(db_column="VendorDoc", max_length=200, blank=True)
     client_doc_no = models.CharField(db_column="ClientDocNo", max_length=200, blank=True)
+    contractor_doc_no = models.CharField(
+        db_column="ContractorDocNo", max_length=200, blank=True, default=""
+    )
     client_doc_class = models.CharField(db_column="ClientDocClass", max_length=200, blank=True)
     doc_title = models.CharField(db_column="DocTitle", max_length=300, blank=True)
     doc_penalty = models.BooleanField(db_column="DocPenalty", default=False)

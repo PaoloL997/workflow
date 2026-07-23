@@ -44,6 +44,7 @@ from .services.commesse import (
     esegui_emissione,
     esegui_ricezione,
     fetch_from_bc,
+    format_revisione_label,
     genera_documenti_da_modelli,
     get_commessa,
     list_cartelle_modelli,
@@ -846,6 +847,7 @@ def export_documenti(request, job):
         "Item",
         "B&R Doc",
         "Client Doc N°",
+        "Contractor Doc N°",
         "Client Doc Class",
         "Titolo",
         "Reparto",
@@ -866,12 +868,13 @@ def export_documenti(request, job):
         ws.cell(row=row_idx, column=1, value=d["item_no"])
         ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
         ws.cell(row=row_idx, column=3, value=d["client_doc_no"])
-        ws.cell(row=row_idx, column=4, value=d["client_doc_class"])
-        ws.cell(row=row_idx, column=5, value=d["doc_title"])
-        ws.cell(row=row_idx, column=6, value=d["reparto_label"])
-        ws.cell(row=row_idx, column=7, value="Sì" if d["doc_penalty"] else "")
-        ws.cell(row=row_idx, column=8, value="Sì" if d["doc_payment"] else "")
-        ws.cell(row=row_idx, column=9, value=d["remarks"])
+        ws.cell(row=row_idx, column=4, value=d["contractor_doc_no"])
+        ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
+        ws.cell(row=row_idx, column=6, value=d["doc_title"])
+        ws.cell(row=row_idx, column=7, value=d["reparto_label"])
+        ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "")
+        ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "")
+        ws.cell(row=row_idx, column=10, value=d["remarks"])
 
     # Auto-fit column widths
     for col_idx, _ in enumerate(headers, start=1):
@@ -952,10 +955,12 @@ def export_situazione(request, job):
     """
     try:
         documenti = list_documenti(job)
+        testata = get_commessa(job)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
 
     vista = request.GET.get("vista", "verticale")
+    rev_let_flag = testata.rev_let_flag
 
     revs_by_doc = revisioni_by_doc_for_job(job)
 
@@ -983,6 +988,7 @@ def export_situazione(request, job):
             "Item",
             "B&R Doc",
             "Client Doc No",
+            "Contractor Doc No",
             "Client Doc Class",
             "Descrizione",
             "Reparto",
@@ -1024,6 +1030,7 @@ def export_situazione(request, job):
                     d["item_no"],
                     d["vendor_doc"],
                     d["client_doc_no"],
+                    d["contractor_doc_no"],
                     d["client_doc_class"],
                     d["doc_title"],
                     d["reparto_acronimo"] or d["reparto_label"],
@@ -1048,6 +1055,7 @@ def export_situazione(request, job):
             "Item",
             "B&R Doc",
             "Client Doc No",
+            "Contractor Doc No",
             "Client Doc Class",
             "Titolo",
             "Reparto",
@@ -1075,35 +1083,33 @@ def export_situazione(request, job):
                 ws.cell(row=row_idx, column=1, value=d["item_no"])
                 ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
                 ws.cell(row=row_idx, column=3, value=d["client_doc_no"])
-                ws.cell(row=row_idx, column=4, value=d["client_doc_class"])
-                ws.cell(row=row_idx, column=5, value=d["doc_title"])
-                ws.cell(row=row_idx, column=6, value=d["reparto_acronimo"] or d["reparto_label"])
-                ws.cell(row=row_idx, column=7, value="Sì" if d["doc_penalty"] else "No")
-                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_payment"] else "No")
+                ws.cell(row=row_idx, column=4, value=d["contractor_doc_no"])
+                ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
+                ws.cell(row=row_idx, column=6, value=d["doc_title"])
+                ws.cell(row=row_idx, column=7, value=d["reparto_acronimo"] or d["reparto_label"])
+                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "No")
+                ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "No")
                 row_idx += 1
                 continue
             for r in revs:
-                rev_label = (
-                    (r["rev_let"] or "")
-                    if r["rev_let"]
-                    else str(r["rev_no"] if r["rev_no"] is not None else "")
-                )
+                rev_label = format_revisione_label(r["rev_no"], r["rev_let"], rev_let_flag)
                 int_label = r["int_status_label"] or ""
                 ws.cell(row=row_idx, column=1, value=d["item_no"])
                 ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
                 ws.cell(row=row_idx, column=3, value=d["client_doc_no"])
-                ws.cell(row=row_idx, column=4, value=d["client_doc_class"])
-                ws.cell(row=row_idx, column=5, value=d["doc_title"])
-                ws.cell(row=row_idx, column=6, value=d["reparto_acronimo"] or d["reparto_label"])
-                ws.cell(row=row_idx, column=7, value="Sì" if d["doc_penalty"] else "No")
-                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_payment"] else "No")
-                ws.cell(row=row_idx, column=9, value=rev_label)
-                ws.cell(row=row_idx, column=10, value=fmt(r["dis_plan_date"]))
-                ws.cell(row=row_idx, column=11, value=fmt(r["dis_act_date"]))
-                ws.cell(row=row_idx, column=12, value=fmt(r["rec_plan_date"]))
-                ws.cell(row=row_idx, column=13, value=fmt(r["rec_act_date"]))
+                ws.cell(row=row_idx, column=4, value=d["contractor_doc_no"])
+                ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
+                ws.cell(row=row_idx, column=6, value=d["doc_title"])
+                ws.cell(row=row_idx, column=7, value=d["reparto_acronimo"] or d["reparto_label"])
+                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "No")
+                ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "No")
+                ws.cell(row=row_idx, column=10, value=rev_label)
+                ws.cell(row=row_idx, column=11, value=fmt(r["dis_plan_date"]))
+                ws.cell(row=row_idx, column=12, value=fmt(r["dis_act_date"]))
+                ws.cell(row=row_idx, column=13, value=fmt(r["rec_plan_date"]))
+                ws.cell(row=row_idx, column=14, value=fmt(r["rec_act_date"]))
                 # Stato interno — colored badge
-                int_cell = ws.cell(row=row_idx, column=14, value=int_label)
+                int_cell = ws.cell(row=row_idx, column=15, value=int_label)
                 int_colors = _INT_STATUS_COLORS.get(r["int_status"] or "")
                 if int_colors:
                     int_cell.fill = PatternFill(
@@ -1113,7 +1119,7 @@ def export_situazione(request, job):
                     int_cell.alignment = Alignment(horizontal="center", vertical="center")
                 # Risposta cliente — colored using the stored hex from the DB
                 ext_label = r["ext_status_label"] or ""
-                ext_cell = ws.cell(row=row_idx, column=15, value=ext_label)
+                ext_cell = ws.cell(row=row_idx, column=16, value=ext_label)
                 if ext_label:
                     raw_color = (r.get("ext_status_colore") or "").lstrip("#")
                     if len(raw_color) == 6:
@@ -1124,7 +1130,7 @@ def export_situazione(request, job):
                         ext_cell.alignment = Alignment(horizontal="center", vertical="center")
                 row_idx += 1
 
-        total_cols = 15
+        total_cols = 16
 
     # Auto-fit column widths (scan all rows; merged-range non-origin cells have None value)
     for col_idx in range(1, total_cols + 1):
@@ -1160,6 +1166,7 @@ _DOCUMENTI_IMPORT_HEADERS = [
     "Item",
     "B&R Doc",
     "Client Doc N°",
+    "Contractor Doc N°",
     "Client Doc Class",
     "Titolo documento",
     "Reparto",
@@ -1182,6 +1189,10 @@ _IMPORT_COL_MAP = {
     "client doc no": "client_doc_no",
     "client doc n": "client_doc_no",
     "client_doc_no": "client_doc_no",
+    "contractor doc n°": "contractor_doc_no",
+    "contractor doc no": "contractor_doc_no",
+    "contractor doc n": "contractor_doc_no",
+    "contractor_doc_no": "contractor_doc_no",
     "client doc class": "client_doc_class",
     "client_doc_class": "client_doc_class",
     "titolo": "doc_title",
@@ -1345,6 +1356,7 @@ def import_documenti_excel(request, job):
                 item_no=str(data.get("item_no") or "").strip(),
                 vendor_doc=str(data.get("vendor_doc") or "").strip(),
                 client_doc_no=str(data.get("client_doc_no") or "").strip(),
+                contractor_doc_no=str(data.get("contractor_doc_no") or "").strip(),
                 client_doc_class=str(data.get("client_doc_class") or "").strip(),
                 doc_title=str(data.get("doc_title") or "").strip(),
                 doc_penalty=_parse_bool(data.get("doc_penalty", "")),
@@ -1391,14 +1403,15 @@ def import_documenti_template(request):
         1: 10,  # Item
         2: 22,  # B&R Doc
         3: 22,  # Client Doc N°
-        4: 22,  # Client Doc Class
-        5: 45,  # Titolo documento
-        6: 18,  # Reparto
-        7: 10,  # Penale
-        8: 12,  # Pagamento
-        9: 14,  # Rev. Generale
-        10: 28,  # Data invio prevista (Rev. 0)
-        11: 35,  # Note
+        4: 22,  # Contractor Doc N°
+        5: 22,  # Client Doc Class
+        6: 45,  # Titolo documento
+        7: 18,  # Reparto
+        8: 10,  # Penale
+        9: 12,  # Pagamento
+        10: 14,  # Rev. Generale
+        11: 28,  # Data invio prevista (Rev. 0)
+        12: 35,  # Note
     }
     for col_idx, width in _col_widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = width

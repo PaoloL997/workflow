@@ -821,7 +821,7 @@
     if (!_docs.length) { emptyTbl('Nessun documento pronto per l\'emissione.'); return; }
     const today = new Date(); today.setHours(0,0,0,0);
     tb.innerHTML = _docs.map(function(d) {
-      const rev = (d.latest_rev_let || '') !== '' ? d.latest_rev_let : (d.latest_rev_no != null ? String(d.latest_rev_no) : '\u2014');
+      const rev = d.latest_rev_display || '\u2014';
       const planDate = d.latest_dis_plan_date ? fmtDate(d.latest_dis_plan_date) : '—';
       const isOverdue = d.latest_dis_plan_date && new Date(d.latest_dis_plan_date) < today;
       return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'

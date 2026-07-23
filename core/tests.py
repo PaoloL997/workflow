@@ -20,7 +20,13 @@ from .models import (
     StatoEsterno,
     Testata,
 )
-from .services.commesse import risolvi_file_revisione, salva_file_link
+from .services.commesse import (
+    format_revisione_label,
+    list_documenti,
+    list_situazione,
+    risolvi_file_revisione,
+    salva_file_link,
+)
 from .services.import_old import importa_commessa_da_access
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -909,6 +915,7 @@ class ImportOldTests(TestCase):
                         "ItemNo": "1",
                         "VendorDoc": "99999-01",
                         "ClientDocNo": "",
+                        "ContractorDocNo": "CTR-99",
                         "ClientDocClass": "",
                         "DocTitle": "Titolo",
                         "DocPenalty": False,
@@ -954,6 +961,8 @@ class ImportOldTests(TestCase):
         self.assertEqual(Revisione.objects.count(), 2)
         self.assertIn("anomalie", result)
         self.assertEqual(Revisione.objects.filter(rev_no=1).get().int_status, "")
+        doc = Documento.objects.get(vendor_doc="99999-01")
+        self.assertEqual(doc.contractor_doc_no, "CTR-99")
 
     @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_rejects_existing_job(self, mock_fetch):
@@ -1244,6 +1253,21 @@ class ImportDocumentiExcelTests(TestCase):
         rev0 = Revisione.objects.filter(documento__testata_id="IMP01", rev_no=0).first()
         self.assertIsNone(rev0.dis_plan_date)
 
+    def test_import_with_contractor_doc_no(self):
+        self.client.force_login(self.writing_user)
+        xlsx = self._make_xlsx(
+            ["Item", "Titolo documento", "Contractor Doc N°"],
+            [["005", "Doc contractor", "CTR-001"]],
+        )
+        resp = self.client.post(
+            "/api/commesse/IMP01/import-excel/",
+            data={"file": xlsx},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["created"], 1)
+        doc = Documento.objects.get(testata_id="IMP01", item_no="005")
+        self.assertEqual(doc.contractor_doc_no, "CTR-001")
+
     # ── template download ────────────────────────────────────────────────────
 
     def test_template_download_returns_xlsx(self):
@@ -1267,7 +1291,7 @@ class ImportDocumentiExcelTests(TestCase):
         headers = [cell.value for cell in ws[1]]
         self.assertIn("Data invio prevista (Rev. 0)", headers)
         # All expected columns must be present
-        for col in ["Item", "B&R Doc", "Titolo documento", "Note"]:
+        for col in ["Item", "B&R Doc", "Contractor Doc N°", "Titolo documento", "Note"]:
             self.assertIn(col, headers)
 
     def test_template_download_reparto_has_dropdown_validation(self):
@@ -1373,3 +1397,38 @@ class PasswordResetTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'href="/password-reset/"')
         self.assertContains(response, "Recuperala")
+
+
+class RevisioneLabelDisplayTests(TestCase):
+    """Revision display depends on Testata.rev_let_flag, not on rev_let alone."""
+
+    def test_format_revisione_label_uses_flag(self):
+        self.assertEqual(format_revisione_label(1, "A", True), "A")
+        self.assertEqual(format_revisione_label(1, "A", False), "1")
+        self.assertEqual(format_revisione_label(1, "", True), "1")
+        self.assertEqual(format_revisione_label(None, "B", True), "B")
+        self.assertEqual(format_revisione_label(None, "B", False), "")
+
+    def test_list_documenti_ignores_rev_let_when_flag_false(self):
+        t = Testata.objects.create(job="REVFLG1", rev_let_flag=False)
+        doc = Documento.objects.create(testata=t, vendor_doc="REVFLG1-01")
+        Revisione.objects.create(documento=doc, rev_no=2, rev_let="C")
+
+        payload = list_documenti("REVFLG1")
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["latest_rev_display"], "2")
+        self.assertEqual(payload[0]["latest_rev_let"], "C")
+        self.assertEqual(payload[0]["latest_rev_no"], 2)
+
+    def test_list_documenti_shows_letter_when_flag_true(self):
+        t = Testata.objects.create(job="REVFLG2", rev_let_flag=True)
+        doc = Documento.objects.create(testata=t, vendor_doc="REVFLG2-01")
+        Revisione.objects.create(documento=doc, rev_no=2, rev_let="C")
+
+        payload = list_documenti("REVFLG2")
+        self.assertEqual(payload[0]["latest_rev_display"], "C")
+
+    def test_list_situazione_includes_rev_let_flag(self):
+        Testata.objects.create(job="REVFLG3", rev_let_flag=True)
+        data = list_situazione("REVFLG3")
+        self.assertTrue(data["rev_let_flag"])

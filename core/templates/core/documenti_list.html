@@ -1177,6 +1177,10 @@
         <input type="text" id="f-client-doc-no">
       </div>
       <div class="fg">
+        <label for="f-contractor-doc-no">Contractor Doc N°</label>
+        <input type="text" id="f-contractor-doc-no">
+      </div>
+      <div class="fg">
         <label for="f-client-doc-class">Client Doc Class</label>
         <input type="text" id="f-client-doc-class">
       </div>
@@ -1244,6 +1248,7 @@
           <tr><td>Item</td><td>Numero item</td></tr>
           <tr><td>B&amp;R Doc</td><td>Numero doc. B&amp;R</td></tr>
           <tr><td>Client Doc N°</td><td>Numero doc. cliente</td></tr>
+          <tr><td>Contractor Doc N°</td><td>Numero doc. contractor</td></tr>
           <tr><td>Client Doc Class</td><td>Classe doc. cliente</td></tr>
           <tr><td>Titolo documento</td><td>Titolo</td></tr>
           <tr><td>Reparto</td><td>Seleziona dalla lista a tendina nel template</td></tr>
@@ -1349,6 +1354,7 @@
   'use strict';
 
   var JOB = '{{ testata.job|escapejs }}';
+  var REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
   var CSRF_COOKIE = 'workflow_csrftoken';
 
   /* ── Theme toggle ── */
@@ -1432,17 +1438,20 @@
       var badgeText = d.client_doc_class || '';
       var badgeHtml = badgeText ? '<span class="doc-row-badge">' + esc(badgeText) + '</span>' : '';
 
-      // Meta: item • vendor_doc • client_doc_no • reparto
+      // Meta: item • vendor_doc • client_doc_no • contractor_doc_no • reparto
       var metaItem   = d.item_no      ? '<span class="meta-item">'       + esc(d.item_no)       + '</span>'
                                       : '<span class="meta-item muted">Item —</span>';
       var metaVendor = d.vendor_doc   ? '<span class="meta-item">'       + esc(d.vendor_doc)    + '</span>'
                                       : '<span class="meta-item muted">Doc B&amp;R —</span>';
       var metaClient = d.client_doc_no ? '<span class="meta-item">'      + esc(d.client_doc_no) + '</span>'
                                       : '';
+      var metaContractor = d.contractor_doc_no ? '<span class="meta-item">' + esc(d.contractor_doc_no) + '</span>'
+                                      : '';
       var metaRep    = d.reparto_label ? '<span class="meta-item plain">' + esc(d.reparto_label) + '</span>'
                                       : '';
 
       var metaClientSep = metaClient ? '<span class="meta-sep">•</span>' + metaClient : '';
+      var metaContractorSep = metaContractor ? '<span class="meta-sep">•</span>' + metaContractor : '';
       var metaRepSep    = metaRep    ? '<span class="meta-sep">•</span>' + metaRep    : '';
 
       // Bottom row: flags only (shown if any active)
@@ -1464,6 +1473,7 @@
               '<span class="meta-sep">•</span>' +
               metaVendor +
               metaClientSep +
+              metaContractorSep +
               metaRepSep +
             '</div>' +
             flagsRow +
@@ -1567,8 +1577,12 @@
     }
     strip.innerHTML = '';
     revs.forEach(function(r, i) {
-      var label = 'Rev. ' + (r.rev_no !== null && r.rev_no !== undefined ? r.rev_no : '—');
-      if (r.rev_let) label += r.rev_let;
+      var label = 'Rev. ';
+      if (REV_LET_FLAG) {
+        label += (r.rev_let || (r.rev_no !== null && r.rev_no !== undefined ? r.rev_no : '—'));
+      } else {
+        label += (r.rev_no !== null && r.rev_no !== undefined ? r.rev_no : '—');
+      }
       var cls = 'doc-rev-mini' + (i === revs.length - 1 ? ' doc-rev-mini--latest' : '');
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -2018,6 +2032,7 @@
     document.getElementById('f-item-no').value          = d.item_no || '';
     document.getElementById('f-vendor-doc').value       = d.vendor_doc || '';
     document.getElementById('f-client-doc-no').value    = d.client_doc_no || '';
+    document.getElementById('f-contractor-doc-no').value = d.contractor_doc_no || '';
     document.getElementById('f-client-doc-class').value = d.client_doc_class || '';
     document.getElementById('f-doc-title').value        = d.doc_title || '';
     document.getElementById('f-reparto').value          = d.reparto || '';
@@ -2044,7 +2059,7 @@
   }
   function closeModal() { backdrop.classList.remove('show'); editDocId = null; hideError(); }
   function clearForm() {
-    ['f-item-no','f-vendor-doc','f-client-doc-no','f-client-doc-class','f-doc-title','f-remarks']
+    ['f-item-no','f-vendor-doc','f-client-doc-no','f-contractor-doc-no','f-client-doc-class','f-doc-title','f-remarks']
       .forEach(function(id){ document.getElementById(id).value = ''; });
     document.getElementById('f-reparto').value = '';
     document.getElementById('f-dis-plan-date-rev0').value = '';
@@ -2061,6 +2076,7 @@
       item_no: document.getElementById('f-item-no').value.trim(),
       vendor_doc: document.getElementById('f-vendor-doc').value.trim(),
       client_doc_no: document.getElementById('f-client-doc-no').value.trim(),
+      contractor_doc_no: document.getElementById('f-contractor-doc-no').value.trim(),
       client_doc_class: document.getElementById('f-client-doc-class').value.trim(),
       doc_title: document.getElementById('f-doc-title').value.trim(),
       reparto: document.getElementById('f-reparto').value,
@@ -2185,6 +2201,7 @@
       return (d.item_no||'').toLowerCase().includes(q) ||
              (d.vendor_doc||'').toLowerCase().includes(q) ||
              (d.client_doc_no||'').toLowerCase().includes(q) ||
+             (d.contractor_doc_no||'').toLowerCase().includes(q) ||
              (d.client_doc_class||'').toLowerCase().includes(q) ||
              (d.doc_title||'').toLowerCase().includes(q) ||
              (d.reparto||'').toLowerCase().includes(q);

@@ -144,6 +144,7 @@ def importa_commessa_da_access(job: str) -> dict:
             item_no=_to_str(d["ItemNo"]),
             vendor_doc=_to_str(d["VendorDoc"]),
             client_doc_no=_to_str(d["ClientDocNo"]),
+            contractor_doc_no=_to_str(d.get("ContractorDocNo", "")),
             client_doc_class=_to_str(d["ClientDocClass"]),
             doc_title=_to_str(d["DocTitle"]),
             doc_penalty=_to_bool(d["DocPenalty"]),

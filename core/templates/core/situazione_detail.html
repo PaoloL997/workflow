@@ -947,8 +947,8 @@
       </button>
       <div class="sit-filter-summary" id="sit-filter-summary"></div>
       <div class="filter-bar-end">
-        {% include "core/partials/sblocca_revisioni.html" with job=testata.job %}
-        {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" %}
+        {% include "core/partials/sblocca_revisioni.html" with job=testata.job rev_let_flag=testata.rev_let_flag %}
+        {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" rev_let_flag=testata.rev_let_flag %}
         <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
           <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
           <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
@@ -1057,6 +1057,7 @@
 
   const JOB = "{{ testata.job }}";
   const COMMESSA_FOLDER = "{{ commessa_folder|escapejs }}";
+  let REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
 
   const STATI_LABEL = {
     da_iniziare:       'Da iniziare',
@@ -1135,6 +1136,7 @@
     item_no:          'Item',
     vendor_doc:       'B&R Doc',
     client_doc_no:    'Client Doc No',
+    contractor_doc_no:'Contractor Doc No',
     client_doc_class: 'Client Doc Class',
     doc_title:        'Titolo',
     reparto_label:    'Reparto',
@@ -1261,6 +1263,14 @@
     return String(value == null ? '' : value).toLowerCase().trim();
   }
 
+  function formatRevLabel(r) {
+    if (!r) return '';
+    if (REV_LET_FLAG) {
+      return r.rev_let || (r.rev_no != null ? String(r.rev_no) : '');
+    }
+    return r.rev_no != null ? String(r.rev_no) : '';
+  }
+
   function getColumnFilterValue(row, key) {
     const d = row.d;
     const r = row.r;
@@ -1269,7 +1279,7 @@
       case 'doc_payment': return d.doc_payment ? 'yes' : 'no';
       case 'rev_no':
         if (!r) return '';
-        return String(r.rev_no ?? '') + (r.rev_let || '');
+        return formatRevLabel(r);
       case 'reparto_label':
         return d.reparto_acronimo || d.reparto_label || '';
       case 'dis_plan_date':
@@ -1561,6 +1571,9 @@
       const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/situazione/`);
       if (!res.ok) { showMsg('Errore nel caricamento.'); return; }
       const data = await res.json();
+      if (typeof data.rev_let_flag === 'boolean') {
+        REV_LET_FLAG = data.rev_let_flag;
+      }
       _allDocs = data.documenti || [];
       _allDocs.sort((a, b) =>
         (a.item_no || '').localeCompare(b.item_no || '', undefined, { numeric: true }));
@@ -1638,6 +1651,7 @@
       case 'item_no':        return d.item_no || '';
       case 'vendor_doc':     return d.vendor_doc || '';
       case 'client_doc_no':  return d.client_doc_no || '';
+      case 'contractor_doc_no': return d.contractor_doc_no || '';
       case 'client_doc_class': return d.client_doc_class || '';
       case 'doc_title':      return d.doc_title || '';
       case 'reparto_label':  return d.reparto_label || '';
@@ -1712,12 +1726,13 @@
       const intBadge  = intLabel
         ? `<span class="sit-int-badge ${escHtml(intClass)}">${escHtml(intLabel)}</span>`
         : `<span style="opacity:.35">\u2014</span>`;
-      const rev = r ? `${r.rev_no ?? ''}${r.rev_let || ''}` : '\u2014';
+      const rev = r ? (formatRevLabel(r) || '\u2014') : '\u2014';
 
       return `<tr ${rowStyle}${r ? ` class="sit-row-clickable" onclick="onRevBtnClick(${r.id}, this)"` : ''}>
         <td>${escHtml(d.item_no || '\u2014')}</td>
         <td><strong>${escHtml(d.vendor_doc || '\u2014')}</strong></td>
         <td>${escHtml(d.client_doc_no || '\u2014')}</td>
+        <td>${escHtml(d.contractor_doc_no || '\u2014')}</td>
         <td>${escHtml(d.client_doc_class || '\u2014')}</td>
         <td style="white-space:normal;min-width:150px;max-width:280px;" title="${escHtml(d.doc_title || '')}">${escHtml(d.doc_title || '\u2014')}</td>
         <td>${escHtml(d.reparto_acronimo || d.reparto_label || '\u2014')}</td>
@@ -1731,7 +1746,7 @@
         <td>${intBadge}</td>
         <td>${extBadge}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="15" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>';
+    }).join('') : '<tr><td colspan="16" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>';
 
     c.innerHTML = `
       <div class="sit-table-wrap">
@@ -1740,6 +1755,7 @@
             ${thSort('Item', 'item_no')}
             ${thSort('B&amp;R Doc', 'vendor_doc')}
             ${thSort('Client Doc N&deg;', 'client_doc_no')}
+            ${thSort('Contractor Doc N&deg;', 'contractor_doc_no')}
             ${thSort('Client Doc Class', 'client_doc_class')}
             ${thSort('Titolo', 'doc_title')}
             ${thSort('Reparto', 'reparto_label')}
@@ -1772,11 +1788,12 @@
       { label: 'Item',             key: 'item_no'        },
       { label: 'B&amp;R Doc',      key: 'vendor_doc'     },
       { label: 'Client Doc N&deg;',key: 'client_doc_no'  },
+      { label: 'Contractor Doc N&deg;', key: 'contractor_doc_no' },
       { label: 'Client Doc Class', key: 'client_doc_class'},
       { label: 'Descrizione',      key: 'doc_title'      },
       { label: 'Reparto',          key: 'reparto_label'  },
     ];
-    const fixW  = [80, 110, 130, 130, 240, 100];
+    const fixW  = [80, 110, 130, 130, 130, 240, 100];
     let leftAcc = 0;
     const leftOf = fixW.map(w => { const v = leftAcc; leftAcc += w; return v; });
 

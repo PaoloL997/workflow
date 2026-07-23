@@ -141,8 +141,22 @@ class TestataAdmin(admin.ModelAdmin):
 
 @admin.register(Documento)
 class DocumentoAdmin(admin.ModelAdmin):
-    list_display = ("id", "testata", "vendor_doc", "client_doc_no", "doc_title", "reparto")
-    search_fields = ("vendor_doc", "client_doc_no", "doc_title", "testata__job")
+    list_display = (
+        "id",
+        "testata",
+        "vendor_doc",
+        "client_doc_no",
+        "contractor_doc_no",
+        "doc_title",
+        "reparto",
+    )
+    search_fields = (
+        "vendor_doc",
+        "client_doc_no",
+        "contractor_doc_no",
+        "doc_title",
+        "testata__job",
+    )
     list_filter = ("reparto",)
     raw_id_fields = ("testata",)
 

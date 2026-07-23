@@ -1,4 +1,4 @@
-{# Banner + modal anomalie revisioni. Richiede: job, anomalie_count (opzionale), anomalie_banner_layout (full|compact) #}
+{# Banner + modal anomalie revisioni. Richiede: job, anomalie_count (opzionale), anomalie_banner_layout (full|compact), rev_let_flag (opzionale) #}
 <style>
   .anom-banner {
     display: none;
@@ -340,6 +340,7 @@
   'use strict';
 
   const JOB = '{{ job|escapejs }}';
+  const REV_LET_FLAG = {{ rev_let_flag|default_if_none:False|yesno:"true,false" }};
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
   const HIGHLIGHT = new URLSearchParams(window.location.search).get('anomalie') === '1';
 
@@ -351,6 +352,14 @@
   const resolveBackdrop = document.getElementById('anom-resolve-backdrop');
   const resolveBody = document.getElementById('anom-resolve-body');
   const resolveErrEl = document.getElementById('anom-resolve-error');
+
+  function formatRevLabel(rev) {
+    if (!rev) return '';
+    if (REV_LET_FLAG) {
+      return rev.rev_let || (rev.rev_no != null ? String(rev.rev_no) : '');
+    }
+    return rev.rev_no != null ? String(rev.rev_no) : '';
+  }
 
   if (!banner || !backdrop || !resolveBackdrop) return;
 
@@ -532,7 +541,7 @@
     const bucket = gruppo.suggest_bucket || 'da_emettere';
     const focusFields = focusFieldsForAnomalie(gruppo.anomalie);
     const doc = gruppo.documento || {};
-    const revLabel = (rev.rev_no ?? '') + (rev.rev_let || '');
+    const revLabel = formatRevLabel(rev);
     const badge = gruppo.is_latest
       ? '<span class="anom-badge anom-badge--latest">Ultima revisione</span>'
       : '<span class="anom-badge anom-badge--older">Revisione precedente</span>';
@@ -695,7 +704,7 @@
     const rows = _gruppi.map(function (g) {
       const doc = g.documento || {};
       const rev = g.revisione || {};
-      const revLabel = (rev.rev_no ?? '') + (rev.rev_let || '');
+      const revLabel = formatRevLabel(rev);
       const badge = g.is_latest
         ? '<span class="anom-badge anom-badge--latest">Ultima revisione</span>'
         : '<span class="anom-badge anom-badge--older">Revisione precedente</span>';
