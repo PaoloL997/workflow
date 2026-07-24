@@ -6,16 +6,13 @@
 
 ### Added
 
-- Colonna data Rev. 0 nel template Excel di import documenti
-- Dropdown reparto nel template Excel di import documenti
-- Flusso di reset password con invio email via SMTP
-- Filtri colonna stile Excel in situazione documenti (lista valori, seleziona tutto, ricerca, contiene)
-- Ordinamento colonne nella visualizzazione orizzontale di situazione documenti
-- File `CHANGELOG.md` del progetto
-- Tintatura della cella «Ric. effettivo» con il colore della risposta cliente nella vista orizzontale di situazione documenti
-- Legenda risposte cliente (swatch + etichetta) sotto la tabella in vista orizzontale
-- Pulsante versione `v0.1.1` in basso a sinistra sulla home con modal novità (aggiunte e fix)
+- È ora possibile definire la prima data di emissione di una revisione anche nell'Excel di import documenti
+- Reset password possibile nel menu di accesso
+- Aggiunti filtri in ciascuna colonna nella situazione documenti verticale e orizzontale
+- Nella vista orizzontale, in situazione documenti, ora le celle con la data di ricezione effettiva delle revisioni sono colorate in base alla risposta del cliente
 
 ### Fixed
 
+- Link incompleto nell'email di reset password (`http://host` senza percorso `/reset/...`)
 - Evidenziazione di oggi nel calendario data ricezione (fuso orario locale invece di UTC)
+- Tintature di stato (righe/celle situazione, badge sblocca) poco visibili in tema scuro

@@ -232,7 +232,7 @@
     const rows = _items.map(function (item) {
       const revLabel = formatRevLabel(item);
       const bg = item.ext_status_colore || '#888';
-      const statusBadge = '<span class="sbloc-ext-badge" style="background:' + esc(bg) + '22;color:' + esc(bg) + '">' +
+      const statusBadge = '<span class="sbloc-ext-badge" style="background:color-mix(in srgb, ' + esc(bg) + ' var(--status-tint-pct), var(--color-surface));color:' + esc(bg) + '">' +
         esc(item.ext_status_label || '—') + '</span>';
       return '<tr>' +
         '<td class="sbloc-col-doc"><div class="sbloc-doc-code">' + esc(item.vendor_doc) + '</div></td>' +

@@ -1140,22 +1140,21 @@
     return { label, className: '', style: `background:${escHtml(color)};color:#fff` };
   }
 
+  function statusTintBackground(color) {
+    return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-pct), var(--color-surface))`;
+  }
+
   function getRowHighlightStyle(rev) {
     const extColor = rev?.ext_status_colore || '';
     if (extColor) {
-      return `style="border-left-color:${escHtml(extColor)};background:${escHtml(extColor)}12"`;
+      const tint = statusTintBackground(extColor);
+      return `style="border-left-color:${escHtml(extColor)};background:${tint}"`;
     }
     if ((rev?.int_status || '') === 'inviato_al_cliente') {
-      return 'style="border-left-color:#FFC000;background:#FFC00012"';
+      const tint = statusTintBackground('#FFC000');
+      return `style="border-left-color:#FFC000;background:${tint}"`;
     }
     return '';
-  }
-
-  function getDocumentRowHighlightStyle(revs) {
-    const relevantRev = [...(revs || [])].reverse().find(function (rev) {
-      return Boolean(rev?.ext_status_colore) || (rev?.int_status || '') === 'inviato_al_cliente';
-    });
-    return getRowHighlightStyle(relevantRev || null);
   }
 
   let _allDocs    = [];
@@ -1905,7 +1904,7 @@
       tbody += `<tr><td colspan="${colspan}" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>`;
     }
     for (const { doc, revs } of rows) {
-      tbody += `<tr ${getDocumentRowHighlightStyle(revs)}>`;
+      tbody += '<tr>';
       FIX.forEach((col, i) => {
         let val;
         if (col.key === 'reparto_label') {
@@ -1931,7 +1930,7 @@
           const extLabel = (rev.ext_status_label || '').trim();
           // Opaque mix against surface so the tint is not altered by the row highlight underneath.
           const ricStyle = (rev.rec_act_date && extColor)
-            ? ` style="background:color-mix(in srgb, ${escHtml(extColor)} 7%, var(--color-surface))"`
+            ? ` style="background:${statusTintBackground(extColor)}"`
             : '';
           const ricTitle = (rev.rec_act_date && extLabel)
             ? ` title="${escHtml(extLabel)}"`

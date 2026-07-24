@@ -1353,6 +1353,8 @@ class PasswordResetTests(TestCase):
         self.assertRedirects(response, "/password-reset/done/")
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn("reset@brembanarolle.com", mail.outbox[0].to)
+        self.assertIn("/reset/", mail.outbox[0].body)
+        self.assertRegex(mail.outbox[0].body, r"/reset/[^/\s]+/[^/\s]+/")
 
     def test_password_reset_unknown_email_shows_done_without_leak(self):
         response = self.client.post(
