@@ -32,6 +32,20 @@ def _to_date(val):
     return val
 
 
+def int_status_from_dates(dis_act_date, rec_act_date) -> str:
+    """Derive workflow int_status from Access dispatch/receipt dates.
+
+    - receipt recorded → ricevuto
+    - dispatch recorded (no receipt yet) → inviato_al_cliente
+    - neither → empty (UI: Da inviare / da emettere)
+    """
+    if rec_act_date:
+        return "ricevuto"
+    if dis_act_date:
+        return "inviato_al_cliente"
+    return ""
+
+
 def _to_str(val, default=""):
     try:
         if pd.isna(val):
@@ -159,15 +173,17 @@ def importa_commessa_da_access(job: str) -> dict:
     for doc in documenti:
         doc_revs = rev_df.loc[rev_df["VendorDoc"] == doc.vendor_doc]
         for _, rv in doc_revs.iterrows():
+            dis_act_date = _to_date(rv["DisActDate"])
+            rec_act_date = _to_date(rv["RecActDate"])
             Revisione.objects.create(
                 documento=doc,
                 rev_no=_to_int(rv["RevNo"]),
                 rev_let=_to_str(rv["RevLet"]),
                 dis_plan_date=_to_date(rv["DisPlanDate"]),
-                dis_act_date=_to_date(rv["DisActDate"]),
+                dis_act_date=dis_act_date,
                 rec_plan_date=_to_date(rv["RecPlanDate"]),
-                rec_act_date=_to_date(rv["RecActDate"]),
-                int_status="",
+                rec_act_date=rec_act_date,
+                int_status=int_status_from_dates(dis_act_date, rec_act_date),
                 ext_status=_get_stato_esterno(rv["Status"]),
             )
             rev_count += 1

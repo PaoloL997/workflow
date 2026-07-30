@@ -960,9 +960,35 @@ class ImportOldTests(TestCase):
         self.assertEqual(result["revisioni"], 2)
         self.assertEqual(Revisione.objects.count(), 2)
         self.assertIn("anomalie", result)
+        # Rev 0 has DisActDate + RecActDate → ricevuto; rev 1 has no dates → Da inviare
+        self.assertEqual(Revisione.objects.filter(rev_no=0).get().int_status, "ricevuto")
         self.assertEqual(Revisione.objects.filter(rev_no=1).get().int_status, "")
         doc = Documento.objects.get(vendor_doc="99999-01")
         self.assertEqual(doc.contractor_doc_no, "CTR-99")
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_sets_inviato_when_only_dis_act_date(self, mock_fetch):
+        frames = self._frames()
+        frames["revisioni"] = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "99999-01",
+                    "RevNo": 0,
+                    "RevLet": "A",
+                    "DisPlanDate": None,
+                    "DisActDate": "2025-01-01",
+                    "RecPlanDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                }
+            ]
+        )
+        mock_fetch.return_value = frames
+        importa_commessa_da_access("99999")
+        rev = Revisione.objects.get()
+        self.assertEqual(rev.int_status, "inviato_al_cliente")
+        self.assertEqual(rev.dis_act_date.isoformat(), "2025-01-01")
+        self.assertIsNone(rev.rec_act_date)
 
     @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_rejects_existing_job(self, mock_fetch):
