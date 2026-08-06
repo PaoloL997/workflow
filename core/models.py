@@ -112,6 +112,38 @@ class Testata(models.Model):
         return self.job
 
 
+class CommessaPin(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="commessa_pins",
+    )
+    testata = models.ForeignKey(
+        Testata,
+        to_field="job",
+        db_column="Job",
+        on_delete=models.CASCADE,
+        related_name="pins",
+    )
+    pinned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "commessa_pins"
+        verbose_name = "Pin commessa"
+        verbose_name_plural = "Pin commesse"
+        ordering = ["pinned_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "testata"],
+                name="uniq_user_commessa_pin",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id}:{self.testata_id}"
+
+
 class IndirSped(models.Model):
     testata = models.ForeignKey(
         Testata,
@@ -153,6 +185,14 @@ STATI_INTERNI_CHOICES = [
 
 class StatoEsterno(models.Model):
     nome = models.CharField(db_column="Nome", max_length=100, unique=True)
+    lettera = models.CharField(
+        db_column="Lettera",
+        max_length=2,
+        blank=True,
+        default="",
+        verbose_name="Lettera",
+        help_text="Codice lettera mostrato in situazione documenti (es. A = Approved).",
+    )
     colore = models.CharField(
         db_column="Colore",
         max_length=7,

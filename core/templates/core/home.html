@@ -280,6 +280,7 @@
   }
 
   .commessa-card {
+    position: relative;
     background: var(--color-surface);
     border-radius: var(--radius-lg);
     padding: 24px;
@@ -300,11 +301,45 @@
     text-decoration: none;
   }
 
+  .card-pin {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+    z-index: 2;
+    padding: 0;
+  }
+
+  .commessa-card:hover .card-pin { opacity: 0.8; }
+
+  .card-pin:hover {
+    opacity: 1;
+    background: hsla(211, 100%, 50%, 0.1);
+    color: var(--color-accent);
+  }
+
+  .card-pin.pinned {
+    opacity: 1;
+    color: var(--color-accent);
+  }
+
   .card-job {
     font-size: 14px;
     font-weight: 700;
     color: var(--color-accent);
     letter-spacing: -0.01em;
+    padding-right: 28px;
   }
 
   .card-client {
@@ -970,13 +1005,21 @@
   async function loadCommesse() {
     const grid = document.getElementById('commesse-grid');
     try {
-      const res = await fetch('/api/commesse/');
+      const res = await fetch('/api/commesse/?home=1');
       if (!res.ok) throw new Error('Errore di rete');
       const { commesse } = await res.json();
-      renderGrid(commesse.slice(0, 8));
+      renderGrid(commesse);
     } catch {
       grid.innerHTML = '<div class="empty-state">Impossibile caricare le commesse.</div>';
     }
+  }
+
+  function pinIconSvg(filled) {
+    const fill = filled ? 'currentColor' : 'none';
+    const stroke = filled ? 'none' : 'currentColor';
+    return `<svg width="16" height="16" viewBox="0 0 24 24" fill="${fill}" stroke="${stroke}" stroke-width="1.8" aria-hidden="true">
+      <path d="M16 12V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+    </svg>`;
   }
 
   function renderGrid(commesse) {
@@ -985,8 +1028,16 @@
       grid.innerHTML = '<div class="empty-state">Nessuna commessa trovata.<br>Premi <strong>Apri Commessa</strong> per crearne una.</div>';
       return;
     }
-    grid.innerHTML = commesse.map(c => `
-      <a href="/commesse/${encodeURIComponent(c.job)}/" class="commessa-card" aria-label="Commessa ${c.job}">
+    grid.innerHTML = commesse.map(c => {
+      const pinned = !!c.pinned;
+      return `
+      <a href="/commesse/${encodeURIComponent(c.job)}/" class="commessa-card" aria-label="Commessa ${escHtml(c.job)}">
+        <button type="button" class="card-pin${pinned ? ' pinned' : ''}"
+          data-job="${escHtml(c.job)}" data-pinned="${pinned ? '1' : '0'}"
+          aria-label="${pinned ? 'Rimuovi pin' : 'Pinna commessa'}"
+          title="${pinned ? 'Rimuovi pin' : 'Pinna commessa'}">
+          ${pinIconSvg(pinned)}
+        </button>
         <div class="card-job">${escHtml(c.job)}</div>
         <div class="card-client">${escHtml(c.client || '—')}</div>
         ${c.job_detail ? `<div class="card-detail">${escHtml(c.job_detail)}</div>` : ''}
@@ -996,8 +1047,38 @@
           </svg>
           ${formatDate(c.delivery_date)}
         </div>
-      </a>
-    `).join('');
+      </a>`;
+    }).join('');
+
+    grid.querySelectorAll('.card-pin').forEach(btn => {
+      btn.addEventListener('click', onPinClick);
+    });
+  }
+
+  async function onPinClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const job = btn.dataset.job;
+    const pinned = btn.dataset.pinned === '1';
+    const method = pinned ? 'DELETE' : 'POST';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/commesse/' + encodeURIComponent(job) + '/pin/', {
+        method,
+        headers: { 'X-CSRFToken': CSRF },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error || 'Impossibile aggiornare il pin.');
+        return;
+      }
+      await loadCommesse();
+    } catch {
+      alert('Impossibile aggiornare il pin.');
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   /* ──────────────────────────────────────────────

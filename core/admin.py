@@ -68,8 +68,9 @@ class CustomUserAdmin(UserAdmin):
 
 @admin.register(StatoEsterno)
 class StatoEsternoAdmin(admin.ModelAdmin):
-    list_display = ("id", "nome", "colore", "crea_nuova_rev")
-    search_fields = ("nome",)
+    list_display = ("id", "lettera", "nome", "colore", "crea_nuova_rev")
+    search_fields = ("nome", "lettera")
+    fields = ("nome", "lettera", "colore", "crea_nuova_rev")
 
 
 class ModelloDocumentoInline(admin.TabularInline):

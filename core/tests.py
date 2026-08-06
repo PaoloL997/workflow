@@ -7,11 +7,12 @@ import pandas as pd
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
-from django.test import Client, TestCase
+from django.test import Client, SimpleTestCase, TestCase
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .models import (
+    CommessaPin,
     Documento,
     Permesso,
     Reparto,
@@ -21,11 +22,16 @@ from .models import (
     Testata,
 )
 from .services.commesse import (
+    MAX_PINNED_COMMESSE,
     format_revisione_label,
     list_documenti,
+    list_home_commesse,
     list_situazione,
+    list_stati_esterni,
+    pin_commessa,
     risolvi_file_revisione,
     salva_file_link,
+    serialize_revisione,
 )
 from .services.import_old import importa_commessa_da_access
 from .services.revisione_anomalie import (
@@ -38,6 +44,7 @@ from .services.revisione_anomalie import (
 )
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
+from .services.stato_esterno_codes import letter_for_status_name
 
 User = get_user_model()
 
@@ -616,6 +623,28 @@ class PermessiTestCase(TestCase):
         )
         self.assertEqual(response.status_code, 201)
 
+    def test_delete_commessa_sends_request_email_without_deleting(self):
+        Testata.objects.create(job="DEL-001", job_detail="Prova eliminazione")
+        self.client.force_login(self.writing_user)
+        response = self.client.delete("/api/commesse/DEL-001/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertTrue(Testata.objects.filter(job="DEL-001").exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["plitta@brembanarolle.com"])
+        self.assertIn("writing_user", mail.outbox[0].body)
+        self.assertIn("DEL-001", mail.outbox[0].body)
+        self.assertIn("ha richiesto l'eliminazione della commessa", mail.outbox[0].body)
+
+    def test_admin_delete_commessa_removes_it(self):
+        Testata.objects.create(job="DEL-ADM", job_detail="Eliminazione admin")
+        self.client.force_login(self.admin_user)
+        response = self.client.delete("/api/commesse/DEL-ADM/")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["ok"])
+        self.assertFalse(Testata.objects.filter(job="DEL-ADM").exists())
+        self.assertEqual(len(mail.outbox), 0)
+
     def test_reading_cannot_access_admin(self):
         self.client.force_login(self.reading_user)
         response = self.client.get("/admin/")
@@ -1041,6 +1070,125 @@ class SituazioneApiTestCase(TestCase):
         response = self.client.get("/api/commesse/INEXISTENT/situazione/")
         self.assertEqual(response.status_code, 404)
 
+    def test_export_situazione_pdf(self):
+        from datetime import date
+
+        import fitz
+
+        today = date.today()
+        date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+
+        response = self.client.get(f"/api/commesse/{self.job}/situazione/export/?vista=orizzontale")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(
+            f'filename="situazione_documenti_orizzontale_{date_part}.pdf"',
+            response["Content-Disposition"],
+        )
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+        text = fitz.open(stream=response.content, filetype="pdf")[0].get_text()
+        self.assertIn("Vendor Document", text)
+        self.assertIn("Planning", text)
+        self.assertIn("Dispatch", text)
+        self.assertIn("25056-QMDBI", text)
+        self.assertNotIn("Client Doc No", text)
+        self.assertNotIn("Penalty", text)
+
+        response_v = self.client.get(f"/api/commesse/{self.job}/situazione/export/?vista=verticale")
+        self.assertEqual(response_v.status_code, 200)
+        self.assertIn(
+            f'filename="situazione_documenti_verticale_{date_part}.pdf"',
+            response_v["Content-Disposition"],
+        )
+        text_v = fitz.open(stream=response_v.content, filetype="pdf")[0].get_text()
+        self.assertIn("Vendor Document", text_v)
+
+    def test_export_situazione_pdf_hides_empty_fixed_columns(self):
+        from src.pdf import _active_fixed_doc_columns
+
+        documenti = [
+            {"vendor_doc": "DOC-1", "doc_title": "", "client_doc_no": ""},
+            {"vendor_doc": "DOC-2", "doc_penalty": True, "item_no": "42"},
+        ]
+        active = _active_fixed_doc_columns(documenti)
+        labels = [col["label"] for col in active]
+        self.assertEqual(labels, ["Vendor Document", "Item", "Penalty"])
+
+    def test_export_situazione_not_found(self):
+        response = self.client.get("/api/commesse/INEXISTENT/situazione/export/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_situazione_api_includes_ext_status_lettera(self):
+        approved = StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        doc = self.fixtures["doc_qmdbi"]
+        rev = doc.revisioni.order_by("rev_no").first()
+        rev.ext_status = approved
+        rev.save(update_fields=["ext_status"])
+
+        response = self.client.get(f"/api/commesse/{self.job}/situazione/")
+        self.assertEqual(response.status_code, 200)
+        revs = response.json()["revisioni_by_doc"][str(doc.pk)]
+        self.assertEqual(revs[0]["ext_status_lettera"], "A")
+        self.assertEqual(revs[0]["ext_status_label"], "Approved")
+
+
+class StatoEsternoLetteraTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "stato_lettera_user",
+            "stato_lettera@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+        )
+        self.client.force_login(self.user)
+
+    def test_letter_for_status_name_aliases(self):
+        self.assertEqual(letter_for_status_name("Approved"), "A")
+        self.assertEqual(
+            letter_for_status_name("Commented-To be resubmitted-Work can proceed"),
+            "C",
+        )
+        self.assertEqual(
+            letter_for_status_name("Commented - To be resubmitted - Work can proceed"),
+            "C",
+        )
+        self.assertEqual(letter_for_status_name("Unknown Status"), "")
+
+    def test_serialize_revisione_includes_lettera(self):
+        testata = Testata.objects.create(job="LET01")
+        doc = Documento.objects.create(testata=testata, item_no="001", vendor_doc="VD")
+        stato = StatoEsterno.objects.create(nome="Final - As Built", lettera="F", colore="#FFC000")
+        rev = Revisione.objects.create(documento=doc, rev_no=0, ext_status=stato)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["ext_status_lettera"], "F")
+        self.assertEqual(data["ext_status_label"], "Final - As Built")
+
+    def test_list_stati_esterni_includes_lettera(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        items = list_stati_esterni()
+        self.assertEqual(items[0]["lettera"], "A")
+
+    def test_stati_esterni_api_create_and_patch_lettera(self):
+        create = self.client.post(
+            "/api/stati-esterni/",
+            data=json.dumps({"nome": "For Information", "lettera": "z", "colore": "#FFC000"}),
+            content_type="application/json",
+        )
+        self.assertEqual(create.status_code, 201)
+        payload = create.json()["data"]
+        self.assertEqual(payload["lettera"], "Z")
+        pk = payload["id"]
+
+        patch = self.client.patch(
+            f"/api/stati-esterni/{pk}/",
+            data=json.dumps({"lettera": "Z"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch.status_code, 200)
+        self.assertEqual(patch.json()["data"]["lettera"], "Z")
+
 
 class RevisioneSbloccoTests(TestCase):
     def setUp(self):
@@ -1213,7 +1361,7 @@ class ImportDocumentiExcelTests(TestCase):
     def test_import_with_date_sets_dis_plan_date(self):
         self.client.force_login(self.writing_user)
         xlsx = self._make_xlsx(
-            ["Item", "Titolo documento", "Data invio prevista (Rev. 0)"],
+            ["Item", "Document title", "Planned send date (Rev. 0)"],
             [["001", "Doc test", "2026-03-15"]],
         )
         resp = self.client.post(
@@ -1232,7 +1380,7 @@ class ImportDocumentiExcelTests(TestCase):
     def test_import_without_date_column_leaves_dis_plan_date_null(self):
         self.client.force_login(self.writing_user)
         xlsx = self._make_xlsx(
-            ["Item", "Titolo documento"],
+            ["Item", "Document title"],
             [["002", "Doc senza data"]],
         )
         resp = self.client.post(
@@ -1247,7 +1395,7 @@ class ImportDocumentiExcelTests(TestCase):
     def test_import_with_italian_date_format(self):
         self.client.force_login(self.writing_user)
         xlsx = self._make_xlsx(
-            ["Item", "Data invio prevista (Rev. 0)"],
+            ["Item", "Planned send date (Rev. 0)"],
             [["003", "20/07/2026"]],
         )
         resp = self.client.post(
@@ -1263,7 +1411,7 @@ class ImportDocumentiExcelTests(TestCase):
     def test_import_with_invalid_date_creates_doc_and_reports_warning(self):
         self.client.force_login(self.writing_user)
         xlsx = self._make_xlsx(
-            ["Item", "Data invio prevista (Rev. 0)"],
+            ["Item", "Planned send date (Rev. 0)"],
             [["004", "not-a-date"]],
         )
         resp = self.client.post(
@@ -1282,7 +1430,7 @@ class ImportDocumentiExcelTests(TestCase):
     def test_import_with_contractor_doc_no(self):
         self.client.force_login(self.writing_user)
         xlsx = self._make_xlsx(
-            ["Item", "Titolo documento", "Contractor Doc N°"],
+            ["Item", "Document title", "Contractor Doc N°"],
             [["005", "Doc contractor", "CTR-001"]],
         )
         resp = self.client.post(
@@ -1315,9 +1463,9 @@ class ImportDocumentiExcelTests(TestCase):
         wb = openpyxl.load_workbook(io.BytesIO(resp.content))
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
-        self.assertIn("Data invio prevista (Rev. 0)", headers)
+        self.assertIn("Planned send date (Rev. 0)", headers)
         # All expected columns must be present
-        for col in ["Item", "B&R Doc", "Contractor Doc N°", "Titolo documento", "Note"]:
+        for col in ["Item", "B&R Doc", "Contractor Doc N°", "Document title", "Notes"]:
             self.assertIn(col, headers)
 
     def test_template_download_reparto_has_dropdown_validation(self):
@@ -1344,7 +1492,7 @@ class ImportDocumentiExcelTests(TestCase):
         )
 
         ws = wb.active
-        reparto_col = get_column_letter([cell.value for cell in ws[1]].index("Reparto") + 1)
+        reparto_col = get_column_letter([cell.value for cell in ws[1]].index("Department") + 1)
         validations = [
             dv
             for dv in ws.data_validations.dataValidation
@@ -1427,6 +1575,26 @@ class PasswordResetTests(TestCase):
         self.assertContains(response, "Recuperala")
 
 
+class DateDisplayFormatTests(SimpleTestCase):
+    """Dates are shown as ``10 jan 2026`` across the app."""
+
+    def test_format_display_date(self):
+        import datetime
+
+        from .date_fmt import format_display_date
+
+        self.assertEqual(format_display_date(datetime.date(2026, 1, 10)), "10 jan 2026")
+        self.assertEqual(format_display_date("2026-03-05"), "5 mar 2026")
+        self.assertEqual(format_display_date(None), "")
+        self.assertEqual(format_display_date(""), "")
+
+    def test_pdf_date_line(self):
+        from src.pdf import _fmt_date
+
+        self.assertEqual(_fmt_date("2026-01-10", "Milano"), "Milano, 10 jan 2026")
+        self.assertEqual(_fmt_date("2026-01-10", ""), "10 jan 2026")
+
+
 class RevisioneLabelDisplayTests(TestCase):
     """Revision display depends on Testata.rev_let_flag, not on rev_let alone."""
 
@@ -1460,3 +1628,82 @@ class RevisioneLabelDisplayTests(TestCase):
         Testata.objects.create(job="REVFLG3", rev_let_flag=True)
         data = list_situazione("REVFLG3")
         self.assertTrue(data["rev_let_flag"])
+
+
+class CommessaPinTestCase(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "pin_user", "pin@example.com", "pw", permesso=Permesso.READING
+        )
+        self.other = User.objects.create_user(
+            "pin_other", "pinother@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.jobs = []
+        for i in range(10):
+            self.jobs.append(Testata.objects.create(job=f"PIN-{i:02d}", client=f"C{i}"))
+
+    def test_reading_user_can_pin_and_unpin(self):
+        self.client.force_login(self.user)
+        job = self.jobs[0].job
+        pin_res = self.client.post(f"/api/commesse/{job}/pin/")
+        self.assertEqual(pin_res.status_code, 200)
+        self.assertTrue(pin_res.json()["data"]["pinned"])
+        self.assertTrue(CommessaPin.objects.filter(user=self.user, testata_id=job).exists())
+
+        list_res = self.client.get("/api/commesse/")
+        self.assertEqual(list_res.status_code, 200)
+        by_job = {c["job"]: c for c in list_res.json()["commesse"]}
+        self.assertTrue(by_job[job]["pinned"])
+
+        unpin_res = self.client.delete(f"/api/commesse/{job}/pin/")
+        self.assertEqual(unpin_res.status_code, 200)
+        self.assertFalse(unpin_res.json()["data"]["pinned"])
+        self.assertFalse(CommessaPin.objects.filter(user=self.user, testata_id=job).exists())
+
+    def test_pin_limit_is_eight(self):
+        self.client.force_login(self.user)
+        for t in self.jobs[:MAX_PINNED_COMMESSE]:
+            res = self.client.post(f"/api/commesse/{t.job}/pin/")
+            self.assertEqual(res.status_code, 200)
+        overflow = self.client.post(f"/api/commesse/{self.jobs[8].job}/pin/")
+        self.assertEqual(overflow.status_code, 400)
+        self.assertIn("massimo", overflow.json()["error"].lower())
+        self.assertEqual(CommessaPin.objects.filter(user=self.user).count(), 8)
+
+    def test_home_fills_with_recent_when_fewer_than_eight_pinned(self):
+        self.client.force_login(self.user)
+        pinned_jobs = [self.jobs[0].job, self.jobs[1].job]
+        for job in pinned_jobs:
+            self.client.post(f"/api/commesse/{job}/pin/")
+
+        res = self.client.get("/api/commesse/?home=1")
+        self.assertEqual(res.status_code, 200)
+        home = res.json()["commesse"]
+        self.assertEqual(len(home), 8)
+        self.assertEqual([c["job"] for c in home[:2]], pinned_jobs)
+        self.assertTrue(all(c["pinned"] for c in home[:2]))
+        self.assertTrue(all(not c["pinned"] for c in home[2:]))
+        self.assertNotIn(self.jobs[0].job, [c["job"] for c in home[2:]])
+
+    def test_home_shows_only_eight_when_eight_pinned(self):
+        self.client.force_login(self.user)
+        pinned = [t.job for t in self.jobs[:8]]
+        for job in pinned:
+            self.client.post(f"/api/commesse/{job}/pin/")
+
+        res = self.client.get("/api/commesse/?home=1")
+        home = res.json()["commesse"]
+        self.assertEqual(len(home), 8)
+        self.assertEqual([c["job"] for c in home], pinned)
+        self.assertTrue(all(c["pinned"] for c in home))
+        self.assertNotIn(self.jobs[8].job, [c["job"] for c in home])
+
+    def test_pins_are_per_user(self):
+        pin_commessa(self.user, self.jobs[0].job)
+        self.client.force_login(self.other)
+        res = self.client.get("/api/commesse/?home=1")
+        home = res.json()["commesse"]
+        by_job = {c["job"]: c for c in home}
+        self.assertFalse(by_job.get(self.jobs[0].job, {}).get("pinned", False))
+        self.assertEqual(len(list_home_commesse(self.other)), 8)

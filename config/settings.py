@@ -171,6 +171,11 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "Workflow <noreply@brembanarolle.com>",
 )
 
+# Destinatari per le richieste di eliminazione commessa (lista allargabile).
+COMMESSA_DELETE_REQUEST_RECIPIENTS = [
+    "plitta@brembanarolle.com",
+]
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -182,6 +187,14 @@ TIME_ZONE = "Europe/Rome"
 USE_I18N = True
 
 USE_TZ = True
+
+# Display dates as "10 jan 2026" (month abbreviated in letters).
+# Note: Django's ``M`` is locale-aware (Italian → gen); UI/JS/PDF use English
+# abbreviations via ``core.date_fmt`` / ``formatDate`` for a consistent look.
+DATE_FORMAT = "j M Y"
+SHORT_DATE_FORMAT = "j M Y"
+DATETIME_FORMAT = "j M Y H:i"
+SHORT_DATETIME_FORMAT = "j M Y H:i"
 
 
 # Static files (CSS, JavaScript, Images)

@@ -79,7 +79,7 @@
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
     flex-shrink: 0;
   }
@@ -161,8 +161,13 @@
     white-space: nowrap;
   }
   .ep-tbl th.col-chk  { width: 44px; text-align: center; }
-  .ep-tbl th.col-doc  { width: auto; }
+  .ep-tbl th.col-doc  { width: auto; white-space: nowrap; }
+  .ep-tbl th.col-rev  { width: 72px; text-align: center; }
+  .ep-tbl th.col-title { width: auto; }
   .ep-tbl th.col-date { width: 120px; text-align: center; }
+  .ep-tbl td.cell-title { max-width: 320px; color: var(--color-text-secondary); }
+  .ep-tbl td.cell-rev { text-align: center; font-weight: 600; white-space: nowrap; }
+  .ep-tbl thead th { user-select: none; }
 
   .ep-tbl tbody tr {
     border-bottom: 1px solid var(--color-border);
@@ -178,38 +183,13 @@
     vertical-align: middle;
   }
 
-  /* Document info cell */
+  /* Document code */
   .doc-code {
     font-weight: 700;
     font-size: 13px;
     color: var(--color-accent);
     letter-spacing: -0.01em;
     white-space: nowrap;
-  }
-  .doc-rev-badge {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 7px;
-    border-radius: 999px;
-    background: var(--color-elevated);
-    color: var(--color-text-secondary);
-    font-size: 11px;
-    font-weight: 500;
-    vertical-align: middle;
-  }
-  .doc-info-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-  }
-  .doc-title-right {
-    font-size: 11px;
-    color: var(--color-text-secondary);
-    letter-spacing: 0.01em;
-    text-align: right;
-    flex-shrink: 1;
-    min-width: 0;
   }
 
   /* Date cells */
@@ -519,6 +499,7 @@
   .pdf-opts-body { display: flex; flex-direction: column; gap: 16px; }
 
 </style>
+{% include "core/partials/doc_list_filter_styles.html" %}
 {% endblock %}
 
 {% block content %}
@@ -555,6 +536,25 @@
 
     <!-- ── Controls bar ── -->
     <div class="ep-ctrl">
+      <div class="export-wrap">
+        <button class="toolbar-btn" type="button" onclick="toggleExportMenu(this, event)" aria-label="Esporta" aria-haspopup="menu">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Esporta
+        </button>
+        <div class="export-menu" role="menu">
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('xlsx', event)">
+            <strong>Excel</strong>
+            <span>Senza header</span>
+          </button>
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('pdf', event)">
+            <strong>PDF</strong>
+            <span>Con header Document Status</span>
+          </button>
+        </div>
+      </div>
+      <div class="ctrl-div"></div>
       <span class="ctrl-lbl">Data:</span>
       <input type="date" id="ep-data" class="ctrl-date">
       <div class="ctrl-div"></div>
@@ -571,6 +571,7 @@
     <!-- ── Page toolbar (sticky action bar) ── -->
     <div class="page-toolbar">
       <div class="toolbar-left">
+        <div class="list-filter-summary" id="ep-filter-summary"></div>
         <span class="toolbar-counter" id="ep-counter"><strong>0</strong> di 0 documenti selezionati</span>
         <span class="status-msg" id="ep-status"></span>
       </div>
@@ -584,15 +585,17 @@
     <div class="doc-card">
     <!-- ── Table ── -->
     <table class="ep-tbl">
-      <thead>
+      <thead id="ep-thead">
         <tr>
           <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleAll(this.checked)"></div></th>
-          <th class="col-doc">Documento</th>
-          <th class="col-date">Data prevista</th>
+          <th class="col-doc">B&amp;R Doc</th>
+          <th class="col-rev">Rev.</th>
+          <th class="col-title">Title</th>
+          <th class="col-date">Planned date</th>
         </tr>
       </thead>
       <tbody id="ep-tbody">
-        <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+        <tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
       </tbody>
     </table>
     </div><!-- /doc-card -->
@@ -600,6 +603,7 @@
   </div><!-- /content -->
 </div><!-- /page -->
 
+{% include "core/partials/doc_list_filter_popover.html" %}
 <!-- ── PDF options modal ── -->
 <div class="modal-overlay" id="pdf-opts-modal" role="dialog" aria-modal="true">
   <div class="modal-box" style="max-width:520px;">
@@ -695,6 +699,8 @@
   </svg>
 </button>
 
+{% include "core/partials/doc_list_filters_js.html" %}
+{% include "core/partials/export_format_menu.html" %}
 <script>
 (function () {
   'use strict';
@@ -702,9 +708,53 @@
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
 
+  DocListFilters.init({
+    filterLabels: {
+      vendor_doc: 'B&R Doc',
+      latest_rev_display: 'Rev.',
+      doc_title: 'Title',
+      latest_dis_plan_date: 'Planned date',
+    },
+    dateFilterKeys: ['latest_dis_plan_date'],
+    getDocs: function () { return _docs; },
+    getCellValue: function (d, key) {
+      if (key === 'latest_dis_plan_date') {
+        return d.latest_dis_plan_date ? fmtDate(d.latest_dis_plan_date) : '';
+      }
+      if (key === 'latest_rev_display') {
+        const v = d.latest_rev_display;
+        return (!v || v === '\u2014') ? '' : v;
+      }
+      return d[key] || '';
+    },
+    getDateValue: function (d, key) {
+      if (key === 'latest_dis_plan_date') return d.latest_dis_plan_date || '';
+      return '';
+    },
+    getSortValue: function (d, key) {
+      if (key === 'latest_dis_plan_date') return d.latest_dis_plan_date || '';
+      if (key === 'latest_rev_display') return d.latest_rev_no ?? -1;
+      return d[key] || '';
+    },
+    defaultSort: function (docs) {
+      // Scadute / più vicine prima; senza data in coda (come gestisci ricezione).
+      return docs.sort(function (a, b) {
+        const aT = a.latest_dis_plan_date ? new Date(a.latest_dis_plan_date + 'T00:00:00').getTime() : null;
+        const bT = b.latest_dis_plan_date ? new Date(b.latest_dis_plan_date + 'T00:00:00').getTime() : null;
+        if (aT === null && bT === null) return 0;
+        if (aT === null) return 1;
+        if (bT === null) return -1;
+        return aT - bT;
+      });
+    },
+    onApply: function () { applyAndRender(); },
+    summaryId: 'ep-filter-summary',
+  });
+
   /* ── Theme toggle ── */
   (function () {
     var btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
     btn.addEventListener('click', function () {
       var current = document.documentElement.getAttribute('data-theme');
       var isDark = current === 'dark' ||
@@ -800,39 +850,63 @@
   function selAddrIds() { return _addrs.filter(function(a) { return a.sel; }).map(function(a) { return a.id; }); }
 
   /* ── documents ── */
+  function selectedIdSet() {
+    return new Set(Array.from(document.querySelectorAll('.doc-c:checked')).map(function (c) {
+      return c.value;
+    }));
+  }
+
+  function renderThead() {
+    const th = DocListFilters.thHeader;
+    document.getElementById('ep-thead').innerHTML =
+      '<tr>'
+      + '<th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleAll(this.checked)"></div></th>'
+      + th('B&amp;R Doc', 'vendor_doc', true, { className: 'col-doc' })
+      + th('Rev.', 'latest_rev_display', true, { className: 'col-rev' })
+      + th('Title', 'doc_title', true, { className: 'col-title' })
+      + th('Planned date', 'latest_dis_plan_date', true, { className: 'col-date' })
+      + '</tr>';
+  }
+
   async function loadDocs() {
     try {
       const r = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/documenti/');
       if (!r.ok) { emptyTbl('Errore nel caricamento.'); return; }
       const d = await r.json();
       _docs = (d.documenti || []).filter(function(x) { return x.latest_int_status !== 'inviato_al_cliente' && x.latest_int_status !== 'ricevuto'; });
-      renderTbl();
+      applyAndRender();
     } catch { emptyTbl('Errore di rete.'); }
   }
 
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    const [y, m, d] = iso.split('-');
-    return d + '/' + m + '/' + y;
+  function applyAndRender() {
+    try {
+      renderThead();
+      renderTbl(DocListFilters.applyPipeline(_docs));
+    } catch (err) {
+      console.error('applyAndRender failed', err);
+    }
   }
 
-  function renderTbl() {
+  function renderTbl(docs) {
     const tb = document.getElementById('ep-tbody');
+    const selected = selectedIdSet();
     if (!_docs.length) { emptyTbl('Nessun documento pronto per l\'emissione.'); return; }
+    if (!docs.length) {
+      tb.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessun documento corrisponde ai filtri.</td></tr>';
+      updBtns(0); updCounter(0);
+      return;
+    }
     const today = new Date(); today.setHours(0,0,0,0);
-    tb.innerHTML = _docs.map(function(d) {
+    tb.innerHTML = docs.map(function(d) {
       const rev = d.latest_rev_display || '\u2014';
       const planDate = d.latest_dis_plan_date ? fmtDate(d.latest_dis_plan_date) : '—';
       const isOverdue = d.latest_dis_plan_date && new Date(d.latest_dis_plan_date) < today;
+      const checked = selected.has(String(d.id)) ? ' checked' : '';
       return '<tr id="tr-' + d.id + '" onclick="toggleRow(' + d.id + ')">'
-        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '" onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
-        + '<td>'
-        +   '<div class="doc-info-row">'
-        +     '<div><span class="doc-code">' + escHtml(d.vendor_doc || '\u2014') + '</span>'
-        +     '<span class="doc-rev-badge">Rev.\u00a0' + escHtml(rev) + '</span></div>'
-        +     '<div class="doc-title-right">' + escHtml(d.doc_title || '') + '</div>'
-        +   '</div>'
-        + '</td>'
+        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk doc-c" id="c-' + d.id + '" value="' + d.id + '"' + checked + ' onclick="event.stopPropagation()" onchange="onRowChk()"></div></td>'
+        + '<td><span class="doc-code">' + escHtml(d.vendor_doc || '\u2014') + '</span></td>'
+        + '<td class="cell-rev">' + escHtml(rev) + '</td>'
+        + '<td class="cell-title">' + escHtml(d.doc_title || '—') + '</td>'
         + '<td class="cell-date' + (isOverdue ? ' overdue' : '') + '">' + escHtml(planDate) + '</td>'
         + '</tr>';
     }).join('');
@@ -841,9 +915,14 @@
 
   function emptyTbl(msg) {
     document.getElementById('ep-tbody').innerHTML =
-      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+      '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
     updBtns(0); updCounter(0);
   }
+
+  window.onExportFormatChosen = function (format) {
+    const fmt = format === 'pdf' ? 'pdf' : 'xlsx';
+    window.location.href = '/api/commesse/' + encodeURIComponent(JOB) + '/emissione/export/?format=' + fmt;
+  };
 
   window.toggleRow = function(id) {
     const c = document.getElementById('c-' + id);
@@ -858,8 +937,10 @@
       if (tr) tr.classList.toggle('sel', c.checked);
     });
     const sa = document.getElementById('sel-all');
-    sa.checked = all.length > 0 && chk.length === all.length;
-    sa.indeterminate = chk.length > 0 && chk.length < all.length;
+    if (sa) {
+      sa.checked = all.length > 0 && chk.length === all.length;
+      sa.indeterminate = chk.length > 0 && chk.length < all.length;
+    }
     updBtns(chk.length); updCounter(chk.length);
   };
 

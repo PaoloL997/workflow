@@ -1,4 +1,3 @@
-import colorsys
 import json
 import logging
 from datetime import date as _date
@@ -12,11 +11,11 @@ from django.db import IntegrityError
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from src.pdf import genera_trasmittal_pdf
+from src.pdf import genera_planned_docs_pdf, genera_situazione_documenti_pdf, genera_trasmittal_pdf
 
 from .models import (
     Documento,
@@ -44,18 +43,20 @@ from .services.commesse import (
     esegui_emissione,
     esegui_ricezione,
     fetch_from_bc,
-    format_revisione_label,
     genera_documenti_da_modelli,
     get_commessa,
     list_cartelle_modelli,
     list_commesse,
     list_documenti,
+    list_home_commesse,
     list_indirizzi,
     list_reparti,
     list_revisioni,
     list_situazione,
     list_stati_esterni,
     list_stati_interni,
+    pin_commessa,
+    request_delete_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
     salva_file_link,
@@ -64,6 +65,7 @@ from .services.commesse import (
     serialize_indirizzo,
     serialize_revisione,
     serialize_testata,
+    unpin_commessa,
     update_commessa,
     update_documento,
     update_indirizzo,
@@ -351,8 +353,10 @@ def home_view(request):
 @require_http_methods(["GET", "POST"])
 def commesse_api(request):
     if request.method == "GET":
+        if request.GET.get("home") in ("1", "true", "True"):
+            return JsonResponse({"commesse": list_home_commesse(request.user)})
         q = request.GET.get("q", "").strip() or None
-        return JsonResponse({"commesse": list_commesse(q)})
+        return JsonResponse({"commesse": list_commesse(q, user=request.user)})
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, ValueError):
@@ -364,6 +368,21 @@ def commesse_api(request):
         return JsonResponse({"error": "Una commessa con questo Job esiste già."}, status=409)
     except ValidationError as exc:
         return JsonResponse({"error": exc.message_dict}, status=422)
+
+
+@api_login_required
+@require_http_methods(["POST", "DELETE"])
+def commessa_pin_api(request, job):
+    try:
+        if request.method == "POST":
+            data = pin_commessa(request.user, job)
+        else:
+            data = unpin_commessa(request.user, job)
+        return JsonResponse({"ok": True, "data": data})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 @api_login_required
@@ -390,10 +409,21 @@ def commessa_api_detail(request, job):
         except ValidationError as exc:
             return JsonResponse({"error": exc.message_dict}, status=422)
     try:
-        delete_commessa(job)
+        if request.user.is_app_admin:
+            delete_commessa(job)
+        else:
+            request_delete_commessa(job, request.user)
         return JsonResponse({"ok": True})
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+    except Exception:
+        logger.exception('Eliminazione/richiesta eliminazione fallita per commessa "%s".', job)
+        return JsonResponse(
+            {"error": "Impossibile completare l'operazione di eliminazione."},
+            status=500,
+        )
 
 
 @api_login_required
@@ -580,6 +610,7 @@ def stati_esterni_api(request):
                 "data": {
                     "id": s.pk,
                     "nome": s.nome,
+                    "lettera": s.lettera,
                     "colore": s.colore,
                     "crea_nuova_rev": s.crea_nuova_rev,
                 },
@@ -609,6 +640,7 @@ def stato_esterno_api_detail(request, pk):
                     "data": {
                         "id": s.pk,
                         "nome": s.nome,
+                        "lettera": s.lettera,
                         "colore": s.colore,
                         "crea_nuova_rev": s.crea_nuova_rev,
                     },
@@ -849,11 +881,11 @@ def export_documenti(request, job):
         "Client Doc N°",
         "Contractor Doc N°",
         "Client Doc Class",
-        "Titolo",
-        "Reparto",
-        "Penale",
-        "Pagamento",
-        "Note",
+        "Title",
+        "Department",
+        "Penalty",
+        "Payment",
+        "Notes",
     ]
     header_fill = PatternFill(start_color="1C1C1A", end_color="1C1C1A", fill_type="solid")
     header_font = Font(bold=True, color="FFFFFF", size=10)
@@ -872,8 +904,8 @@ def export_documenti(request, job):
         ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
         ws.cell(row=row_idx, column=6, value=d["doc_title"])
         ws.cell(row=row_idx, column=7, value=d["reparto_label"])
-        ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "")
-        ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "")
+        ws.cell(row=row_idx, column=8, value="Yes" if d["doc_penalty"] else "")
+        ws.cell(row=row_idx, column=9, value="Yes" if d["doc_payment"] else "")
         ws.cell(row=row_idx, column=10, value=d["remarks"])
 
     # Auto-fit column widths
@@ -902,261 +934,534 @@ def export_documenti(request, job):
     return response
 
 
-# ── Export: Situazione documenti ─────────────────────────────────────────────
+# ── Export: Emissione / Ricezione ────────────────────────────────────────────
 
 
-def _hsl_hex(h_deg: float, s_pct: float, l_pct: float) -> str:
-    """Convert a CSS HSL color to a 6-char RRGGBB hex string for openpyxl.
+_EMISSIONE_EXCLUDE_STATUSES = frozenset({"inviato_al_cliente", "ricevuto"})
 
-    Args:
-        h_deg: Hue in degrees (0–360).
-        s_pct: Saturation as a percentage (0–100).
-        l_pct: Lightness as a percentage (0–100).
+_XLSX_THIN = Border(
+    left=Side(style="thin", color="B9B9B9"),
+    right=Side(style="thin", color="B9B9B9"),
+    top=Side(style="thin", color="B9B9B9"),
+    bottom=Side(style="thin", color="B9B9B9"),
+)
+_XLSX_HEADER_FONT = Font(bold=True, color="000000", size=10)
+_XLSX_HEADER_FILL = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+_XLSX_HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
+_XLSX_CELL_ALIGN = Alignment(horizontal="left", vertical="center")
+_XLSX_CENTER_ALIGN = Alignment(horizontal="center", vertical="center")
+_XLSX_WRAP_ALIGN = Alignment(horizontal="left", vertical="center", wrap_text=True)
+_XLSX_OVERDUE_FONT = Font(bold=True, color="B40000", size=10)
 
-    Returns:
-        Upper-case 6-character hex string, e.g. ``"C8E1F9"``.
-    """
-    r, g, b = colorsys.hls_to_rgb(h_deg / 360, l_pct / 100, s_pct / 100)
-    return f"{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+# Content-driven width caps. Compact cols ignore long headers (headers wrap).
+_XLSX_COMPACT_COLS = frozenset(
+    {
+        "Item",
+        "Rev.",
+        "Department",
+        "Penalty",
+        "Payment",
+    }
+)
+_XLSX_DATE_COLS = frozenset(
+    {
+        "Planned date",
+        "Planned return date",
+        "Emission date",
+        "Planned send",
+        "Actual send",
+        "Planned receipt",
+        "Actual receipt",
+        "Submission date",
+        "Receipt date",
+        "Dispatch",
+        "Received",
+    }
+)
 
 
-# Light-mode badge palette from situazione_detail.html, mapped to (bg_hex, fg_hex).
-# Used to apply matching colors in the Excel export.
-_INT_STATUS_COLORS: dict[str, tuple[str, str]] = {
-    "da_iniziare": (_hsl_hex(220, 14, 90), _hsl_hex(220, 10, 40)),
-    "in_lavorazione": (_hsl_hex(210, 80, 88), _hsl_hex(210, 80, 30)),
-    "in_revisione": (_hsl_hex(42, 80, 88), _hsl_hex(42, 60, 30)),
-    "in_approvazione": (_hsl_hex(30, 80, 88), _hsl_hex(30, 60, 30)),
-    "da_emettere": (_hsl_hex(270, 60, 88), _hsl_hex(270, 50, 35)),
-    "inviato_al_cliente": (_hsl_hex(46, 92, 88), _hsl_hex(46, 70, 30)),
-    "ricevuto": (_hsl_hex(145, 55, 88), _hsl_hex(145, 45, 28)),
-}
+def _is_export_date_overdue(raw) -> bool:
+    if not raw:
+        return False
+    day = str(raw).strip()[:10]
+    if len(day) < 10:
+        return False
+    return day < _date.today().isoformat()
 
 
-@login_required
-@require_http_methods(["GET"])
-def export_situazione(request, job):
-    """Export the situazione documenti as an Excel file.
+def _style_xlsx_header_row(ws, headers):
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = _XLSX_HEADER_FONT
+        cell.fill = _XLSX_HEADER_FILL
+        cell.alignment = _XLSX_HEADER_ALIGN
+        cell.border = _XLSX_THIN
 
-    Supports two layouts via the ``vista`` query parameter:
 
-    - ``verticale`` (default): one row per document × revision, with all
-      status columns.
-    - ``orizzontale``: one row per document, with date columns grouped by
-      revision index.
+def _style_xlsx_header_cell(cell):
+    cell.font = _XLSX_HEADER_FONT
+    cell.fill = _XLSX_HEADER_FILL
+    cell.alignment = _XLSX_HEADER_ALIGN
+    cell.border = _XLSX_THIN
 
-    Args:
-        request: The HTTP request. Optional ``?vista=orizzontale`` param.
-        job: The commessa job identifier.
 
-    Returns:
-        HttpResponse: An xlsx attachment, or a 404 JSON response if the
-        commessa does not exist.
-    """
-    try:
-        documenti = list_documenti(job)
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+def _style_xlsx_data_cell(cell, *, overdue=False, center=False, wrap=False):
+    cell.border = _XLSX_THIN
+    if center:
+        cell.alignment = _XLSX_CENTER_ALIGN
+    elif wrap:
+        cell.alignment = _XLSX_WRAP_ALIGN
+    else:
+        cell.alignment = _XLSX_CELL_ALIGN
+    if overdue:
+        cell.font = _XLSX_OVERDUE_FONT
 
-    vista = request.GET.get("vista", "verticale")
-    rev_let_flag = testata.rev_let_flag
 
-    revs_by_doc = revisioni_by_doc_for_job(job)
+def _xlsx_content_max_len(ws, col_idx: int, *, data_start_row: int = 2) -> int:
+    if ws.max_row < data_start_row:
+        return 0
+    return max(
+        (
+            len(str(ws.cell(row=r, column=col_idx).value or ""))
+            for r in range(data_start_row, ws.max_row + 1)
+        ),
+        default=0,
+    )
 
-    def fmt(d):
-        """Format an ISO date string as DD/MM/YYYY, or return empty string."""
-        if not d:
-            return ""
-        try:
-            y, m, day = str(d).split("-")
-            return f"{day}/{m}/{y}"
-        except ValueError:
-            return str(d)
 
-    header_fill = PatternFill(start_color="1C1C1A", end_color="1C1C1A", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF", size=10)
-    header_align = Alignment(horizontal="center", vertical="center")
+def _xlsx_wrapped_line_count(text, col_width: float) -> int:
+    """Rough number of wrapped lines for Excel row-height estimation."""
+    chars_per_line = max(int(col_width * 0.95), 8)
+    total = 0
+    for part in str(text or "").splitlines() or [""]:
+        total += max(1, (len(part) + chars_per_line - 1) // chars_per_line)
+    return max(1, total)
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Situazione"
 
-    if vista == "orizzontale":
-        max_revs = max((len(revs_by_doc.get(d["id"], [])) for d in documenti), default=1)
-        fixed_labels = [
-            "Item",
-            "B&R Doc",
-            "Client Doc No",
-            "Contractor Doc No",
-            "Client Doc Class",
-            "Descrizione",
-            "Reparto",
-        ]
-        sub_labels = ["Inv. prev.", "Inv. eff.", "Ric. prev.", "Ric. eff."]
-        n_fixed = len(fixed_labels)
-        total_cols = n_fixed + max_revs * 4
+def _autosize_xlsx_columns(ws, headers, *, data_start_row: int = 2):
+    """Size columns from cell content (not padded by long headers)."""
+    title_col = None
+    title_width = 40.0
 
-        # ── Row 1: fixed column headers (merged over rows 1–2) + "Rev. X" group headers ──
-        for col_idx, label in enumerate(fixed_labels, start=1):
-            cell = ws.cell(row=1, column=col_idx, value=label)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_align
-            ws.merge_cells(start_row=1, start_column=col_idx, end_row=2, end_column=col_idx)
+    for col_idx, header in enumerate(headers, start=1):
+        content_len = _xlsx_content_max_len(ws, col_idx, data_start_row=data_start_row)
+        letter = get_column_letter(col_idx)
 
-        for i in range(max_revs):
-            rev_start = n_fixed + 1 + i * 4
-            cell = ws.cell(row=1, column=rev_start, value=f"Rev. {i}")
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_align
-            ws.merge_cells(start_row=1, start_column=rev_start, end_row=1, end_column=rev_start + 3)
+        if header == "Title":
+            # Prefer reading the full title: wide + wrap; raise row height below.
+            width = float(max(36, min(content_len + 2, 90)))
+            title_col = col_idx
+            title_width = width
+        elif header in _XLSX_COMPACT_COLS:
+            # Acronyms / flags: fit content, keep narrow (header wraps).
+            width = float(max(5, min(max(content_len + 1, 5), 10)))
+        elif header in _XLSX_DATE_COLS:
+            width = float(max(11, min(max(content_len + 1, 11), 14)))
+        elif header in ("Internal status", "Client response"):
+            width = float(max(12, min(max(content_len + 2, 12), 24)))
+        elif header in ("B&R Doc", "Client Doc N°", "Contractor Doc N°", "Client Doc Class"):
+            width = float(max(10, min(max(content_len + 2, 10), 28)))
+        else:
+            width = float(max(10, min(max(content_len + 2, len(header)), 32)))
 
-        # ── Row 2: sub-labels under each revision group ──
-        sub_font = Font(bold=True, color="FFFFFF", size=9)
-        for i in range(max_revs):
-            for j, sub in enumerate(sub_labels):
-                cell = ws.cell(row=2, column=n_fixed + 1 + i * 4 + j, value=sub)
-                cell.font = sub_font
-                cell.fill = header_fill
-                cell.alignment = header_align
+        ws.column_dimensions[letter].width = width
 
-        # ── Data rows (start at row 3) ──
-        for row_idx, d in enumerate(documenti, start=3):
-            revs = revs_by_doc.get(d["id"], [])
-            for col_idx, val in enumerate(
-                [
-                    d["item_no"],
-                    d["vendor_doc"],
-                    d["client_doc_no"],
-                    d["contractor_doc_no"],
-                    d["client_doc_class"],
-                    d["doc_title"],
-                    d["reparto_acronimo"] or d["reparto_label"],
-                ],
-                start=1,
-            ):
-                ws.cell(row=row_idx, column=col_idx, value=val)
-            for i in range(max_revs):
-                r = revs[i] if i < len(revs) else None
-                for j, val in enumerate(
-                    [
-                        fmt(r["dis_plan_date"]) if r else "",
-                        fmt(r["dis_act_date"]) if r else "",
-                        fmt(r["rec_plan_date"]) if r else "",
-                        fmt(r["rec_act_date"]) if r else "",
-                    ]
-                ):
-                    ws.cell(row=row_idx, column=n_fixed + 1 + i * 4 + j, value=val)
+    if title_col is None or ws.max_row < data_start_row:
+        return
 
-    else:  # verticale (default)
-        headers = [
-            "Item",
-            "B&R Doc",
-            "Client Doc No",
-            "Contractor Doc No",
-            "Client Doc Class",
-            "Titolo",
-            "Reparto",
-            "Penale",
-            "Pagamento",
-            "Rev.",
-            "Inv. previsto",
-            "Inv. effettivo",
-            "Ric. previsto",
-            "Ric. effettivo",
-            "Stato interno",
-            "Risposta cliente",
-        ]
-        for col_idx, h in enumerate(headers, start=1):
-            cell = ws.cell(row=1, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_align
+    # Expand row height so wrapped titles are not clipped vertically.
+    for r in range(data_start_row, ws.max_row + 1):
+        text = ws.cell(row=r, column=title_col).value
+        lines = _xlsx_wrapped_line_count(text, title_width)
+        if lines > 1:
+            ws.row_dimensions[r].height = min(14.5 * lines, 75)
 
-        row_idx = 2
-        for d in documenti:
-            revs = revs_by_doc.get(d["id"], [])
-            if not revs:
-                # One row with no revision data
-                ws.cell(row=row_idx, column=1, value=d["item_no"])
-                ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
-                ws.cell(row=row_idx, column=3, value=d["client_doc_no"])
-                ws.cell(row=row_idx, column=4, value=d["contractor_doc_no"])
-                ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
-                ws.cell(row=row_idx, column=6, value=d["doc_title"])
-                ws.cell(row=row_idx, column=7, value=d["reparto_acronimo"] or d["reparto_label"])
-                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "No")
-                ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "No")
-                row_idx += 1
-                continue
-            for r in revs:
-                rev_label = format_revisione_label(r["rev_no"], r["rev_let"], rev_let_flag)
-                int_label = r["int_status_label"] or ""
-                ws.cell(row=row_idx, column=1, value=d["item_no"])
-                ws.cell(row=row_idx, column=2, value=d["vendor_doc"])
-                ws.cell(row=row_idx, column=3, value=d["client_doc_no"])
-                ws.cell(row=row_idx, column=4, value=d["contractor_doc_no"])
-                ws.cell(row=row_idx, column=5, value=d["client_doc_class"])
-                ws.cell(row=row_idx, column=6, value=d["doc_title"])
-                ws.cell(row=row_idx, column=7, value=d["reparto_acronimo"] or d["reparto_label"])
-                ws.cell(row=row_idx, column=8, value="Sì" if d["doc_penalty"] else "No")
-                ws.cell(row=row_idx, column=9, value="Sì" if d["doc_payment"] else "No")
-                ws.cell(row=row_idx, column=10, value=rev_label)
-                ws.cell(row=row_idx, column=11, value=fmt(r["dis_plan_date"]))
-                ws.cell(row=row_idx, column=12, value=fmt(r["dis_act_date"]))
-                ws.cell(row=row_idx, column=13, value=fmt(r["rec_plan_date"]))
-                ws.cell(row=row_idx, column=14, value=fmt(r["rec_act_date"]))
-                # Stato interno — colored badge
-                int_cell = ws.cell(row=row_idx, column=15, value=int_label)
-                int_colors = _INT_STATUS_COLORS.get(r["int_status"] or "")
-                if int_colors:
-                    int_cell.fill = PatternFill(
-                        start_color=int_colors[0], end_color=int_colors[0], fill_type="solid"
-                    )
-                    int_cell.font = Font(color=int_colors[1], size=9, bold=True)
-                    int_cell.alignment = Alignment(horizontal="center", vertical="center")
-                # Risposta cliente — colored using the stored hex from the DB
-                ext_label = r["ext_status_label"] or ""
-                ext_cell = ws.cell(row=row_idx, column=16, value=ext_label)
-                if ext_label:
-                    raw_color = (r.get("ext_status_colore") or "").lstrip("#")
-                    if len(raw_color) == 6:
-                        ext_cell.fill = PatternFill(
-                            start_color=raw_color, end_color=raw_color, fill_type="solid"
-                        )
-                        ext_cell.font = Font(color="FFFFFF", size=9, bold=True)
-                        ext_cell.alignment = Alignment(horizontal="center", vertical="center")
-                row_idx += 1
 
-        total_cols = 16
-
-    # Auto-fit column widths (scan all rows; merged-range non-origin cells have None value)
-    for col_idx in range(1, total_cols + 1):
-        max_len = max(
-            (
-                len(str(ws.cell(row=r, column=col_idx).value or ""))
-                for r in range(1, ws.max_row + 1)
-            ),
-            default=8,
-        )
-        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 4, 50)
-
+def _xlsx_response(wb, filename: str) -> HttpResponse:
     from io import BytesIO
 
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
-
-    safe_job = job.replace(" ", "_")
-    filename = f"situazione_{safe_job}.xlsx"
     response = HttpResponse(
         buf.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
     return response
+
+
+def _pdf_response(pdf_bytes: bytes, filename: str) -> HttpResponse:
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response["Pragma"] = "no-cache"
+    return response
+
+
+def _export_format(request, default="xlsx"):
+    fmt = (request.GET.get("format") or default).strip().lower()
+    return fmt if fmt in ("xlsx", "pdf") else default
+
+
+_EMISSIONE_PDF_COLUMNS = [
+    ("Item", "item_no", False),
+    ("B&R Doc", "vendor_doc", False),
+    ("Rev.", "latest_rev_display", False),
+    ("Client Doc N°", "client_doc_no", False),
+    ("Contractor Doc N°", "contractor_doc_no", False),
+    ("Client Doc Class", "client_doc_class", False),
+    ("Title", "doc_title", False),
+    ("Planned date", "latest_dis_plan_date", True),
+]
+
+_RICEZIONE_PDF_COLUMNS = [
+    ("Item", "item_no", False),
+    ("B&R Doc", "vendor_doc", False),
+    ("Rev.", "latest_rev_display", False),
+    ("Client Doc N°", "client_doc_no", False),
+    ("Contractor Doc N°", "contractor_doc_no", False),
+    ("Client Doc Class", "client_doc_class", False),
+    ("Title", "doc_title", False),
+    ("Emission date", "latest_dis_act_date", True),
+    ("Planned return date", "latest_rec_plan_date", True),
+]
+
+
+def _sort_docs_by_date(docs, date_key):
+    """Ascending by ISO date; empty dates last (matches UI defaultSort)."""
+
+    def _key(d):
+        raw = d.get(date_key)
+        if not raw:
+            return (1, "")
+        return (0, str(raw)[:10])
+
+    return sorted(docs, key=_key)
+
+
+def _export_planned_docs_xlsx(
+    job,
+    docs,
+    *,
+    sheet_title,
+    date_header,
+    date_key,
+    filename,
+    include_rev=False,
+    emission_date_header=None,
+    emission_date_key="latest_dis_act_date",
+):
+    """Build an Excel export for emissione/ricezione document lists."""
+    from .date_fmt import format_display_date
+
+    docs = _sort_docs_by_date(docs, date_key)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_title
+
+    headers = [
+        "Item",
+        "B&R Doc",
+    ]
+    if include_rev:
+        headers.append("Rev.")
+    headers.extend(
+        [
+            "Client Doc N°",
+            "Contractor Doc N°",
+            "Client Doc Class",
+            "Title",
+        ]
+    )
+    if emission_date_header:
+        headers.append(emission_date_header)
+    headers.append(date_header)
+
+    _style_xlsx_header_row(ws, headers)
+    ws.row_dimensions[1].height = 22
+
+    for row_idx, d in enumerate(docs, start=2):
+        col = 1
+        cells_meta = []  # (value, overdue, center)
+
+        cells_meta.append((d.get("item_no") or "", False, True))
+        cells_meta.append((d.get("vendor_doc") or "", False, False))
+        if include_rev:
+            rev = d.get("latest_rev_display") or ""
+            if rev == "\u2014":
+                rev = ""
+            cells_meta.append((rev, False, True))
+        cells_meta.append((d.get("client_doc_no") or "", False, False))
+        cells_meta.append((d.get("contractor_doc_no") or "", False, False))
+        cells_meta.append((d.get("client_doc_class") or "", False, True))
+        cells_meta.append((d.get("doc_title") or "", False, False))
+        if emission_date_header:
+            raw_em = d.get(emission_date_key)
+            cells_meta.append((format_display_date(raw_em) if raw_em else "", False, True))
+        raw_plan = d.get(date_key)
+        plan_text = format_display_date(raw_plan) if raw_plan else ""
+        cells_meta.append((plan_text, _is_export_date_overdue(raw_plan) and bool(plan_text), True))
+
+        for value, overdue, center in cells_meta:
+            cell = ws.cell(row=row_idx, column=col, value=value)
+            wrap = headers[col - 1] == "Title"
+            _style_xlsx_data_cell(cell, overdue=overdue, center=center, wrap=wrap)
+            col += 1
+
+    _autosize_xlsx_columns(ws, headers)
+
+    safe_job = job.replace(" ", "_")
+    # ``filename`` may be a ready name or a template with ``{job}``.
+    out_name = filename.format(job=safe_job) if "{job}" in filename else filename
+    return _xlsx_response(wb, out_name)
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def export_emissione(request, job):
+    """Export documents eligible for emission as Excel or PDF."""
+    try:
+        testata = get_commessa(job)
+        documenti = list_documenti(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    docs = [d for d in documenti if d.get("latest_int_status") not in _EMISSIONE_EXCLUDE_STATUSES]
+    docs = _sort_docs_by_date(docs, "latest_dis_plan_date")
+    fmt = _export_format(request, default="xlsx")
+    safe_job = job.replace(" ", "_")
+    today = _date.today()
+    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    base_name = f"{safe_job}_to_be_issued_{date_part}"
+    if fmt == "pdf":
+        pdf_bytes = genera_planned_docs_pdf(
+            serialize_testata(testata),
+            docs,
+            columns=_EMISSIONE_PDF_COLUMNS,
+            include_status=False,
+            omit_empty_columns=True,
+        )
+        return _pdf_response(pdf_bytes, f"{base_name}.pdf")
+    return _export_planned_docs_xlsx(
+        job,
+        docs,
+        sheet_title="Emissione",
+        date_header="Planned date",
+        date_key="latest_dis_plan_date",
+        filename=f"{base_name}.xlsx",
+        include_rev=True,
+    )
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def export_ricezione(request, job):
+    """Export documents awaiting reception as Excel or PDF."""
+    try:
+        testata = get_commessa(job)
+        documenti = list_documenti(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    docs = [d for d in documenti if d.get("latest_int_status") == "inviato_al_cliente"]
+    docs = _sort_docs_by_date(docs, "latest_rec_plan_date")
+    fmt = _export_format(request, default="xlsx")
+    safe_job = job.replace(" ", "_")
+    today = _date.today()
+    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    base_name = f"{safe_job}_to_be_received_{date_part}"
+    if fmt == "pdf":
+        pdf_bytes = genera_planned_docs_pdf(
+            serialize_testata(testata),
+            docs,
+            columns=_RICEZIONE_PDF_COLUMNS,
+            include_status=False,
+            omit_empty_columns=True,
+        )
+        return _pdf_response(pdf_bytes, f"{base_name}.pdf")
+    return _export_planned_docs_xlsx(
+        job,
+        docs,
+        sheet_title="Ricezione",
+        date_header="Planned return date",
+        date_key="latest_rec_plan_date",
+        filename=f"{base_name}.xlsx",
+        include_rev=True,
+        emission_date_header="Emission date",
+        emission_date_key="latest_dis_act_date",
+    )
+
+
+# ── Export: Situazione documenti ─────────────────────────────────────────────
+
+
+def _export_situazione_xlsx(job, payload, *, vista):
+    """Flat Excel for situazione with Planning/Actual grouped date headers."""
+    from .date_fmt import format_display_date
+
+    docs = payload.get("documenti") or []
+    rev_map = payload.get("revisioni_by_doc") or {}
+    rev_let_flag = bool(payload.get("rev_let_flag"))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Situazione"
+
+    # Leaf headers (row 2 for date groups) — used for sizing/rules.
+    leaf_headers = [
+        "Item",
+        "B&R Doc",
+        "Client Doc N°",
+        "Contractor Doc N°",
+        "Client Doc Class",
+        "Title",
+        "Department",
+        "Penalty",
+        "Payment",
+        "Rev.",
+        "Submission date",
+        "Receipt date",
+        "Dispatch",
+        "Received",
+        "Internal status",
+        "Client response",
+    ]
+    plan_start, plan_end = 11, 12
+    act_start, act_end = 13, 14
+
+    # Row 1–2 headers: fixed cols span both rows; Planning/Actual group dates.
+    for col_idx, label in enumerate(leaf_headers, start=1):
+        if plan_start <= col_idx <= plan_end or act_start <= col_idx <= act_end:
+            continue
+        ws.merge_cells(start_row=1, start_column=col_idx, end_row=2, end_column=col_idx)
+        cell = ws.cell(row=1, column=col_idx, value=label)
+        _style_xlsx_header_cell(cell)
+        _style_xlsx_header_cell(ws.cell(row=2, column=col_idx))
+
+    ws.merge_cells(start_row=1, start_column=plan_start, end_row=1, end_column=plan_end)
+    ws.merge_cells(start_row=1, start_column=act_start, end_row=1, end_column=act_end)
+    plan_cell = ws.cell(row=1, column=plan_start, value="Planning")
+    act_cell = ws.cell(row=1, column=act_start, value="Actual")
+    _style_xlsx_header_cell(plan_cell)
+    _style_xlsx_header_cell(act_cell)
+    _style_xlsx_header_cell(ws.cell(row=1, column=plan_end))
+    _style_xlsx_header_cell(ws.cell(row=1, column=act_end))
+
+    for col_idx in range(plan_start, act_end + 1):
+        cell = ws.cell(row=2, column=col_idx, value=leaf_headers[col_idx - 1])
+        _style_xlsx_header_cell(cell)
+
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 20
+
+    # Columns that use centered alignment (others left-aligned).
+    _CENTER_COLS = {1, 5, 8, 9, 10, 11, 12, 13, 14}
+    _TITLE_COL = leaf_headers.index("Title") + 1
+
+    def _rev_label(rev):
+        if not rev:
+            return ""
+        if rev_let_flag:
+            return rev.get("rev_let") or (
+                str(rev["rev_no"]) if rev.get("rev_no") is not None else ""
+            )
+        return str(rev["rev_no"]) if rev.get("rev_no") is not None else ""
+
+    def _int_status_label(rev):
+        # Match UI getIntStatusMeta: empty → "Da inviare"
+        if not rev:
+            return "Da inviare"
+        code = (rev.get("int_status") or "").strip()
+        if not code:
+            return "Da inviare"
+        return (rev.get("int_status_label") or code).strip()
+
+    row_idx = 3
+    for d in docs:
+        revs = rev_map.get(d["id"]) or rev_map.get(str(d["id"])) or []
+        revs = sorted(revs, key=lambda r: (r.get("rev_no") is None, r.get("rev_no") or 0))
+        if vista == "verticale" and revs:
+            rows = revs
+        elif revs:
+            rows = [revs[-1]]
+        else:
+            rows = [None]
+        for rev in rows:
+            dis_plan = rev.get("dis_plan_date") if rev else None
+            rec_plan = rev.get("rec_plan_date") if rev else None
+            values = [
+                d.get("item_no") or "",
+                d.get("vendor_doc") or "",
+                d.get("client_doc_no") or "",
+                d.get("contractor_doc_no") or "",
+                d.get("client_doc_class") or "",
+                d.get("doc_title") or "",
+                d.get("reparto_acronimo") or d.get("reparto_label") or "",
+                "Yes" if d.get("doc_penalty") else "",
+                "Yes" if d.get("doc_payment") else "",
+                _rev_label(rev),
+                format_display_date(dis_plan) if dis_plan else "",
+                format_display_date(rec_plan) if rec_plan else "",
+                format_display_date(rev.get("dis_act_date"))
+                if rev and rev.get("dis_act_date")
+                else "",
+                format_display_date(rev.get("rec_act_date"))
+                if rev and rev.get("rec_act_date")
+                else "",
+                _int_status_label(rev),
+                (rev.get("ext_status_label") or "") if rev else "",
+            ]
+            for col_idx, value in enumerate(values, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                _style_xlsx_data_cell(
+                    cell,
+                    overdue=False,
+                    center=col_idx in _CENTER_COLS,
+                    wrap=col_idx == _TITLE_COL,
+                )
+            row_idx += 1
+
+    _autosize_xlsx_columns(ws, leaf_headers, data_start_row=3)
+    ws.freeze_panes = "A3"
+
+    safe_job = job.replace(" ", "_")
+    return _xlsx_response(wb, f"situazione_documenti_{vista}_{safe_job}.xlsx")
+
+
+@login_required
+@require_http_methods(["GET"])
+def export_situazione(request, job):
+    """Export situazione documenti as PDF (with header) or Excel (no header)."""
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    vista = request.GET.get("vista", "orizzontale")
+    if vista not in ("orizzontale", "verticale"):
+        vista = "orizzontale"
+
+    payload = list_situazione(job)
+    fmt = _export_format(request, default="pdf")
+    if fmt == "xlsx":
+        return _export_situazione_xlsx(job, payload, vista=vista)
+
+    pdf_bytes = genera_situazione_documenti_pdf(
+        serialize_testata(testata),
+        documenti=payload.get("documenti") or [],
+        revisioni_by_doc=payload.get("revisioni_by_doc") or {},
+        rev_let_flag=bool(payload.get("rev_let_flag")),
+        vista=vista,
+    )
+    today = _date.today()
+    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    safe_job = job.replace(" ", "_")
+    filename = f"{safe_job}_document_status_{date_part}.pdf"
+    return _pdf_response(pdf_bytes, filename)
 
 
 # ── Import: Document list from Excel ─────────────────────────────────────────
@@ -1168,13 +1473,13 @@ _DOCUMENTI_IMPORT_HEADERS = [
     "Client Doc N°",
     "Contractor Doc N°",
     "Client Doc Class",
-    "Titolo documento",
-    "Reparto",
-    "Penale",
-    "Pagamento",
-    "Rev. Generale",
-    "Data invio prevista (Rev. 0)",
-    "Note",
+    "Document title",
+    "Department",
+    "Penalty",
+    "Payment",
+    "General rev.",
+    "Planned send date (Rev. 0)",
+    "Notes",
 ]
 
 # Column aliases accepted in the uploaded file (case-insensitive, stripped)
@@ -1197,24 +1502,33 @@ _IMPORT_COL_MAP = {
     "client_doc_class": "client_doc_class",
     "titolo": "doc_title",
     "titolo documento": "doc_title",
+    "document title": "doc_title",
     "doc title": "doc_title",
     "doc_title": "doc_title",
     "reparto": "reparto_name",
+    "department": "reparto_name",
     "penale": "doc_penalty",
+    "penalty": "doc_penalty",
     "doc penalty": "doc_penalty",
     "doc_penalty": "doc_penalty",
     "pagamento": "doc_payment",
+    "payment": "doc_payment",
     "doc payment": "doc_payment",
     "doc_payment": "doc_payment",
     "rev generale": "rev_gen",
     "rev. generale": "rev_gen",
+    "general rev.": "rev_gen",
+    "general rev": "rev_gen",
     "rev_gen": "rev_gen",
     "data invio prevista (rev. 0)": "dis_plan_date_rev0",
     "data invio prevista": "dis_plan_date_rev0",
     "data prima emissione": "dis_plan_date_rev0",
+    "planned send date (rev. 0)": "dis_plan_date_rev0",
+    "planned send date": "dis_plan_date_rev0",
     "dis_plan_date": "dis_plan_date_rev0",
     "dis_plan_date_rev0": "dis_plan_date_rev0",
     "note": "remarks",
+    "notes": "remarks",
     "remarks": "remarks",
 }
 
@@ -1405,24 +1719,24 @@ def import_documenti_template(request):
         3: 22,  # Client Doc N°
         4: 22,  # Contractor Doc N°
         5: 22,  # Client Doc Class
-        6: 45,  # Titolo documento
-        7: 18,  # Reparto
-        8: 10,  # Penale
-        9: 12,  # Pagamento
-        10: 14,  # Rev. Generale
-        11: 28,  # Data invio prevista (Rev. 0)
-        12: 35,  # Note
+        6: 45,  # Document title
+        7: 18,  # Department
+        8: 10,  # Penalty
+        9: 12,  # Payment
+        10: 14,  # General rev.
+        11: 28,  # Planned send date (Rev. 0)
+        12: 35,  # Notes
     }
     for col_idx, width in _col_widths.items():
         ws.column_dimensions[get_column_letter(col_idx)].width = width
 
     # Apply date format to the date column
-    date_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Data invio prevista (Rev. 0)") + 1
+    date_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Planned send date (Rev. 0)") + 1
     for row in range(2, 102):  # pre-format 100 data rows
-        ws.cell(row=row, column=date_col_idx).number_format = "DD/MM/YYYY"
+        ws.cell(row=row, column=date_col_idx).number_format = "D MMM YYYY"
 
-    # Reparto: dropdown with system departments at download time
-    reparto_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Reparto") + 1
+    # Department: dropdown with system departments at download time
+    reparto_col_idx = _DOCUMENTI_IMPORT_HEADERS.index("Department") + 1
     reparto_col_letter = get_column_letter(reparto_col_idx)
     reparti = list_reparti()
     if reparti:
@@ -1436,10 +1750,10 @@ def import_documenti_template(request):
             formula1=f"='_Reparti'!$A$1:$A${last_reparto_row}",
             allow_blank=True,
         )
-        dv.error = "Seleziona un reparto dalla lista."
-        dv.errorTitle = "Reparto non valido"
-        dv.prompt = "Scegli un reparto presente nel sistema."
-        dv.promptTitle = "Reparto"
+        dv.error = "Select a department from the list."
+        dv.errorTitle = "Invalid department"
+        dv.prompt = "Choose a department present in the system."
+        dv.promptTitle = "Department"
         ws.add_data_validation(dv)
         dv.add(f"{reparto_col_letter}2:{reparto_col_letter}101")
 

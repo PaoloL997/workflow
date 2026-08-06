@@ -192,12 +192,6 @@
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    const p = iso.split('-');
-    return p[2] + '/' + p[1] + '/' + p[0];
-  }
-
   function updateBtn(count) {
     btnText.textContent = count > 0
       ? 'Sblocca revisione (' + count + ')'
@@ -246,11 +240,11 @@
 
     body.innerHTML =
       '<table class="sbloc-table"><thead><tr>' +
-      '<th class="sbloc-col-doc">Documento</th>' +
-      '<th class="sbloc-col-rev">Revisione</th>' +
-      '<th class="sbloc-col-status">Risposta cliente</th>' +
-      '<th class="sbloc-col-rev">Rientro</th>' +
-      '<th class="sbloc-col-actions">Azioni</th>' +
+      '<th class="sbloc-col-doc">Document</th>' +
+      '<th class="sbloc-col-rev">Revision</th>' +
+      '<th class="sbloc-col-status">Client response</th>' +
+      '<th class="sbloc-col-rev">Return</th>' +
+      '<th class="sbloc-col-actions">Actions</th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table>';
 
     body.querySelectorAll('[data-sbloc]').forEach(function (el) {

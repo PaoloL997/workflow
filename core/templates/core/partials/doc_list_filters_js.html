@@ -1,0 +1,466 @@
+{% comment %}
+  Shared column filter/sort helpers for flat document lists.
+  Call DocListFilters.init({
+    filterLabels, getCellValue, getDocs, onApply, summaryId,
+    dateFilterKeys?: string[],
+    getDateValue?: (doc, key) => isoString,
+    getSortValue?: (doc, key) => any,
+  })
+  Requires date_range_filter_ui.html to be included first.
+{% endcomment %}
+{% include "core/partials/date_range_filter_ui.html" %}
+<script>
+(function () {
+  const FILTER_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>';
+
+  let _cfg = null;
+  let _sortKey = null;
+  let _sortDir = 1;
+  let _columnFilters = {};
+  let _openFilterKey = null;
+  let _dateFilterKeys = new Set();
+  let _dateRangeCtrl = null;
+  let _listenersBound = false;
+
+  function drf() {
+    return window.DateRangeFilterUI || null;
+  }
+
+  function escHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function normalizeForFilter(value) {
+    return String(value == null ? '' : value).toLowerCase().trim();
+  }
+
+  function filterDisplayValue(value) {
+    const text = String(value == null ? '' : value).trim();
+    return text || '\u2014';
+  }
+
+  function isDateFilterKey(key) {
+    return _dateFilterKeys.has(key);
+  }
+
+  function getFilterState(key) {
+    const raw = _columnFilters[key];
+    if (raw == null || raw === '') return null;
+    if (raw.type === 'dateRange') {
+      return { type: 'dateRange', from: raw.from || null, to: raw.to || null };
+    }
+    if (typeof raw === 'string') {
+      return { type: 'excel', selected: null, contains: raw };
+    }
+    return {
+      type: 'excel',
+      selected: raw.selected == null ? null : [...raw.selected],
+      contains: raw.contains || '',
+    };
+  }
+
+  function isColumnFilterActive(key) {
+    const state = getFilterState(key);
+    if (!state) return false;
+    if (state.type === 'dateRange') {
+      const ui = drf();
+      return ui ? ui.isActive(state) : !!(state.from || state.to);
+    }
+    if (state.contains) return true;
+    if (state.selected === null) return false;
+    if (!state.selected.length) return true;
+    const allValues = collectUniqueValuesForKey(key);
+    return state.selected.length < allValues.length;
+  }
+
+  function collectUniqueValuesForKey(key) {
+    const values = new Set();
+    (_cfg.getDocs() || []).forEach(function (d) {
+      values.add(filterDisplayValue(_cfg.getCellValue(d, key)));
+    });
+    return Array.from(values).sort(function (a, b) {
+      return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }
+
+  function getDateIso(doc, key) {
+    if (typeof _cfg.getDateValue === 'function') {
+      const v = _cfg.getDateValue(doc, key);
+      return v ? String(v).slice(0, 10) : '';
+    }
+    if (typeof _cfg.getSortValue === 'function') {
+      const v = _cfg.getSortValue(doc, key);
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    }
+    return '';
+  }
+
+  function cellMatchesFilter(doc, key) {
+    const state = getFilterState(key);
+    if (!state) return true;
+
+    if (state.type === 'dateRange') {
+      const ui = drf();
+      if (!ui) return true;
+      return ui.matchesIso(getDateIso(doc, key), state.from, state.to);
+    }
+
+    const cellVal = _cfg.getCellValue(doc, key);
+    const display = filterDisplayValue(cellVal);
+    if (state.contains && !normalizeForFilter(display).includes(normalizeForFilter(state.contains))) {
+      return false;
+    }
+    if (state.selected === null) return true;
+    if (!state.selected.length) return false;
+    return state.selected.includes(display);
+  }
+
+  function activeFilterKeys() {
+    return Object.keys(_columnFilters).filter(function (k) { return isColumnFilterActive(k); });
+  }
+
+  function filterBtnHtml(key) {
+    const active = isColumnFilterActive(key);
+    return '<button type="button" class="col-filter-btn' + (active ? ' active' : '') + '" '
+      + 'onclick="DocListFilters.openColumnFilter(\'' + escHtml(key) + '\', event)" '
+      + 'aria-label="Filtra ' + escHtml((_cfg.filterLabels[key] || key)) + '" '
+      + 'aria-pressed="' + active + '">' + FILTER_ICON + '</button>';
+  }
+
+  function updateFilterSummary(shown, total) {
+    const el = document.getElementById(_cfg.summaryId);
+    if (!el) return;
+    if (!activeFilterKeys().length) {
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    el.style.display = 'flex';
+    el.innerHTML =
+      '<span class="list-filter-count"><strong>' + shown + '</strong> di ' + total + ' righe</span>'
+      + '<button type="button" class="list-filter-reset" onclick="DocListFilters.clearColumnFilters()">Azzera filtri</button>';
+  }
+
+  function compareSortValues(a, b) {
+    if (a == null) a = '';
+    if (b == null) b = '';
+    return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  function sortValue(doc, key) {
+    if (typeof _cfg.getSortValue === 'function') return _cfg.getSortValue(doc, key);
+    return _cfg.getCellValue(doc, key);
+  }
+
+  function docMatchesFilters(doc) {
+    const keys = activeFilterKeys();
+    for (let i = 0; i < keys.length; i++) {
+      if (!cellMatchesFilter(doc, keys[i])) return false;
+    }
+    return true;
+  }
+
+  function safeOnApply() {
+    if (!_cfg || typeof _cfg.onApply !== 'function') return;
+    try {
+      _cfg.onApply();
+    } catch (err) {
+      console.error('DocListFilters onApply failed', err);
+    }
+  }
+
+  function buildExcelFilterPopoverBody(key) {
+    const body = document.getElementById('col-filter-popover-body');
+    const pop = document.getElementById('col-filter-popover');
+    if (!body || !pop) return;
+    const state = getFilterState(key) || { type: 'excel', selected: null, contains: '' };
+    const values = collectUniqueValuesForKey(key);
+    const selectedSet = state.selected === null
+      ? new Set(values)
+      : new Set(state.selected || []);
+    const contains = state.contains || '';
+
+    let valuesHtml = '';
+    values.forEach(function (value) {
+      const checked = selectedSet.has(value) ? ' checked' : '';
+      valuesHtml += '<label class="col-filter-value-row" data-value="' + escHtml(value) + '">'
+        + '<input type="checkbox" class="col-filter-value-cb" value="' + escHtml(value) + '"' + checked + '>'
+        + '<span>' + escHtml(value) + '</span></label>';
+    });
+
+    pop.classList.add('excel-mode');
+    pop.classList.remove('date-range-mode');
+    body.innerHTML =
+      '<input type="text" class="col-filter-search" id="col-filter-search" placeholder="Cerca…" autocomplete="off">'
+      + '<div class="col-filter-values-wrap">'
+      + '<label class="col-filter-value-row col-filter-select-all">'
+      + '<input type="checkbox" id="col-filter-select-all">'
+      + '<span>(Seleziona tutto)</span></label>'
+      + '<div class="col-filter-values" id="col-filter-values">' + valuesHtml + '</div>'
+      + '</div>'
+      + '<div class="col-filter-contains-wrap">'
+      + '<span class="col-filter-contains-label">Contiene</span>'
+      + '<input type="text" class="col-filter-popover-input" id="col-filter-contains" '
+      + 'value="' + escHtml(contains) + '" placeholder="Contiene…" autocomplete="off">'
+      + '</div>';
+
+    const search = document.getElementById('col-filter-search');
+    const selectAll = document.getElementById('col-filter-select-all');
+    const valuesEl = document.getElementById('col-filter-values');
+    if (!search || !selectAll || !valuesEl) return;
+
+    function allCheckboxes() {
+      return Array.from(valuesEl.querySelectorAll('input.col-filter-value-cb'));
+    }
+    function visibleRows() {
+      return Array.from(valuesEl.querySelectorAll('.col-filter-value-row[data-value]:not(.hidden)'));
+    }
+    function syncSelectAll() {
+      const boxes = allCheckboxes();
+      const checked = boxes.filter(function (cb) { return cb.checked; });
+      selectAll.checked = boxes.length > 0 && checked.length === boxes.length;
+      selectAll.indeterminate = checked.length > 0 && checked.length < boxes.length;
+    }
+    selectAll.addEventListener('change', function () {
+      visibleRows().forEach(function (row) {
+        const cb = row.querySelector('input.col-filter-value-cb');
+        if (cb) cb.checked = selectAll.checked;
+      });
+      syncSelectAll();
+    });
+    valuesEl.addEventListener('change', function (e) {
+      if (e.target.classList.contains('col-filter-value-cb')) syncSelectAll();
+    });
+    search.addEventListener('input', function () {
+      const q = normalizeForFilter(search.value);
+      valuesEl.querySelectorAll('.col-filter-value-row[data-value]').forEach(function (row) {
+        const label = normalizeForFilter(row.getAttribute('data-value') || '');
+        row.classList.toggle('hidden', Boolean(q) && !label.includes(q));
+      });
+      syncSelectAll();
+    });
+    syncSelectAll();
+  }
+
+  function buildDateRangeFilterPopoverBody(key) {
+    const body = document.getElementById('col-filter-popover-body');
+    const pop = document.getElementById('col-filter-popover');
+    const ui = drf();
+    if (!body || !pop || !ui) return;
+    const state = getFilterState(key);
+    pop.classList.remove('excel-mode');
+    pop.classList.add('date-range-mode');
+    body.innerHTML = ui.buildBodyHtml();
+    _dateRangeCtrl = ui.mount(body, {
+      from: state && state.from ? state.from : null,
+      to: state && state.to ? state.to : null,
+    });
+  }
+
+  function buildFilterPopoverBody(key) {
+    _dateRangeCtrl = null;
+    if (isDateFilterKey(key)) buildDateRangeFilterPopoverBody(key);
+    else buildExcelFilterPopoverBody(key);
+  }
+
+  function closeColumnFilterPopover() {
+    const pop = document.getElementById('col-filter-popover');
+    if (pop) pop.classList.remove('open', 'excel-mode', 'date-range-mode');
+    _openFilterKey = null;
+    _dateRangeCtrl = null;
+  }
+
+  function positionPopover(anchorEl) {
+    const pop = document.getElementById('col-filter-popover');
+    if (!pop || !anchorEl || !anchorEl.getBoundingClientRect) return;
+    const rect = anchorEl.getBoundingClientRect();
+    const popW = pop.classList.contains('date-range-mode')
+      ? 292
+      : (pop.classList.contains('excel-mode') ? 280 : 220);
+    const popH = pop.classList.contains('date-range-mode')
+      ? 360
+      : (pop.classList.contains('excel-mode') ? 360 : 120);
+    let left = rect.left;
+    left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+    pop.style.left = left + 'px';
+    pop.style.width = popW + 'px';
+    const spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow >= popH) {
+      pop.style.top = (rect.bottom + 6) + 'px';
+      pop.style.bottom = '';
+    } else {
+      pop.style.top = '';
+      pop.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+    }
+  }
+
+  window.DocListFilters = {
+    init: function (cfg) {
+      _cfg = cfg;
+      _sortKey = null;
+      _sortDir = 1;
+      _columnFilters = {};
+      _openFilterKey = null;
+      _dateFilterKeys = new Set(cfg.dateFilterKeys || []);
+      _dateRangeCtrl = null;
+
+      if (_listenersBound) return;
+      _listenersBound = true;
+
+      const applyBtn = document.getElementById('col-filter-apply-btn');
+      const cancelBtn = document.getElementById('col-filter-cancel-btn');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          DocListFilters.applyCurrentColumnFilter();
+        });
+      }
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          DocListFilters.clearCurrentColumnFilter();
+        });
+      }
+      // Use click (not mousedown) so Applica is not raced with outside-close.
+      // composedPath survives calendar re-renders that detach e.target mid-click.
+      document.addEventListener('click', function (e) {
+        const pop = document.getElementById('col-filter-popover');
+        if (!pop || !pop.classList.contains('open')) return;
+        const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+        if (path.indexOf(pop) !== -1) return;
+        if (pop.contains(e.target)) return;
+        if (e.target.closest && e.target.closest('.col-filter-btn')) return;
+        closeColumnFilterPopover();
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeColumnFilterPopover();
+        const pop = document.getElementById('col-filter-popover');
+        if (e.key === 'Enter' && _openFilterKey && pop && pop.classList.contains('open')) {
+          const tag = document.activeElement && document.activeElement.tagName;
+          const id = document.activeElement && document.activeElement.id;
+          if (tag === 'INPUT' && (id === 'col-filter-search' || id === 'col-filter-contains')) {
+            e.preventDefault();
+            DocListFilters.applyCurrentColumnFilter();
+          }
+        }
+      });
+    },
+
+    getSortKey: function () { return _sortKey; },
+    getSortDir: function () { return _sortDir; },
+
+    thHeader: function (label, key, sortable, opts) {
+      opts = opts || {};
+      const filterActive = isColumnFilterActive(key);
+      const sortActive = _sortKey === key;
+      const classes = (opts.className || '')
+        + (sortActive ? ' sort-active' : '')
+        + (filterActive ? ' col-filter-active' : '');
+      const labelHtml = sortable
+        ? '<button type="button" class="sort-label" onclick="DocListFilters.onSortClick(\'' + escHtml(key) + '\')">' + label + '</button>'
+        : '<span class="sort-label">' + label + '</span>';
+      const sortAttr = sortable ? ' data-sort-key="' + escHtml(key) + '"' : '';
+      const filterAttr = _cfg.filterLabels[key] ? ' data-filter-key="' + escHtml(key) + '"' : '';
+      const filterBtn = _cfg.filterLabels[key] ? filterBtnHtml(key) : '';
+      return '<th' + sortAttr + filterAttr + ' class="' + classes.trim() + '"' + (opts.extraAttrs || '') + '>'
+        + '<span class="th-inner">' + labelHtml + filterBtn + '</span></th>';
+    },
+
+    onSortClick: function (key) {
+      if (_sortKey === key) _sortDir *= -1;
+      else { _sortKey = key; _sortDir = 1; }
+      safeOnApply();
+    },
+
+    openColumnFilter: function (key, event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      const pop = document.getElementById('col-filter-popover');
+      if (!pop) return;
+      if (_openFilterKey === key && pop.classList.contains('open')) {
+        closeColumnFilterPopover();
+        return;
+      }
+      _openFilterKey = key;
+      const title = document.getElementById('col-filter-popover-title');
+      if (title) title.textContent = _cfg.filterLabels[key] || key;
+      buildFilterPopoverBody(key);
+      pop.classList.add('open');
+      const anchor = event && (event.currentTarget || event.target);
+      positionPopover(anchor);
+      const focusEl = document.getElementById('col-filter-search');
+      if (focusEl) focusEl.focus();
+    },
+
+    applyCurrentColumnFilter: function () {
+      if (!_openFilterKey) return;
+      const key = _openFilterKey;
+
+      if (isDateFilterKey(key)) {
+        const range = _dateRangeCtrl ? _dateRangeCtrl.getRange() : { from: null, to: null };
+        const ui = drf();
+        const active = ui ? ui.isActive(range) : !!(range.from || range.to);
+        if (active) {
+          _columnFilters[key] = { type: 'dateRange', from: range.from, to: range.to };
+        } else {
+          delete _columnFilters[key];
+        }
+      } else {
+        const allValues = collectUniqueValuesForKey(key);
+        const boxes = Array.from(document.querySelectorAll('#col-filter-values input.col-filter-value-cb'));
+        const checked = boxes.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+        const containsEl = document.getElementById('col-filter-contains');
+        const contains = ((containsEl && containsEl.value) || '').trim();
+        let selected = null;
+        if (checked.length < allValues.length) selected = checked;
+        if (selected !== null || contains) {
+          _columnFilters[key] = { selected: selected, contains: contains };
+        } else {
+          delete _columnFilters[key];
+        }
+      }
+
+      closeColumnFilterPopover();
+      safeOnApply();
+    },
+
+    clearCurrentColumnFilter: function () {
+      if (_openFilterKey) delete _columnFilters[_openFilterKey];
+      closeColumnFilterPopover();
+      safeOnApply();
+    },
+
+    clearColumnFilters: function () {
+      _columnFilters = {};
+      closeColumnFilterPopover();
+      safeOnApply();
+    },
+
+    applyPipeline: function (docs) {
+      const filtered = (docs || []).filter(docMatchesFilters);
+      let rows = filtered;
+      if (_sortKey) {
+        rows = [...filtered].sort(function (a, b) {
+          const cmp = compareSortValues(
+            sortValue(a, _sortKey),
+            sortValue(b, _sortKey)
+          );
+          return cmp * _sortDir;
+        });
+      } else if (typeof _cfg.defaultSort === 'function') {
+        rows = _cfg.defaultSort([...filtered]);
+      }
+      updateFilterSummary(rows.length, (docs || []).length);
+      return rows;
+    },
+  };
+})();
+</script>

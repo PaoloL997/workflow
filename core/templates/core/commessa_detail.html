@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load static %}
+{% load static date_extras %}
 
 {% block title %}Commessa{% endblock %}
 
@@ -1279,7 +1279,7 @@
       {% endif %}
       <div class="commessa-header-actions">
         {% if testata.actual_delivery_date %}
-        <span class="commessa-closed-label">Chiusa il {{ testata.actual_delivery_date|date:"j/n/Y" }}</span>
+        <span class="commessa-closed-label">Chiusa il {{ testata.actual_delivery_date|date_letters }}</span>
         {% else %}
         <button class="del-commessa-btn close-commessa-btn" type="button" id="close-commessa-btn" onclick="closeCommessa()" aria-label="Chiudi commessa">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
@@ -1607,7 +1607,7 @@
 
 </div><!-- /page -->
 
-<!-- ── Elimina commessa: modal ── -->
+<!-- ── Elimina / richiesta eliminazione commessa: modal ── -->
 <div class="del-modal-overlay" id="del-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="del-modal-title">
   <div class="del-modal">
     <div class="del-modal-icon" aria-hidden="true">
@@ -1615,13 +1615,20 @@
     </div>
     <div class="del-modal-title" id="del-modal-title">Elimina commessa {{ testata.job }}</div>
     <div class="del-modal-body">
+      {% if user_is_admin %}
       Questa operazione è <strong>irreversibile</strong>. Verranno eliminati tutti i documenti,
       le revisioni e i dati collegati alla commessa <strong>{{ testata.job }}</strong>.
+      {% else %}
+      Verrà inviata una <strong>richiesta di eliminazione</strong> per la commessa
+      <strong>{{ testata.job }}</strong>. La commessa non verrà eliminata automaticamente.
+      {% endif %}
     </div>
     <div class="del-modal-error" id="del-modal-error"></div>
     <div class="del-modal-actions">
       <button class="del-modal-cancel" type="button" onclick="closeDeleteModal()">Annulla</button>
-      <button class="del-modal-confirm" type="button" id="del-modal-confirm-btn" onclick="deleteCommessa()">Elimina</button>
+      <button class="del-modal-confirm" type="button" id="del-modal-confirm-btn" onclick="deleteCommessa()">
+        {% if user_is_admin %}Elimina{% else %}Invia richiesta{% endif %}
+      </button>
     </div>
   </div>
 </div>
@@ -1732,10 +1739,12 @@
   statusSvgEl.setAttribute('fill', statusInfo.color);
   statusSvgEl.textContent = statusInfo.label;
 
-  /* --- Date labels (day month short + year) --- */
-  var fmt = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-  startLabelEl.textContent = fmt.format(startDate);
-  endLabelEl.textContent   = fmt.format(endDate);
+  /* --- Date labels (e.g. 10 jan 2026) --- */
+  function toIsoLocal(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  startLabelEl.textContent = formatDate(toIsoLocal(startDate));
+  endLabelEl.textContent   = formatDate(toIsoLocal(endDate));
 
   /* --- Easing --- */
   function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
@@ -1763,12 +1772,17 @@
 
   var CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
   var JOB  = '{{ testata.job }}';
+  var IS_ADMIN = !!window.USER_IS_ADMIN;
+  var CONFIRM_LABEL = IS_ADMIN ? 'Elimina' : 'Invia richiesta';
+  var PENDING_LABEL = IS_ADMIN ? 'Eliminazione…' : 'Invio…';
 
   function openDeleteModal() {
     if (!requireWrite()) return;
     document.getElementById('del-modal-error').style.display = 'none';
     document.getElementById('del-modal-error').textContent   = '';
-    document.getElementById('del-modal-confirm-btn').disabled = false;
+    var btn = document.getElementById('del-modal-confirm-btn');
+    btn.disabled = false;
+    btn.textContent = CONFIRM_LABEL;
     document.getElementById('del-modal-overlay').classList.add('open');
   }
 
@@ -1777,7 +1791,7 @@
     var btn = document.getElementById('del-modal-confirm-btn');
     var err = document.getElementById('del-modal-error');
     btn.disabled = true;
-    btn.textContent = 'Eliminazione…';
+    btn.textContent = PENDING_LABEL;
     err.style.display = 'none';
 
     try {
@@ -1786,7 +1800,14 @@
         headers: { 'X-CSRFToken': CSRF },
       });
       if (res.ok) {
-        window.location.href = '/';
+        if (IS_ADMIN) {
+          window.location.href = '/';
+          return;
+        }
+        closeDeleteModal();
+        alert('Richiesta di eliminazione inviata.');
+        btn.disabled    = false;
+        btn.textContent = CONFIRM_LABEL;
       } else {
         var data = {};
         try { data = await res.json(); } catch (_) {}
@@ -1797,13 +1818,13 @@
         err.textContent   = data.error || ('Errore ' + res.status);
         err.style.display = 'block';
         btn.disabled      = false;
-        btn.textContent   = 'Elimina';
+        btn.textContent   = CONFIRM_LABEL;
       }
     } catch (e) {
       err.textContent   = 'Errore di rete. Riprova.';
       err.style.display = 'block';
       btn.disabled      = false;
-      btn.textContent   = 'Elimina';
+      btn.textContent   = CONFIRM_LABEL;
     }
   }
 

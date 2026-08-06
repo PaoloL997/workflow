@@ -1243,18 +1243,18 @@
       <strong>Colonne supportate</strong>
       Prima riga come intestazione, nomi non sensibili a maiuscole.
       <table class="col-table">
-        <thead><tr><th>Colonna</th><th>Campo</th></tr></thead>
+        <thead><tr><th>Column</th><th>Field</th></tr></thead>
         <tbody>
-          <tr><td>Item</td><td>Numero item</td></tr>
-          <tr><td>B&amp;R Doc</td><td>Numero doc. B&amp;R</td></tr>
-          <tr><td>Client Doc N°</td><td>Numero doc. cliente</td></tr>
-          <tr><td>Contractor Doc N°</td><td>Numero doc. contractor</td></tr>
-          <tr><td>Client Doc Class</td><td>Classe doc. cliente</td></tr>
-          <tr><td>Titolo documento</td><td>Titolo</td></tr>
-          <tr><td>Reparto</td><td>Seleziona dalla lista a tendina nel template</td></tr>
-          <tr><td>Penale / Pagamento / Rev. Generale</td><td>Sì / 1 per attivo</td></tr>
-          <tr><td>Data invio prevista (Rev. 0)</td><td>Data prima emissione (YYYY-MM-DD o GG/MM/AAAA, opzionale)</td></tr>
-          <tr><td>Note</td><td>Note libere</td></tr>
+          <tr><td>Item</td><td>Item number</td></tr>
+          <tr><td>B&amp;R Doc</td><td>B&amp;R document number</td></tr>
+          <tr><td>Client Doc N°</td><td>Client document number</td></tr>
+          <tr><td>Contractor Doc N°</td><td>Contractor document number</td></tr>
+          <tr><td>Client Doc Class</td><td>Client document class</td></tr>
+          <tr><td>Document title</td><td>Title</td></tr>
+          <tr><td>Department</td><td>Select from the dropdown list in the template</td></tr>
+          <tr><td>Penalty / Payment / General rev.</td><td>Yes / 1 when active</td></tr>
+          <tr><td>Planned send date (Rev. 0)</td><td>First planned send date (YYYY-MM-DD or DD/MM/YYYY, optional)</td></tr>
+          <tr><td>Notes</td><td>Free-text notes</td></tr>
         </tbody>
       </table>
     </div>
@@ -1923,7 +1923,7 @@
         preview.className = 'modello-cartella-preview';
         var table = document.createElement('table');
         table.className = 'modello-preview-table';
-        table.innerHTML = '<thead><tr><th>Titolo</th><th>Item</th><th>Codice</th><th>Reparto</th></tr></thead>';
+        table.innerHTML = '<thead><tr><th>Title</th><th>Item</th><th>Code</th><th>Department</th></tr></thead>';
         var tbody = document.createElement('tbody');
         c.modelli.forEach(function(m) {
           var tr = document.createElement('tr');

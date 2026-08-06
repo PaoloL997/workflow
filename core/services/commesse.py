@@ -1,12 +1,15 @@
 from datetime import date as date_type
 from datetime import timedelta
 
+from django.conf import settings
+from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Prefetch
 
 from ..models import (
     STATI_INTERNI_CHOICES,
     CartellaModelloDocumento,
+    CommessaPin,
     Documento,
     IndirSped,
     Reparto,
@@ -14,6 +17,8 @@ from ..models import (
     StatoEsterno,
     Testata,
 )
+
+MAX_PINNED_COMMESSE = 8
 
 # ── Serializers ───────────────────────────────────────────────────────────────
 
@@ -31,8 +36,8 @@ def format_revisione_label(rev_no, rev_let, rev_let_flag):
     return str(rev_no) if rev_no is not None else ""
 
 
-def serialize_testata(t):
-    return {
+def serialize_testata(t, pinned=None):
+    data = {
         "id": t.pk,
         "job": t.job,
         "client": t.client,
@@ -48,6 +53,9 @@ def serialize_testata(t):
         "time_ven_doc_rev": t.time_ven_doc_rev,
         "rev_let_flag": t.rev_let_flag,
     }
+    if pinned is not None:
+        data["pinned"] = bool(pinned)
+    return data
 
 
 def serialize_indirizzo(i):
@@ -67,11 +75,60 @@ def serialize_indirizzo(i):
 # ── Testata CRUD ──────────────────────────────────────────────────────────────
 
 
-def list_commesse(q=None):
+def _pinned_jobs_for_user(user):
+    if user is None or not getattr(user, "is_authenticated", False):
+        return []
+    return list(
+        CommessaPin.objects.filter(user=user)
+        .order_by("pinned_at")
+        .values_list("testata_id", flat=True)
+    )
+
+
+def list_commesse(q=None, user=None):
     qs = Testata.objects.all().order_by("-pk")
     if q:
         qs = qs.filter(job__icontains=q) | qs.filter(client__icontains=q)
-    return [serialize_testata(t) for t in qs]
+    pinned_jobs = _pinned_jobs_for_user(user)
+    pinned_set = set(pinned_jobs)
+    items = [serialize_testata(t, pinned=t.job in pinned_set) for t in qs]
+    if pinned_jobs:
+        order = {job: i for i, job in enumerate(pinned_jobs)}
+        items.sort(key=lambda c: (0 if c["pinned"] else 1, order.get(c["job"], 0), -c["id"]))
+    return items
+
+
+def list_home_commesse(user, limit=MAX_PINNED_COMMESSE):
+    pinned_jobs = _pinned_jobs_for_user(user)
+    pinned_testate = {t.job: t for t in Testata.objects.filter(job__in=pinned_jobs)}
+    result = []
+    for job in pinned_jobs[:limit]:
+        t = pinned_testate.get(job)
+        if t is not None:
+            result.append(serialize_testata(t, pinned=True))
+    if len(result) >= limit:
+        return result[:limit]
+    pinned_set = set(pinned_jobs)
+    remaining = limit - len(result)
+    for t in Testata.objects.exclude(job__in=pinned_set).order_by("-pk")[:remaining]:
+        result.append(serialize_testata(t, pinned=False))
+    return result
+
+
+def pin_commessa(user, job):
+    t = Testata.objects.get(job=job)
+    if CommessaPin.objects.filter(user=user, testata=t).exists():
+        return serialize_testata(t, pinned=True)
+    if CommessaPin.objects.filter(user=user).count() >= MAX_PINNED_COMMESSE:
+        raise ValueError(f"Puoi pinnare al massimo {MAX_PINNED_COMMESSE} commesse.")
+    CommessaPin.objects.create(user=user, testata=t)
+    return serialize_testata(t, pinned=True)
+
+
+def unpin_commessa(user, job):
+    t = Testata.objects.get(job=job)
+    CommessaPin.objects.filter(user=user, testata=t).delete()
+    return serialize_testata(t, pinned=False)
 
 
 def get_commessa(job):
@@ -91,6 +148,29 @@ def update_commessa(job, data):
         setattr(t, k, v)
     t.full_clean()
     t.save()
+    return t
+
+
+def request_delete_commessa(job, user):
+    """Invia una mail di richiesta eliminazione; non cancella la commessa."""
+    t = Testata.objects.get(job=job)
+    recipients = list(getattr(settings, "COMMESSA_DELETE_REQUEST_RECIPIENTS", []) or [])
+    if not recipients:
+        raise ValueError("Nessun destinatario configurato per le richieste di eliminazione.")
+
+    requester = getattr(user, "nome_completo", None) or user.get_username()
+    subject = f"Richiesta eliminazione commessa {t.job}"
+    body = f"Utente {requester} ha richiesto l'eliminazione della commessa {t.job}."
+    if t.job_detail:
+        body += f"\nDescrizione: {t.job_detail}"
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=recipients,
+        fail_silently=False,
+    )
     return t
 
 
@@ -447,7 +527,13 @@ def list_stati_interni():
 
 def list_stati_esterni():
     return [
-        {"id": s.pk, "nome": s.nome, "colore": s.colore, "crea_nuova_rev": s.crea_nuova_rev}
+        {
+            "id": s.pk,
+            "nome": s.nome,
+            "lettera": s.lettera,
+            "colore": s.colore,
+            "crea_nuova_rev": s.crea_nuova_rev,
+        }
         for s in StatoEsterno.objects.all()
     ]
 
@@ -455,6 +541,7 @@ def list_stati_esterni():
 def create_stato_esterno(data):
     s = StatoEsterno(
         nome=data.get("nome", "").strip(),
+        lettera=(data.get("lettera") or "").strip().upper()[:2],
         colore=data.get("colore", "").strip(),
     )
     if "crea_nuova_rev" in data:
@@ -468,6 +555,8 @@ def update_stato_esterno(pk, data):
     s = StatoEsterno.objects.get(pk=pk)
     if "nome" in data:
         s.nome = data["nome"].strip()
+    if "lettera" in data:
+        s.lettera = (data.get("lettera") or "").strip().upper()[:2]
     if "colore" in data:
         s.colore = data["colore"].strip()
     if "crea_nuova_rev" in data:
@@ -504,6 +593,7 @@ def serialize_revisione(r):
         "int_status_label": int_status_label,
         "ext_status": r.ext_status_id,
         "ext_status_label": r.ext_status.nome if r.ext_status else "",
+        "ext_status_lettera": r.ext_status.lettera if r.ext_status else "",
         "ext_status_colore": r.ext_status.colore if r.ext_status else "",
         "crea_nuova_rev": r.crea_nuova_rev,
     }

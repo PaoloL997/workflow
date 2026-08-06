@@ -55,6 +55,7 @@ urlpatterns = [
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
     path("api/commesse/<str:job>/", views.commessa_api_detail, name="commessa_api_detail"),
+    path("api/commesse/<str:job>/pin/", views.commessa_pin_api, name="commessa_pin_api"),
     path("api/commesse/<str:job>/chiudi/", views.commessa_close_api, name="commessa_close_api"),
     path(
         "api/commesse/<str:job>/anomalie/",
@@ -93,6 +94,16 @@ urlpatterns = [
         "api/commesse/<str:job>/situazione/export/",
         views.export_situazione,
         name="export_situazione",
+    ),
+    path(
+        "api/commesse/<str:job>/emissione/export/",
+        views.export_emissione,
+        name="export_emissione",
+    ),
+    path(
+        "api/commesse/<str:job>/ricezione/export/",
+        views.export_ricezione,
+        name="export_ricezione",
     ),
     path(
         "api/commesse/<str:job>/import-excel/",

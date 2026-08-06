@@ -406,6 +406,19 @@
   <script>
     window.USER_CAN_WRITE = {{ user_can_write|yesno:"true,false" }};
     window.USER_IS_ADMIN = {{ user_is_admin|yesno:"true,false" }};
+
+    /* Date display: 10 jan 2026 — available before page scripts in content */
+    var MONTHS_SHORT = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const [y, m, d] = String(iso).slice(0, 10).split('-');
+      const mon = MONTHS_SHORT[parseInt(m, 10) - 1];
+      if (!mon || !y || !d) return String(iso);
+      return `${parseInt(d, 10)} ${mon} ${y}`;
+    }
+    function fmtDate(iso) {
+      return formatDate(iso);
+    }
   </script>
   <div id="permission-toast" class="permission-toast" role="alert" aria-live="assertive"></div>
   {% block content %}{% endblock %}
@@ -491,12 +504,6 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
-    }
-
-    function formatDate(iso) {
-      if (!iso) return '—';
-      const [y, m, d] = iso.split('-');
-      return `${d}/${m}/${y}`;
     }
 
     /* ── Spotlight ── */

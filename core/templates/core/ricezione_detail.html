@@ -73,6 +73,18 @@
   }
 
   /* ─────────────────────────────────────────────
+     CONTROLS BAR (Esporta — stessa posizione di emissione)
+  ───────────────────────────────────────────── */
+  .ep-ctrl {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+
+  /* ─────────────────────────────────────────────
      PAGE TOOLBAR (above scrollable list)
   ───────────────────────────────────────────── */
   .page-toolbar {
@@ -145,7 +157,7 @@
   ───────────────────────────────────────────── */
   .ric-table {
     width: 100%;
-    min-width: 1320px;
+    min-width: 1180px;
     border-collapse: collapse;
     font-size: 13px;
     table-layout: fixed; /* column widths are enforced exactly */
@@ -157,12 +169,17 @@
     font-size: 11px; font-weight: 600;
     letter-spacing: 0.06em; text-transform: uppercase;
     color: var(--color-text-secondary); white-space: nowrap;
+    user-select: none;
   }
-  .ric-table th.col-doc    { /* takes all remaining width */ }
+  .ric-table th.col-doc    { width: 140px; }
+  .ric-table th.col-rev    { width: 72px; text-align: center; }
+  .ric-table th.col-title  { /* takes remaining width */ }
   .ric-table th.col-date   { width: 120px; text-align: center; }
-  .ric-table th.col-sel    { width: 220px; }
+  .ric-table th.col-sel    { width: 200px; }
   .ric-table th.col-in     { width: 188px; }
-  .ric-table th.col-toggle { width: 120px; text-align: center; }
+  .ric-table th.col-toggle { width: 110px; text-align: center; }
+  .ric-table td.cell-rev   { text-align: center; font-weight: 600; white-space: nowrap; }
+  .ric-table td.cell-title { color: var(--color-text-secondary); }
 
   .ric-table tbody tr.doc-main-row {
     border-bottom: 1px solid var(--color-border);
@@ -171,21 +188,11 @@
   .ric-table tbody tr.doc-main-row:hover { background: var(--color-elevated); }
   .ric-table td { padding: 16px; vertical-align: middle; }
 
-  /* Document info cell */
+  /* Document code */
   .doc-code {
     font-weight: 700; font-size: 13px;
     color: var(--color-accent); letter-spacing: -0.01em;
-  }
-  .doc-rev-badge {
-    display: inline-block; margin-left: 6px;
-    padding: 1px 7px; border-radius: 999px;
-    background: var(--color-elevated);
-    color: var(--color-text-secondary);
-    font-size: 11px; font-weight: 500; vertical-align: middle;
-  }
-  .doc-title-small {
-    font-size: 11px; color: var(--color-text-secondary);
-    margin-top: 3px; letter-spacing: 0.01em;
+    white-space: nowrap;
   }
 
   /* Date cells */
@@ -492,6 +499,7 @@
     :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
 </style>
+{% include "core/partials/doc_list_filter_styles.html" %}
 {% endblock %}
 
 {% block content %}
@@ -526,9 +534,32 @@
       <h1 class="page-title">Gestisci ricezione</h1>
     </header>
 
+    <!-- ── Controls bar ── -->
+    <div class="ep-ctrl">
+      <div class="export-wrap">
+        <button class="toolbar-btn" type="button" onclick="toggleExportMenu(this, event)" aria-label="Esporta" aria-haspopup="menu">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Esporta
+        </button>
+        <div class="export-menu" role="menu">
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('xlsx', event)">
+            <strong>Excel</strong>
+            <span>Senza header</span>
+          </button>
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('pdf', event)">
+            <strong>PDF</strong>
+            <span>Con header Document Status</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Page toolbar ── -->
     <div class="page-toolbar">
       <div class="toolbar-left">
+        <div class="list-filter-summary" id="ric-filter-summary"></div>
         <span class="toolbar-counter" id="counter-label">—</span>
         <span class="status-msg" id="ric-status"></span>
       </div>
@@ -547,6 +578,7 @@
   </div><!-- /content -->
 </div><!-- /page -->
 
+{% include "core/partials/doc_list_filter_popover.html" %}
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
   <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -593,16 +625,67 @@
   <div class="dp-grid" id="dp-grid"></div>
 </div>
 
+{% include "core/partials/doc_list_filters_js.html" %}
+{% include "core/partials/export_format_menu.html" %}
 <script>
 (function () {
   'use strict';
 
-  const JOB  = "{{ testata.job }}";
+  const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+
+  DocListFilters.init({
+    filterLabels: {
+      vendor_doc: 'B&R Doc',
+      latest_rev_display: 'Rev.',
+      doc_title: 'Title',
+      latest_dis_act_date: 'Issued',
+      latest_rec_plan_date: 'Planned return date',
+    },
+    dateFilterKeys: ['latest_dis_act_date', 'latest_rec_plan_date'],
+    getDocs: function () { return _docs; },
+    getCellValue: function (d, key) {
+      if (key === 'latest_dis_act_date') {
+        return d.latest_dis_act_date ? fmtDate(d.latest_dis_act_date) : '';
+      }
+      if (key === 'latest_rec_plan_date') {
+        return d.latest_rec_plan_date ? fmtDate(d.latest_rec_plan_date) : '';
+      }
+      if (key === 'latest_rev_display') {
+        const v = d.latest_rev_display;
+        return (!v || v === '\u2014') ? '' : v;
+      }
+      return d[key] || '';
+    },
+    getDateValue: function (d, key) {
+      if (key === 'latest_dis_act_date') return d.latest_dis_act_date || '';
+      if (key === 'latest_rec_plan_date') return d.latest_rec_plan_date || '';
+      return '';
+    },
+    getSortValue: function (d, key) {
+      if (key === 'latest_dis_act_date') return d.latest_dis_act_date || '';
+      if (key === 'latest_rec_plan_date') return d.latest_rec_plan_date || '';
+      if (key === 'latest_rev_display') return d.latest_rev_no ?? -1;
+      return d[key] || '';
+    },
+    defaultSort: function (docs) {
+      return docs.sort(function (a, b) {
+        const aT = a.latest_rec_plan_date ? new Date(a.latest_rec_plan_date + 'T00:00:00').getTime() : null;
+        const bT = b.latest_rec_plan_date ? new Date(b.latest_rec_plan_date + 'T00:00:00').getTime() : null;
+        if (aT === null && bT === null) return 0;
+        if (aT === null) return 1;
+        if (bT === null) return -1;
+        return aT - bT;
+      });
+    },
+    onApply: function () { applyAndRender(); },
+    summaryId: 'ric-filter-summary',
+  });
 
   /* ── Theme toggle ── */
   (function () {
     var btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
     btn.addEventListener('click', function () {
       var current = document.documentElement.getAttribute('data-theme');
       var isDark = current === 'dark' ||
@@ -615,40 +698,73 @@
 
   let _statiEsterni = [];
   let _docs = [];
+  let _draft = {};
 
   /* ── Init ── */
   async function init() {
-    const [docsRes, statiRes] = await Promise.all([
-      fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`),
-      fetch('/api/stati-esterni/'),
-    ]);
+    try {
+      const [docsRes, statiRes] = await Promise.all([
+        fetch(`/api/commesse/${encodeURIComponent(JOB)}/documenti/`),
+        fetch('/api/stati-esterni/'),
+      ]);
 
-    if (statiRes.ok) {
-      const s = await statiRes.json();
-      _statiEsterni = s.stati || [];
+      if (statiRes.ok) {
+        const s = await statiRes.json();
+        _statiEsterni = s.stati || [];
+      }
+
+      if (!docsRes.ok) { showEmpty('Errore nel caricamento.'); return; }
+      const data = await docsRes.json();
+      _docs = (data.documenti || []).filter(d => d.latest_int_status === 'inviato_al_cliente');
+      _draft = {};
+      applyAndRender();
+    } catch (err) {
+      console.error(err);
+      showEmpty('Errore nel caricamento.');
     }
+  }
 
-    if (!docsRes.ok) { showEmpty('Errore nel caricamento.'); return; }
-    const data = await docsRes.json();
-    _docs = (data.documenti || []).filter(d => d.latest_int_status === 'inviato_al_cliente');
+  function captureDraft() {
+    document.querySelectorAll('.ric-date').forEach(function (el) {
+      const id = String(el.dataset.doc);
+      const statoVal = document.querySelector('.ric-stato[data-doc="' + id + '"]')?.value || '';
+      _draft[id] = {
+        date: el.value || '',
+        dateText: document.querySelector('.dp-text-input[data-doc="' + id + '"]')?.value || '',
+        stato: statoVal,
+        statoLabel: document.querySelector('.csel-btn[data-doc="' + id + '"] .csel-label')?.textContent || '— Seleziona —',
+        nuova: document.querySelector('.ric-nuova-rev[data-doc="' + id + '"]')?.checked ?? true,
+      };
+    });
+  }
 
-    renderTable(_docs);
+  function applyAndRender() {
+    try {
+      captureDraft();
+      renderTable(DocListFilters.applyPipeline(_docs));
+    } catch (err) {
+      console.error('applyAndRender failed', err);
+    }
+  }
+
+  function theadHtml() {
+    const th = DocListFilters.thHeader;
+    return '<tr>'
+      + th('B&amp;R Doc', 'vendor_doc', true, { className: 'col-doc' })
+      + th('Rev.', 'latest_rev_display', true, { className: 'col-rev' })
+      + th('Title', 'doc_title', true, { className: 'col-title' })
+      + th('Issued', 'latest_dis_act_date', true, { className: 'col-date' })
+      + th('Planned return date', 'latest_rec_plan_date', true, { className: 'col-date' })
+      + '<th class="col-sel">Client response</th>'
+      + '<th class="col-in">Return date</th>'
+      + '<th class="col-toggle">New rev.</th>'
+      + '</tr>';
   }
 
   /* ── Render table ── */
   function renderTable(docs) {
-    // Sort: overdue first (oldest date = most urgent), then soonest upcoming, then no date
-    docs = [...docs].sort((a, b) => {
-      const aT = a.latest_rec_plan_date ? new Date(a.latest_rec_plan_date + 'T00:00:00').getTime() : null;
-      const bT = b.latest_rec_plan_date ? new Date(b.latest_rec_plan_date + 'T00:00:00').getTime() : null;
-      if (aT === null && bT === null) return 0;
-      if (aT === null) return 1;
-      if (bT === null) return -1;
-      return aT - bT;
-    });
-
     const wrap = document.getElementById('table-wrap');
-    if (!docs.length) {
+    if (!_docs.length) {
       wrap.innerHTML = `
         <div class="empty-state">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
@@ -659,14 +775,20 @@
       return;
     }
 
-    const statiOptions = ''; // options rendered dynamically in portal
+    if (!docs.length) {
+      wrap.innerHTML =
+        '<table class="ric-table"><thead>' + theadHtml() + '</thead><tbody>'
+        + '<tr><td colspan="8" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessun documento corrisponde ai filtri.</td></tr>'
+        + '</tbody></table>';
+      document.getElementById('ric-btn').disabled = true;
+      document.getElementById('counter-label').innerHTML = '<strong>0</strong> di 0 documenti compilati';
+      return;
+    }
 
     const today = new Date(); today.setHours(0,0,0,0);
 
-    const rows = docs.map(d => {
-      const revLabel  = d.latest_rev_display && d.latest_rev_display !== '—'
-        ? `Rev. ${d.latest_rev_display}`
-        : (d.latest_rev_display || '—');
+    const rows = docs.map(function (d) {
+      const rev = d.latest_rev_display || '\u2014';
       const disDate   = d.latest_dis_act_date ? fmtDate(d.latest_dis_act_date) : '—';
       const recPlan   = d.latest_rec_plan_date ? fmtDate(d.latest_rec_plan_date) : '—';
 
@@ -675,79 +797,63 @@
       const diffDays    = recPlanDate ? Math.round((recPlanDate - today) / 86400000) : null;
       const isWarning   = !isOverdue && diffDays !== null && diffDays <= 7;
       const rowClass    = isOverdue ? ' row-overdue' : isWarning ? ' row-warning' : '';
-      const urgencyTag  = '';
+
+      const draft = _draft[String(d.id)] || {};
+      const statoVal = draft.stato || '';
+      const statoLabel = draft.statoLabel || '— Seleziona —';
+      const hasStato = Boolean(statoVal);
+      const dateIso = draft.date || '';
+      const dateText = draft.dateText || (dateIso ? fmtDate(dateIso) : '');
+      const nuovaChecked = draft.nuova === undefined ? true : draft.nuova;
 
       return `
         <tr class="doc-main-row${rowClass}" data-doc-id="${d.id}">
-          <td>
-            <span class="doc-code">${escHtml(d.vendor_doc || '—')}</span>
-            <span class="doc-rev-badge">${escHtml(revLabel)}</span>
-            <div class="doc-title-small">${escHtml(d.doc_title || '')}</div>
-          </td>
+          <td><span class="doc-code">${escHtml(d.vendor_doc || '—')}</span></td>
+          <td class="cell-rev">${escHtml(rev)}</td>
+          <td class="cell-title">${escHtml(d.doc_title || '—')}</td>
           <td class="cell-date">${escHtml(disDate)}</td>
           <td class="cell-date${isOverdue ? ' overdue' : isWarning ? ' warning' : ''}">
-            ${escHtml(recPlan)}${urgencyTag}
+            ${escHtml(recPlan)}
           </td>
           <td>
             <div class="csel-wrap">
-              <button type="button" class="csel-btn" data-doc="${d.id}" onclick="openCsel(this)">
-                <span class="csel-label">— Seleziona —</span>
+              <button type="button" class="csel-btn${hasStato ? ' has-value' : ''}" data-doc="${d.id}" onclick="openCsel(this)">
+                <span class="csel-label">${escHtml(statoLabel)}</span>
                 <svg class="csel-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              <input type="hidden" class="ric-stato" data-doc="${d.id}" value="">
+              <input type="hidden" class="ric-stato" data-doc="${d.id}" value="${escHtml(statoVal)}">
             </div>
           </td>
           <td>
             <div class="dp-wrap">
-              <input type="text" class="dp-text-input" data-doc="${d.id}"
-                     maxlength="10" autocomplete="off" spellcheck="false"
-                     placeholder="gg/mm/aaaa"
+              <input type="text" class="dp-text-input${dateIso ? ' filled' : ''}" data-doc="${d.id}"
+                     maxlength="12" autocomplete="off" spellcheck="false"
+                     placeholder="10 jan 2026"
+                     value="${escHtml(dateText)}"
                      oninput="onDpTextInput(this)">
               <button type="button" class="dp-cal-btn" data-doc="${d.id}"
                       onclick="openDp(this)" title="Apri calendario">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </button>
-              <input type="hidden" class="ric-date" data-doc="${d.id}" value="">
+              <input type="hidden" class="ric-date" data-doc="${d.id}" value="${escHtml(dateIso)}">
             </div>
           </td>
           <td style="text-align:center">
             <label class="toggle-track">
-              <input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}" checked>
+              <input type="checkbox" class="ric-nuova-rev" data-doc="${d.id}"${nuovaChecked ? ' checked' : ''}>
               <span class="toggle-thumb"></span>
             </label>
           </td>
         </tr>`;
     }).join('');
 
-    wrap.innerHTML = `
-      <table class="ric-table">
-        <thead>
-          <tr>
-            <th class="col-doc">Documento</th>
-            <th class="col-date">Emesso</th>
-            <th class="col-date">
-              Rientro prev.
-              <svg style="vertical-align:middle;margin-left:3px;opacity:0.5" width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
-            </th>
-            <th class="col-sel">Stato esterno</th>
-            <th class="col-in">Data rientro</th>
-            <th class="col-toggle">Nuova rev.</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
+    wrap.innerHTML =
+      '<table class="ric-table"><thead>' + theadHtml() + '</thead><tbody>' + rows + '</tbody></table>';
 
     updateCounter();
-    document.getElementById('ric-btn').disabled = false;
   }
 
   /* ── Helpers ── */
-  function fmtDate(iso) {
-    if (!iso) return '—';
-    const [y, m, d] = iso.split('-');
-    return `${d}/${m}/${y}`;
-  }
-
   function toLocalIso(date) {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
@@ -758,6 +864,11 @@
     document.getElementById('counter-label').textContent = '';
   }
 
+  window.onExportFormatChosen = function (format) {
+    const fmt = format === 'pdf' ? 'pdf' : 'xlsx';
+    window.location.href = '/api/commesse/' + encodeURIComponent(JOB) + '/ricezione/export/?format=' + fmt;
+  };
+
   function updateCounter() {
     const total   = document.querySelectorAll('.ric-date').length;
     const filled  = [...document.querySelectorAll('.ric-date')].filter(el => el.value).length;
@@ -766,15 +877,28 @@
     document.getElementById('ric-btn').disabled = total === 0;
   }
 
-  /* Manual text input for date (gg/mm/aaaa) */
+  /* Manual text input for date (10 jan 2026 or gg/mm/aaaa) */
   window.onDpTextInput = function(el) {
     const docId  = el.dataset.doc;
     const hidden = document.querySelector(`.ric-date[data-doc="${docId}"]`);
-    const val    = el.value.trim();
-    const match  = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (match) {
-      const iso = `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;
-      const dt  = new Date(iso + 'T00:00:00');
+    const val    = el.value.trim().toLowerCase();
+    let iso = null;
+
+    const letterMatch = val.match(/^(\d{1,2})\s+([a-z]{3})\s+(\d{4})$/);
+    if (letterMatch) {
+      const mon = MONTHS_SHORT.indexOf(letterMatch[2]);
+      if (mon >= 0) {
+        iso = `${letterMatch[3]}-${String(mon + 1).padStart(2, '0')}-${letterMatch[1].padStart(2, '0')}`;
+      }
+    } else {
+      const slashMatch = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (slashMatch) {
+        iso = `${slashMatch[3]}-${slashMatch[2].padStart(2, '0')}-${slashMatch[1].padStart(2, '0')}`;
+      }
+    }
+
+    if (iso) {
+      const dt = new Date(iso + 'T00:00:00');
       if (!isNaN(dt)) {
         hidden.value = iso;
         el.classList.add('filled');
@@ -927,8 +1051,7 @@
     const textInput = document.querySelector(`.dp-text-input[data-doc="${docId}"]`);
     if (hidden) hidden.value = iso;
     if (textInput) {
-      const [y,m,d] = iso.split('-');
-      textInput.value = `${d}/${m}/${y}`;
+      textInput.value = formatDate(iso);
       textInput.classList.add('filled');
     }
     updateCounter();
@@ -963,7 +1086,8 @@
   /* ── Modal ── */
   window.openModal = function() {
     if (!requireWrite()) return;
-    const filled = [...document.querySelectorAll('.ric-date')].filter(el => el.value).length;
+    captureDraft();
+    const filled = Object.keys(_draft).filter(function (id) { return _draft[id].date; }).length;
     if (!filled) { alert('Inserisci almeno una data di rientro.'); return; }
     document.getElementById('modal-subtitle').textContent =
       `${filled} document${filled === 1 ? 'o verrà registrato' : 'i verranno registrati'}`;
@@ -987,21 +1111,23 @@
   /* ── Confirm & send ── */
   window.confermaRicezione = async function() {
     if (!requireWrite()) return;
+    captureDraft();
     const entries = [];
-
-    document.querySelectorAll('.ric-date').forEach(el => {
-      const docId = parseInt(el.dataset.doc, 10);
-      const date  = el.value;
-      if (!date) return;
-      const stato = document.querySelector(`.ric-stato[data-doc="${docId}"]`)?.value || null;
-      const nuova = document.querySelector(`.ric-nuova-rev[data-doc="${docId}"]`)?.checked || false;
+    Object.keys(_draft).forEach(function (id) {
+      const d = _draft[id];
+      if (!d.date) return;
       entries.push({
-        doc_id: docId,
-        rec_act_date: date,
-        ext_status_id: stato ? parseInt(stato, 10) : null,
-        crea_nuova_revisione: nuova,
+        doc_id: parseInt(id, 10),
+        rec_act_date: d.date,
+        ext_status_id: d.stato ? parseInt(d.stato, 10) : null,
+        crea_nuova_revisione: Boolean(d.nuova),
       });
     });
+
+    if (!entries.length) {
+      alert('Inserisci almeno una data di rientro.');
+      return;
+    }
 
     closeModal();
 

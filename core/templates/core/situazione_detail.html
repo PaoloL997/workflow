@@ -272,12 +272,26 @@
   .sit-horiz td.sit-fix {
     position: sticky;
     background: var(--color-elevated);
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sit-horiz th.sit-col-title,
+  .sit-horiz td.sit-col-title {
+    font-size: 10px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+
+  .sit-horiz thead th.sit-col-title {
+    font-size: 10px;
   }
 
   .sit-horiz tbody td.sit-fix {
     background: var(--color-surface);
+  }
+
+  .sit-horiz tbody td.sit-fix.sit-vendor-tinted {
+    background: var(--sit-vendor-tint) !important;
   }
 
   /* Incremental z-index so rightmost fixed columns stack above scrolling revision cells */
@@ -287,28 +301,43 @@
   .sit-horiz tbody td.sit-fix:nth-child(4) { z-index: 4; }
   .sit-horiz tbody td.sit-fix:nth-child(5) { z-index: 5; }
   .sit-horiz tbody td.sit-fix:nth-child(6) { z-index: 6; }
+  .sit-horiz tbody td.sit-fix:nth-child(7) { z-index: 7; }
+  .sit-horiz tbody td.sit-fix:nth-child(8) { z-index: 8; }
 
-  .sit-horiz thead th.sit-fix:nth-child(1) { z-index: 11; }
-  .sit-horiz thead th.sit-fix:nth-child(2) { z-index: 12; }
-  .sit-horiz thead th.sit-fix:nth-child(3) { z-index: 13; }
-  .sit-horiz thead th.sit-fix:nth-child(4) { z-index: 14; }
-  .sit-horiz thead th.sit-fix:nth-child(5) { z-index: 15; }
-  .sit-horiz thead th.sit-fix:nth-child(6) { z-index: 16; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(1) { z-index: 21; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(2) { z-index: 22; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(3) { z-index: 23; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(4) { z-index: 24; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(5) { z-index: 25; }
+  .sit-horiz thead tr:first-child th.sit-fix:nth-child(6) { z-index: 26; }
+
+  .sit-horiz thead tr:nth-child(2) th.sit-fix:nth-child(1) { z-index: 27; }
+  .sit-horiz thead tr:nth-child(2) th.sit-fix:nth-child(2) { z-index: 28; }
 
   .sit-horiz th.sit-fix-last,
   .sit-horiz td.sit-fix-last {
     box-shadow: 2px 0 6px hsla(0, 0%, 0%, 0.1);
   }
 
+  .sit-horiz th.sit-plan-group,
   .sit-horiz th.sit-rev-group {
     text-align: center;
     /* opaque blend: accent at 12% over elevated — prevents content showing through when sticky */
     background: color-mix(in hsl, var(--color-accent) 12%, var(--color-elevated));
-    border-left: 2px solid var(--color-border);
     color: var(--color-text-primary);
   }
 
-  .sit-horiz td.sit-rev-first { border-left: 2px solid var(--color-border); }
+  .sit-horiz th.sit-plan-group {
+    position: sticky;
+    z-index: 27;
+  }
+
+  /* Vertical separators: Planning | Rev A | Rev B | … */
+  .sit-horiz th.sit-rev-group,
+  .sit-horiz thead tr:nth-child(2) th.sit-rev-first,
+  .sit-horiz td.sit-rev-first {
+    border-left: 2px solid var(--color-border);
+  }
 
   .sit-horiz tr:last-child td { border-bottom: none; }
   .sit-horiz td:last-child,
@@ -500,8 +529,146 @@
     padding: 10px 12px 12px;
   }
 
+  .col-filter-popover.date-range-mode {
+    width: 292px;
+    padding: 10px 12px 12px;
+  }
+
   .col-filter-popover.open {
     display: block;
+  }
+
+  /* ── Date range filter calendar ── */
+  .drf-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .drf-bound {
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-elevated);
+    min-width: 0;
+  }
+  .drf-bound-lbl {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    margin-bottom: 2px;
+  }
+  .drf-bound-val {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .drf-cal {
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-elevated);
+    padding: 10px;
+  }
+  .drf-hdr {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .drf-nav {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    padding: 0;
+  }
+  .drf-nav:hover {
+    color: var(--color-text-primary);
+    background: hsla(0,0%,50%,0.08);
+  }
+  .drf-month {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+  .drf-wdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    margin-bottom: 4px;
+  }
+  .drf-wdays span {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+    padding-bottom: 4px;
+  }
+  .drf-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .drf-day {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    padding: 0;
+  }
+  .drf-day:hover:not(.empty) {
+    background: hsla(0,0%,50%,0.1);
+  }
+  .drf-day.empty {
+    visibility: hidden;
+    cursor: default;
+  }
+  .drf-day.today {
+    color: var(--color-accent);
+    font-weight: 700;
+  }
+  .drf-day.in-range {
+    background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+    border-radius: 0;
+  }
+  .drf-day.range-start,
+  .drf-day.range-end,
+  .drf-day.picking {
+    background: var(--color-accent);
+    color: #fff;
+    font-weight: 600;
+  }
+  .drf-day.range-start { border-radius: 7px 0 0 7px; }
+  .drf-day.range-end { border-radius: 0 7px 7px 0; }
+  .drf-day.range-start.range-end,
+  .drf-day.picking { border-radius: 7px; }
+  .drf-hint {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.35;
   }
 
   .col-filter-popover-title {
@@ -964,12 +1131,24 @@
 
     <!-- ── Filter bar ── -->
     <div class="filter-bar">
-      <button class="toolbar-btn" id="btn-export" onclick="exportXLSX()" aria-label="Esporta come Excel">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-        </svg>
-        Esporta Excel
-      </button>
+      <div class="export-wrap">
+        <button class="toolbar-btn" id="btn-export" type="button" onclick="exportSituazione(this, event)" aria-label="Esporta" aria-haspopup="menu">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          Esporta
+        </button>
+        <div class="export-menu" role="menu">
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('xlsx', event)">
+            <strong>Excel</strong>
+            <span>Senza header</span>
+          </button>
+          <button type="button" class="export-menu-btn" role="menuitem" onclick="chooseExportFormat('pdf', event)">
+            <strong>PDF</strong>
+            <span>Con header Document Status</span>
+          </button>
+        </div>
+      </div>
       <button class="toolbar-btn" id="btn-fullscreen" onclick="toggleFullscreen()" aria-label="Schermo intero" style="padding:8px 10px;">
         <svg id="fs-icon-expand" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
@@ -983,8 +1162,8 @@
         {% include "core/partials/sblocca_revisioni.html" with job=testata.job rev_let_flag=testata.rev_let_flag %}
         {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" rev_let_flag=testata.rev_let_flag %}
         <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
-          <button class="view-btn active" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
-          <button class="view-btn" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
+          <button class="view-btn" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
+          <button class="view-btn active" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
         </div>
       </div>
     </div>
@@ -996,7 +1175,6 @@
       </div>
     </div>
     <div class="sit-ext-legend" id="sit-ext-legend" aria-label="Legenda risposte cliente" hidden></div>
-
   </div><!-- /content -->
   </div><!-- /page -->
 
@@ -1068,6 +1246,8 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% include "core/partials/date_range_filter_ui.html" %}
+{% include "core/partials/export_format_menu.html" %}
 <script>
 (function () {
   'use strict';
@@ -1144,56 +1324,89 @@
     return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-pct), var(--color-surface))`;
   }
 
+  function latestExtStatusMeta(revs) {
+    if (!revs || !revs.length) return { color: '', label: '' };
+    for (let i = revs.length - 1; i >= 0; i--) {
+      const color = (revs[i].ext_status_colore || '').trim();
+      if (color) {
+        return {
+          color,
+          label: (revs[i].ext_status_label || '').trim(),
+        };
+      }
+    }
+    return { color: '', label: '' };
+  }
+
   function getRowHighlightStyle(rev) {
     const extColor = rev?.ext_status_colore || '';
-    if (extColor) {
-      const tint = statusTintBackground(extColor);
-      return `style="border-left-color:${escHtml(extColor)};background:${tint}"`;
-    }
-    if ((rev?.int_status || '') === 'inviato_al_cliente') {
-      const tint = statusTintBackground('#FFC000');
-      return `style="border-left-color:#FFC000;background:${tint}"`;
-    }
-    return '';
+    if (!extColor) return '';
+    const tint = statusTintBackground(extColor);
+    return `style="border-left-color:${escHtml(extColor)};background:${tint}"`;
   }
 
   let _allDocs    = [];
   let _allDocRevs = [];
-  let _vista      = 'verticale';
-  let _sortKey    = null;
+  let _vista      = 'orizzontale';
+  let _sortKey    = 'client_doc_no';
   let _sortDir    = 1; // 1 = asc, -1 = desc
   let _columnFilters = {};
   let _openFilterKey = null;
+  let _dateRangeCtrl = null;
 
   const FILTER_LABELS = {
     item_no:          'Item',
     vendor_doc:       'B&R Doc',
-    client_doc_no:    'Client Doc No',
-    contractor_doc_no:'Contractor Doc No',
+    client_doc_no:    'Client Doc N°',
+    contractor_doc_no:'Contractor Doc N°',
     client_doc_class: 'Client Doc Class',
-    doc_title:        'Titolo',
-    reparto_label:    'Reparto',
-    doc_penalty:      'Penale',
-    doc_payment:      'Pagamento',
+    doc_title:        'Title',
+    reparto_label:    'Department',
+    doc_penalty:      'Penalty',
+    doc_payment:      'Payment',
     rev_no:           'Rev.',
-    dis_plan_date:    'Inv. previsto',
-    dis_act_date:     'Inv. effettivo',
-    rec_plan_date:    'Ric. previsto',
-    rec_act_date:     'Ric. effettivo',
-    int_status:       'Stato interno',
-    ext_status:       'Risposta cliente',
+    dis_plan_date:    'Planned send',
+    dis_act_date:     'Actual send',
+    rec_plan_date:    'Planned receipt',
+    rec_act_date:     'Actual receipt',
+    planned_send:     'Submission date',
+    planned_receipt:  'Receipt date',
+    int_status:       'Internal status',
+    ext_status:       'Client response',
   };
 
   const BOOL_FILTER_KEYS = new Set(['doc_penalty', 'doc_payment']);
   const SELECT_FILTER_KEYS = new Set(['int_status', 'ext_status']);
   const DATE_FILTER_KEYS = new Set([
     'dis_plan_date', 'dis_act_date', 'rec_plan_date', 'rec_act_date',
+    'planned_send', 'planned_receipt',
   ]);
+  const HORIZ_PLANNED_DATE_KEYS = new Set(['planned_send', 'planned_receipt']);
 
   const FILTER_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/></svg>';
 
+  function usesDateRangeFilter(key) {
+    return DATE_FILTER_KEYS.has(key);
+  }
+
   function usesExcelFilter(key) {
-    return !BOOL_FILTER_KEYS.has(key) && !SELECT_FILTER_KEYS.has(key);
+    return !BOOL_FILTER_KEYS.has(key) && !SELECT_FILTER_KEYS.has(key) && !DATE_FILTER_KEYS.has(key);
+  }
+
+  function drf() {
+    return window.DateRangeFilterUI || null;
+  }
+
+  function dateRangeActive(range) {
+    const ui = drf();
+    if (ui) return ui.isActive(range);
+    return !!(range && (range.from || range.to));
+  }
+
+  function dateRangeMatches(iso, from, to) {
+    const ui = drf();
+    if (!ui) return true;
+    return ui.matchesIso(iso, from, to);
   }
 
   function filterDisplayValue(value) {
@@ -1204,6 +1417,9 @@
   function getFilterState(key) {
     const raw = _columnFilters[key];
     if (raw == null || raw === '') return null;
+    if (raw.type === 'dateRange') {
+      return { type: 'dateRange', from: raw.from || null, to: raw.to || null };
+    }
     if (typeof raw === 'string') {
       if (BOOL_FILTER_KEYS.has(key) || SELECT_FILTER_KEYS.has(key)) {
         return { type: 'exact', value: raw };
@@ -1221,6 +1437,7 @@
     const state = getFilterState(key);
     if (!state) return false;
     if (state.type === 'exact') return !!state.value;
+    if (state.type === 'dateRange') return dateRangeActive(state);
     if (state.contains) return true;
     if (state.selected === null) return false;
     if (!state.selected.length) return true;
@@ -1239,7 +1456,7 @@
       });
     } else {
       _allDocRevs.forEach(function (entry) {
-        values.add(filterDisplayValue(getDocFilterValue(entry.doc, key)));
+        values.add(filterDisplayValue(getDocFilterValue(entry.doc, key, entry.revs)));
       });
     }
     return Array.from(values).sort(function (a, b) {
@@ -1251,6 +1468,9 @@
     const state = getFilterState(key);
     if (!state) return true;
     if (state.type === 'exact') return cellVal === state.value;
+    if (state.type === 'dateRange') {
+      return dateRangeMatches(cellVal, state.from, state.to);
+    }
 
     const display = filterDisplayValue(cellVal);
     if (state.contains && !normalizeForFilter(display).includes(normalizeForFilter(state.contains))) {
@@ -1275,6 +1495,7 @@
 
   function updateFilterSummary(shown, total) {
     const el = document.getElementById('sit-filter-summary');
+    if (!el) return;
     if (!activeFilterKeys().length) {
       el.style.display = 'none';
       el.innerHTML = '';
@@ -1289,7 +1510,7 @@
   window.clearColumnFilters = function () {
     _columnFilters = {};
     closeColumnFilterPopover();
-    applyFilters();
+    safeApplyFilters();
   };
 
   function normalizeForFilter(value) {
@@ -1325,11 +1546,42 @@
     }
   }
 
-  function getDocFilterValue(doc, key) {
+  function plannedDatesForLatestRev(revs) {
+    const latest = (revs && revs.length) ? revs[revs.length - 1] : null;
+    if (!latest) return { planned_send: null, planned_receipt: null };
+    const extLabel = (latest.ext_status_label || '').trim().toLowerCase();
+    if (extLabel === 'approved') {
+      return { planned_send: null, planned_receipt: null };
+    }
+    if ((latest.int_status || '') === 'inviato_al_cliente') {
+      return { planned_send: null, planned_receipt: latest.rec_plan_date || null };
+    }
+    if ((latest.int_status || '') !== 'ricevuto') {
+      return { planned_send: latest.dis_plan_date || null, planned_receipt: null };
+    }
+    return { planned_send: null, planned_receipt: null };
+  }
+
+  function fmtPlanningDate(iso) {
+    return fmtDate(iso);
+  }
+
+  function getDocFilterValue(doc, key, revs) {
+    if (HORIZ_PLANNED_DATE_KEYS.has(key)) {
+      const planned = plannedDatesForLatestRev(revs || []);
+      const iso = planned[key];
+      return iso ? fmtDate(iso) : '';
+    }
     if (key === 'reparto_label') {
       return doc.reparto_acronimo || doc.reparto_label || '';
     }
     return doc[key] || '';
+  }
+
+  function getRowDateIso(row, key) {
+    const r = row.r;
+    if (!r || !r[key]) return '';
+    return String(r[key]).slice(0, 10);
   }
 
   function rowMatchesFilters(row) {
@@ -1337,6 +1589,13 @@
     if (!keys.length) return true;
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i];
+      if (DATE_FILTER_KEYS.has(key)) {
+        const state = getFilterState(key);
+        if (state && state.type === 'dateRange') {
+          if (!dateRangeMatches(getRowDateIso(row, key), state.from, state.to)) return false;
+          continue;
+        }
+      }
       const cellVal = getColumnFilterValue(row, key);
       if (!cellMatchesFilter(cellVal, key)) return false;
     }
@@ -1349,7 +1608,18 @@
     const doc = entry.doc;
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i];
-      const cellVal = getDocFilterValue(doc, key);
+      // Revision date filters apply only in vertical view.
+      if (DATE_FILTER_KEYS.has(key) && !HORIZ_PLANNED_DATE_KEYS.has(key)) continue;
+      if (HORIZ_PLANNED_DATE_KEYS.has(key)) {
+        const state = getFilterState(key);
+        if (state && state.type === 'dateRange') {
+          const planned = plannedDatesForLatestRev(entry.revs);
+          const iso = planned[key] ? String(planned[key]).slice(0, 10) : '';
+          if (!dateRangeMatches(iso, state.from, state.to)) return false;
+          continue;
+        }
+      }
+      const cellVal = getDocFilterValue(doc, key, entry.revs);
       if (!cellMatchesFilter(cellVal, key)) return false;
     }
     return true;
@@ -1377,8 +1647,10 @@
 
   function closeColumnFilterPopover() {
     _openFilterKey = null;
+    _dateRangeCtrl = null;
     const pop = document.getElementById('col-filter-popover');
-    pop.classList.remove('open', 'excel-mode');
+    if (!pop) return;
+    pop.classList.remove('open', 'excel-mode', 'date-range-mode');
     pop.style.left = '';
     pop.style.top = '';
   }
@@ -1386,14 +1658,17 @@
   function buildFilterPopoverBody(key) {
     const body = document.getElementById('col-filter-popover-body');
     const pop = document.getElementById('col-filter-popover');
+    if (!body || !pop) return;
+    _dateRangeCtrl = null;
     pop.classList.toggle('excel-mode', usesExcelFilter(key));
+    pop.classList.toggle('date-range-mode', usesDateRangeFilter(key));
 
     if (BOOL_FILTER_KEYS.has(key)) {
       const current = (_columnFilters[key] || '');
       body.innerHTML =
         '<select class="col-filter-popover-select" id="col-filter-input">'
-        + '<option value="">Tutti</option>'
-        + '<option value="yes"' + (current === 'yes' ? ' selected' : '') + '>Sì</option>'
+        + '<option value="">All</option>'
+        + '<option value="yes"' + (current === 'yes' ? ' selected' : '') + '>Yes</option>'
         + '<option value="no"' + (current === 'no' ? ' selected' : '') + '>No</option>'
         + '</select>';
       return;
@@ -1401,7 +1676,7 @@
 
     if (key === 'int_status') {
       const current = (_columnFilters[key] || '');
-      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">Tutti</option>';
+      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">All</option>';
       getIntStatusOptions().forEach(function (label) {
         html += '<option value="' + escHtml(label) + '"' + (current === label ? ' selected' : '') + '>'
           + escHtml(label) + '</option>';
@@ -1412,12 +1687,27 @@
 
     if (key === 'ext_status') {
       const current = (_columnFilters[key] || '');
-      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">Tutti</option>';
+      let html = '<select class="col-filter-popover-select" id="col-filter-input"><option value="">All</option>';
       getUniqueExtLabels().forEach(function (label) {
         html += '<option value="' + escHtml(label) + '"' + (current === label ? ' selected' : '') + '>'
           + escHtml(label) + '</option>';
       });
       body.innerHTML = html + '</select>';
+      return;
+    }
+
+    if (usesDateRangeFilter(key)) {
+      const ui = drf();
+      if (!ui) {
+        body.innerHTML = '<p class="drf-hint">Filtro data non disponibile.</p>';
+        return;
+      }
+      const state = getFilterState(key);
+      body.innerHTML = ui.buildBodyHtml();
+      _dateRangeCtrl = ui.mount(body, {
+        from: state && state.from ? state.from : null,
+        to: state && state.to ? state.to : null,
+      });
       return;
     }
 
@@ -1436,7 +1726,6 @@
         + '<span>' + escHtml(value) + '</span></label>';
     });
 
-    const containsPlaceholder = DATE_FILTER_KEYS.has(key) ? 'es. 03/2025' : 'Contiene…';
     body.innerHTML =
       '<input type="text" class="col-filter-search" id="col-filter-search" placeholder="Cerca…" autocomplete="off">'
       + '<div class="col-filter-values-wrap">'
@@ -1448,7 +1737,7 @@
       + '<div class="col-filter-contains-wrap">'
       + '<span class="col-filter-contains-label">Contiene</span>'
       + '<input type="text" class="col-filter-popover-input" id="col-filter-contains" '
-      + 'value="' + escHtml(contains) + '" placeholder="' + escHtml(containsPlaceholder) + '" autocomplete="off">'
+      + 'value="' + escHtml(contains) + '" placeholder="Contiene…" autocomplete="off">'
       + '</div>';
 
     wireExcelFilterPopover();
@@ -1511,10 +1800,15 @@
 
   function positionColumnFilterPopover(anchorEl) {
     const pop = document.getElementById('col-filter-popover');
+    if (!pop || !anchorEl || !anchorEl.getBoundingClientRect) return;
     pop.classList.add('open');
     const rect = anchorEl.getBoundingClientRect();
-    const popW = pop.classList.contains('excel-mode') ? 280 : 220;
-    const popH = pop.classList.contains('excel-mode') ? 360 : 120;
+    const popW = pop.classList.contains('date-range-mode')
+      ? 292
+      : (pop.classList.contains('excel-mode') ? 280 : 220);
+    const popH = pop.classList.contains('date-range-mode')
+      ? 360
+      : (pop.classList.contains('excel-mode') ? 360 : 120);
     let left = rect.left;
     let top = rect.bottom + 6;
     if (left + popW > window.innerWidth - 12) {
@@ -1525,15 +1819,21 @@
     }
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
+    pop.style.width = popW + 'px';
   }
 
   window.openColumnFilter = function (key, event) {
-    event.preventDefault();
-    event.stopPropagation();
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    const pop = document.getElementById('col-filter-popover');
+    if (!pop) return;
     _openFilterKey = key;
-    document.getElementById('col-filter-popover-title').textContent = FILTER_LABELS[key] || key;
+    const title = document.getElementById('col-filter-popover-title');
+    if (title) title.textContent = FILTER_LABELS[key] || key;
     buildFilterPopoverBody(key);
-    positionColumnFilterPopover(event.currentTarget);
+    positionColumnFilterPopover(event && event.currentTarget);
     const focusEl = usesExcelFilter(key)
       ? document.getElementById('col-filter-search')
       : document.getElementById('col-filter-input');
@@ -1547,7 +1847,14 @@
     if (!_openFilterKey) return;
     const key = _openFilterKey;
 
-    if (usesExcelFilter(key)) {
+    if (usesDateRangeFilter(key)) {
+      const range = _dateRangeCtrl ? _dateRangeCtrl.getRange() : { from: null, to: null };
+      if (dateRangeActive(range)) {
+        _columnFilters[key] = { type: 'dateRange', from: range.from, to: range.to };
+      } else {
+        delete _columnFilters[key];
+      }
+    } else if (usesExcelFilter(key)) {
       const { selected, contains, active } = readExcelFilterState(key);
       if (active) {
         _columnFilters[key] = { selected, contains };
@@ -1562,41 +1869,54 @@
     }
 
     closeColumnFilterPopover();
-    applyFilters();
+    safeApplyFilters();
   }
 
   function clearCurrentColumnFilter() {
     if (!_openFilterKey) return;
     delete _columnFilters[_openFilterKey];
     closeColumnFilterPopover();
-    applyFilters();
+    safeApplyFilters();
   }
 
-  document.getElementById('col-filter-apply-btn').addEventListener('click', applyCurrentColumnFilter);
-  document.getElementById('col-filter-cancel-btn').addEventListener('click', clearCurrentColumnFilter);
+  const applyBtn = document.getElementById('col-filter-apply-btn');
+  const cancelBtn = document.getElementById('col-filter-cancel-btn');
+  if (applyBtn) {
+    applyBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      applyCurrentColumnFilter();
+    });
+  }
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearCurrentColumnFilter();
+    });
+  }
   document.addEventListener('click', function (e) {
     const pop = document.getElementById('col-filter-popover');
-    if (!pop.classList.contains('open')) return;
-    if (pop.contains(e.target) || e.target.closest('.col-filter-btn')) return;
+    if (!pop || !pop.classList.contains('open')) return;
+    // composedPath survives calendar re-renders that detach e.target mid-click.
+    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+    if (path.indexOf(pop) !== -1) return;
+    if (pop.contains(e.target)) return;
+    if (e.target.closest && e.target.closest('.col-filter-btn')) return;
     closeColumnFilterPopover();
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeColumnFilterPopover();
-    if (e.key === 'Enter' && _openFilterKey && document.getElementById('col-filter-popover').classList.contains('open')) {
+    const pop = document.getElementById('col-filter-popover');
+    if (e.key === 'Enter' && _openFilterKey && pop && pop.classList.contains('open')) {
       const tag = document.activeElement && document.activeElement.tagName;
       const id = document.activeElement && document.activeElement.id;
-      if (tag === 'INPUT' && (id === 'col-filter-input' || id === 'col-filter-contains')) {
+      if (tag === 'INPUT' && (id === 'col-filter-input' || id === 'col-filter-contains' || id === 'col-filter-search')) {
         e.preventDefault();
         applyCurrentColumnFilter();
       }
     }
   });
-
-  function fmtDate(d) {
-    if (!d) return '\u2014';
-    const [y, m, g] = d.split('-');
-    return `${g}/${m}/${y}`;
-  }
 
   async function loadDocs() {
     showMsg('Caricamento\u2026');
@@ -1609,7 +1929,7 @@
       }
       _allDocs = data.documenti || [];
       _allDocs.sort((a, b) =>
-        (a.item_no || '').localeCompare(b.item_no || '', undefined, { numeric: true }));
+        (a.vendor_doc || '').localeCompare(b.vendor_doc || '', undefined, { numeric: true, sensitivity: 'base' }));
 
       const revsByDoc = data.revisioni_by_doc || {};
       _allDocRevs = _allDocs.map(d => ({
@@ -1617,9 +1937,20 @@
         revs: (revsByDoc[d.id] || revsByDoc[String(d.id)] || [])
           .sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)),
       }));
+    } catch (e) {
+      console.error(e);
+      showMsg('Errore nel caricamento.');
+      return;
+    }
+    safeApplyFilters();
+  }
 
+  function safeApplyFilters() {
+    try {
       applyFilters();
-    } catch (e) { showMsg('Errore nel caricamento.'); }
+    } catch (err) {
+      console.error('applyFilters failed', err);
+    }
   }
 
   window.applyFilters = function () {
@@ -1629,13 +1960,13 @@
 
   window.setVista = function (v) {
     _vista = v;
-    _sortKey = null;
+    _sortKey = v === 'orizzontale' ? 'client_doc_no' : 'vendor_doc';
     _sortDir = 1;
     _columnFilters = {};
     closeColumnFilterPopover();
     document.getElementById('btn-vert').classList.toggle('active', v === 'verticale');
     document.getElementById('btn-horiz').classList.toggle('active', v === 'orizzontale');
-    applyFilters();
+    safeApplyFilters();
   };
 
   function showMsg(msg) {
@@ -1660,8 +1991,9 @@
       for (const rev of revs || []) {
         const label = (rev.ext_status_label || '').trim();
         const color = (rev.ext_status_colore || '').trim();
+        const letter = (rev.ext_status_lettera || '').trim();
         if (!label || !color || byLabel.has(label)) continue;
-        byLabel.set(label, color);
+        byLabel.set(label, { color, letter });
       }
     }
     if (!byLabel.size) {
@@ -1670,12 +2002,13 @@
     }
     const items = [...byLabel.entries()].sort((a, b) =>
       a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
-    el.innerHTML = items.map(([label, color]) =>
-      `<span class="sit-ext-legend-item">` +
-        `<span class="sit-ext-legend-swatch" style="background:${escHtml(color)}" aria-hidden="true"></span>` +
-        `<span>${escHtml(label)}</span>` +
-      `</span>`
-    ).join('');
+    el.innerHTML = items.map(([label, meta]) => {
+      const text = meta.letter ? `${meta.letter} — ${label}` : label;
+      return `<span class="sit-ext-legend-item">` +
+        `<span class="sit-ext-legend-swatch" style="background:${escHtml(meta.color)}" aria-hidden="true"></span>` +
+        `<span>${escHtml(text)}</span>` +
+      `</span>`;
+    }).join('');
     el.hidden = false;
     el.classList.add('is-visible');
   }
@@ -1699,7 +2032,14 @@
     const revMatch = key.match(/^rev:(\d+):(\w+)$/);
     if (revMatch) {
       const rev = entry.revs[parseInt(revMatch[1], 10)];
-      return rev?.[revMatch[2]] || '';
+      const field = revMatch[2];
+      if (field === 'ext_status') {
+        return rev?.ext_status_lettera || rev?.ext_status_label || '';
+      }
+      return rev?.[field] || '';
+    }
+    if (HORIZ_PLANNED_DATE_KEYS.has(key)) {
+      return plannedDatesForLatestRev(entry.revs)[key] || '';
     }
     const doc = entry.doc;
     if (key === 'reparto_label') {
@@ -1739,7 +2079,7 @@
   function onSortClick(key) {
     if (_sortKey === key) _sortDir *= -1;
     else { _sortKey = key; _sortDir = 1; }
-    applyFilters();
+    safeApplyFilters();
   }
 
   function thHeader(label, key, sortable, opts) {
@@ -1807,8 +2147,8 @@
         <td>${escHtml(d.client_doc_class || '\u2014')}</td>
         <td style="white-space:normal;min-width:150px;max-width:280px;" title="${escHtml(d.doc_title || '')}">${escHtml(d.doc_title || '\u2014')}</td>
         <td>${escHtml(d.reparto_acronimo || d.reparto_label || '\u2014')}</td>
-        <td style="text-align:center">${d.doc_penalty ? 'Sì' : 'No'}</td>
-        <td style="text-align:center">${d.doc_payment ? 'Sì' : 'No'}</td>
+        <td style="text-align:center">${d.doc_penalty ? 'Yes' : 'No'}</td>
+        <td style="text-align:center">${d.doc_payment ? 'Yes' : 'No'}</td>
         <td style="text-align:center;font-weight:600">${escHtml(rev)}</td>
         <td>${fmtDate(r?.dis_plan_date)}</td>
         <td>${fmtDate(r?.dis_act_date)}</td>
@@ -1828,17 +2168,17 @@
             ${thSort('Client Doc N&deg;', 'client_doc_no')}
             ${thSort('Contractor Doc N&deg;', 'contractor_doc_no')}
             ${thSort('Client Doc Class', 'client_doc_class')}
-            ${thSort('Titolo', 'doc_title')}
-            ${thSort('Reparto', 'reparto_label')}
-            ${thFilter('Penale', 'doc_penalty')}
-            ${thFilter('Pagamento', 'doc_payment')}
+            ${thSort('Title', 'doc_title')}
+            ${thSort('Department', 'reparto_label')}
+            ${thFilter('Penalty', 'doc_penalty')}
+            ${thFilter('Payment', 'doc_payment')}
             ${thSort('Rev.', 'rev_no')}
-            ${thSort('Inv. previsto', 'dis_plan_date')}
-            ${thSort('Inv. effettivo', 'dis_act_date')}
-            ${thSort('Ric. previsto', 'rec_plan_date')}
-            ${thSort('Ric. effettivo', 'rec_act_date')}
-            ${thSort('Stato interno', 'int_status')}
-            ${thSort('Risposta cliente', 'ext_status')}
+            ${thSort('Planned send', 'dis_plan_date')}
+            ${thSort('Actual send', 'dis_act_date')}
+            ${thSort('Planned receipt', 'rec_plan_date')}
+            ${thSort('Actual receipt', 'rec_act_date')}
+            ${thSort('Internal status', 'int_status')}
+            ${thSort('Client response', 'ext_status')}
           </tr></thead>
           <tbody>${trs}</tbody>
         </table>
@@ -1855,44 +2195,68 @@
     updateFilterSummary(filteredDocRevs.length, totalRows);
     const rows = sortedDocRevs(filteredDocRevs);
 
-    const FIX = [
-      { label: 'Item',             key: 'item_no'        },
-      { label: 'B&amp;R Doc',      key: 'vendor_doc'     },
-      { label: 'Client Doc N&deg;',key: 'client_doc_no'  },
+    const DOC_FIX = [
+      { label: 'Client Doc N&deg;',     key: 'client_doc_no' },
+      { label: 'Client Doc Class',      key: 'client_doc_class' },
       { label: 'Contractor Doc N&deg;', key: 'contractor_doc_no' },
-      { label: 'Client Doc Class', key: 'client_doc_class'},
-      { label: 'Descrizione',      key: 'doc_title'      },
-      { label: 'Reparto',          key: 'reparto_label'  },
+      { label: 'B&amp;R Doc',           key: 'vendor_doc' },
+      { label: 'Title',                 key: 'doc_title' },
+      { label: 'Item',                  key: 'item_no' },
     ];
-    const fixW  = [80, 110, 130, 130, 130, 240, 100];
+    const PLAN_SUB = [
+      { label: 'Submission date', key: 'planned_send' },
+      { label: 'Receipt date',    key: 'planned_receipt' },
+    ];
+    const FIX = DOC_FIX.concat(PLAN_SUB);
+    const fixW  = [140, 130, 140, 120, 180, 70, 115, 115];
     let leftAcc = 0;
     const leftOf = fixW.map(w => { const v = leftAcc; leftAcc += w; return v; });
 
     const maxRevs = Math.max(...docRevs.map(e => e.revs.length), 1);
-    const SUB = ['Inv. prev.', 'Inv. eff.', 'Ric. prev.', 'Ric. eff.'];
-    const SUB_KEYS = ['dis_plan_date', 'dis_act_date', 'rec_plan_date', 'rec_act_date'];
+    const SUB = ['Dispatch', 'Received', 'Status'];
+    const SUB_KEYS = ['dis_act_date', 'rec_act_date', 'ext_status'];
 
     const fixStyle = (i) =>
-      `left:${leftOf[i]}px;width:${fixW[i]}px;min-width:${fixW[i]}px;max-width:${fixW[i]}px;`;
+      `left:${leftOf[i]}px;min-width:${fixW[i]}px;`;
+
+    function revGroupLabel(r) {
+      for (const entry of docRevs) {
+        const rev = entry.revs[r];
+        if (rev) {
+          const label = formatRevLabel(rev);
+          if (label !== '') return `Rev. ${escHtml(label)}`;
+        }
+      }
+      return `Rev. ${r}`;
+    }
 
     let thead = '<thead><tr>';
-    FIX.forEach((col, i) => {
-      const lastCls = i === FIX.length - 1 ? ' sit-fix-last' : '';
+    DOC_FIX.forEach((col, i) => {
+      const titleCls = col.key === 'doc_title' ? ' sit-col-title' : '';
       thead += thHeader(col.label, col.key, true, {
-        className: 'sit-fix' + lastCls,
+        className: 'sit-fix' + titleCls,
         extraAttrs: ` rowspan="2" style="${fixStyle(i)}"`,
       });
     });
+    thead += `<th class="sit-plan-group" colspan="2" style="left:${leftOf[DOC_FIX.length]}px">Planning</th>`;
     for (let r = 0; r < maxRevs; r++) {
-      thead += `<th class="sit-rev-group" colspan="4">Rev. ${r}</th>`;
+      thead += `<th class="sit-rev-group" colspan="3">${revGroupLabel(r)}</th>`;
     }
     thead += '</tr><tr>';
+    PLAN_SUB.forEach((col, i) => {
+      const idx = DOC_FIX.length + i;
+      const lastCls = i === PLAN_SUB.length - 1 ? ' sit-fix-last' : '';
+      thead += thHeader(col.label, col.key, true, {
+        className: 'sit-fix' + lastCls,
+        extraAttrs: ` style="${fixStyle(idx)}"`,
+      });
+    });
     for (let r = 0; r < maxRevs; r++) {
       SUB.forEach((sub, si) => {
         const sortKey = `rev:${r}:${SUB_KEYS[si]}`;
         thead += thHeader(sub, sortKey, true, {
           className: si === 0 ? 'sit-rev-first' : '',
-          extraAttrs: ' style="min-width:85px;"',
+          extraAttrs: ' style="min-width:95px;white-space:nowrap;"',
         });
       });
     }
@@ -1900,48 +2264,64 @@
 
     let tbody = '<tbody>';
     if (!rows.length) {
-      const colspan = FIX.length + maxRevs * 4;
+      const colspan = FIX.length + maxRevs * 3;
       tbody += `<tr><td colspan="${colspan}" class="sit-empty-filter">Nessun risultato per i filtri selezionati</td></tr>`;
     }
     for (const { doc, revs } of rows) {
+      const planned = plannedDatesForLatestRev(revs);
+      const extMeta = latestExtStatusMeta(revs);
       tbody += '<tr>';
       FIX.forEach((col, i) => {
         let val;
-        if (col.key === 'reparto_label') {
-          val = escHtml(doc.reparto_acronimo || doc.reparto_label || '\u2014');
+        let extraClass = '';
+        let extraStyle = '';
+        let titleAttr = '';
+        if (col.key === 'planned_send') {
+          val = fmtPlanningDate(planned.planned_send);
+        } else if (col.key === 'planned_receipt') {
+          val = fmtPlanningDate(planned.planned_receipt);
+        } else if (col.key === 'vendor_doc') {
+          val = escHtml(doc.vendor_doc || '\u2014');
+          if (extMeta.color) {
+            extraClass = ' sit-vendor-tinted';
+            extraStyle = `--sit-vendor-tint:${statusTintBackground(extMeta.color)};`;
+            if (extMeta.label) {
+              titleAttr = ` title="${escHtml(extMeta.label)}"`;
+            }
+          }
+        } else if (col.key === 'doc_title') {
+          val = escHtml(doc.doc_title || '\u2014');
+          titleAttr = ` title="${escHtml(doc.doc_title || '')}"`;
+          extraClass += ' sit-col-title';
         } else {
           val = escHtml(doc[col.key] || '\u2014');
         }
-        const titleAttr = col.key === 'doc_title'
-          ? ` title="${escHtml(doc.doc_title || '')}"`
-          : col.key === 'reparto_label'
-            ? ` title="${escHtml(doc.reparto_label || '')}"`
-            : '';
         const lastCls = i === FIX.length - 1 ? ' sit-fix-last' : '';
-        tbody += `<td class="sit-fix${lastCls}" style="${fixStyle(i)}"${titleAttr}>${val}</td>`;
+        tbody += `<td class="sit-fix${extraClass}${lastCls}" style="${fixStyle(i)}${extraStyle}"${titleAttr}>${val}</td>`;
       });
       for (let r = 0; r < maxRevs; r++) {
         const rev = revs[r];
         if (rev) {
-          tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_plan_date)}</td>`;
-          tbody += `<td>${fmtDate(rev.dis_act_date)}</td>`;
-          tbody += `<td>${fmtDate(rev.rec_plan_date)}</td>`;
-          const extColor = (rev.ext_status_colore || '').trim();
+          tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_act_date)}</td>`;
           const extLabel = (rev.ext_status_label || '').trim();
-          // Opaque mix against surface so the tint is not altered by the row highlight underneath.
-          const ricStyle = (rev.rec_act_date && extColor)
-            ? ` style="background:${statusTintBackground(extColor)}"`
-            : '';
+          const extLetter = (rev.ext_status_lettera || '').trim();
           const ricTitle = (rev.rec_act_date && extLabel)
             ? ` title="${escHtml(extLabel)}"`
             : '';
           if (rev.rec_act_date) {
-            tbody += `<td class="sit-row-clickable"${ricStyle}${ricTitle} onclick="onRevBtnClick(${rev.id}, this)">${fmtDate(rev.rec_act_date)}</td>`;
+            tbody += `<td class="sit-row-clickable"${ricTitle} onclick="onRevBtnClick(${rev.id}, this)">${fmtDate(rev.rec_act_date)}</td>`;
           } else {
             tbody += `<td>${fmtDate(rev.rec_act_date)}</td>`;
           }
+          const statusTitle = extLabel ? ` title="${escHtml(extLabel)}"` : '';
+          const statusText = extLetter || '\u2014';
+          if (extLetter || rev.rec_act_date) {
+            tbody += `<td class="sit-row-clickable" style="text-align:center;font-weight:700"${statusTitle} onclick="onRevBtnClick(${rev.id}, this)">${escHtml(statusText)}</td>`;
+          } else {
+            tbody += `<td style="text-align:center;font-weight:700">\u2014</td>`;
+          }
         } else {
-          tbody += `<td class="sit-rev-first">\u2014</td><td>\u2014</td><td>\u2014</td><td>\u2014</td>`;
+          tbody += `<td class="sit-rev-first">\u2014</td><td>\u2014</td><td>\u2014</td>`;
         }
       }
       tbody += '</tr>';
@@ -1960,7 +2340,9 @@
       const sampleRow = tbl.querySelector('tbody tr');
       if (!sampleRow) return;
       const fixCells = sampleRow.querySelectorAll('td.sit-fix');
-      const headerFix = tbl.querySelectorAll('thead tr:first-child th.sit-fix');
+      const headerDocFix = tbl.querySelectorAll('thead tr:first-child th.sit-fix');
+      const headerPlanFix = tbl.querySelectorAll('thead tr:nth-child(2) th.sit-fix');
+      const planGroup = tbl.querySelector('thead tr:first-child th.sit-plan-group');
       let left = 0;
       fixCells.forEach((cell, i) => {
         const leftPx = left + 'px';
@@ -1968,16 +2350,41 @@
           const td = tr.querySelectorAll('td.sit-fix')[i];
           if (td) td.style.left = leftPx;
         });
-        if (headerFix[i]) headerFix[i].style.left = leftPx;
+        if (i < headerDocFix.length) {
+          headerDocFix[i].style.left = leftPx;
+        } else {
+          const planIdx = i - headerDocFix.length;
+          if (headerPlanFix[planIdx]) headerPlanFix[planIdx].style.left = leftPx;
+          if (planIdx === 0 && planGroup) planGroup.style.left = leftPx;
+        }
         left += cell.offsetWidth;
       });
     });
   }
 
-  /* ── Export Excel ── */
-  /* ── Export Excel (server-side via openpyxl) ── */
-  window.exportXLSX = function () {
-    window.location.href = '/api/commesse/' + encodeURIComponent(JOB) + '/situazione/export/?vista=' + _vista;
+  /* ── Export ── */
+  function exportSituazioneUrl(format) {
+    return '/api/commesse/' + encodeURIComponent(JOB)
+      + '/situazione/export/?vista=' + encodeURIComponent(_vista)
+      + '&format=' + encodeURIComponent(format);
+  }
+
+  window.exportSituazione = function (btn, event) {
+    // Vista orizzontale: PDF diretto (Document Status).
+    if (_vista === 'orizzontale') {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      window.location.href = exportSituazioneUrl('pdf');
+      return;
+    }
+    toggleExportMenu(btn, event);
+  };
+
+  window.onExportFormatChosen = function (format) {
+    const fmt = format === 'xlsx' ? 'xlsx' : 'pdf';
+    window.location.href = exportSituazioneUrl(fmt);
   };
 
   /* ── Fullscreen ── */

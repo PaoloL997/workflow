@@ -1,0 +1,188 @@
+{% comment %}
+  Shared date-range calendar UI for column filters.
+  Exposes window.DateRangeFilterUI:
+    buildBodyHtml() -> html
+    mount(bodyEl, { from, to }) -> controller with getRange()
+    matchesIso(iso, from, to) -> bool
+    isActive(range) -> bool
+{% endcomment %}
+<script>
+(function () {
+  'use strict';
+
+  const MONTHS = [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+  ];
+
+  function toIso(y, m, d) {
+    return y + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+
+  function parseIso(iso) {
+    if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return null;
+    const parts = iso.slice(0, 10).split('-').map(Number);
+    return { y: parts[0], m: parts[1] - 1, d: parts[2] };
+  }
+
+  function fmtLabel(iso) {
+    if (!iso) return '—';
+    if (typeof formatDate === 'function') return formatDate(iso);
+    return iso;
+  }
+
+  function matchesIso(iso, from, to) {
+    if (!iso) return false;
+    const day = String(iso).slice(0, 10);
+    if (from && day < from) return false;
+    if (to && day > to) return false;
+    return true;
+  }
+
+  function isActive(range) {
+    return !!(range && (range.from || range.to));
+  }
+
+  function buildBodyHtml() {
+    return ''
+      + '<div class="drf-summary">'
+      +   '<div class="drf-bound"><span class="drf-bound-lbl">Dal</span><span class="drf-bound-val" id="drf-from-lbl">—</span></div>'
+      +   '<div class="drf-bound"><span class="drf-bound-lbl">Al</span><span class="drf-bound-val" id="drf-to-lbl">—</span></div>'
+      + '</div>'
+      + '<div class="drf-cal">'
+      +   '<div class="drf-hdr">'
+      +     '<button type="button" class="drf-nav" id="drf-prev" aria-label="Mese precedente">'
+      +       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>'
+      +     '</button>'
+      +     '<span class="drf-month" id="drf-month-lbl"></span>'
+      +     '<button type="button" class="drf-nav" id="drf-next" aria-label="Mese successivo">'
+      +       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
+      +     '</button>'
+      +   '</div>'
+      +   '<div class="drf-wdays">'
+      +     '<span>Lu</span><span>Ma</span><span>Me</span><span>Gi</span><span>Ve</span><span>Sa</span><span>Do</span>'
+      +   '</div>'
+      +   '<div class="drf-grid" id="drf-grid"></div>'
+      + '</div>'
+      + '<p class="drf-hint" id="drf-hint">Seleziona la data di inizio, poi quella di fine</p>';
+  }
+
+  function mount(bodyEl, initial) {
+    if (!bodyEl) {
+      return { getRange: function () { return { from: null, to: null }; } };
+    }
+    initial = initial || {};
+    let from = initial.from || null;
+    let to = initial.to || null;
+    let year;
+    let month;
+
+    const seed = parseIso(from || to);
+    if (seed) {
+      year = seed.y;
+      month = seed.m;
+    } else {
+      const now = new Date();
+      year = now.getFullYear();
+      month = now.getMonth();
+    }
+
+    function updateSummary() {
+      const fromLbl = bodyEl.querySelector('#drf-from-lbl');
+      const toLbl = bodyEl.querySelector('#drf-to-lbl');
+      const hint = bodyEl.querySelector('#drf-hint');
+      if (fromLbl) fromLbl.textContent = from ? fmtLabel(from) : '—';
+      if (toLbl) toLbl.textContent = to ? fmtLabel(to) : '—';
+      if (hint) {
+        if (!from) hint.textContent = 'Seleziona la data di inizio, poi quella di fine';
+        else if (!to) hint.textContent = 'Seleziona la data di fine';
+        else hint.textContent = 'Clicca una data per ricominciare la selezione';
+      }
+    }
+
+    function renderGrid() {
+      const monthLbl = bodyEl.querySelector('#drf-month-lbl');
+      const grid = bodyEl.querySelector('#drf-grid');
+      if (!monthLbl || !grid) return;
+      monthLbl.textContent = MONTHS[month] + ' ' + year;
+
+      let dow = new Date(year, month, 1).getDay();
+      dow = dow === 0 ? 6 : dow - 1;
+      const dim = new Date(year, month + 1, 0).getDate();
+      const today = new Date();
+      const todayIso = toIso(today.getFullYear(), today.getMonth(), today.getDate());
+
+      let html = '';
+      for (let i = 0; i < dow; i++) {
+        html += '<button type="button" class="drf-day empty" disabled></button>';
+      }
+      for (let d = 1; d <= dim; d++) {
+        const iso = toIso(year, month, d);
+        const classes = ['drf-day'];
+        if (iso === todayIso) classes.push('today');
+        if (from && iso === from) classes.push('range-start');
+        if (to && iso === to) classes.push('range-end');
+        if (from && to && iso > from && iso < to) classes.push('in-range');
+        if (from && !to && iso === from) classes.push('picking');
+        html += '<button type="button" class="' + classes.join(' ') + '" data-iso="' + iso + '">' + d + '</button>';
+      }
+      grid.innerHTML = html;
+    }
+
+    function onDayClick(iso) {
+      if (!from || (from && to)) {
+        from = iso;
+        to = null;
+      } else {
+        if (iso < from) {
+          to = from;
+          from = iso;
+        } else {
+          to = iso;
+        }
+      }
+      updateSummary();
+      renderGrid();
+    }
+
+    const prev = bodyEl.querySelector('#drf-prev');
+    const next = bodyEl.querySelector('#drf-next');
+    const gridEl = bodyEl.querySelector('#drf-grid');
+    if (prev) {
+      prev.addEventListener('click', function () {
+        if (--month < 0) { month = 11; year--; }
+        renderGrid();
+      });
+    }
+    if (next) {
+      next.addEventListener('click', function () {
+        if (++month > 11) { month = 0; year++; }
+        renderGrid();
+      });
+    }
+    if (gridEl) {
+      gridEl.addEventListener('click', function (e) {
+        const btn = e.target.closest('.drf-day[data-iso]');
+        if (!btn || btn.disabled) return;
+        onDayClick(btn.getAttribute('data-iso'));
+      });
+    }
+
+    updateSummary();
+    renderGrid();
+
+    return {
+      getRange: function () {
+        return { from: from, to: to };
+      },
+    };
+  }
+
+  window.DateRangeFilterUI = {
+    buildBodyHtml: buildBodyHtml,
+    mount: mount,
+    matchesIso: matchesIso,
+    isActive: isActive,
+  };
+})();
+</script>

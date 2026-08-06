@@ -4,16 +4,17 @@ from django.db import transaction
 from ..models import Documento, IndirSped, Reparto, Revisione, StatoEsterno, Testata
 from .access_source import fetch_commessa_frames
 from .revisione_anomalie import audit_commessa_summary
+from .stato_esterno_codes import STATUS_LETTER_MAP
 
 _STATUS_MAP = {
-    "A": {"nome": "Approved", "colore": "#00B050"},
-    "I": {"nome": "Commented - To be issued as Final", "colore": "#D61D09"},
-    "C": {"nome": "Commented - To be resubmitted - Work can proceed", "colore": "#D61D09"},
-    "F": {"nome": "Final - As Built", "colore": "#FFC000"},
-    "Z": {"nome": "For Information", "colore": "#FFC000"},
-    "O": {"nome": "Old", "colore": "#D61D09"},
-    "R": {"nome": "Rejected - Work can not proceed", "colore": "#D61D09"},
-    "S": {"nome": "Superseeded", "colore": "#B8B8B8"},
+    "A": {"nome": STATUS_LETTER_MAP["A"], "colore": "#00B050"},
+    "I": {"nome": STATUS_LETTER_MAP["I"], "colore": "#D61D09"},
+    "C": {"nome": STATUS_LETTER_MAP["C"], "colore": "#D61D09"},
+    "F": {"nome": STATUS_LETTER_MAP["F"], "colore": "#FFC000"},
+    "Z": {"nome": STATUS_LETTER_MAP["Z"], "colore": "#FFC000"},
+    "O": {"nome": STATUS_LETTER_MAP["O"], "colore": "#D61D09"},
+    "R": {"nome": STATUS_LETTER_MAP["R"], "colore": "#D61D09"},
+    "S": {"nome": STATUS_LETTER_MAP["S"], "colore": "#B8B8B8"},
 }
 
 __REPARTO_MAP = {
@@ -97,10 +98,13 @@ def _get_stato_esterno(code):
     if not isinstance(code, str) or code not in _STATUS_MAP:
         return None
     info = _STATUS_MAP[code]
-    obj, _ = StatoEsterno.objects.get_or_create(
+    obj, created = StatoEsterno.objects.get_or_create(
         nome=info["nome"],
-        defaults={"colore": info["colore"]},
+        defaults={"colore": info["colore"], "lettera": code},
     )
+    if not created and not (obj.lettera or "").strip():
+        obj.lettera = code
+        obj.save(update_fields=["lettera"])
     return obj
 
 
