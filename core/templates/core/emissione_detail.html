@@ -623,13 +623,13 @@
         <label>ID documento in tabella</label>
         <div class="pdf-radio-group" id="pdf-doc-id-group">
           <label class="pdf-radio-opt">
-            <input type="radio" name="pdf-doc-id" value="vendor"> Solo ID interno (Vendor Doc)
+            <input type="checkbox" name="pdf-doc-id" value="vendor" checked> ID interno (Vendor Doc)
           </label>
           <label class="pdf-radio-opt">
-            <input type="radio" name="pdf-doc-id" value="client"> Solo ID cliente (Client Doc)
+            <input type="checkbox" name="pdf-doc-id" value="client" checked> ID cliente (Client Doc)
           </label>
           <label class="pdf-radio-opt">
-            <input type="radio" name="pdf-doc-id" value="both" checked> Entrambi
+            <input type="checkbox" name="pdf-doc-id" value="contractor" checked> Contractor Doc
           </label>
         </div>
       </div>
@@ -989,7 +989,9 @@
     const city    = document.getElementById('pdf-stabilimento').value;
     const mode    = document.querySelector('input[name="pdf-delivery"]:checked')?.value || 'attached';
     const bName   = document.getElementById('pdf-brevi-name').value.trim();
-    const docIdMode = document.querySelector('input[name="pdf-doc-id"]:checked')?.value || 'both';
+    const docIdCols = Array.from(
+      document.querySelectorAll('input[name="pdf-doc-id"]:checked')
+    ).map(function(el) { return el.value; });
     chiudiPdfOpts();
 
     if (_pendingPdfAction === 'emit') {
@@ -1005,19 +1007,19 @@
       document.getElementById('conf-ok').disabled = false;
       document.getElementById('conf-modal').classList.add('open');
       // Store PDF opts for eseguiEmissione
-      window._pdfOpts = { ourRef: ourRef, city: city, mode: mode, bName: bName, docIdMode: docIdMode };
+      window._pdfOpts = { ourRef: ourRef, city: city, mode: mode, bName: bName, docIdCols: docIdCols };
     } else if (_pendingPdfAction === 'print') {
       const date = document.getElementById('ep-data').value;
       const ids  = selDocIds();
       setStatus('Generazione PDF\u2026');
-      dlPdf(ids, selAddrIds(), date, ourRef, city, mode, bName, docIdMode).then(function() {
+      dlPdf(ids, selAddrIds(), date, ourRef, city, mode, bName, docIdCols).then(function() {
         setTimeout(function() { setStatus(''); }, 2000);
       });
     }
   };
 
   /* ── PDF helper ── */
-  async function dlPdf(docIds, addrIds, date, ourRef, city, deliveryMode, breviName, docIdMode) {
+  async function dlPdf(docIds, addrIds, date, ourRef, city, deliveryMode, breviName, docIdCols) {
     try {
       const r = await fetch('/api/trasmittal/pdf/', {
         method: 'POST',
@@ -1026,7 +1028,7 @@
           doc_ids: docIds, addr_ids: addrIds, date: date, job: JOB,
           our_ref: ourRef || '', city: city || '',
           delivery_mode: deliveryMode || 'attached', brevi_manu_name: breviName || '',
-          doc_id_mode: docIdMode || 'both',
+          doc_id_cols: Array.isArray(docIdCols) ? docIdCols : ['vendor', 'client', 'contractor'],
         }),
       });
       if (!r.ok) {
@@ -1076,7 +1078,7 @@
       }
       const n = docIds.length;
       setStatus('\u2713 ' + n + ' document' + (n===1?'o':'i') + ' emess' + (n===1?'o':'i'));
-      await dlPdf(docIds, adrIds, date, opts.ourRef, opts.city, opts.mode, opts.bName, opts.docIdMode);
+      await dlPdf(docIds, adrIds, date, opts.ourRef, opts.city, opts.mode, opts.bName, opts.docIdCols);
       await loadDocs();
       setTimeout(function() { setStatus(''); }, 4000);
     } catch {

@@ -713,9 +713,19 @@ def trasmittal_pdf_api(request):
     city = data.get("city", "")
     delivery_mode = data.get("delivery_mode", "attached")
     brevi_manu_name = data.get("brevi_manu_name", "")
-    doc_id_mode = data.get("doc_id_mode", "both")
-    if doc_id_mode not in ("vendor", "client", "both"):
-        doc_id_mode = "both"
+    doc_id_cols = data.get("doc_id_cols")
+    if not isinstance(doc_id_cols, list):
+        # Legacy single-mode payload.
+        doc_id_mode = data.get("doc_id_mode", "all")
+        if doc_id_mode == "both":
+            doc_id_mode = "all"
+        if doc_id_mode == "all":
+            doc_id_cols = ["client", "vendor", "contractor"]
+        elif doc_id_mode in ("vendor", "client", "contractor"):
+            doc_id_cols = [doc_id_mode]
+        else:
+            doc_id_cols = ["client", "vendor", "contractor"]
+    doc_id_cols = [c for c in doc_id_cols if c in ("vendor", "client", "contractor")]
 
     if not doc_ids or not job:
         return JsonResponse({"error": "Specificare job e doc_ids."}, status=400)
@@ -759,8 +769,13 @@ def trasmittal_pdf_api(request):
                 "item_no": doc.item_no or "",
                 "vendor_doc": doc.vendor_doc or "",
                 "client_doc_no": doc.client_doc_no or "",
+                "contractor_doc_no": doc.contractor_doc_no or "",
                 "doc_title": doc.doc_title or "",
                 "rev_no": rev.rev_no if rev else "",
+                # Planned date (same field shown in gestione emissione).
+                "dis_plan_date": rev.dis_plan_date.isoformat()
+                if (rev and rev.dis_plan_date)
+                else None,
             }
         )
 
@@ -768,6 +783,12 @@ def trasmittal_pdf_api(request):
         from datetime import date as date_type
 
         date_str = date_type.today().isoformat()
+
+    user = request.user
+    signer_name = (getattr(user, "nome_completo", None) or user.get_full_name() or "").strip()
+    if not signer_name:
+        signer_name = (user.get_username() or "").strip()
+    signer_role = (getattr(user, "ruolo", None) or "").strip()
 
     try:
         pdf_bytes = genera_trasmittal_pdf(
@@ -779,7 +800,9 @@ def trasmittal_pdf_api(request):
             city=city,
             delivery_mode=delivery_mode,
             brevi_manu_name=brevi_manu_name,
-            doc_id_mode=doc_id_mode,
+            doc_id_cols=doc_id_cols,
+            signer_name=signer_name,
+            signer_role=signer_role,
         )
     except Exception as exc:
         return JsonResponse({"error": f"Errore generazione PDF: {exc}"}, status=500)

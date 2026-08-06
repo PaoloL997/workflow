@@ -15,23 +15,27 @@ from core.date_fmt import format_display_date
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
 
-# Column layouts per doc_id_mode (mm): ITEM | … | REV. | DOCUMENT | REQUIRED BY
-_TABLE_LAYOUTS = {
-    "vendor": {
-        "headers": ["ITEM", "VENDOR DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
-        "widths": [20, 45, 12, 83, 20],
-    },
-    "client": {
-        "headers": ["ITEM", "CLIENT DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
-        "widths": [20, 45, 12, 83, 20],
-    },
-    "both": {
-        "headers": ["ITEM", "CLIENT DOC.", "VENDOR DOC.", "REV.", "DOCUMENT", "REQUIRED BY"],
-        "widths": [18, 32, 32, 10, 68, 20],
-    },
-}
+# Usable table width on A4 with 15mm side margins.
+_TABLE_WIDTH_MM = 180.0
 
-VALID_DOC_ID_MODES = frozenset(_TABLE_LAYOUTS)
+# Column specs: (field_key, header, preferred_width_mm, align)
+# ID columns are inserted based on the multi-select doc_id_cols list.
+_COL_ITEM = ("item_no", "ITEM", 16, "CENTER")
+_COL_CLIENT = ("client_doc_no", "CLIENT DOC.", 32, "LEFT")
+_COL_VENDOR = ("vendor_doc", "VENDOR DOC.", 32, "LEFT")
+_COL_CONTRACTOR = ("contractor_doc_no", "CONTRACTOR DOC.", 32, "LEFT")
+_COL_REV = ("rev_no", "REV.", 10, "CENTER")
+_COL_DOCUMENT = ("doc_title", "DOCUMENT", 60, "LEFT")
+_COL_REQUIRED = ("dis_plan_date", "REQUIRED BY", 20, "CENTER")
+
+# ID columns selectable via multi-select (fixed display order).
+_ID_COL_ORDER = ("client", "vendor", "contractor")
+_ID_COLS = {
+    "client": _COL_CLIENT,
+    "vendor": _COL_VENDOR,
+    "contractor": _COL_CONTRACTOR,
+}
+VALID_DOC_ID_COLS = frozenset(_ID_COLS)
 
 DELIVERY_OPTIONS = [
     ("attached", "In allegato", "Attached"),
@@ -42,7 +46,18 @@ DELIVERY_OPTIONS = [
 
 
 class TrasmittalPDF(FPDF):
-    def __init__(self, testata, address, date_str, our_ref, city, delivery_mode, brevi_manu_name):
+    def __init__(
+        self,
+        testata,
+        address,
+        date_str,
+        our_ref,
+        city,
+        delivery_mode,
+        brevi_manu_name,
+        signer_name="",
+        signer_role="",
+    ):
         super().__init__(orientation="P", unit="mm", format="A4")
         self.testata = testata
         self.address = address
@@ -51,20 +66,42 @@ class TrasmittalPDF(FPDF):
         self.city = city
         self.delivery_mode = delivery_mode
         self.brevi_manu_name = brevi_manu_name
+        self.signer_name = signer_name or ""
+        self.signer_role = signer_role or ""
+        self._render_signoff = False
+        self._signoff_page = None
         self.set_margins(left=15, top=10, right=15)
-        self.set_auto_page_break(auto=True, margin=20)
+        # Leave room for last-page signoff in the footer.
+        self.set_auto_page_break(auto=True, margin=18)
 
     def header(self):
         if LOGO_PATH.exists():
             self.image(str(LOGO_PATH), x=15, y=8, w=70)
         self.set_y(34)
 
+    def _signoff_lines(self):
+        lines = ["Best Regards", "Brembana&Rolle S.p.A."]
+        name = (self.signer_name or "").strip()
+        role = (self.signer_role or "").strip()
+        if name and role:
+            lines.append(f"{name} - {role}")
+        elif name:
+            lines.append(name)
+        elif role:
+            lines.append(role)
+        return lines
+
     def footer(self):
-        self.set_y(-15)
-        self.set_font("Helvetica", "I", 7)
-        self.set_text_color(120, 120, 120)
-        self.cell(0, 10, f"Pagina {self.page_no()}/{{nb}}", align="C")
-        self.set_text_color(0, 0, 0)
+        # Closing block only on the last page (enabled just before output).
+        if self._render_signoff and self.page_no() == self._signoff_page:
+            lines = self._signoff_lines()
+            line_h = 3.5
+            # Pin the block to the bottom edge (small clearance so glyphs are not clipped).
+            self.set_y(-(line_h * len(lines) + 2))
+            self.set_font("Helvetica", "I", 8)
+            self.set_text_color(0, 0, 0)
+            for line in lines:
+                self.cell(0, line_h, line, align="C", new_x="LMARGIN", new_y="NEXT")
 
 
 def _fmt_date(date_str, city):
@@ -73,6 +110,58 @@ def _fmt_date(date_str, city):
     if city:
         return f"{city}, {formatted}"
     return formatted
+
+
+def _fit_text_width(pdf, text, max_w_mm, *, preferred=9.0, minimum=5.5, bold=False):
+    """Largest Helvetica size in [minimum, preferred] that fits ``text`` in ``max_w_mm``."""
+    text = text or ""
+    if not text:
+        return preferred
+    size = preferred
+    style = "B" if bold else ""
+    while size > minimum + 1e-6:
+        pdf.set_font("Helvetica", style, size)
+        if pdf.get_string_width(text) <= max_w_mm:
+            return size
+        size -= 0.25
+    return minimum
+
+
+def _addr_line_height(font_size):
+    return max(4.0, font_size * 0.55 + 1.2)
+
+
+def _wrap_to_width(pdf, text, max_w_mm, size):
+    """Word-wrap ``text`` to ``max_w_mm`` at Helvetica ``size``; hard-split overlong tokens."""
+    text = (text or "").strip()
+    if not text:
+        return [""]
+    pdf.set_font("Helvetica", "", size)
+    words = text.split()
+    chunks, cur = [], ""
+    for word in words:
+        trial = f"{cur} {word}".strip()
+        if pdf.get_string_width(trial) <= max_w_mm:
+            cur = trial
+            continue
+        if cur:
+            chunks.append(cur)
+            cur = ""
+        if pdf.get_string_width(word) <= max_w_mm:
+            cur = word
+            continue
+        # Hard-split a single token that still overflows at this size.
+        piece = ""
+        for ch in word:
+            if piece and pdf.get_string_width(piece + ch) > max_w_mm:
+                chunks.append(piece)
+                piece = ch
+            else:
+                piece += ch
+        cur = piece
+    if cur:
+        chunks.append(cur)
+    return chunks or [text]
 
 
 def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
@@ -112,7 +201,7 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
 
     # ── RIGHT COLUMN: bordered address box ───────────────────────────────────
     box_padding = 3
-    # Estimate height: count non-empty address fields + labels
+    inner_w = right_w - box_padding * 2
     addr_lines = []
     if address.get("attn"):
         addr_lines.append(("Messr's:", address["attn"]))
@@ -130,7 +219,45 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
     if address.get("ph_no"):
         addr_lines.append(("Ph. No.:", address["ph_no"]))
 
-    box_h = max((len(addr_lines) * (line_h + 1)) + box_padding * 2, 30)
+    # Prefit each line so font size / wrapping stay inside the box.
+    fitted = []
+    content_h = 0.0
+    for label, value in addr_lines:
+        value = str(value or "").strip()
+        if label:
+            pdf.set_font("Helvetica", "B", 9)
+            lbl_w = min(pdf.get_string_width(label) + 2, inner_w * 0.45)
+            val_w = max(1.0, inner_w - lbl_w)
+            lbl_size = _fit_text_width(pdf, label, lbl_w, preferred=9.0, minimum=5.5, bold=True)
+            # Prefer shrinking to one line; wrap only if still too wide at minimum.
+            one_line_size = _fit_text_width(pdf, value, val_w, preferred=9.0, minimum=5.5)
+            pdf.set_font("Helvetica", "", one_line_size)
+            if value and pdf.get_string_width(value) > val_w:
+                size = min(lbl_size, 5.5)
+                chunks = _wrap_to_width(pdf, value, val_w, size)
+                lh = _addr_line_height(size)
+                fitted.append(("labeled_wrap", label, chunks, size, lbl_w, lh))
+                content_h += lh * len(chunks) + 1
+            else:
+                size = min(lbl_size, one_line_size)
+                lh = _addr_line_height(size)
+                fitted.append(("labeled", label, value, size, lbl_w, lh))
+                content_h += lh + 1
+        else:
+            one_line_size = _fit_text_width(pdf, value, inner_w, preferred=9.0, minimum=5.5)
+            pdf.set_font("Helvetica", "", one_line_size)
+            if value and pdf.get_string_width(value) > inner_w:
+                size = 5.5
+                chunks = _wrap_to_width(pdf, value, inner_w, size)
+                lh = _addr_line_height(size)
+                fitted.append(("wrap", None, chunks, size, 0, lh))
+                content_h += lh * len(chunks) + 1
+            else:
+                lh = _addr_line_height(one_line_size)
+                fitted.append(("plain", None, value, one_line_size, 0, lh))
+                content_h += lh + 1
+
+    box_h = max(content_h + box_padding * 2, 30)
 
     # Draw box border
     pdf.set_draw_color(0, 0, 0)
@@ -138,18 +265,40 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
 
     # Fill address content inside box
     y_right = y_start + box_padding
-    for label, value in addr_lines:
-        pdf.set_xy(right_x + box_padding, y_right)
-        if label:
-            pdf.set_font("Helvetica", "B", 9)
-            lbl_w = pdf.get_string_width(label) + 2
-            pdf.cell(lbl_w, line_h, label)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(right_w - lbl_w - box_padding * 2, line_h, value, ln=False)
+    for kind, label, value, size, lbl_w, lh in fitted:
+        if kind == "labeled":
+            pdf.set_xy(right_x + box_padding, y_right)
+            pdf.set_font("Helvetica", "B", size)
+            pdf.cell(lbl_w, lh, label)
+            pdf.set_font("Helvetica", "", size)
+            pdf.cell(inner_w - lbl_w, lh, value)
+            y_right += lh + 1
+        elif kind == "labeled_wrap":
+            for i, chunk in enumerate(value):
+                pdf.set_xy(right_x + box_padding, y_right)
+                if i == 0:
+                    pdf.set_font("Helvetica", "B", size)
+                    pdf.cell(lbl_w, lh, label)
+                    pdf.set_font("Helvetica", "", size)
+                    pdf.cell(inner_w - lbl_w, lh, chunk)
+                else:
+                    pdf.set_font("Helvetica", "", size)
+                    pdf.set_x(right_x + box_padding + lbl_w)
+                    pdf.cell(inner_w - lbl_w, lh, chunk)
+                y_right += lh
+            y_right += 1
+        elif kind == "wrap":
+            for chunk in value:
+                pdf.set_xy(right_x + box_padding, y_right)
+                pdf.set_font("Helvetica", "", size)
+                pdf.cell(inner_w, lh, chunk)
+                y_right += lh
+            y_right += 1
         else:
-            pdf.set_font("Helvetica", "", 9)
-            pdf.cell(right_w - box_padding * 2, line_h, value)
-        y_right += line_h + 1
+            pdf.set_xy(right_x + box_padding, y_right)
+            pdf.set_font("Helvetica", "", size)
+            pdf.cell(inner_w, lh, value)
+            y_right += lh + 1
 
     y_after = max(y_left, y_start + box_h) + 6
     pdf.set_y(y_after)
@@ -194,49 +343,133 @@ def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
     pdf.ln(line_h + 4)
 
 
-def _cell_style_for_text(text, col_width_mm):
-    """Pick a smaller font when cell content is long for the column width."""
-    if not text:
-        return None
-    max_chars_per_line = max(len(line) for line in text.split("\n"))
-    # Rough heuristic: ~1.6mm per char at 8pt Helvetica
-    capacity = max(8, int(col_width_mm / 1.5))
-    if max_chars_per_line > capacity * 1.4:
-        return FontFace(size_pt=6)
-    if max_chars_per_line > capacity:
-        return FontFace(size_pt=7)
-    return None
+_TABLE_PAD_H = 1.5  # horizontal cell padding (mm), matches table padding
 
 
-def _doc_id_values(doc, mode):
-    vendor = (doc.get("vendor_doc") or "").strip()
-    client = (doc.get("client_doc_no") or "").strip()
-    if mode == "vendor":
-        return [vendor]
-    if mode == "client":
-        return [client]
-    return [client, vendor]
-
-
-def _build_doc_table(pdf, documents, time_cli_doc_rev, doc_id_mode="both"):
-    """Render the documents table."""
-    mode = doc_id_mode if doc_id_mode in VALID_DOC_ID_MODES else "both"
-    layout = _TABLE_LAYOUTS[mode]
-    headers = layout["headers"]
-    widths = layout["widths"]
-    required_by = f"{time_cli_doc_rev} DAYS" if time_cli_doc_rev else ""
-
-    # Left-align ID and title columns; keep ITEM/REV centered
-    aligns = []
-    for h in headers:
-        if h in ("CLIENT DOC.", "VENDOR DOC.", "DOCUMENT"):
-            aligns.append("LEFT")
+def _truncate_to_width(pdf, text, max_w_mm, *, bold=False):
+    """Shorten ``text`` with an ellipsis so it fits in ``max_w_mm`` at the current font."""
+    style = "B" if bold else ""
+    # Font is already set by caller; keep style/size consistent.
+    pdf.set_font("Helvetica", style, pdf.font_size_pt)
+    if pdf.get_string_width(text) <= max_w_mm:
+        return text
+    ell = "..."
+    if pdf.get_string_width(ell) > max_w_mm:
+        return ""
+    lo, hi = 0, len(text)
+    best = ell
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        cand = text[:mid].rstrip() + ell
+        if pdf.get_string_width(cand) <= max_w_mm:
+            best = cand
+            lo = mid + 1
         else:
-            aligns.append("CENTER")
+            hi = mid - 1
+    return best
+
+
+def _fit_table_cell(
+    pdf,
+    text,
+    col_width_mm,
+    *,
+    preferred=8.0,
+    minimum=3.5,
+    bold=False,
+    fill_color=None,
+):
+    """Return ``(text, FontFace)`` sized to fit on one line (truncate only as last resort)."""
+    text = " ".join(str(text or "").split())
+    # Slight extra inset: fpdf table borders/padding can eat a fraction of a mm.
+    max_w = max(0.5, float(col_width_mm) - 2 * _TABLE_PAD_H - 0.5)
+    style = "B" if bold else ""
+    size = float(preferred)
+    if text:
+        while size > minimum + 1e-6:
+            pdf.set_font("Helvetica", style, size)
+            if pdf.get_string_width(text) <= max_w:
+                break
+            size -= 0.25
+        else:
+            size = float(minimum)
+            pdf.set_font("Helvetica", style, size)
+            if pdf.get_string_width(text) > max_w:
+                text = _truncate_to_width(pdf, text, max_w, bold=bold)
+
+    kwargs = {"size_pt": size}
+    if bold:
+        kwargs["emphasis"] = "BOLD"
+    if fill_color is not None:
+        kwargs["fill_color"] = fill_color
+    return text, FontFace(**kwargs)
+
+
+def _normalize_doc_id_cols(doc_id_cols=None, doc_id_mode=None):
+    """Resolve selected ID columns; preserve Client → Vendor → Contractor order.
+
+    Accepts a list (preferred) or a legacy single ``doc_id_mode`` string
+    (``vendor`` / ``client`` / ``contractor`` / ``all`` / ``both``).
+    """
+    if doc_id_cols is None and doc_id_mode is not None:
+        if doc_id_mode in ("all", "both"):
+            doc_id_cols = list(_ID_COL_ORDER)
+        elif doc_id_mode in VALID_DOC_ID_COLS:
+            doc_id_cols = [doc_id_mode]
+        else:
+            doc_id_cols = list(_ID_COL_ORDER)
+    selected = {c for c in (doc_id_cols or []) if c in VALID_DOC_ID_COLS}
+    return [c for c in _ID_COL_ORDER if c in selected]
+
+
+def _cell_value_for_col(doc, key):
+    """Display value for a trasmittal table column key."""
+    if key == "dis_plan_date":
+        return format_display_date(doc.get("dis_plan_date")) or ""
+    if key == "rev_no":
+        rev = doc.get("rev_no")
+        return "" if rev is None else str(rev)
+    return str(doc.get(key) or "").strip()
+
+
+def _candidate_columns(doc_id_cols):
+    """Ordered column specs for the selected ID columns (before empty-column filter)."""
+    cols = [_COL_ITEM]
+    for key in _normalize_doc_id_cols(doc_id_cols):
+        cols.append(_ID_COLS[key])
+    cols.extend([_COL_REV, _COL_DOCUMENT, _COL_REQUIRED])
+    return cols
+
+
+def _col_has_values(key, documents):
+    return any(_cell_value_for_col(doc, key) for doc in documents or [])
+
+
+def _active_trasmittal_columns(documents, doc_id_cols):
+    """Candidate columns minus those empty across all documents; widths sum to table width."""
+    candidates = _candidate_columns(doc_id_cols)
+    active = [col for col in candidates if _col_has_values(col[0], documents)]
+    if not active:
+        # Degenerate: keep DOCUMENT so the table still has a structure.
+        active = [_COL_DOCUMENT]
+    prefs = [float(col[2]) for col in active]
+    total = sum(prefs) or 1.0
+    scale = _TABLE_WIDTH_MM / total
+    widths = [round(p * scale, 2) for p in prefs]
+    # Fix rounding drift on the last column.
+    widths[-1] = round(_TABLE_WIDTH_MM - sum(widths[:-1]), 2)
+    return active, widths
+
+
+def _build_doc_table(pdf, documents, doc_id_cols=None):
+    """Render the documents table (omit fully empty columns; fit widths to page)."""
+    cols, widths = _active_trasmittal_columns(documents, doc_id_cols)
+    headers = [c[1] for c in cols]
+    aligns = [c[3] for c in cols]
+    keys = [c[0] for c in cols]
 
     pdf.set_font("Helvetica", "", 8)
-    headings_style = FontFace(emphasis="BOLD", fill_color=(210, 210, 210))
-    heading_size = FontFace(emphasis="BOLD", fill_color=(210, 210, 210), size_pt=7)
+    headings_style = FontFace(emphasis="BOLD", fill_color=(255, 255, 255), size_pt=8)
     with pdf.table(
         col_widths=tuple(widths),
         first_row_as_headings=True,
@@ -244,45 +477,35 @@ def _build_doc_table(pdf, documents, time_cli_doc_rev, doc_id_mode="both"):
         borders_layout=TableBordersLayout.ALL,
         text_align=tuple(aligns),
         line_height=int(pdf.font_size * 2.6),
-        padding=(1.2, 1.5),
+        padding=(1.2, _TABLE_PAD_H),
         wrapmode="CHAR",
     ) as table:
         header_row = table.row()
-        for col, w in zip(headers, widths):
-            style = heading_size if len(col) > 10 else None
-            header_row.cell(col, style=style)
-
-        id_widths = [w for h, w in zip(headers, widths) if h in ("CLIENT DOC.", "VENDOR DOC.")]
-        title_width = next(w for h, w in zip(headers, widths) if h == "DOCUMENT")
+        for header, w in zip(headers, widths):
+            label, style = _fit_table_cell(
+                pdf,
+                header,
+                w,
+                preferred=8.0,
+                bold=True,
+                fill_color=(255, 255, 255),
+            )
+            header_row.cell(label, style=style)
 
         for doc in documents:
-            id_values = _doc_id_values(doc, mode)
-            title = str(doc.get("doc_title", "") or "").strip()
-            title_style = _cell_style_for_text(title, title_width)
-
             row = table.row()
-            row.cell(str(doc.get("item_no", "")))
+            for key, w in zip(keys, widths):
+                value = _cell_value_for_col(doc, key)
+                text, style = _fit_table_cell(pdf, value, w)
+                row.cell(text, style=style)
 
-            if mode == "both":
-                client_val, vendor_val = id_values
-                row.cell(
-                    client_val,
-                    style=_cell_style_for_text(client_val, id_widths[0]),
-                )
-                row.cell(
-                    vendor_val,
-                    style=_cell_style_for_text(vendor_val, id_widths[1]),
-                )
-            else:
-                id_val = id_values[0]
-                row.cell(
-                    id_val,
-                    style=_cell_style_for_text(id_val, id_widths[0] if id_widths else widths[1]),
-                )
 
-            row.cell(str(doc.get("rev_no", "")))
-            row.cell(title, style=title_style)
-            row.cell(required_by)
+def _build_notes_header(pdf):
+    """Left-aligned 'Note' section header below the documents table."""
+    pdf.ln(6)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_text_color(0, 0, 0)
+    pdf.cell(0, 6, "Note", align="L", new_x="LMARGIN", new_y="NEXT")
 
 
 def genera_trasmittal_pdf(
@@ -294,27 +517,37 @@ def genera_trasmittal_pdf(
     city="",
     delivery_mode="attached",
     brevi_manu_name="",
-    doc_id_mode="both",
+    doc_id_cols=None,
+    doc_id_mode=None,
+    signer_name="",
+    signer_role="",
 ):
     """
     Generate a trasmittal PDF and return the raw bytes.
 
     Args:
-        testata: dict with keys job, po_no, job_detail, client, time_cli_doc_rev
+        testata: dict with keys job, po_no, job_detail, client
         addresses: list of dicts with keys consignee, address, zip_code, city, country, attn, ph_no
-        documents: list of dicts with keys item_no, vendor_doc, client_doc_no, doc_title, rev_no
+        documents: list of dicts with keys item_no, vendor_doc, client_doc_no,
+            contractor_doc_no, doc_title, rev_no, dis_plan_date (ISO; shown in REQUIRED BY)
         date_str: ISO date string (e.g. '2025-01-15')
         our_ref: trasmittal reference number (user-provided)
         city: city name for the date header (e.g. 'Schio')
         delivery_mode: one of 'attached', 'mail', 'courier', 'brevi_manu'
         brevi_manu_name: name after "Mr." when delivery_mode is 'brevi_manu'
-        doc_id_mode: 'vendor' | 'client' | 'both' — which document IDs to include in the table
+        doc_id_cols: list of 'vendor' | 'client' | 'contractor' to include as ID columns
+            (fully empty columns are omitted regardless). Default: all three.
+        doc_id_mode: legacy single-mode string; used only if ``doc_id_cols`` is None
+        signer_name: full name for the closing block (e.g. 'Gianni Sartore')
+        signer_role: role/title for the closing block (e.g. 'PM')
 
     Returns:
         bytes — the PDF content
     """
     first_addr = addresses[0] if addresses else {}
-    time_cli_doc_rev = testata.get("time_cli_doc_rev")
+    id_cols = _normalize_doc_id_cols(doc_id_cols, doc_id_mode)
+    if not id_cols and doc_id_cols is None and doc_id_mode is None:
+        id_cols = list(_ID_COL_ORDER)
 
     pdf = TrasmittalPDF(
         testata,
@@ -324,8 +557,9 @@ def genera_trasmittal_pdf(
         city=city,
         delivery_mode=delivery_mode,
         brevi_manu_name=brevi_manu_name,
+        signer_name=signer_name,
+        signer_role=signer_role,
     )
-    pdf.alias_nb_pages()
     pdf.add_page()
 
     # Two-column header: refs (left) + address box (right)
@@ -340,7 +574,14 @@ def genera_trasmittal_pdf(
     _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name)
 
     # Document table
-    _build_doc_table(pdf, documents, time_cli_doc_rev, doc_id_mode=doc_id_mode)
+    _build_doc_table(pdf, documents, doc_id_cols=id_cols)
+
+    # Notes section header (left)
+    _build_notes_header(pdf)
+
+    # Enable last-page signoff just before footer is finalized on output.
+    pdf._signoff_page = pdf.page_no()
+    pdf._render_signoff = True
 
     return bytes(pdf.output())
 
