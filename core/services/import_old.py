@@ -4,6 +4,11 @@ from django.db import transaction
 from ..models import Documento, IndirSped, Reparto, Revisione, StatoEsterno, Testata
 from .access_source import fetch_commessa_frames
 from .revisione_anomalie import audit_commessa_summary
+from .revisioni_cleanup import (
+    access_codes_without_nuova_rev,
+    drop_orphan_revisioni,
+    find_orphan_indices,
+)
 from .stato_esterno_codes import STATUS_LETTER_MAP
 
 _STATUS_MAP = {
@@ -126,7 +131,14 @@ def importa_commessa_da_access(job: str) -> dict:
     if testata_df.empty:
         raise ValueError(f'Commessa "{job}" non trovata nel database Access.')
 
-    rev_df = rev_raw
+    # Drop last revisions that are Access placeholders: previous response does
+    # not foresee a new revision (crea_nuova_rev=False) and the last row has
+    # only DisPlanDate.
+    no_nuova_rev_codes = access_codes_without_nuova_rev()
+    revisioni_orfane_escluse = len(
+        find_orphan_indices(rev_raw, no_nuova_rev_codes=no_nuova_rev_codes)
+    )
+    rev_df = drop_orphan_revisioni(rev_raw, no_nuova_rev_codes=no_nuova_rev_codes)
 
     r = testata_df.iloc[0]
     testata = Testata.objects.create(
@@ -197,6 +209,7 @@ def importa_commessa_da_access(job: str) -> dict:
         "job": testata.job,
         "documenti": len(documenti),
         "revisioni": rev_count,
+        "revisioni_orfane_escluse": revisioni_orfane_escluse,
         "anomalie": summary["count"],
         "anomalie_per_codice": summary["per_codice"],
     }

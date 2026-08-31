@@ -1,13 +1,9 @@
 """
 clean_revisioni.py — Rimuove le revisioni "orfane" da Revisioni.xlsx.
 
-Una revisione è orfana se:
-  - la revisione effettiva precedente (per lo stesso documento) aveva Status = "A" (Approved), E
-  - la revisione corrente non è mai stata spedita (DisActDate = null)
-    né ricevuta (RecActDate = null) né ha una risposta del cliente (Status = null).
-
-Gestisce catene consecutive: quando una revisione viene rimossa, il prev_effective_status
-non viene aggiornato, così eventuali ulteriori orfane successive vengono rimosse anch'esse.
+Una revisione è orfana se (ultima del documento):
+  - la penultima risposta cliente ha crea_nuova_rev=False (Impostazioni), E
+  - l'ultima ha solo DisPlanDate (niente invio/rientro effettivo né Status).
 
 Uso:
     python Access/clean_revisioni.py [--dry-run]
@@ -32,7 +28,11 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from core.services.access_source import get_access_connection  # noqa: E402
-from core.services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices  # noqa: E402
+from core.services.revisioni_cleanup import (  # noqa: E402
+    access_codes_without_nuova_rev,
+    drop_orphan_revisioni,
+    find_orphan_indices,
+)
 
 XLSX_PATH = Path(__file__).parent / "Revisioni.xlsx"
 BACKUP_PATH = XLSX_PATH.with_suffix(".xlsx.bak")
@@ -60,7 +60,9 @@ def main(dry_run: bool = False, from_access: bool = False) -> None:
     total = len(df)
     print(f"Righe totali: {total}")
 
-    orphans = find_orphan_indices(df)
+    codes = access_codes_without_nuova_rev()
+    print(f"Status senza nuova revisione (crea_nuova_rev=False): {sorted(codes)}")
+    orphans = find_orphan_indices(df, no_nuova_rev_codes=codes)
     print(f"Revisioni orfane da rimuovere: {len(orphans)}")
 
     if dry_run:
@@ -78,13 +80,12 @@ def main(dry_run: bool = False, from_access: bool = False) -> None:
     shutil.copy2(XLSX_PATH, BACKUP_PATH)
     print(f"Backup salvato: {BACKUP_PATH}")
 
-    df_clean = drop_orphan_revisioni(df)
+    df_clean = drop_orphan_revisioni(df, no_nuova_rev_codes=codes)
     df_clean.to_excel(XLSX_PATH, index=False)
-    print(f"File aggiornato: {XLSX_PATH}")
-    print(f"Righe rimanenti: {len(df_clean)} (rimosse {total - len(df_clean)})")
+    print(f"Scritto: {XLSX_PATH} ({len(df_clean)} righe, -{len(orphans)})")
 
 
 if __name__ == "__main__":
-    dry_run = "--dry-run" in sys.argv
-    from_access = "--from-access" in sys.argv
-    main(dry_run=dry_run, from_access=from_access)
+    dry = "--dry-run" in sys.argv
+    from_acc = "--from-access" in sys.argv
+    main(dry_run=dry, from_access=from_acc)

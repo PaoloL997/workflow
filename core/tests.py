@@ -695,27 +695,33 @@ class PermessiTestCase(TestCase):
 
 
 class RevisioniCleanupTests(TestCase):
-    def test_single_orphan_after_approved(self):
+    def test_single_orphan_after_approved_with_only_dis_plan(self):
         df = pd.DataFrame(
             [
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 0,
+                    "DisPlanDate": "2025-01-01",
                     "DisActDate": "2025-01-01",
+                    "RecPlanDate": "2025-01-10",
                     "RecActDate": "2025-01-10",
                     "Status": "C",
                 },
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 1,
+                    "DisPlanDate": "2025-02-01",
                     "DisActDate": "2025-02-01",
+                    "RecPlanDate": "2025-02-10",
                     "RecActDate": "2025-02-10",
                     "Status": "A",
                 },
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 2,
+                    "DisPlanDate": "2025-03-01",
                     "DisActDate": None,
+                    "RecPlanDate": None,
                     "RecActDate": None,
                     "Status": None,
                 },
@@ -726,34 +732,31 @@ class RevisioniCleanupTests(TestCase):
         cleaned = drop_orphan_revisioni(df)
         self.assertEqual(len(cleaned), 2)
 
-    def test_consecutive_orphans_removed(self):
+    def test_not_orphan_when_previous_status_needs_new_rev(self):
+        # Status C has crea_nuova_rev=True by default → keep last placeholder.
         df = pd.DataFrame(
             [
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 0,
+                    "DisPlanDate": "2025-01-01",
                     "DisActDate": "2025-01-01",
+                    "RecPlanDate": "2025-01-10",
                     "RecActDate": "2025-01-10",
-                    "Status": "A",
+                    "Status": "C",
                 },
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 1,
+                    "DisPlanDate": "2025-02-01",
                     "DisActDate": None,
-                    "RecActDate": None,
-                    "Status": None,
-                },
-                {
-                    "VendorDoc": "JOB-01",
-                    "RevNo": 2,
-                    "DisActDate": None,
+                    "RecPlanDate": None,
                     "RecActDate": None,
                     "Status": None,
                 },
             ]
         )
-        orphans = find_orphan_indices(df)
-        self.assertEqual(orphans, {1, 2})
+        self.assertEqual(find_orphan_indices(df), set())
 
     def test_not_orphan_when_dis_act_date_present(self):
         df = pd.DataFrame(
@@ -761,14 +764,43 @@ class RevisioniCleanupTests(TestCase):
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 0,
+                    "DisPlanDate": "2025-01-01",
                     "DisActDate": "2025-01-01",
+                    "RecPlanDate": "2025-01-10",
                     "RecActDate": "2025-01-10",
                     "Status": "A",
                 },
                 {
                     "VendorDoc": "JOB-01",
                     "RevNo": 1,
+                    "DisPlanDate": "2025-02-01",
                     "DisActDate": "2025-02-01",
+                    "RecPlanDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                },
+            ]
+        )
+        self.assertEqual(find_orphan_indices(df), set())
+
+    def test_not_orphan_without_dis_plan_date(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 0,
+                    "DisPlanDate": "2025-01-01",
+                    "DisActDate": "2025-01-01",
+                    "RecPlanDate": "2025-01-10",
+                    "RecActDate": "2025-01-10",
+                    "Status": "A",
+                },
+                {
+                    "VendorDoc": "JOB-01",
+                    "RevNo": 1,
+                    "DisPlanDate": None,
+                    "DisActDate": None,
+                    "RecPlanDate": None,
                     "RecActDate": None,
                     "Status": None,
                 },
@@ -987,6 +1019,7 @@ class ImportOldTests(TestCase):
         result = importa_commessa_da_access("99999")
         self.assertEqual(result["documenti"], 1)
         self.assertEqual(result["revisioni"], 2)
+        self.assertEqual(result["revisioni_orfane_escluse"], 0)
         self.assertEqual(Revisione.objects.count(), 2)
         self.assertIn("anomalie", result)
         # Rev 0 has DisActDate + RecActDate → ricevuto; rev 1 has no dates → Da inviare
@@ -994,6 +1027,41 @@ class ImportOldTests(TestCase):
         self.assertEqual(Revisione.objects.filter(rev_no=1).get().int_status, "")
         doc = Documento.objects.get(vendor_doc="99999-01")
         self.assertEqual(doc.contractor_doc_no, "CTR-99")
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_excludes_orphan_after_approved(self, mock_fetch):
+        StatoEsterno.objects.create(nome="Approved", colore="#00B050", crea_nuova_rev=False)
+        frames = self._frames()
+        frames["revisioni"] = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "99999-01",
+                    "RevNo": 0,
+                    "RevLet": "",
+                    "DisPlanDate": "2025-01-01",
+                    "DisActDate": "2025-01-01",
+                    "RecPlanDate": "2025-01-10",
+                    "RecActDate": "2025-01-10",
+                    "Status": "A",
+                },
+                {
+                    "VendorDoc": "99999-01",
+                    "RevNo": 1,
+                    "RevLet": "",
+                    "DisPlanDate": "2025-02-01",
+                    "DisActDate": None,
+                    "RecPlanDate": None,
+                    "RecActDate": None,
+                    "Status": None,
+                },
+            ]
+        )
+        mock_fetch.return_value = frames
+        result = importa_commessa_da_access("99999")
+        self.assertEqual(result["revisioni_orfane_escluse"], 1)
+        self.assertEqual(result["revisioni"], 1)
+        self.assertEqual(Revisione.objects.count(), 1)
+        self.assertEqual(Revisione.objects.get().rev_no, 0)
 
     @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_sets_inviato_when_only_dis_act_date(self, mock_fetch):
