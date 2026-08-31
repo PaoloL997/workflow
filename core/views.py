@@ -22,6 +22,7 @@ from .models import (
     IndirSped,
     Permesso,
     Revisione,
+    Segnalazione,
     Stabilimento,
     StatoEsterno,
     Testata,
@@ -81,6 +82,16 @@ from .services.revisione_anomalie import (
     serialize_anomalie_gruppi,
 )
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
+from .services.segnalazioni import (
+    SegnalazioneClosed,
+    SegnalazioneForbidden,
+    chiudi_segnalazione,
+    create_commento,
+    create_segnalazione,
+    list_segnalazioni,
+    riapri_segnalazione,
+    set_voto,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2169,3 +2180,114 @@ def import_from_old_api(request):
     except Exception as exc:
         logger.exception("Errore importazione da Access, job=%s", job)
         return JsonResponse({"error": f"Errore durante l'importazione: {exc}"}, status=500)
+
+
+# ── HTML + API: Segnalazioni ─────────────────────────────────────────────────
+
+
+def _json_body(request):
+    try:
+        return json.loads(request.body)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
+@login_required
+def segnalazioni_view(request):
+    return render(request, "core/segnalazioni.html", {})
+
+
+@api_login_required
+@require_http_methods(["GET", "POST"])
+def segnalazioni_api(request):
+    if request.method == "GET":
+        tipo = (request.GET.get("tipo") or "").strip() or None
+        stato = (request.GET.get("stato") or "").strip() or None
+        mine_raw = (request.GET.get("mine") or "").strip()
+        top_raw = (request.GET.get("top") or "").strip() or None
+        if mine_raw and mine_raw not in ("0", "1"):
+            return JsonResponse({"error": "Parametro mine non valido."}, status=400)
+        try:
+            return JsonResponse(
+                {
+                    "segnalazioni": list_segnalazioni(
+                        request.user,
+                        tipo=tipo,
+                        stato=stato,
+                        mine=mine_raw == "1",
+                        top=top_raw,
+                    )
+                }
+            )
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+
+    data = _json_body(request)
+    if data is None:
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        item = create_segnalazione(
+            request.user,
+            data.get("tipo"),
+            data.get("titolo"),
+            data.get("testo"),
+        )
+        return JsonResponse({"ok": True, "data": item}, status=201)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def segnalazione_voto_api(request, pk):
+    data = _json_body(request)
+    if data is None:
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        item = set_voto(request.user, pk, data.get("valore"))
+        return JsonResponse({"ok": True, "data": item})
+    except Segnalazione.DoesNotExist:
+        return JsonResponse({"error": "Segnalazione non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def segnalazione_commenti_api(request, pk):
+    data = _json_body(request)
+    if data is None:
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        item = create_commento(request.user, pk, data.get("testo"))
+        return JsonResponse({"ok": True, "data": item}, status=201)
+    except Segnalazione.DoesNotExist:
+        return JsonResponse({"error": "Segnalazione non trovata."}, status=404)
+    except SegnalazioneClosed as exc:
+        return JsonResponse({"error": str(exc)}, status=403)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def segnalazione_chiudi_api(request, pk):
+    try:
+        item = chiudi_segnalazione(request.user, pk)
+        return JsonResponse({"ok": True, "data": item})
+    except Segnalazione.DoesNotExist:
+        return JsonResponse({"error": "Segnalazione non trovata."}, status=404)
+    except SegnalazioneForbidden:
+        return JsonResponse({"error": "Permesso negato."}, status=403)
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def segnalazione_riapri_api(request, pk):
+    try:
+        item = riapri_segnalazione(request.user, pk)
+        return JsonResponse({"ok": True, "data": item})
+    except Segnalazione.DoesNotExist:
+        return JsonResponse({"error": "Segnalazione non trovata."}, status=404)
+    except SegnalazioneForbidden:
+        return JsonResponse({"error": "Permesso negato."}, status=403)

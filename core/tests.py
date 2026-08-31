@@ -18,8 +18,13 @@ from .models import (
     Reparto,
     Revisione,
     RevisioneFileLink,
+    Segnalazione,
+    SegnalazioneCommento,
+    SegnalazioneVoto,
     StatoEsterno,
+    StatoSegnalazione,
     Testata,
+    TipoSegnalazione,
 )
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
@@ -1775,3 +1780,281 @@ class CommessaPinTestCase(TestCase):
         by_job = {c["job"]: c for c in home}
         self.assertFalse(by_job.get(self.jobs[0].job, {}).get("pinned", False))
         self.assertEqual(len(list_home_commesse(self.other)), 8)
+
+
+class SegnalazioniTestCase(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.reader = User.objects.create_user(
+            "seg_reader",
+            "seg-reader@example.com",
+            "pw",
+            permesso=Permesso.READING,
+            first_name="Luca",
+            last_name="Rossi",
+        )
+        self.writer = User.objects.create_user(
+            "seg_writer",
+            "seg-writer@example.com",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Anna",
+            last_name="Bianchi",
+        )
+        self.admin = User.objects.create_user(
+            "seg_admin",
+            "seg-admin@example.com",
+            "pw",
+            permesso=Permesso.ADMIN,
+            first_name="Mario",
+            last_name="Verdi",
+        )
+        self.voter = User.objects.create_user(
+            "seg_voter",
+            "seg-voter@example.com",
+            "pw",
+            permesso=Permesso.READING,
+            first_name="Piero",
+            last_name="Neri",
+        )
+
+    def _post(self, url, payload, user=None):
+        if user:
+            self.client.force_login(user)
+        return self.client.post(url, data=json.dumps(payload), content_type="application/json")
+
+    def _create(self, user, tipo="feature", titolo="Titolo", testo="Descrizione"):
+        return self._post(
+            "/api/segnalazioni/",
+            {"tipo": tipo, "titolo": titolo, "testo": testo},
+            user=user,
+        )
+
+    def test_page_requires_login(self):
+        res = self.client.get("/segnalazioni/")
+        self.assertEqual(res.status_code, 302)
+
+    def test_page_ok_for_authenticated(self):
+        self.client.force_login(self.reader)
+        res = self.client.get("/segnalazioni/")
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Nuova proposta")
+        self.assertContains(res, "Tutti i post")
+        self.assertContains(res, "I miei post")
+        self.assertContains(res, "Top 10 per voti")
+        self.assertContains(res, "Nuove funzionalità")
+        self.assertContains(res, "Segnalazioni")
+        self.assertContains(res, "Solo aperti")
+        self.assertContains(res, "Post chiusi")
+
+    def test_home_contains_prompt_link(self):
+        self.client.force_login(self.reader)
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, "Qualcosa da segnalare?")
+        self.assertContains(res, 'href="/segnalazioni/"')
+
+    def test_reading_user_can_create(self):
+        res = self._create(self.reader, titolo="Nuova export", testo="Vorrei un export CSV.")
+        self.assertEqual(res.status_code, 201)
+        data = res.json()["data"]
+        self.assertEqual(data["titolo"], "Nuova export")
+        self.assertEqual(data["tipo"], TipoSegnalazione.FEATURE)
+        self.assertEqual(data["autore_nome"], "Luca Rossi")
+        self.assertEqual(data["autore_iniziale"], "L")
+        self.assertIsNone(data["autore_avatar"])
+        self.assertEqual(data["stato"], StatoSegnalazione.APERTO)
+        self.assertEqual(data["score"], 0)
+        self.assertEqual(data["mio_voto"], 0)
+        self.assertNotIn("voti", data)
+        self.assertNotIn("utente", data)
+
+    def test_vote_unique_and_score(self):
+        created = self._create(self.reader)
+        pk = created.json()["data"]["id"]
+
+        up = self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": 1}, user=self.writer)
+        self.assertEqual(up.status_code, 200)
+        self.assertEqual(up.json()["data"]["score"], 1)
+        self.assertEqual(up.json()["data"]["up"], 1)
+        self.assertEqual(up.json()["data"]["mio_voto"], 1)
+
+        again = self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": 1}, user=self.writer)
+        self.assertEqual(again.json()["data"]["score"], 1)
+        self.assertEqual(SegnalazioneVoto.objects.filter(segnalazione_id=pk).count(), 1)
+
+        down = self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": -1}, user=self.voter)
+        self.assertEqual(down.json()["data"]["score"], 0)
+        self.assertEqual(down.json()["data"]["down"], 1)
+
+        switch = self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": -1}, user=self.writer)
+        self.assertEqual(switch.json()["data"]["score"], -2)
+
+        clear = self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": 0}, user=self.writer)
+        self.assertEqual(clear.json()["data"]["mio_voto"], 0)
+        self.assertEqual(clear.json()["data"]["score"], -1)
+
+    def test_votes_are_anonymous_in_list(self):
+        created = self._create(self.reader, titolo="Voto anonimo")
+        pk = created.json()["data"]["id"]
+        self._post(f"/api/segnalazioni/{pk}/voto/", {"valore": 1}, user=self.voter)
+
+        self.client.force_login(self.reader)
+        res = self.client.get("/api/segnalazioni/")
+        self.assertEqual(res.status_code, 200)
+        blob = res.content.decode()
+        self.assertNotIn("seg_voter", blob)
+        self.assertNotIn("Piero Neri", blob)
+        item = res.json()["segnalazioni"][0]
+        self.assertEqual(item["up"], 1)
+        self.assertEqual(item["mio_voto"], 0)
+        self.assertNotIn("voti", item)
+        for key in item:
+            self.assertNotIn("utente", key)
+
+    def test_comment_on_open_and_closed(self):
+        pk = self._create(self.reader).json()["data"]["id"]
+        comment = self._post(
+            f"/api/segnalazioni/{pk}/commenti/",
+            {"testo": "Concordo."},
+            user=self.writer,
+        )
+        self.assertEqual(comment.status_code, 201)
+        self.assertEqual(comment.json()["data"]["commenti"][0]["autore_nome"], "Anna Bianchi")
+        self.assertEqual(SegnalazioneCommento.objects.filter(segnalazione_id=pk).count(), 1)
+
+        close = self._post(f"/api/segnalazioni/{pk}/chiudi/", {}, user=self.admin)
+        self.assertEqual(close.status_code, 200)
+        self.assertEqual(close.json()["data"]["stato"], StatoSegnalazione.CHIUSO)
+
+        blocked = self._post(
+            f"/api/segnalazioni/{pk}/commenti/",
+            {"testo": "Troppo tardi."},
+            user=self.writer,
+        )
+        self.assertEqual(blocked.status_code, 403)
+        self.assertIn("chiuso", blocked.json()["error"].lower())
+
+    def test_non_admin_cannot_close(self):
+        pk = self._create(self.reader).json()["data"]["id"]
+        res = self._post(f"/api/segnalazioni/{pk}/chiudi/", {}, user=self.writer)
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(res.json()["error"], "Permesso negato.")
+        self.assertEqual(Segnalazione.objects.get(pk=pk).stato, StatoSegnalazione.APERTO)
+
+        res2 = self._post(f"/api/segnalazioni/{pk}/riapri/", {}, user=self.reader)
+        self.assertEqual(res2.status_code, 403)
+
+    def test_list_orders_open_before_closed_by_score(self):
+        low = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Basso",
+            testo="x",
+        )
+        high = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.PROBLEMA,
+            titolo="Alto",
+            testo="x",
+        )
+        closed = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Chiuso alto",
+            testo="x",
+            stato=StatoSegnalazione.CHIUSO,
+        )
+        SegnalazioneVoto.objects.create(segnalazione=low, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=high, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=high, utente=self.voter, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.voter, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.admin, valore=1)
+
+        self.client.force_login(self.reader)
+        titles = [s["titolo"] for s in self.client.get("/api/segnalazioni/").json()["segnalazioni"]]
+        self.assertEqual(titles, ["Alto", "Basso", "Chiuso alto"])
+
+    def test_filter_by_tipo(self):
+        self._create(self.reader, tipo="feature", titolo="Feat")
+        self._create(self.reader, tipo="problema", titolo="Bug")
+        self.client.force_login(self.reader)
+        feats = self.client.get("/api/segnalazioni/?tipo=feature").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in feats], ["Feat"])
+        bugs = self.client.get("/api/segnalazioni/?tipo=problema").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in bugs], ["Bug"])
+
+    def test_filter_by_stato(self):
+        self._create(self.reader, titolo="Aperto")
+        closed_pk = self._create(self.reader, titolo="Chiuso").json()["data"]["id"]
+        self._post(f"/api/segnalazioni/{closed_pk}/chiudi/", {}, user=self.admin)
+        self.client.force_login(self.reader)
+        aperti = self.client.get("/api/segnalazioni/?stato=aperto").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in aperti], ["Aperto"])
+        chiusi = self.client.get("/api/segnalazioni/?stato=chiuso").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in chiusi], ["Chiuso"])
+
+    def test_filter_mine(self):
+        self._create(self.reader, titolo="Del reader")
+        self._create(self.writer, titolo="Del writer")
+        self.client.force_login(self.reader)
+        mine = self.client.get("/api/segnalazioni/?mine=1").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in mine], ["Del reader"])
+        self.client.force_login(self.writer)
+        mine_w = self.client.get("/api/segnalazioni/?mine=1").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in mine_w], ["Del writer"])
+
+    def test_top_by_score(self):
+        closed = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Chiuso top",
+            testo="x",
+            stato=StatoSegnalazione.CHIUSO,
+        )
+        mid = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Medio",
+            testo="x",
+        )
+        high = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.PROBLEMA,
+            titolo="Alto",
+            testo="x",
+        )
+        Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Zero",
+            testo="x",
+        )
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.voter, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=closed, utente=self.admin, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=high, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=high, utente=self.voter, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=mid, utente=self.writer, valore=1)
+
+        for i in range(8):
+            Segnalazione.objects.create(
+                autore=self.reader,
+                tipo=TipoSegnalazione.FEATURE,
+                titolo=f"Extra {i}",
+                testo="x",
+            )
+        self.client.force_login(self.reader)
+        top = self.client.get("/api/segnalazioni/?top=10").json()["segnalazioni"]
+        self.assertEqual(len(top), 10)
+        self.assertEqual([s["titolo"] for s in top[:3]], ["Chiuso top", "Alto", "Medio"])
+        self.assertNotIn("Zero", [s["titolo"] for s in top])
+
+    def test_invalid_list_params(self):
+        self.client.force_login(self.reader)
+        self.assertEqual(self.client.get("/api/segnalazioni/?tipo=nope").status_code, 400)
+        self.assertEqual(self.client.get("/api/segnalazioni/?stato=nope").status_code, 400)
+        self.assertEqual(self.client.get("/api/segnalazioni/?top=abc").status_code, 400)
+        self.assertEqual(self.client.get("/api/segnalazioni/?top=0").status_code, 400)
+        self.assertEqual(self.client.get("/api/segnalazioni/?mine=yes").status_code, 400)

@@ -10,6 +10,8 @@ from .models import (
     Reparto,
     Revisione,
     RevisioneFileLink,
+    Segnalazione,
+    SegnalazioneCommento,
     Stabilimento,
     StatoEsterno,
     Testata,
@@ -177,3 +179,29 @@ class RevisioneAdmin(admin.ModelAdmin):
     search_fields = ("documento__vendor_doc", "documento__testata__job")
     list_filter = ("int_status",)
     raw_id_fields = ("documento",)
+
+
+class SegnalazioneCommentoInline(admin.TabularInline):
+    model = SegnalazioneCommento
+    extra = 0
+    readonly_fields = ("autore", "testo", "created_at")
+    can_delete = True
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Segnalazione)
+class SegnalazioneAdmin(admin.ModelAdmin):
+    list_display = ("id", "titolo", "tipo", "stato", "autore", "created_at")
+    list_filter = ("tipo", "stato")
+    search_fields = (
+        "titolo",
+        "testo",
+        "autore__username",
+        "autore__first_name",
+        "autore__last_name",
+    )
+    readonly_fields = ("autore", "created_at", "chiuso_da", "chiuso_il")
+    raw_id_fields = ("autore", "chiuso_da")
+    inlines = [SegnalazioneCommentoInline]

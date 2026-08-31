@@ -25,6 +25,10 @@
     margin-bottom: 64px;
   }
 
+  @media (min-width: 900px) {
+    .navbar { padding: 28px 280px 0; }
+  }
+
   .nav-item {
     display: flex;
     align-items: center;
@@ -380,6 +384,45 @@
     padding: 48px 24px;
     color: var(--color-text-secondary);
     font-size: 15px;
+  }
+
+  .segnalazioni-prompt {
+    position: fixed;
+    top: 20px;
+    right: 96px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    z-index: 100;
+    margin: 0;
+    padding: 0;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .segnalazioni-prompt a {
+    color: var(--color-accent);
+    font-weight: 600;
+    text-decoration: none;
+    margin-left: 0.45em;
+  }
+
+  .segnalazioni-prompt a:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 800px) {
+    .segnalazioni-prompt {
+      font-size: 12px;
+      max-width: 42vw;
+      white-space: normal;
+      text-align: right;
+      line-height: 1.25;
+      height: auto;
+      min-height: 40px;
+    }
   }
 
   /* ── Apri Commessa dropdown ── */
@@ -856,6 +899,10 @@
 
 </div><!-- /page -->
 
+<p class="segnalazioni-prompt">
+  Qualcosa da segnalare? proponila <a href="{% url 'segnalazioni' %}">qui</a>
+</p>
+
 
 <!-- ── Modal: Apri Commessa ── -->
 <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -983,6 +1030,7 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
+          <li>Bacheca proposte e segnalazioni: voti anonimi, commenti e chiusura da admin</li>
           <li>Campo Contractor Doc N° su documenti, import Excel, elenco, situazione ed export</li>
           <li>Commesse preferite pinnabili per utente</li>
           <li>Export Excel e PDF da emissione, ricezione e situazione documenti</li>

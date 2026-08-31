@@ -158,4 +158,27 @@ urlpatterns = [
     # HTML + API — Import from old Access DB
     path("import-from-old/", views.import_from_old_view, name="import_from_old"),
     path("api/import-from-old/", views.import_from_old_api, name="import_from_old_api"),
+    # HTML + API — Segnalazioni
+    path("segnalazioni/", views.segnalazioni_view, name="segnalazioni"),
+    path("api/segnalazioni/", views.segnalazioni_api, name="segnalazioni_api"),
+    path(
+        "api/segnalazioni/<int:pk>/voto/",
+        views.segnalazione_voto_api,
+        name="segnalazione_voto_api",
+    ),
+    path(
+        "api/segnalazioni/<int:pk>/commenti/",
+        views.segnalazione_commenti_api,
+        name="segnalazione_commenti_api",
+    ),
+    path(
+        "api/segnalazioni/<int:pk>/chiudi/",
+        views.segnalazione_chiudi_api,
+        name="segnalazione_chiudi_api",
+    ),
+    path(
+        "api/segnalazioni/<int:pk>/riapri/",
+        views.segnalazione_riapri_api,
+        name="segnalazione_riapri_api",
+    ),
 ]

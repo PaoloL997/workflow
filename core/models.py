@@ -406,3 +406,102 @@ class RevisioneFileLink(models.Model):
 
     def __str__(self):
         return f"{self.revisione} → {self.percorso}"
+
+
+class TipoSegnalazione(models.TextChoices):
+    FEATURE = "feature", "Feature"
+    PROBLEMA = "problema", "Problema"
+
+
+class StatoSegnalazione(models.TextChoices):
+    APERTO = "aperto", "Aperto"
+    CHIUSO = "chiuso", "Chiuso"
+
+
+class Segnalazione(models.Model):
+    autore = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="segnalazioni",
+    )
+    tipo = models.CharField(max_length=20, choices=TipoSegnalazione.choices)
+    titolo = models.CharField(max_length=200)
+    testo = models.TextField()
+    stato = models.CharField(
+        max_length=20,
+        choices=StatoSegnalazione.choices,
+        default=StatoSegnalazione.APERTO,
+    )
+    chiuso_da = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="segnalazioni_chiuse",
+    )
+    chiuso_il = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "segnalazioni"
+        verbose_name = "Segnalazione"
+        verbose_name_plural = "Segnalazioni"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.titolo
+
+
+class SegnalazioneVoto(models.Model):
+    segnalazione = models.ForeignKey(
+        Segnalazione,
+        on_delete=models.CASCADE,
+        related_name="voti",
+    )
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="segnalazione_voti",
+    )
+    valore = models.SmallIntegerField()
+
+    class Meta:
+        managed = True
+        db_table = "segnalazione_voti"
+        verbose_name = "Voto segnalazione"
+        verbose_name_plural = "Voti segnalazioni"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["segnalazione", "utente"],
+                name="uniq_utente_segnalazione_voto",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.utente_id}:{self.segnalazione_id}={self.valore}"
+
+
+class SegnalazioneCommento(models.Model):
+    segnalazione = models.ForeignKey(
+        Segnalazione,
+        on_delete=models.CASCADE,
+        related_name="commenti",
+    )
+    autore = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="segnalazione_commenti",
+    )
+    testo = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "segnalazione_commenti"
+        verbose_name = "Commento segnalazione"
+        verbose_name_plural = "Commenti segnalazioni"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Commento #{self.pk}"
