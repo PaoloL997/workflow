@@ -6,6 +6,7 @@
 
 ### Added
 
+- Forum per proposte di modifica e segnalazione di problemi: voti anonimi, commenti e chiusura da admin
 - Campo Contractor Doc N° su documenti, import Excel, elenco, situazione ed export
 - Commesse preferite pinnabili per utente
 - Export Excel e PDF da emissione, ricezione e situazione documenti
