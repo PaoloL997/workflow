@@ -73,7 +73,7 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if self.is_superuser:
             self.permesso = Permesso.ADMIN
-        self.is_staff = self.permesso == Permesso.ADMIN
+        self.is_staff = self.permesso in (Permesso.ADMIN, Permesso.WRITING)
         super().save(*args, **kwargs)
 
 
