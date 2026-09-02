@@ -1,4 +1,4 @@
-"""Allinea la table transmittal ai PDF già presenti su TRANSMITTAL_PATH."""
+"""Allinea la table transmittal ai PDF in JOBS/{job}/PROGETTO/DCC/TRANSMITTAL."""
 
 from django.core.management.base import BaseCommand
 
@@ -8,7 +8,8 @@ from core.services.trasmittal_archivio import sync_trasmittal_da_cartella
 
 class Command(BaseCommand):
     help = (
-        "Crea righe transmittal per i PDF già in cartella (id + data file, "
+        "Crea righe transmittal per i PDF già in "
+        "JOBS/{job}/PROGETTO/DCC/TRANSMITTAL (id + data file, "
         "senza documenti/revisioni). Non sovrascrive righe esistenti."
     )
 

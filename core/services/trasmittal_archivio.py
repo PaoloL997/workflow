@@ -1,6 +1,6 @@
 """Transmittal archive: fileserver PDFs plus database records.
 
-File operations are restricted to ``settings.TRANSMITTAL_PATH``.
+PDFs live in ``{FILESERVER_JOBS_PATH}/{job}/PROGETTO/DCC/TRANSMITTAL``.
 Expected filename: ``Transmittal {job}-{id}.pdf`` (case-insensitive).
 """
 
@@ -9,12 +9,12 @@ from __future__ import annotations
 import logging
 import re
 from datetime import date, datetime
-from glob import escape as glob_escape
 from pathlib import Path
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
+
+from .fileserver import get_base_path, get_jobs_root
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,20 @@ class TrasmittalAnnullaError(Exception):
     """Cancel is not allowed (not latest, no revisions, or already received)."""
 
 
-def get_trasmittal_root() -> Path:
-    """Return the root Path of the transmittal archive directory."""
-    return Path(settings.TRANSMITTAL_PATH)
+def cartella_trasmittal(job: str) -> Path:
+    """Return ``{JOBS}/{job}/PROGETTO/DCC/TRANSMITTAL``."""
+    return get_base_path((job or "").strip(), "DCC") / "TRANSMITTAL"
 
 
-def _is_inside_root(path: Path, root: Path) -> bool:
+def percorso_previsto(job: str, numero: int) -> Path:
+    """Return the destination path for a transmittal PDF (file may not exist)."""
+    job_clean = (job or "").strip()
+    return cartella_trasmittal(job_clean) / _filename(job_clean, numero)
+
+
+def _is_inside_jobs(path: Path) -> bool:
     try:
-        path.resolve().relative_to(root.resolve())
+        path.resolve().relative_to(get_jobs_root().resolve())
         return True
     except (ValueError, OSError):
         return False
@@ -51,26 +57,25 @@ def lista_trasmittal(job: str) -> list[dict]:
         List of dicts with ``id`` (int) and ``nome`` (filename), sorted by
         id descending. Empty if the folder is missing or has no matches.
     """
-    root = get_trasmittal_root()
-    if not root.exists() or not root.is_dir():
-        return []
-
     job_clean = (job or "").strip()
     if not job_clean:
         return []
 
+    folder = cartella_trasmittal(job_clean)
+    if not folder.exists() or not folder.is_dir():
+        return []
+
     items: list[dict] = []
     seen_ids: set[int] = set()
-    pattern = f"Transmittal {glob_escape(job_clean)}-*.pdf"
     try:
-        entries = root.glob(pattern)
+        entries = folder.iterdir()
     except OSError:
         return []
 
     for entry in entries:
         if not entry.is_file():
             continue
-        if not _is_inside_root(entry, root):
+        if not _is_inside_jobs(entry):
             continue
         match = _FILENAME_RE.match(entry.name)
         if not match:
@@ -89,7 +94,7 @@ def lista_trasmittal(job: str) -> list[dict]:
 
 
 def percorso_trasmittal(job: str, transmittal_id: int) -> Path:
-    """Resolve a transmittal PDF path inside the archive root.
+    """Resolve a transmittal PDF path inside the job TRANSMITTAL folder.
 
     Args:
         job: Job number.
@@ -100,21 +105,21 @@ def percorso_trasmittal(job: str, transmittal_id: int) -> Path:
 
     Raises:
         FileNotFoundError: If no matching file exists.
-        PermissionError: If the resolved path is outside the archive root.
+        PermissionError: If the resolved path is outside the JOBS root.
     """
-    root = get_trasmittal_root()
     job_clean = (job or "").strip()
     if not job_clean or transmittal_id < 0:
         raise FileNotFoundError("Transmittal non trovato.")
 
-    if not root.exists() or not root.is_dir():
+    folder = cartella_trasmittal(job_clean)
+    if not folder.exists() or not folder.is_dir():
         raise FileNotFoundError("Cartella transmittal non trovata.")
 
-    candidate = root / f"Transmittal {job_clean}-{transmittal_id}.pdf"
+    candidate = percorso_previsto(job_clean, transmittal_id)
     try:
         if not candidate.is_file():
             raise FileNotFoundError("Transmittal non trovato.")
-        if not _is_inside_root(candidate, root):
+        if not _is_inside_jobs(candidate):
             raise PermissionError("Percorso non autorizzato.")
     except PermissionError:
         raise
@@ -138,11 +143,14 @@ def _data_caricamento_file(path: Path) -> date:
     return datetime.fromtimestamp(ts).date()
 
 
-def sync_trasmittal_da_cartella(job: str) -> int:
+def sync_trasmittal_da_cartella(job: str, *, solo_se_vuota: bool = False) -> int:
     """Create DB rows for files on disk that are not yet in the table.
 
     Existing rows are left unchanged (including revision links). Date is the
     file creation time; revisions stay empty.
+
+    Args:
+        solo_se_vuota: If True, do nothing when the job already has rows.
 
     Returns:
         Number of rows created.
@@ -155,6 +163,9 @@ def sync_trasmittal_da_cartella(job: str) -> int:
     try:
         testata = Testata.objects.get(job=job_clean)
     except Testata.DoesNotExist:
+        return 0
+
+    if solo_se_vuota and Transmittal.objects.filter(testata=testata).exists():
         return 0
 
     files = lista_trasmittal(job_clean)
@@ -261,9 +272,9 @@ def annulla_trasmittal(job: str, numero: int) -> None:
             rev.save(update_fields=["int_status", "dis_act_date", "rec_plan_date"])
         trasmittal.delete()
 
-    dest = get_trasmittal_root() / _filename(job_clean, numero)
+    dest = percorso_previsto(job_clean, numero)
     try:
-        if dest.is_file() and _is_inside_root(dest, get_trasmittal_root()):
+        if dest.is_file() and _is_inside_jobs(dest):
             dest.unlink()
     except OSError as exc:
         logger.warning("Impossibile rimuovere PDF transmittal %s: %s", dest, exc)
@@ -281,9 +292,8 @@ def prossimo_numero(job: str) -> int:
     for item in lista_trasmittal(job_clean):
         file_max = max(file_max, item["id"])
     numero = max(db_max, file_max) + 1
-    root = get_trasmittal_root()
     while True:
-        candidate = root / f"Transmittal {job_clean}-{numero}.pdf"
+        candidate = percorso_previsto(job_clean, numero)
         try:
             exists = candidate.is_file()
         except OSError:
@@ -298,16 +308,16 @@ def _filename(job: str, numero: int) -> str:
 
 
 def salva_pdf_trasmittal(job: str, numero: int, pdf_bytes: bytes) -> Path:
-    """Write a transmittal PDF into TRANSMITTAL_PATH.
+    """Write a transmittal PDF into the job TRANSMITTAL folder.
 
     Raises:
-        PermissionError: If the target is outside the archive root.
+        PermissionError: If the target is outside the JOBS root.
         OSError: If the write fails.
     """
-    root = get_trasmittal_root()
-    root.mkdir(parents=True, exist_ok=True)
-    dest = root / _filename(job, numero)
-    if not _is_inside_root(dest, root):
+    folder = cartella_trasmittal(job)
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = percorso_previsto(job, numero)
+    if not _is_inside_jobs(dest):
         raise PermissionError("Percorso non autorizzato.")
     dest.write_bytes(pdf_bytes)
     return dest

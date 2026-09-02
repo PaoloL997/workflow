@@ -427,6 +427,7 @@
   .conf-sum strong { color: var(--color-text-primary); }
   .conf-row { display: flex; gap: 8px; margin-top: 8px; font-size: 13px; }
   .conf-row .lbl { color: var(--color-text-secondary); opacity: .65; min-width: 80px; flex-shrink: 0; }
+  .conf-row .file-path { word-break: break-all; }
 
   /* Storico transmittal */
   .storico-row {
@@ -1077,12 +1078,14 @@
   async function apriPdfOptsModal() {
     const ref = document.getElementById('pdf-our-ref');
     ref.value = '';
+    window._pendingPercorso = '';
     document.getElementById('pdf-opts-modal').classList.add('open');
     try {
       const r = await fetch(storicoUrl('prossimo/'));
       if (r.ok) {
         const d = await r.json();
         if (d.codice) ref.value = d.codice;
+        if (d.percorso) window._pendingPercorso = d.percorso;
       }
     } catch { /* leave empty */ }
   }
@@ -1190,10 +1193,14 @@
       const adrIds = selAddrIds();
       const names  = _addrs.filter(function(a) { return a.sel; }).map(function(a) { return a.consignee || ('#' + a.id); });
       const n = ids.length;
+      const dest = window._pendingPercorso || '';
       document.getElementById('conf-body').innerHTML =
         '<div class="conf-row"><span class="lbl">Documenti</span><strong>' + n + ' document' + (n===1?'o':'i') + '</strong></div>'
         + '<div class="conf-row"><span class="lbl">Data invio</span><strong>' + escHtml(date) + '</strong></div>'
-        + '<div class="conf-row"><span class="lbl">Destinatari</span><span>' + (names.length ? escHtml(names.join(', ')) : '<em style="opacity:.5">Nessuno</em>') + '</span></div>';
+        + '<div class="conf-row"><span class="lbl">Destinatari</span><span>' + (names.length ? escHtml(names.join(', ')) : '<em style="opacity:.5">Nessuno</em>') + '</span></div>'
+        + (dest
+          ? '<div class="conf-row"><span class="lbl">File</span><span class="file-path">' + escHtml(dest) + '</span></div>'
+          : '');
       document.getElementById('conf-ok').disabled = false;
       document.getElementById('conf-modal').classList.add('open');
       // Store PDF opts for eseguiEmissione

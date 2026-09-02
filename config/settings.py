@@ -208,10 +208,6 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 FILESERVER_JOBS_PATH = os.environ.get("FILESERVER_JOBS_PATH", r"Z:\JOBS")
-TRANSMITTAL_PATH = os.environ.get(
-    "TRANSMITTAL_PATH",
-    r"Z:\Gestione Documenti\Transmittal",
-)
 
 ACCESS_MDB_PATH = os.environ.get(
     "ACCESS_MDB_PATH",

@@ -6,7 +6,7 @@
 
 ### Added
 
-- Il numero del trasmittal viene precompilato in base all’ultimo documento in `Z:\Gestione Documenti\Transmittal`
+- Il numero del trasmittal viene precompilato in base all’ultimo documento in `Z:\JOBS\{commessa}\PROGETTO\DCC\TRANSMITTAL`
 - È possibile visualizzare lo storico dei trasmittal per ciascuna commessa e visualizzare il file in anteprima
 - È possibile annullare l’invio di un trasmittal in caso di errore
 

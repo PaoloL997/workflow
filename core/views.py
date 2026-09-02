@@ -864,7 +864,7 @@ def trasmittal_storico_api(request, job):
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
     try:
-        sync_trasmittal_da_cartella(job)
+        sync_trasmittal_da_cartella(job, solo_se_vuota=True)
         items = lista_storico(job)
     except Exception as e:
         logger.error("Errore elenco transmittal job=%s: %s", job, e)
@@ -875,8 +875,8 @@ def trasmittal_storico_api(request, job):
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_prossimo_api(request, job):
-    """Return the next transmittal number/code for a job."""
-    from .services.trasmittal_archivio import prossimo_numero
+    """Return the next transmittal number/code and destination path for a job."""
+    from .services.trasmittal_archivio import percorso_previsto, prossimo_numero
 
     try:
         get_commessa(job)
@@ -887,7 +887,8 @@ def trasmittal_prossimo_api(request, job):
     except Exception as e:
         logger.error("Errore prossimo transmittal job=%s: %s", job, e)
         return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"numero": numero, "codice": f"{job}-{numero}"})
+    dest = percorso_previsto(job, numero)
+    return JsonResponse({"numero": numero, "codice": f"{job}-{numero}", "percorso": str(dest)})
 
 
 @api_login_required

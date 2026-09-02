@@ -362,22 +362,49 @@ class RevisioneFileMockApiTest(TestCase):
         self.assertIn(response.status_code, [302, 401, 403])
 
 
+def _trasmittal_dir(jobs_root, job: str) -> Path:
+    folder = Path(jobs_root) / job / "PROGETTO" / "DCC" / "TRANSMITTAL"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _trasmittal_path(jobs_root, job: str, numero: int) -> Path:
+    return (
+        Path(jobs_root)
+        / job
+        / "PROGETTO"
+        / "DCC"
+        / "TRANSMITTAL"
+        / f"Transmittal {job}-{numero}.pdf"
+    )
+
+
+def _write_trasmittal(jobs_root, job, numero, content=b"%PDF", filename=None):
+    folder = _trasmittal_dir(jobs_root, job)
+    name = filename or f"Transmittal {job}-{numero}.pdf"
+    path = folder / name
+    path.write_bytes(content)
+    return path
+
+
 class ListaTrasmittalTest(TestCase):
     """Unit tests for transmittal archive listing against a temp folder."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.patcher = patch("django.conf.settings.TRANSMITTAL_PATH", self.tmp)
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
 
     def tearDown(self):
         self.patcher.stop()
 
     def test_lists_matching_job_sorted_desc(self):
-        Path(self.tmp, "Transmittal 25089-3.pdf").write_bytes(b"%PDF")
-        Path(self.tmp, "Transmittal 25089-21.pdf").write_bytes(b"%PDF")
-        Path(self.tmp, "Transmittal 25056-1.pdf").write_bytes(b"%PDF")
-        Path(self.tmp, "readme.txt").write_text("x")
+        folder = _trasmittal_dir(self.tmp, "25089")
+        (folder / "Transmittal 25089-3.pdf").write_bytes(b"%PDF")
+        (folder / "Transmittal 25089-21.pdf").write_bytes(b"%PDF")
+        (folder / "Transmittal 25056-1.pdf").write_bytes(b"%PDF")
+        (folder / "readme.txt").write_text("x")
+        _write_trasmittal(self.tmp, "25056", 9)
         from core.services.trasmittal_archivio import lista_trasmittal
 
         items = lista_trasmittal("25089")
@@ -385,7 +412,7 @@ class ListaTrasmittalTest(TestCase):
         self.assertEqual(items[0]["nome"], "Transmittal 25089-21.pdf")
 
     def test_case_insensitive_filename(self):
-        Path(self.tmp, "TRANSMITTAL 25089-2.PDF").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "25089", 2, filename="TRANSMITTAL 25089-2.PDF")
         from core.services.trasmittal_archivio import lista_trasmittal
 
         items = lista_trasmittal("25089")
@@ -393,24 +420,21 @@ class ListaTrasmittalTest(TestCase):
         self.assertEqual(items[0]["id"], 2)
 
     def test_missing_folder_returns_empty(self):
-        self.patcher.stop()
-        missing = str(Path(self.tmp) / "does-not-exist")
-        self.patcher = patch("django.conf.settings.TRANSMITTAL_PATH", missing)
-        self.patcher.start()
         from core.services.trasmittal_archivio import lista_trasmittal
 
         self.assertEqual(lista_trasmittal("25089"), [])
 
     def test_percorso_found(self):
-        Path(self.tmp, "Transmittal 25089-7.pdf").write_bytes(b"%PDF-1.4")
+        _write_trasmittal(self.tmp, "25089", 7, content=b"%PDF-1.4")
         from core.services.trasmittal_archivio import percorso_trasmittal
 
         path = percorso_trasmittal("25089", 7)
         self.assertTrue(path.is_file())
         self.assertEqual(path.name, "Transmittal 25089-7.pdf")
+        self.assertEqual(path, _trasmittal_path(self.tmp, "25089", 7))
 
     def test_percorso_wrong_job_not_found(self):
-        Path(self.tmp, "Transmittal 25089-7.pdf").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "25089", 7)
         from core.services.trasmittal_archivio import percorso_trasmittal
 
         with self.assertRaises(FileNotFoundError):
@@ -422,7 +446,7 @@ class TrasmittalStoricoApiTest(TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.patcher = patch("django.conf.settings.TRANSMITTAL_PATH", self.tmp)
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
         self.user = User.objects.create_user(
             "testuser_trasmittal", password="pw", permesso=Permesso.READING
@@ -435,8 +459,8 @@ class TrasmittalStoricoApiTest(TestCase):
         self.patcher.stop()
 
     def test_storico_lists_files(self):
-        Path(self.tmp, "Transmittal 25089-1.pdf").write_bytes(b"%PDF")
-        Path(self.tmp, "Transmittal 25089-4.pdf").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "25089", 1)
+        _write_trasmittal(self.tmp, "25089", 4)
         response = self.client.get("/api/commesse/25089/trasmittal/storico/")
         self.assertEqual(response.status_code, 200)
         items = response.json()["items"]
@@ -463,11 +487,23 @@ class TrasmittalStoricoApiTest(TestCase):
             numero=1,
             data_emissione="2020-01-01",
         )
-        Path(self.tmp, "Transmittal 25089-1.pdf").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "25089", 1)
         response = self.client.get("/api/commesse/25089/trasmittal/storico/")
         self.assertEqual(response.status_code, 200)
         row = Transmittal.objects.get(testata_id="25089", numero=1)
         self.assertEqual(str(row.data_emissione), "2020-01-01")
+
+    def test_storico_skips_sync_when_job_already_has_rows(self):
+        Transmittal.objects.create(
+            testata_id="25089",
+            numero=1,
+            data_emissione="2020-01-01",
+        )
+        _write_trasmittal(self.tmp, "25089", 9)
+        response = self.client.get("/api/commesse/25089/trasmittal/storico/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([i["id"] for i in response.json()["items"]], [1])
+        self.assertFalse(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
 
     def test_storico_unknown_job(self):
         response = self.client.get("/api/commesse/NOPE/trasmittal/storico/")
@@ -478,7 +514,7 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertIn(response.status_code, [302, 401, 403])
 
     def test_serve_pdf_inline(self):
-        Path(self.tmp, "Transmittal 25089-12.pdf").write_bytes(b"%PDF-fake")
+        _write_trasmittal(self.tmp, "25089", 12, content=b"%PDF-fake")
         response = self.client.get("/api/commesse/25089/trasmittal/12/file/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/pdf")
@@ -489,16 +525,25 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_serve_other_job_file_hidden(self):
-        Path(self.tmp, "Transmittal 11111-1.pdf").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "11111", 1)
         response = self.client.get("/api/commesse/25089/trasmittal/1/file/")
         self.assertEqual(response.status_code, 404)
 
     def test_prossimo_api(self):
-        Path(self.tmp, "Transmittal 25089-3.pdf").write_bytes(b"%PDF")
+        from core.services.trasmittal_archivio import percorso_previsto
+
+        _write_trasmittal(self.tmp, "25089", 3)
         Transmittal.objects.create(testata_id="25089", numero=5, data_emissione="2026-01-01")
         response = self.client.get("/api/commesse/25089/trasmittal/prossimo/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"numero": 6, "codice": "25089-6"})
+        self.assertEqual(
+            response.json(),
+            {
+                "numero": 6,
+                "codice": "25089-6",
+                "percorso": str(percorso_previsto("25089", 6)),
+            },
+        )
 
 
 class TransmittalArchivioServiceTest(TestCase):
@@ -506,7 +551,7 @@ class TransmittalArchivioServiceTest(TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.patcher = patch("django.conf.settings.TRANSMITTAL_PATH", self.tmp)
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
         self.testata = Testata.objects.create(job="25089")
         self.doc = Documento.objects.create(testata=self.testata, vendor_doc="25089-A")
@@ -518,7 +563,7 @@ class TransmittalArchivioServiceTest(TestCase):
     def test_prossimo_numero_from_files_and_db(self):
         from core.services.trasmittal_archivio import prossimo_numero
 
-        Path(self.tmp, "Transmittal 25089-3.pdf").write_bytes(b"%PDF")
+        _write_trasmittal(self.tmp, "25089", 3)
         Transmittal.objects.create(testata=self.testata, numero=5, data_emissione="2026-01-01")
         self.assertEqual(prossimo_numero("25089"), 6)
 
@@ -528,7 +573,7 @@ class TransmittalArchivioServiceTest(TestCase):
         result = emetti_e_archivia("25089", [self.doc.pk], "2026-09-02", b"%PDF-emit")
         self.assertEqual(result["trasmittal"]["id"], 1)
         self.assertEqual(result["trasmittal"]["codice"], "25089-1")
-        dest = Path(self.tmp) / "Transmittal 25089-1.pdf"
+        dest = _trasmittal_path(self.tmp, "25089", 1)
         self.assertTrue(dest.is_file())
         self.assertEqual(dest.read_bytes(), b"%PDF-emit")
         row = Transmittal.objects.get(testata=self.testata, numero=1)
@@ -546,7 +591,7 @@ class TransmittalArchivioServiceTest(TestCase):
         )
 
         emetti_e_archivia("25089", [self.doc.pk], "2026-09-02", b"%PDF-emit")
-        dest = Path(self.tmp) / "Transmittal 25089-1.pdf"
+        dest = _trasmittal_path(self.tmp, "25089", 1)
         self.assertTrue(dest.is_file())
         items = lista_storico("25089")
         self.assertTrue(items[0]["annullabile"])
@@ -600,7 +645,7 @@ class EmissioneArchiviaApiTest(TestCase):
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.patcher = patch("django.conf.settings.TRANSMITTAL_PATH", self.tmp)
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
         self.patcher.start()
         self.pdf_patcher = patch("core.views.genera_trasmittal_pdf", return_value=b"%PDF-api")
         self.pdf_patcher.start()
@@ -633,7 +678,7 @@ class EmissioneArchiviaApiTest(TestCase):
         body = response.json()
         self.assertTrue(body["ok"])
         self.assertEqual(body["trasmittal"]["id"], 1)
-        self.assertTrue((Path(self.tmp) / "Transmittal 25089-1.pdf").is_file())
+        self.assertTrue(_trasmittal_path(self.tmp, "25089", 1).is_file())
         self.assertTrue(Transmittal.objects.filter(testata_id="25089", numero=1).exists())
 
     def test_annulla_api(self):
@@ -649,6 +694,7 @@ class EmissioneArchiviaApiTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["ok"])
         self.assertFalse(Transmittal.objects.filter(testata_id="25089", numero=1).exists())
+        self.assertFalse(_trasmittal_path(self.tmp, "25089", 1).is_file())
 
     def test_annulla_api_requires_write(self):
         User.objects.create_user(
