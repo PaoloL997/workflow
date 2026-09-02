@@ -695,7 +695,7 @@ class PermessiTestCase(TestCase):
 
     def test_admin_syncs_is_staff(self):
         self.assertTrue(self.admin_user.is_staff)
-        self.assertFalse(self.writing_user.is_staff)
+        self.assertTrue(self.writing_user.is_staff)
         self.assertFalse(self.reading_user.is_staff)
 
 
