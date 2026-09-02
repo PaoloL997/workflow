@@ -8,7 +8,7 @@ def migrate_permessi(apps, schema_editor):
             user.permesso = "admin"
         else:
             user.permesso = "writing"
-        user.is_staff = user.permesso == "admin"
+        user.is_staff = user.permesso in ("admin", "writing")
         user.save(update_fields=["permesso", "is_staff"])
 
 
