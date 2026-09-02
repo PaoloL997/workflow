@@ -858,10 +858,11 @@ def trasmittal_pdf_api(request):
 def trasmittal_storico_api(request, job):
     """List issued transmittals for a job from the database table."""
     from .services.trasmittal_archivio import (
-        cartella_trasmittal,
+        cartella_trasmittal_canonica,
         formato_nome_file,
         lista_storico,
         sync_trasmittal_da_cartella,
+        trasmittal_in_da_spedire,
     )
 
     try:
@@ -878,8 +879,9 @@ def trasmittal_storico_api(request, job):
     return JsonResponse(
         {
             "items": items,
-            "cartella": str(cartella_trasmittal(job)),
+            "cartella": str(cartella_trasmittal_canonica(job)),
             "formato": formato_nome_file(job),
+            "in_da_spedire": trasmittal_in_da_spedire(job),
         }
     )
 

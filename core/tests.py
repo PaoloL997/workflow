@@ -478,6 +478,36 @@ class ListaTrasmittalTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             percorso_trasmittal("25056", 7)
 
+    def test_lists_from_da_spedire_when_dcc_missing(self):
+        folder = (
+            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
+        )
+        folder.mkdir(parents=True)
+        (folder / "Transmittal 25089-5.pdf").write_bytes(b"%PDF")
+        from core.services.trasmittal_archivio import (
+            cartella_trasmittal,
+            lista_trasmittal,
+            trasmittal_in_da_spedire,
+        )
+
+        items = lista_trasmittal("25089")
+        self.assertEqual([i["id"] for i in items], [5])
+        self.assertTrue(trasmittal_in_da_spedire("25089"))
+        self.assertEqual(cartella_trasmittal("25089"), folder)
+
+    def test_prefers_dcc_over_da_spedire(self):
+        _write_trasmittal(self.tmp, "25089", 1)
+        fallback = (
+            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
+        )
+        fallback.mkdir(parents=True)
+        (fallback / "Transmittal 25089-9.pdf").write_bytes(b"%PDF")
+        from core.services.trasmittal_archivio import lista_trasmittal, trasmittal_in_da_spedire
+
+        items = lista_trasmittal("25089")
+        self.assertEqual([i["id"] for i in items], [1])
+        self.assertFalse(trasmittal_in_da_spedire("25089"))
+
 
 class TrasmittalStoricoApiTest(TestCase):
     """API tests for transmittal history and file serve."""
@@ -544,15 +574,37 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertFalse(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
 
     def test_storico_empty_includes_cartella_and_formato(self):
-        from core.services.trasmittal_archivio import cartella_trasmittal, formato_nome_file
+        from core.services.trasmittal_archivio import (
+            cartella_trasmittal_canonica,
+            formato_nome_file,
+        )
 
         response = self.client.get("/api/commesse/25089/trasmittal/storico/")
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertEqual(body["items"], [])
-        self.assertEqual(body["cartella"], str(cartella_trasmittal("25089")))
+        self.assertEqual(body["cartella"], str(cartella_trasmittal_canonica("25089")))
         self.assertEqual(body["formato"], formato_nome_file("25089"))
         self.assertEqual(body["formato"], "Transmittal 25089-{n}.pdf")
+        self.assertFalse(body["in_da_spedire"])
+
+    def test_storico_reads_from_da_spedire_and_flags(self):
+        folder = (
+            Path(self.tmp)
+            / "25089"
+            / "PROGETTO"
+            / "DCC"
+            / "DA SPEDIRE"
+            / "TRANSMITTAL"
+        )
+        folder.mkdir(parents=True)
+        (folder / "Transmittal 25089-4.pdf").write_bytes(b"%PDF")
+        response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["in_da_spedire"])
+        self.assertEqual([i["id"] for i in body["items"]], [4])
+        self.assertTrue(Transmittal.objects.filter(testata_id="25089", numero=4).exists())
 
     def test_storico_force_sync_imports_new_files(self):
         Transmittal.objects.create(

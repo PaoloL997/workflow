@@ -524,6 +524,16 @@
     padding: 6px 14px;
     vertical-align: baseline;
   }
+  .storico-hint {
+    margin: 6px 0 0;
+    padding: 0 2px 10px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--color-text-secondary);
+  }
+  .storico-hint[hidden] {
+    display: none;
+  }
 
   /* ── Theme toggle ── */
   .theme-toggle {
@@ -793,6 +803,9 @@
 <div class="modal-overlay" id="storico-modal" role="dialog" aria-modal="true" aria-labelledby="storico-title">
   <div class="modal-box" style="max-width:640px;">
     <div class="modal-title" id="storico-title">Storico trasmittal</div>
+    <p class="storico-hint" id="storico-hint" hidden>
+      La cartella TRANSMITTAL è in DCC\DA SPEDIRE. Spostala in DCC (accanto a DA SPEDIRE).
+    </p>
     <div class="modal-body" id="storico-body">
       <p class="storico-empty">Caricamento&hellip;</p>
     </div>
@@ -1111,12 +1124,15 @@
   window.apriStoricoTrasmittal = async function(opts) {
     const modal = document.getElementById('storico-modal');
     const body = document.getElementById('storico-body');
+    const hint = document.getElementById('storico-hint');
     const forza = opts && opts.sync;
     modal.classList.add('open');
+    if (hint) hint.hidden = true;
     body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
     try {
       const r = await fetch(storicoUrl('storico/') + (forza ? '?sync=1' : ''));
       const data = await r.json().catch(function() { return {}; });
+      if (hint) hint.hidden = !data.in_da_spedire;
       if (!r.ok) {
         body.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare lo storico.') + '</p>';
         return;

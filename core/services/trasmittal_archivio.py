@@ -1,6 +1,8 @@
 """Transmittal archive: fileserver PDFs plus database records.
 
 PDFs live in ``{FILESERVER_JOBS_PATH}/{job}/PROGETTO/DCC/TRANSMITTAL``.
+If that folder is missing, PDFs are also read from
+``DCC/DA SPEDIRE/TRANSMITTAL``. New files are always written to DCC.
 Preferred filename: ``Transmittal {job}-{id}.pdf``. Listing also accepts
 ``Trasmittal``, any case, and leading zeros in the number
 (e.g. ``Trasmittal 26041-01.pdf``).
@@ -30,15 +32,48 @@ class TrasmittalAnnullaError(Exception):
     """Cancel is not allowed (not latest, no revisions, or already received)."""
 
 
+_FOLDER = "TRANSMITTAL"
+_DA_SPEDIRE = "DA SPEDIRE"
+
+
+def cartella_trasmittal_canonica(job: str) -> Path:
+    """Return ``{JOBS}/{job}/PROGETTO/DCC/TRANSMITTAL`` (preferred write path)."""
+    return get_base_path((job or "").strip(), "DCC") / _FOLDER
+
+
+def _cartella_da_spedire(job: str) -> Path:
+    return get_base_path((job or "").strip(), "DCC") / _DA_SPEDIRE / _FOLDER
+
+
+def _is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
 def cartella_trasmittal(job: str) -> Path:
-    """Return ``{JOBS}/{job}/PROGETTO/DCC/TRANSMITTAL``."""
-    return get_base_path((job or "").strip(), "DCC") / "TRANSMITTAL"
+    """Folder used to read PDFs: DCC/TRANSMITTAL, else DCC/DA SPEDIRE/TRANSMITTAL."""
+    preferred = cartella_trasmittal_canonica(job)
+    if _is_dir(preferred):
+        return preferred
+    fallback = _cartella_da_spedire(job)
+    if _is_dir(fallback):
+        return fallback
+    return preferred
+
+
+def trasmittal_in_da_spedire(job: str) -> bool:
+    """True when PDFs are read from DA SPEDIRE because DCC/TRANSMITTAL is missing."""
+    if _is_dir(cartella_trasmittal_canonica(job)):
+        return False
+    return _is_dir(_cartella_da_spedire(job))
 
 
 def percorso_previsto(job: str, numero: int) -> Path:
     """Return the destination path for a transmittal PDF (file may not exist)."""
     job_clean = (job or "").strip()
-    return cartella_trasmittal(job_clean) / _filename(job_clean, numero)
+    return cartella_trasmittal_canonica(job_clean) / _filename(job_clean, numero)
 
 
 def _is_inside_jobs(path: Path) -> bool:
@@ -334,7 +369,7 @@ def salva_pdf_trasmittal(job: str, numero: int, pdf_bytes: bytes) -> Path:
         PermissionError: If the target is outside the JOBS root.
         OSError: If the write fails.
     """
-    folder = cartella_trasmittal(job)
+    folder = cartella_trasmittal_canonica(job)
     folder.mkdir(parents=True, exist_ok=True)
     dest = percorso_previsto(job, numero)
     if not _is_inside_jobs(dest):
