@@ -24,9 +24,9 @@ _STATUS_MAP = {
 
 __REPARTO_MAP = {
     1: ["Ufficio Tecnico", "UT"],
-    4: ["Quality Control", "QC"],
     2: ["Project Management", "PM"],
-    3: ["Quality Control", "QC"],
+    3: ["Amministrazione", "AM"],
+    4: ["Quality Control", "QC"],
 }
 
 
