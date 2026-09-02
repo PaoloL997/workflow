@@ -857,19 +857,31 @@ def trasmittal_pdf_api(request):
 @require_http_methods(["GET"])
 def trasmittal_storico_api(request, job):
     """List issued transmittals for a job from the database table."""
-    from .services.trasmittal_archivio import lista_storico, sync_trasmittal_da_cartella
+    from .services.trasmittal_archivio import (
+        cartella_trasmittal,
+        formato_nome_file,
+        lista_storico,
+        sync_trasmittal_da_cartella,
+    )
 
     try:
         get_commessa(job)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    forza = request.GET.get("sync") in ("1", "true", "yes")
     try:
-        sync_trasmittal_da_cartella(job, solo_se_vuota=True)
+        sync_trasmittal_da_cartella(job, solo_se_vuota=not forza)
         items = lista_storico(job)
     except Exception as e:
         logger.error("Errore elenco transmittal job=%s: %s", job, e)
         return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"items": items})
+    return JsonResponse(
+        {
+            "items": items,
+            "cartella": str(cartella_trasmittal(job)),
+            "formato": formato_nome_file(job),
+        }
+    )
 
 
 @api_login_required

@@ -307,6 +307,11 @@ def _filename(job: str, numero: int) -> str:
     return f"Transmittal {job}-{numero}.pdf"
 
 
+def formato_nome_file(job: str) -> str:
+    """User-facing filename pattern, e.g. ``Transmittal 25089-{n}.pdf``."""
+    return f"Transmittal {(job or '').strip()}-{{n}}.pdf"
+
+
 def salva_pdf_trasmittal(job: str, numero: int, pdf_bytes: bytes) -> Path:
     """Write a transmittal PDF into the job TRANSMITTAL folder.
 

@@ -499,12 +499,30 @@
     border-color: var(--color-danger);
   }
   .storico-empty {
-    padding: 28px 8px;
+    padding: 8px;
     text-align: center;
     color: var(--color-text-secondary);
-    opacity: 0.55;
     font-size: 14px;
-    font-style: italic;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .storico-empty-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 4px 8px;
+  }
+  .storico-empty code {
+    font-size: 12.5px;
+    word-break: break-all;
+    color: var(--color-text-primary);
+  }
+  .storico-empty .btn-confirm {
+    display: inline-block;
+    margin: 0 2px;
+    padding: 6px 14px;
+    vertical-align: baseline;
   }
 
   /* ── Theme toggle ── */
@@ -773,7 +791,7 @@
 
 <!-- ── Storico transmittal ── -->
 <div class="modal-overlay" id="storico-modal" role="dialog" aria-modal="true" aria-labelledby="storico-title">
-  <div class="modal-box" style="max-width:560px;">
+  <div class="modal-box" style="max-width:640px;">
     <div class="modal-title" id="storico-title">Storico trasmittal</div>
     <div class="modal-body" id="storico-body">
       <p class="storico-empty">Caricamento&hellip;</p>
@@ -1090,13 +1108,14 @@
     } catch { /* leave empty */ }
   }
 
-  window.apriStoricoTrasmittal = async function() {
+  window.apriStoricoTrasmittal = async function(opts) {
     const modal = document.getElementById('storico-modal');
     const body = document.getElementById('storico-body');
+    const forza = opts && opts.sync;
     modal.classList.add('open');
     body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
     try {
-      const r = await fetch(storicoUrl('storico/'));
+      const r = await fetch(storicoUrl('storico/') + (forza ? '?sync=1' : ''));
       const data = await r.json().catch(function() { return {}; });
       if (!r.ok) {
         body.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare lo storico.') + '</p>';
@@ -1104,7 +1123,16 @@
       }
       const items = data.items || [];
       if (!items.length) {
-        body.innerHTML = '<p class="storico-empty">Nessun transmittal trovato per questa commessa.</p>';
+        const cartella = data.cartella || ('Z:\\JOBS\\' + JOB + '\\PROGETTO\\DCC\\TRANSMITTAL');
+        const formato = data.formato || ('Transmittal ' + JOB + '-{n}.pdf');
+        body.innerHTML =
+          '<div class="storico-empty-wrap">'
+          + '<p class="storico-empty">Nessun trasmittal trovato per questa commessa. '
+          + 'L\'applicazione registra i trasmittal salvati in <code>' + escHtml(cartella) + '</code> '
+          + 'nel formato <code>' + escHtml(formato) + '</code>. '
+          + 'Una volta salvati clicca su '
+          + '<button type="button" class="btn-confirm" onclick="aggiornaStoricoTrasmittal()">Aggiorna</button>.</p>'
+          + '</div>';
         return;
       }
       body.innerHTML = items.map(function(item) {
@@ -1124,6 +1152,9 @@
     } catch {
       body.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
     }
+  };
+  window.aggiornaStoricoTrasmittal = function() {
+    apriStoricoTrasmittal({ sync: true });
   };
   window.chiudiStoricoTrasmittal = function() {
     document.getElementById('storico-modal').classList.remove('open');

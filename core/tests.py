@@ -505,6 +505,29 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertEqual([i["id"] for i in response.json()["items"]], [1])
         self.assertFalse(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
 
+    def test_storico_empty_includes_cartella_and_formato(self):
+        from core.services.trasmittal_archivio import cartella_trasmittal, formato_nome_file
+
+        response = self.client.get("/api/commesse/25089/trasmittal/storico/")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["items"], [])
+        self.assertEqual(body["cartella"], str(cartella_trasmittal("25089")))
+        self.assertEqual(body["formato"], formato_nome_file("25089"))
+        self.assertEqual(body["formato"], "Transmittal 25089-{n}.pdf")
+
+    def test_storico_force_sync_imports_new_files(self):
+        Transmittal.objects.create(
+            testata_id="25089",
+            numero=1,
+            data_emissione="2020-01-01",
+        )
+        _write_trasmittal(self.tmp, "25089", 9)
+        response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([i["id"] for i in response.json()["items"]], [9, 1])
+        self.assertTrue(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
+
     def test_storico_unknown_job(self):
         response = self.client.get("/api/commesse/NOPE/trasmittal/storico/")
         self.assertEqual(response.status_code, 404)
