@@ -1010,7 +1010,7 @@
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
   </svg>
-  v0.1.2
+  v0.1.3
 </button>
 
 <!-- ── Modal: Changelog / version ── -->
@@ -1022,7 +1022,7 @@
           <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
         </svg>
         <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
-        <span class="version-modal-tag">v0.1.2</span>
+        <span class="version-modal-tag">v0.1.3</span>
       </div>
       <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
     </div>
@@ -1030,22 +1030,11 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
-          <li>Forum per proposte di modifica e segnalazione di problemi: voti anonimi, commenti e chiusura da admin</li>
-          <li>Campo Contractor Doc N° su documenti, import Excel, elenco, situazione ed export</li>
-          <li>Commesse preferite pinnabili per utente</li>
-          <li>Export Excel e PDF da emissione, ricezione e situazione documenti</li>
-          <li>Header B&amp;R aggiunto ad ogni export</li>
-          <li>Filtri per colonna anche in emissione e ricezione, con calendario per intervallo di date</li>
-          <li>Codice lettera dello stato cliente (es. A = Approved) visibile in situazione documenti</li>
-          <li>Nel PDF di transmittal: selezione multipla degli ID documento (vendor / client / contractor), note e firma in corsivo di chi emette</li>
-        </ul>
-      </section>
-      <section>
-        <h3 class="version-modal-section-title">Correzioni</h3>
-        <ul class="version-modal-list">
-          <li>Le etichette di revisione (lettera o numero) rispettano il flag archivio della commessa</li>
-          <li>Import da Access: le revisioni già spedite o ricevute non compaiono più come da emettere</li>
-          <li>Layout del transmittal PDF: tabella e indirizzo restano nella pagina, colonne vuote omesse</li>
+          <li>Storico transmittal in Gestisci emissione, con anteprima dei PDF su Z:\Gestione Documenti\Transmittal</li>
+          <li>In emissione il transmittal viene salvato su quella cartella e tracciato in database (id, data, revisioni)</li>
+          <li>Prefill di numero transmittal, stabilimento dell’utente e destinatari</li>
+          <li>Annulla sull’ultimo transmittal emesso da questa app</li>
+          <li>Campo Stabilimento sull’utente, assegnabile in admin</li>
         </ul>
       </section>
     </div>

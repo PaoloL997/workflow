@@ -15,6 +15,7 @@ from .models import (
     Stabilimento,
     StatoEsterno,
     Testata,
+    Transmittal,
     User,
 )
 
@@ -33,13 +34,23 @@ class RepartoAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    fieldsets = UserAdmin.fieldsets + (("Profilo", {"fields": ("ruolo", "reparto")}),)
+    fieldsets = UserAdmin.fieldsets + (
+        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento")}),
+    )
     add_fieldsets = UserAdmin.add_fieldsets + (
-        ("Profilo", {"fields": ("email", "ruolo", "reparto")}),
+        ("Profilo", {"fields": ("email", "ruolo", "reparto", "stabilimento")}),
         ("Permessi", {"fields": ("permesso",)}),
     )
-    list_display = ("username", "email", "permesso", "ruolo", "reparto", "is_active")
-    list_filter = ("permesso", "is_active", "reparto")
+    list_display = (
+        "username",
+        "email",
+        "permesso",
+        "ruolo",
+        "reparto",
+        "stabilimento",
+        "is_active",
+    )
+    list_filter = ("permesso", "is_active", "reparto", "stabilimento")
     search_fields = ("username", "email", "ruolo")
     readonly_fields = ("is_staff",)
 
@@ -125,6 +136,33 @@ class RevisioneFileLinkAdmin(admin.ModelAdmin):
     search_fields = ("percorso", "revisione__documento__vendor_doc")
     raw_id_fields = ("revisione",)
     readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(Transmittal)
+class TransmittalAdmin(admin.ModelAdmin):
+    list_display = ("id", "testata", "numero", "data_emissione")
+    list_filter = ("data_emissione",)
+    search_fields = ("testata__job",)
+    raw_id_fields = ("testata",)
+    filter_horizontal = ("revisioni",)
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "revisioni":
+            kwargs["queryset"] = Revisione.objects.select_related("documento").order_by(
+                "documento__testata_id", "documento__vendor_doc", "rev_no", "pk"
+            )
+            field = super().formfield_for_manytomany(db_field, request, **kwargs)
+
+            def label(rev):
+                rev_label = f"Rev {rev.rev_no}" if rev.rev_no is not None else "Rev"
+                if rev.rev_let:
+                    rev_label += rev.rev_let
+                vendor = rev.documento.vendor_doc or f"doc {rev.documento_id}"
+                return f"#{rev.pk} — {vendor} {rev_label}"
+
+            field.label_from_instance = label
+            return field
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
 
 @admin.register(Testata)

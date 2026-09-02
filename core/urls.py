@@ -101,6 +101,26 @@ urlpatterns = [
         name="export_emissione",
     ),
     path(
+        "api/commesse/<str:job>/trasmittal/storico/",
+        views.trasmittal_storico_api,
+        name="trasmittal_storico_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal/prossimo/",
+        views.trasmittal_prossimo_api,
+        name="trasmittal_prossimo_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal/<int:trasmittal_id>/annulla/",
+        views.trasmittal_annulla_api,
+        name="trasmittal_annulla_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal/<int:trasmittal_id>/file/",
+        views.trasmittal_file_serve,
+        name="trasmittal_file_serve",
+    ),
+    path(
         "api/commesse/<str:job>/ricezione/export/",
         views.export_ricezione,
         name="export_ricezione",

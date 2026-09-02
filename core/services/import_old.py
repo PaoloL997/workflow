@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 from django.db import transaction
 
@@ -10,6 +12,9 @@ from .revisioni_cleanup import (
     find_orphan_indices,
 )
 from .stato_esterno_codes import STATUS_LETTER_MAP
+from .trasmittal_archivio import sync_trasmittal_da_cartella
+
+logger = logging.getLogger(__name__)
 
 _STATUS_MAP = {
     "A": {"nome": STATUS_LETTER_MAP["A"], "colore": "#00B050"},
@@ -205,6 +210,15 @@ def importa_commessa_da_access(job: str) -> dict:
             rev_count += 1
 
     summary = audit_commessa_summary(testata.job)
+    job_saved = testata.job
+
+    def _sync_trasmittal():
+        try:
+            sync_trasmittal_da_cartella(job_saved)
+        except Exception:
+            logger.exception("Sync transmittal dopo import Access fallito (job=%s)", job_saved)
+
+    transaction.on_commit(_sync_trasmittal)
     return {
         "job": testata.job,
         "documenti": len(documenti),

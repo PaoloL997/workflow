@@ -428,6 +428,84 @@
   .conf-row { display: flex; gap: 8px; margin-top: 8px; font-size: 13px; }
   .conf-row .lbl { color: var(--color-text-secondary); opacity: .65; min-width: 80px; flex-shrink: 0; }
 
+  /* Storico transmittal */
+  .storico-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .storico-row:last-child { border-bottom: none; }
+  .storico-nome {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+  }
+  .storico-date-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: hsla(211, 100%, 55%, 0.15);
+    color: var(--color-accent);
+    border: 1px solid hsla(211, 100%, 55%, 0.35);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  .storico-date-chip:hover {
+    background: hsla(211, 100%, 55%, 0.25);
+    border-color: var(--color-accent);
+  }
+  [data-theme="light"] .storico-date-chip {
+    background: hsl(211, 100%, 92%);
+    color: hsl(211, 80%, 38%);
+    border-color: hsl(211, 80%, 72%);
+  }
+  [data-theme="light"] .storico-date-chip:hover {
+    background: hsl(211, 100%, 88%);
+    border-color: var(--color-accent);
+  }
+  .storico-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .storico-annulla {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  .storico-annulla:hover {
+    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+    border-color: var(--color-danger);
+  }
+  .storico-empty {
+    padding: 28px 8px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    opacity: 0.55;
+    font-size: 14px;
+    font-style: italic;
+  }
+
   /* ── Theme toggle ── */
   .theme-toggle {
     position: fixed;
@@ -554,6 +632,9 @@
           </button>
         </div>
       </div>
+      <button class="toolbar-btn" type="button" onclick="apriStoricoTrasmittal()" aria-label="Storico Trasmittal">
+        Storico Trasmittal
+      </button>
       <div class="ctrl-div"></div>
       <span class="ctrl-lbl">Data:</span>
       <input type="date" id="ep-data" class="ctrl-date">
@@ -689,6 +770,16 @@
   </div>
 </div>
 
+<!-- ── Storico transmittal ── -->
+<div class="modal-overlay" id="storico-modal" role="dialog" aria-modal="true" aria-labelledby="storico-title">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-title" id="storico-title">Storico trasmittal</div>
+    <div class="modal-body" id="storico-body">
+      <p class="storico-empty">Caricamento&hellip;</p>
+    </div>
+  </div>
+</div>
+
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
   <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -707,6 +798,7 @@
 
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  const USER_STABILIMENTO = "{% if user.stabilimento %}{{ user.stabilimento.nome|escapejs }}{% endif %}";
 
   DocListFilters.init({
     filterLabels: {
@@ -790,6 +882,9 @@
         opt.textContent = s.nome;
         sel.appendChild(opt);
       });
+      if (USER_STABILIMENTO) {
+        sel.value = USER_STABILIMENTO;
+      }
     } catch { /* silently fail */ }
   }
 
@@ -799,7 +894,7 @@
       const r = await fetch('/api/commesse/' + encodeURIComponent(JOB) + '/indirizzi/');
       if (!r.ok) return;
       const d = await r.json();
-      _addrs = (d.indirizzi || []).map(function(a) { return Object.assign({}, a, { sel: false }); });
+      _addrs = (d.indirizzi || []).map(function(a) { return Object.assign({}, a, { sel: true }); });
       renderAddrModal();
       renderChips();
     } catch {}
@@ -969,10 +1064,105 @@
     if (!date) { alert('Inserisci la data di invio.'); return; }
     const ids = selDocIds(); if (!ids.length) return;
     _pendingPdfAction = 'emit';
-    document.getElementById('pdf-opts-modal').classList.add('open');
+    apriPdfOptsModal();
   };
   window.chiudiConferma = function() { document.getElementById('conf-modal').classList.remove('open'); };
   document.getElementById('conf-modal').addEventListener('click', function(e) { if (e.target === this) chiudiConferma(); });
+
+  /* ── storico transmittal ── */
+  function storicoUrl(path) {
+    return '/api/commesse/' + encodeURIComponent(JOB) + '/trasmittal/' + path;
+  }
+
+  async function apriPdfOptsModal() {
+    const ref = document.getElementById('pdf-our-ref');
+    ref.value = '';
+    document.getElementById('pdf-opts-modal').classList.add('open');
+    try {
+      const r = await fetch(storicoUrl('prossimo/'));
+      if (r.ok) {
+        const d = await r.json();
+        if (d.codice) ref.value = d.codice;
+      }
+    } catch { /* leave empty */ }
+  }
+
+  window.apriStoricoTrasmittal = async function() {
+    const modal = document.getElementById('storico-modal');
+    const body = document.getElementById('storico-body');
+    modal.classList.add('open');
+    body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
+    try {
+      const r = await fetch(storicoUrl('storico/'));
+      const data = await r.json().catch(function() { return {}; });
+      if (!r.ok) {
+        body.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare lo storico.') + '</p>';
+        return;
+      }
+      const items = data.items || [];
+      if (!items.length) {
+        body.innerHTML = '<p class="storico-empty">Nessun transmittal trovato per questa commessa.</p>';
+        return;
+      }
+      body.innerHTML = items.map(function(item) {
+        const label = 'Transmittal ' + (item.codice || (JOB + '-' + item.id));
+        const dateLabel = item.data ? fmtDate(item.data) : 'Non presente';
+        var actions = '<div class="storico-row-actions">'
+          + '<button type="button" class="storico-date-chip" onclick="apriAnteprimaTrasmittal(' + item.id + ')">' + escHtml(dateLabel) + '</button>';
+        if (item.annullabile) {
+          actions += '<button type="button" class="storico-annulla" onclick="annullaTrasmittal(' + item.id + ')">Annulla</button>';
+        }
+        actions += '</div>';
+        return '<div class="storico-row">'
+          + '<span class="storico-nome">' + escHtml(label) + '</span>'
+          + actions
+          + '</div>';
+      }).join('');
+    } catch {
+      body.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
+    }
+  };
+  window.chiudiStoricoTrasmittal = function() {
+    document.getElementById('storico-modal').classList.remove('open');
+  };
+  document.getElementById('storico-modal').addEventListener('click', function(e) {
+    if (e.target === this) chiudiStoricoTrasmittal();
+  });
+
+  window.apriAnteprimaTrasmittal = function(id) {
+    var serveUrl = storicoUrl(id + '/file/');
+    var a = document.createElement('a');
+    a.href = serveUrl;
+    a.target = '_blank';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function() { if (a.parentNode) a.parentNode.removeChild(a); }, 300);
+  };
+
+  window.annullaTrasmittal = async function(id) {
+    if (!requireWrite()) return;
+    const codice = JOB + '-' + id;
+    if (!confirm('Annullare Transmittal ' + codice + '?\nI documenti torneranno da emettere e il PDF verrà rimosso.')) {
+      return;
+    }
+    try {
+      const r = await fetch(storicoUrl(id + '/annulla/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      });
+      const body = await r.json().catch(function() { return {}; });
+      if (isPermissionDeniedResponse(r, body)) return;
+      if (!r.ok) {
+        alert(body.error || 'Impossibile annullare il transmittal.');
+        return;
+      }
+      await apriStoricoTrasmittal();
+      if (typeof loadDocs === 'function') await loadDocs();
+    } catch {
+      alert('Errore di rete.');
+    }
+  };
 
   /* ── PDF options modal ── */
   document.querySelectorAll('input[name="pdf-delivery"]').forEach(function(radio) {
@@ -1063,7 +1253,17 @@
       const r = await fetch('/api/emissione/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ doc_ids: docIds, dis_act_date: date }),
+        body: JSON.stringify({
+          doc_ids: docIds,
+          dis_act_date: date,
+          job: JOB,
+          addr_ids: adrIds,
+          our_ref: opts.ourRef || '',
+          city: opts.city || '',
+          delivery_mode: opts.mode || 'attached',
+          brevi_manu_name: opts.bName || '',
+          doc_id_cols: Array.isArray(opts.docIdCols) ? opts.docIdCols : ['vendor', 'client', 'contractor'],
+        }),
       });
       if (!r.ok) {
         const e = await r.json().catch(function(){ return {}; });
@@ -1076,9 +1276,13 @@
         document.getElementById('emit-btn').disabled = document.getElementById('print-btn').disabled = false;
         return;
       }
+      const payload = await r.json().catch(function(){ return {}; });
       const n = docIds.length;
       setStatus('\u2713 ' + n + ' document' + (n===1?'o':'i') + ' emess' + (n===1?'o':'i'));
-      await dlPdf(docIds, adrIds, date, opts.ourRef, opts.city, opts.mode, opts.bName, opts.docIdCols);
+      const trasmittalId = payload.trasmittal && payload.trasmittal.id;
+      if (trasmittalId) {
+        apriAnteprimaTrasmittal(trasmittalId);
+      }
       await loadDocs();
       setTimeout(function() { setStatus(''); }, 4000);
     } catch {
@@ -1094,7 +1298,7 @@
     if (!date) { alert('Inserisci la data.'); return; }
     const ids = selDocIds(); if (!ids.length) return;
     _pendingPdfAction = 'print';
-    document.getElementById('pdf-opts-modal').classList.add('open');
+    apriPdfOptsModal();
   };
 
   init();

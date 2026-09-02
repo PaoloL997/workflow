@@ -48,6 +48,14 @@ class User(AbstractUser):
         choices=Permesso.choices,
         default=Permesso.READING,
     )
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        db_column="Stabilimento",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="utenti",
+    )
 
     class Meta:
         managed = True
@@ -406,6 +414,41 @@ class RevisioneFileLink(models.Model):
 
     def __str__(self):
         return f"{self.revisione} → {self.percorso}"
+
+
+class Transmittal(models.Model):
+    """Issued transmittal for a job, archived on the fileserver."""
+
+    testata = models.ForeignKey(
+        Testata,
+        to_field="job",
+        db_column="Job",
+        on_delete=models.CASCADE,
+        related_name="trasmittal",
+    )
+    numero = models.PositiveIntegerField(db_column="Numero")
+    data_emissione = models.DateField(db_column="DataEmissione", blank=True, null=True)
+    revisioni = models.ManyToManyField(
+        Revisione,
+        blank=True,
+        related_name="trasmittal",
+        db_table="trasmittal_revisioni",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "trasmittal"
+        verbose_name = "Transmittal"
+        verbose_name_plural = "Transmittal"
+        unique_together = ("testata", "numero")
+        ordering = ["-numero"]
+
+    def __str__(self):
+        return f"Transmittal {self.codice}"
+
+    @property
+    def codice(self) -> str:
+        return f"{self.testata_id}-{self.numero}"
 
 
 class TipoSegnalazione(models.TextChoices):

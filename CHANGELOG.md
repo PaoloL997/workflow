@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-02
+
+### Added
+
+- Storico transmittal in Gestisci emissione: elenco da database, anteprima PDF da `Z:\Gestione Documenti\Transmittal`
+- In emissione il PDF viene salvato su quella cartella (`Transmittal {commessa}-{id}.pdf`) e registrato in table (id, data, revisioni)
+- Prefill del numero transmittal (`{commessa}-{prossimo}`), dello stabilimento dell’utente e di tutti i destinatari
+- Annulla sull’ultimo transmittal emesso da questa app: ripristina le revisioni, elimina riga e file
+- Campo Stabilimento sull’utente (assegnabile in admin)
+- Allineamento dei PDF già presenti in cartella (id e data file, senza documenti)
+
 ## [0.1.2] - 2026-08-31
 
 ### Added

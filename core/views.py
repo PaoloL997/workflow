@@ -41,7 +41,6 @@ from .services.commesse import (
     delete_indirizzo,
     delete_revisione,
     delete_stato_esterno,
-    esegui_emissione,
     esegui_ricezione,
     fetch_from_bc,
     genera_documenti_da_modelli,
@@ -675,6 +674,88 @@ def stato_esterno_api_detail(request, pk):
 # ── API: Emissione ───────────────────────────────────────────────────────────
 
 
+def _normalize_doc_id_cols(data):
+    doc_id_cols = data.get("doc_id_cols")
+    if not isinstance(doc_id_cols, list):
+        doc_id_mode = data.get("doc_id_mode", "all")
+        if doc_id_mode == "both":
+            doc_id_mode = "all"
+        if doc_id_mode == "all":
+            doc_id_cols = ["client", "vendor", "contractor"]
+        elif doc_id_mode in ("vendor", "client", "contractor"):
+            doc_id_cols = [doc_id_mode]
+        else:
+            doc_id_cols = ["client", "vendor", "contractor"]
+    return [c for c in doc_id_cols if c in ("vendor", "client", "contractor")]
+
+
+def _trasmittal_addresses(testata, addr_ids):
+    addresses = []
+    if not addr_ids:
+        return addresses
+    for addr in IndirSped.objects.filter(pk__in=addr_ids, testata=testata):
+        addresses.append(
+            {
+                "consignee": addr.consignee,
+                "address": addr.address,
+                "zip_code": addr.zip_code,
+                "city": addr.city,
+                "country": addr.country,
+                "attn": addr.attn,
+                "ph_no": addr.ph_no,
+            }
+        )
+    return addresses
+
+
+def _trasmittal_documents(testata, doc_ids):
+    documents = []
+    for doc in Documento.objects.filter(pk__in=doc_ids, testata=testata).order_by("item_no"):
+        rev = doc.revisioni.order_by("-rev_no").first()
+        documents.append(
+            {
+                "item_no": doc.item_no or "",
+                "vendor_doc": doc.vendor_doc or "",
+                "client_doc_no": doc.client_doc_no or "",
+                "contractor_doc_no": doc.contractor_doc_no or "",
+                "doc_title": doc.doc_title or "",
+                "rev_no": rev.rev_no if rev else "",
+                "dis_plan_date": rev.dis_plan_date.isoformat()
+                if (rev and rev.dis_plan_date)
+                else None,
+            }
+        )
+    return documents
+
+
+def _generate_trasmittal_pdf_bytes(request, testata, data, date_str, doc_ids):
+    testata_dict = {
+        "job": testata.job,
+        "po_no": testata.po_no or "",
+        "job_detail": testata.job_detail or "",
+        "client": testata.client or "",
+        "time_cli_doc_rev": testata.time_cli_doc_rev,
+    }
+    user = request.user
+    signer_name = (getattr(user, "nome_completo", None) or user.get_full_name() or "").strip()
+    if not signer_name:
+        signer_name = (user.get_username() or "").strip()
+    signer_role = (getattr(user, "ruolo", None) or "").strip()
+    return genera_trasmittal_pdf(
+        testata_dict,
+        _trasmittal_addresses(testata, data.get("addr_ids") or []),
+        _trasmittal_documents(testata, doc_ids),
+        date_str,
+        our_ref=data.get("our_ref") or "",
+        city=data.get("city") or "",
+        delivery_mode=data.get("delivery_mode") or "attached",
+        brevi_manu_name=data.get("brevi_manu_name") or "",
+        doc_id_cols=_normalize_doc_id_cols(data),
+        signer_name=signer_name,
+        signer_role=signer_role,
+    )
+
+
 @api_login_required
 @api_write_required
 @require_http_methods(["POST"])
@@ -687,9 +768,34 @@ def emissione_api(request):
     dis_act_date = data.get("dis_act_date", "")
     if not doc_ids or not dis_act_date:
         return JsonResponse({"error": "Specificare doc_ids e dis_act_date."}, status=400)
+
+    job = (data.get("job") or "").strip()
+    if not job:
+        job = (
+            Documento.objects.filter(pk=doc_ids[0]).values_list("testata_id", flat=True).first()
+            or ""
+        )
+    if not job:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
     try:
-        updated = esegui_emissione(doc_ids, dis_act_date)
-        return JsonResponse({"ok": True, "updated": updated})
+        testata = Testata.objects.get(job=job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    from .services.trasmittal_archivio import emetti_e_archivia
+
+    try:
+        pdf_bytes = _generate_trasmittal_pdf_bytes(request, testata, data, dis_act_date, doc_ids)
+        result = emetti_e_archivia(job, doc_ids, dis_act_date, pdf_bytes)
+        return JsonResponse({"ok": True, **result})
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except OSError as exc:
+        logger.error("Errore salvataggio PDF transmittal job=%s: %s", job, exc)
+        return JsonResponse(
+            {"error": f"Impossibile salvare il transmittal su disco: {exc}"}, status=500
+        )
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
@@ -717,26 +823,8 @@ def trasmittal_pdf_api(request):
         return JsonResponse({"error": "JSON non valido."}, status=400)
 
     doc_ids = data.get("doc_ids", [])
-    addr_ids = data.get("addr_ids", [])
     date_str = data.get("date", "")
     job = data.get("job", "")
-    our_ref = data.get("our_ref", "")
-    city = data.get("city", "")
-    delivery_mode = data.get("delivery_mode", "attached")
-    brevi_manu_name = data.get("brevi_manu_name", "")
-    doc_id_cols = data.get("doc_id_cols")
-    if not isinstance(doc_id_cols, list):
-        # Legacy single-mode payload.
-        doc_id_mode = data.get("doc_id_mode", "all")
-        if doc_id_mode == "both":
-            doc_id_mode = "all"
-        if doc_id_mode == "all":
-            doc_id_cols = ["client", "vendor", "contractor"]
-        elif doc_id_mode in ("vendor", "client", "contractor"):
-            doc_id_cols = [doc_id_mode]
-        else:
-            doc_id_cols = ["client", "vendor", "contractor"]
-    doc_id_cols = [c for c in doc_id_cols if c in ("vendor", "client", "contractor")]
 
     if not doc_ids or not job:
         return JsonResponse({"error": "Specificare job e doc_ids."}, status=400)
@@ -746,75 +834,13 @@ def trasmittal_pdf_api(request):
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
 
-    # Build testata dict
-    testata_dict = {
-        "job": testata.job,
-        "po_no": testata.po_no or "",
-        "job_detail": testata.job_detail or "",
-        "client": testata.client or "",
-        "time_cli_doc_rev": testata.time_cli_doc_rev,
-    }
-
-    # Build addresses list
-    addresses = []
-    if addr_ids:
-        for addr in IndirSped.objects.filter(pk__in=addr_ids, testata=testata):
-            addresses.append(
-                {
-                    "consignee": addr.consignee,
-                    "address": addr.address,
-                    "zip_code": addr.zip_code,
-                    "city": addr.city,
-                    "country": addr.country,
-                    "attn": addr.attn,
-                    "ph_no": addr.ph_no,
-                }
-            )
-
-    # Build documents list with latest revision info
-    documents = []
-    for doc in Documento.objects.filter(pk__in=doc_ids, testata=testata).order_by("item_no"):
-        rev = doc.revisioni.order_by("-rev_no").first()
-        documents.append(
-            {
-                "item_no": doc.item_no or "",
-                "vendor_doc": doc.vendor_doc or "",
-                "client_doc_no": doc.client_doc_no or "",
-                "contractor_doc_no": doc.contractor_doc_no or "",
-                "doc_title": doc.doc_title or "",
-                "rev_no": rev.rev_no if rev else "",
-                # Planned date (same field shown in gestione emissione).
-                "dis_plan_date": rev.dis_plan_date.isoformat()
-                if (rev and rev.dis_plan_date)
-                else None,
-            }
-        )
-
     if not date_str:
         from datetime import date as date_type
 
         date_str = date_type.today().isoformat()
 
-    user = request.user
-    signer_name = (getattr(user, "nome_completo", None) or user.get_full_name() or "").strip()
-    if not signer_name:
-        signer_name = (user.get_username() or "").strip()
-    signer_role = (getattr(user, "ruolo", None) or "").strip()
-
     try:
-        pdf_bytes = genera_trasmittal_pdf(
-            testata_dict,
-            addresses,
-            documents,
-            date_str,
-            our_ref=our_ref,
-            city=city,
-            delivery_mode=delivery_mode,
-            brevi_manu_name=brevi_manu_name,
-            doc_id_cols=doc_id_cols,
-            signer_name=signer_name,
-            signer_role=signer_role,
-        )
+        pdf_bytes = _generate_trasmittal_pdf_bytes(request, testata, data, date_str, doc_ids)
     except Exception as exc:
         return JsonResponse({"error": f"Errore generazione PDF: {exc}"}, status=500)
 
@@ -822,6 +848,97 @@ def trasmittal_pdf_api(request):
     safe_job = job.replace('"', "")
     response["Content-Disposition"] = f'inline; filename="trasmittal_{safe_job}_{date_str}.pdf"'
     return response
+
+
+# ── API: Storico transmittal ─────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_storico_api(request, job):
+    """List issued transmittals for a job from the database table."""
+    from .services.trasmittal_archivio import lista_storico, sync_trasmittal_da_cartella
+
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        sync_trasmittal_da_cartella(job)
+        items = lista_storico(job)
+    except Exception as e:
+        logger.error("Errore elenco transmittal job=%s: %s", job, e)
+        return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"items": items})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_prossimo_api(request, job):
+    """Return the next transmittal number/code for a job."""
+    from .services.trasmittal_archivio import prossimo_numero
+
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        numero = prossimo_numero(job)
+    except Exception as e:
+        logger.error("Errore prossimo transmittal job=%s: %s", job, e)
+        return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"numero": numero, "codice": f"{job}-{numero}"})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_annulla_api(request, job, trasmittal_id):
+    """Undo the latest app-issued transmittal for a job."""
+    from .services.trasmittal_archivio import TrasmittalAnnullaError, annulla_trasmittal
+
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        annulla_trasmittal(job, trasmittal_id)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except FileNotFoundError:
+        return JsonResponse({"error": "Transmittal non trovato."}, status=404)
+    except TrasmittalAnnullaError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+    except Exception as e:
+        logger.error("Errore annulla transmittal job=%s id=%s: %s", job, trasmittal_id, e)
+        return JsonResponse({"error": str(e)}, status=500)
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_http_methods(["GET"])
+def trasmittal_file_serve(request, job, trasmittal_id):
+    """Serve a transmittal PDF from the archive (same pipeline as revision files)."""
+    from .services.trasmittal_archivio import percorso_trasmittal
+
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    try:
+        file_path = percorso_trasmittal(job, trasmittal_id)
+    except PermissionError:
+        return HttpResponseForbidden("Percorso non autorizzato.")
+    except FileNotFoundError:
+        raise Http404
+    if not file_path.is_file():
+        raise Http404
+    return FileResponse(
+        open(file_path, "rb"),
+        content_type="application/pdf",
+        as_attachment=False,
+        filename=file_path.name,
+    )
 
 
 # ── API: Ricezione ───────────────────────────────────────────────────────────
