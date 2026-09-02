@@ -419,6 +419,24 @@ class ListaTrasmittalTest(TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], 2)
 
+    def test_italian_spelling_trasmittal(self):
+        _write_trasmittal(self.tmp, "25089", 2, filename="Trasmittal 25089-2.pdf")
+        from core.services.trasmittal_archivio import lista_trasmittal
+
+        items = lista_trasmittal("25089")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], 2)
+        self.assertEqual(items[0]["nome"], "Trasmittal 25089-2.pdf")
+
+    def test_leading_zeros_in_number(self):
+        _write_trasmittal(self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf")
+        from core.services.trasmittal_archivio import lista_trasmittal
+
+        items = lista_trasmittal("25089")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], 1)
+        self.assertEqual(items[0]["nome"], "Transmittal 25089-01.pdf")
+
     def test_missing_folder_returns_empty(self):
         from core.services.trasmittal_archivio import lista_trasmittal
 
@@ -432,6 +450,26 @@ class ListaTrasmittalTest(TestCase):
         self.assertTrue(path.is_file())
         self.assertEqual(path.name, "Transmittal 25089-7.pdf")
         self.assertEqual(path, _trasmittal_path(self.tmp, "25089", 7))
+
+    def test_percorso_resolves_padded_filename(self):
+        written = _write_trasmittal(
+            self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf"
+        )
+        from core.services.trasmittal_archivio import percorso_trasmittal
+
+        path = percorso_trasmittal("25089", 1)
+        self.assertEqual(path, written)
+        self.assertEqual(path.name, "Transmittal 25089-01.pdf")
+
+    def test_sync_imports_italian_padded_filename(self):
+        Testata.objects.create(job="25089")
+        _write_trasmittal(self.tmp, "25089", 1, filename="Trasmittal 25089-01.pdf")
+        from core.services.trasmittal_archivio import sync_trasmittal_da_cartella
+
+        created = sync_trasmittal_da_cartella("25089")
+        self.assertEqual(created, 1)
+        row = Transmittal.objects.get(testata_id="25089", numero=1)
+        self.assertIsNotNone(row.data_emissione)
 
     def test_percorso_wrong_job_not_found(self):
         _write_trasmittal(self.tmp, "25089", 7)

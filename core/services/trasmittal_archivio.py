@@ -1,7 +1,9 @@
 """Transmittal archive: fileserver PDFs plus database records.
 
 PDFs live in ``{FILESERVER_JOBS_PATH}/{job}/PROGETTO/DCC/TRANSMITTAL``.
-Expected filename: ``Transmittal {job}-{id}.pdf`` (case-insensitive).
+Preferred filename: ``Transmittal {job}-{id}.pdf``. Listing also accepts
+``Trasmittal``, any case, and leading zeros in the number
+(e.g. ``Trasmittal 26041-01.pdf``).
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from .fileserver import get_base_path, get_jobs_root
 logger = logging.getLogger(__name__)
 
 _FILENAME_RE = re.compile(
-    r"^Transmittal\s+(.+)-(\d+)\.pdf$",
+    r"^Tra[n]?smittal\s+(.+)-(\d+)\.pdf$",
     re.IGNORECASE,
 )
 
@@ -93,8 +95,33 @@ def lista_trasmittal(job: str) -> list[dict]:
     return items
 
 
+def _assert_readable_trasmittal(path: Path, job_clean: str, transmittal_id: int) -> Path:
+    """Return *path* if it is a readable transmittal PDF for this job/id."""
+    try:
+        if not path.is_file():
+            raise FileNotFoundError("Transmittal non trovato.")
+        if not _is_inside_jobs(path):
+            raise PermissionError("Percorso non autorizzato.")
+    except PermissionError:
+        raise
+    except OSError as exc:
+        raise FileNotFoundError("Transmittal non trovato.") from exc
+
+    match = _FILENAME_RE.match(path.name)
+    if not match:
+        raise FileNotFoundError("Transmittal non trovato.")
+    if match.group(1).casefold() != job_clean.casefold():
+        raise FileNotFoundError("Transmittal non trovato.")
+    if int(match.group(2)) != transmittal_id:
+        raise FileNotFoundError("Transmittal non trovato.")
+    return path
+
+
 def percorso_trasmittal(job: str, transmittal_id: int) -> Path:
     """Resolve a transmittal PDF path inside the job TRANSMITTAL folder.
+
+    Matches the preferred name ``Transmittal {job}-{n}.pdf`` and variants
+    (``Trasmittal``, any case, leading zeros in ``n``).
 
     Args:
         job: Job number.
@@ -115,25 +142,13 @@ def percorso_trasmittal(job: str, transmittal_id: int) -> Path:
     if not folder.exists() or not folder.is_dir():
         raise FileNotFoundError("Cartella transmittal non trovata.")
 
-    candidate = percorso_previsto(job_clean, transmittal_id)
-    try:
-        if not candidate.is_file():
-            raise FileNotFoundError("Transmittal non trovato.")
-        if not _is_inside_jobs(candidate):
-            raise PermissionError("Percorso non autorizzato.")
-    except PermissionError:
-        raise
-    except OSError as exc:
-        raise FileNotFoundError("Transmittal non trovato.") from exc
+    for item in lista_trasmittal(job_clean):
+        if item["id"] == transmittal_id:
+            return _assert_readable_trasmittal(folder / item["nome"], job_clean, transmittal_id)
 
-    match = _FILENAME_RE.match(candidate.name)
-    if not match:
-        raise FileNotFoundError("Transmittal non trovato.")
-    if match.group(1).casefold() != job_clean.casefold():
-        raise FileNotFoundError("Transmittal non trovato.")
-    if int(match.group(2)) != transmittal_id:
-        raise FileNotFoundError("Transmittal non trovato.")
-    return candidate
+    return _assert_readable_trasmittal(
+        percorso_previsto(job_clean, transmittal_id), job_clean, transmittal_id
+    )
 
 
 def _data_caricamento_file(path: Path) -> date:
