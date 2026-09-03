@@ -15,6 +15,20 @@ from core.date_fmt import format_display_date
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
 
+_WINDOWS_FONTS_DIR = Path(r"C:\Windows\Fonts")
+_ARIAL_FILES = {"": "arial.ttf", "B": "arialbd.ttf", "I": "ariali.ttf", "BI": "arialbi.ttf"}
+
+
+def _register_unicode_font(pdf, family):
+    """Register Arial (Unicode-capable) under ``family`` on ``pdf``; fall back to
+    the core Helvetica font (Latin-1 only) if the TTFs are not installed."""
+    paths = {style: _WINDOWS_FONTS_DIR / fname for style, fname in _ARIAL_FILES.items()}
+    if all(p.exists() for p in paths.values()):
+        for style, p in paths.items():
+            pdf.add_font(family, style, str(p))
+        return family
+    return "Helvetica"
+
 # Usable table width on A4 with 15mm side margins.
 _TABLE_WIDTH_MM = 180.0
 
@@ -70,6 +84,7 @@ class TrasmittalPDF(FPDF):
         self.signer_role = signer_role or ""
         self._render_signoff = False
         self._signoff_page = None
+        self._font_family = _register_unicode_font(self, "TrasArial")
         self.set_margins(left=15, top=10, right=15)
         # Leave room for last-page signoff in the footer.
         self.set_auto_page_break(auto=True, margin=18)
@@ -98,7 +113,7 @@ class TrasmittalPDF(FPDF):
             line_h = 3.5
             # Pin the block to the bottom edge (small clearance so glyphs are not clipped).
             self.set_y(-(line_h * len(lines) + 2))
-            self.set_font("Helvetica", "I", 8)
+            self.set_font(self._font_family, "I", 8)
             self.set_text_color(0, 0, 0)
             for line in lines:
                 self.cell(0, line_h, line, align="C", new_x="LMARGIN", new_y="NEXT")
@@ -120,7 +135,7 @@ def _fit_text_width(pdf, text, max_w_mm, *, preferred=9.0, minimum=5.5, bold=Fal
     size = preferred
     style = "B" if bold else ""
     while size > minimum + 1e-6:
-        pdf.set_font("Helvetica", style, size)
+        pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), style, size)
         if pdf.get_string_width(text) <= max_w_mm:
             return size
         size -= 0.25
@@ -136,7 +151,7 @@ def _wrap_to_width(pdf, text, max_w_mm, size):
     text = (text or "").strip()
     if not text:
         return [""]
-    pdf.set_font("Helvetica", "", size)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
     words = text.split()
     chunks, cur = [], ""
     for word in words:
@@ -190,12 +205,12 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
         pdf.set_xy(left_x, y_left)
         if value is None:
             # date-only line
-            pdf.set_font("Helvetica", "", 9)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 9)
             pdf.cell(left_w, line_h, label)
         else:
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", 9)
             pdf.cell(label_w, line_h, label)
-            pdf.set_font("Helvetica", "", 9)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 9)
             pdf.cell(left_w - label_w, line_h, value)
         y_left += line_h + 1
 
@@ -225,13 +240,13 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
     for label, value in addr_lines:
         value = str(value or "").strip()
         if label:
-            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", 9)
             lbl_w = min(pdf.get_string_width(label) + 2, inner_w * 0.45)
             val_w = max(1.0, inner_w - lbl_w)
             lbl_size = _fit_text_width(pdf, label, lbl_w, preferred=9.0, minimum=5.5, bold=True)
             # Prefer shrinking to one line; wrap only if still too wide at minimum.
             one_line_size = _fit_text_width(pdf, value, val_w, preferred=9.0, minimum=5.5)
-            pdf.set_font("Helvetica", "", one_line_size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", one_line_size)
             if value and pdf.get_string_width(value) > val_w:
                 size = min(lbl_size, 5.5)
                 chunks = _wrap_to_width(pdf, value, val_w, size)
@@ -245,7 +260,7 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
                 content_h += lh + 1
         else:
             one_line_size = _fit_text_width(pdf, value, inner_w, preferred=9.0, minimum=5.5)
-            pdf.set_font("Helvetica", "", one_line_size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", one_line_size)
             if value and pdf.get_string_width(value) > inner_w:
                 size = 5.5
                 chunks = _wrap_to_width(pdf, value, inner_w, size)
@@ -268,21 +283,21 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
     for kind, label, value, size, lbl_w, lh in fitted:
         if kind == "labeled":
             pdf.set_xy(right_x + box_padding, y_right)
-            pdf.set_font("Helvetica", "B", size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", size)
             pdf.cell(lbl_w, lh, label)
-            pdf.set_font("Helvetica", "", size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
             pdf.cell(inner_w - lbl_w, lh, value)
             y_right += lh + 1
         elif kind == "labeled_wrap":
             for i, chunk in enumerate(value):
                 pdf.set_xy(right_x + box_padding, y_right)
                 if i == 0:
-                    pdf.set_font("Helvetica", "B", size)
+                    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", size)
                     pdf.cell(lbl_w, lh, label)
-                    pdf.set_font("Helvetica", "", size)
+                    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
                     pdf.cell(inner_w - lbl_w, lh, chunk)
                 else:
-                    pdf.set_font("Helvetica", "", size)
+                    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
                     pdf.set_x(right_x + box_padding + lbl_w)
                     pdf.cell(inner_w - lbl_w, lh, chunk)
                 y_right += lh
@@ -290,13 +305,13 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
         elif kind == "wrap":
             for chunk in value:
                 pdf.set_xy(right_x + box_padding, y_right)
-                pdf.set_font("Helvetica", "", size)
+                pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
                 pdf.cell(inner_w, lh, chunk)
                 y_right += lh
             y_right += 1
         else:
             pdf.set_xy(right_x + box_padding, y_right)
-            pdf.set_font("Helvetica", "", size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", size)
             pdf.cell(inner_w, lh, value)
             y_right += lh + 1
 
@@ -306,7 +321,7 @@ def _build_two_column_header(pdf, testata, date_str, our_ref, city, address):
 
 def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
     """Render the 4 delivery mode checkboxes in a horizontal row."""
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 8)
     box_size = 3.5
     line_h = 5
     x_start = pdf.l_margin
@@ -321,10 +336,10 @@ def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
         pdf.rect(x, y + (line_h - box_size) / 2, box_size, box_size)
         if checked:
             # Fill with X mark
-            pdf.set_font("Helvetica", "B", 7)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", 7)
             pdf.set_xy(x + 0.3, y + (line_h - box_size) / 2 - 0.3)
             pdf.cell(box_size, box_size + 1, "X", align="C")
-            pdf.set_font("Helvetica", "", 8)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 8)
 
         # Label text (Italian / English)
         label_x = x + box_size + 2
@@ -336,9 +351,9 @@ def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
         pdf.set_xy(label_x, y)
         pdf.cell(col_w - box_size - 2, line_h / 2, it_label, ln=False)
         pdf.set_xy(label_x, y + line_h / 2)
-        pdf.set_font("Helvetica", "I", 7)
+        pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "I", 7)
         pdf.cell(col_w - box_size - 2, line_h / 2, full_en, ln=False)
-        pdf.set_font("Helvetica", "", 8)
+        pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 8)
 
     pdf.ln(line_h + 4)
 
@@ -350,7 +365,7 @@ def _truncate_to_width(pdf, text, max_w_mm, *, bold=False):
     """Shorten ``text`` with an ellipsis so it fits in ``max_w_mm`` at the current font."""
     style = "B" if bold else ""
     # Font is already set by caller; keep style/size consistent.
-    pdf.set_font("Helvetica", style, pdf.font_size_pt)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), style, pdf.font_size_pt)
     if pdf.get_string_width(text) <= max_w_mm:
         return text
     ell = "..."
@@ -387,13 +402,13 @@ def _fit_table_cell(
     size = float(preferred)
     if text:
         while size > minimum + 1e-6:
-            pdf.set_font("Helvetica", style, size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), style, size)
             if pdf.get_string_width(text) <= max_w:
                 break
             size -= 0.25
         else:
             size = float(minimum)
-            pdf.set_font("Helvetica", style, size)
+            pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), style, size)
             if pdf.get_string_width(text) > max_w:
                 text = _truncate_to_width(pdf, text, max_w, bold=bold)
 
@@ -468,7 +483,7 @@ def _build_doc_table(pdf, documents, doc_id_cols=None):
     aligns = [c[3] for c in cols]
     keys = [c[0] for c in cols]
 
-    pdf.set_font("Helvetica", "", 8)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 8)
     headings_style = FontFace(emphasis="BOLD", fill_color=(255, 255, 255), size_pt=8)
     with pdf.table(
         col_widths=tuple(widths),
@@ -503,7 +518,7 @@ def _build_doc_table(pdf, documents, doc_id_cols=None):
 def _build_notes_header(pdf):
     """Left-aligned 'Note' section header below the documents table."""
     pdf.ln(6)
-    pdf.set_font("Helvetica", "B", 10)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "B", 10)
     pdf.set_text_color(0, 0, 0)
     pdf.cell(0, 6, "Note", align="L", new_x="LMARGIN", new_y="NEXT")
 
@@ -566,7 +581,7 @@ def genera_trasmittal_pdf(
     _build_two_column_header(pdf, testata, date_str, our_ref, city, first_addr)
 
     # Intro text
-    pdf.set_font("Helvetica", "", 9)
+    pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 9)
     pdf.cell(0, 6, "Please find herewith the following documents", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
