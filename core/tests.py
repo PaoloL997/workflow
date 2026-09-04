@@ -14,6 +14,7 @@ from django.utils.http import urlsafe_base64_encode
 from .models import (
     CommessaPin,
     Documento,
+    Notifica,
     Permesso,
     Reparto,
     Revisione,
@@ -41,6 +42,7 @@ from .services.commesse import (
     serialize_revisione,
 )
 from .services.import_old import importa_commessa_da_access
+from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -2532,3 +2534,202 @@ class SegnalazioniTestCase(TestCase):
         self.assertEqual(self.client.get("/api/segnalazioni/?top=abc").status_code, 400)
         self.assertEqual(self.client.get("/api/segnalazioni/?top=0").status_code, 400)
         self.assertEqual(self.client.get("/api/segnalazioni/?mine=yes").status_code, 400)
+
+
+class NotificheTestCase(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.autore = User.objects.create_user(
+            "notif_autore",
+            "notif-autore@example.com",
+            "pw",
+            permesso=Permesso.READING,
+            first_name="Luca",
+            last_name="Rossi",
+        )
+        self.altro = User.objects.create_user(
+            "notif_altro",
+            "notif-altro@example.com",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Anna",
+            last_name="Bianchi",
+        )
+        self.terzo = User.objects.create_user(
+            "notif_terzo",
+            "notif-terzo@example.com",
+            "pw",
+            permesso=Permesso.ADMIN,
+            first_name="Mario",
+            last_name="Verdi",
+        )
+
+    def _crea_segnalazione(self, user, tipo="feature", titolo="Titolo", testo="Descrizione"):
+        self.client.force_login(user)
+        res = self.client.post(
+            "/api/segnalazioni/",
+            data=json.dumps({"tipo": tipo, "titolo": titolo, "testo": testo}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+        return res.json()["data"]["id"]
+
+    def test_nuova_feature_notifica_tutti_tranne_autore(self):
+        self._crea_segnalazione(self.autore, tipo="feature")
+        self.assertEqual(Notifica.objects.filter(destinatario=self.autore).count(), 0)
+        testi = set(
+            Notifica.objects.exclude(destinatario=self.autore).values_list("testo", flat=True)
+        )
+        self.assertEqual(testi, {"Luca Rossi ha proposto una nuova feature"})
+        self.assertEqual(
+            set(
+                Notifica.objects.values_list("destinatario__username", flat=True),
+            ),
+            {"notif_altro", "notif_terzo"},
+        )
+
+    def test_nuovo_problema_ha_testo_dedicato(self):
+        self._crea_segnalazione(self.autore, tipo="problema")
+        testi = set(Notifica.objects.values_list("testo", flat=True))
+        self.assertEqual(testi, {"Luca Rossi ha evidenziato un problema"})
+
+    def test_utenti_disattivati_non_ricevono_notifiche(self):
+        self.terzo.is_active = False
+        self.terzo.save(update_fields=["is_active"])
+        self._crea_segnalazione(self.autore)
+        self.assertEqual(
+            list(Notifica.objects.values_list("destinatario__username", flat=True)),
+            ["notif_altro"],
+        )
+
+    def test_api_elenca_solo_le_proprie_notifiche(self):
+        pk = self._crea_segnalazione(self.autore)
+        self.client.force_login(self.altro)
+        res = self.client.get("/api/notifiche/")
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertEqual(body["count"], 1)
+        item = body["notifiche"][0]
+        self.assertEqual(item["testo"], "Luca Rossi ha proposto una nuova feature")
+        self.assertEqual(item["segnalazione_id"], pk)
+        self.assertEqual(item["tipo"], TipoSegnalazione.FEATURE)
+        self.assertIsNotNone(item["created_at"])
+
+        self.client.force_login(self.autore)
+        self.assertEqual(self.client.get("/api/notifiche/").json()["count"], 0)
+
+    def test_api_richiede_autenticazione(self):
+        self.assertEqual(self.client.get("/api/notifiche/").status_code, 401)
+        self.assertEqual(self.client.post("/api/notifiche/lette/").status_code, 401)
+
+    def test_notifica_sparisce_dopo_la_visualizzazione(self):
+        self._crea_segnalazione(self.autore)
+        self.client.force_login(self.altro)
+        ids = [n["id"] for n in self.client.get("/api/notifiche/").json()["notifiche"]]
+
+        lette = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({"ids": ids}),
+            content_type="application/json",
+        )
+        self.assertEqual(lette.status_code, 200)
+        self.assertEqual(lette.json()["lette"], 1)
+        self.assertEqual(lette.json()["count"], 0)
+        self.assertEqual(self.client.get("/api/notifiche/").json()["notifiche"], [])
+        self.assertIsNotNone(Notifica.objects.get(pk=ids[0]).letta_il)
+
+        # Le notifiche degli altri utenti restano da leggere
+        self.client.force_login(self.terzo)
+        self.assertEqual(self.client.get("/api/notifiche/").json()["count"], 1)
+
+    def test_lette_senza_ids_marca_tutte(self):
+        self._crea_segnalazione(self.autore, titolo="Prima")
+        self._crea_segnalazione(self.terzo, titolo="Seconda")
+        self.client.force_login(self.altro)
+        self.assertEqual(self.client.get("/api/notifiche/").json()["count"], 2)
+
+        res = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["lette"], 2)
+        self.assertEqual(self.client.get("/api/notifiche/").json()["count"], 0)
+
+    def test_lette_marca_solo_gli_id_richiesti(self):
+        self._crea_segnalazione(self.autore, titolo="Prima")
+        self._crea_segnalazione(self.terzo, titolo="Seconda")
+        self.client.force_login(self.altro)
+        notifiche = self.client.get("/api/notifiche/").json()["notifiche"]
+        self.assertEqual(len(notifiche), 2)
+
+        res = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({"ids": [notifiche[0]["id"]]}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.json()["lette"], 1)
+        rimaste = self.client.get("/api/notifiche/").json()["notifiche"]
+        self.assertEqual([n["id"] for n in rimaste], [notifiche[1]["id"]])
+
+    def test_lette_rifiuta_payload_non_valido(self):
+        self.client.force_login(self.altro)
+        bad_type = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({"ids": "1"}),
+            content_type="application/json",
+        )
+        self.assertEqual(bad_type.status_code, 400)
+        bad_item = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({"ids": ["abc"]}),
+            content_type="application/json",
+        )
+        self.assertEqual(bad_item.status_code, 400)
+        bad_json = self.client.post(
+            "/api/notifiche/lette/",
+            data="non-json",
+            content_type="application/json",
+        )
+        self.assertEqual(bad_json.status_code, 400)
+
+    def test_lette_ignora_notifiche_di_altri_utenti(self):
+        self._crea_segnalazione(self.autore)
+        altrui = Notifica.objects.get(destinatario=self.terzo)
+        self.client.force_login(self.altro)
+        res = self.client.post(
+            "/api/notifiche/lette/",
+            data=json.dumps({"ids": [altrui.pk]}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.json()["lette"], 0)
+        self.assertIsNone(Notifica.objects.get(pk=altrui.pk).letta_il)
+
+    def test_notifiche_rimosse_con_la_segnalazione(self):
+        pk = self._crea_segnalazione(self.autore)
+        Segnalazione.objects.filter(pk=pk).delete()
+        self.assertEqual(Notifica.objects.count(), 0)
+
+    def test_service_helpers(self):
+        self._crea_segnalazione(self.autore)
+        self.assertEqual(count_notifiche(self.altro), 1)
+        self.assertEqual(len(list_notifiche(self.altro)), 1)
+        self.assertEqual(segna_lette(self.altro), 1)
+        self.assertEqual(count_notifiche(self.altro), 0)
+        self.assertEqual(list_notifiche(self.altro), [])
+        with self.assertRaises(ValueError):
+            segna_lette(self.terzo, ["x"])
+
+    def test_campanella_visibile_nelle_pagine_autenticate(self):
+        self.client.force_login(self.altro)
+        res = self.client.get("/")
+        self.assertEqual(res.status_code, 200)
+        self.assertContains(res, 'id="notif-btn"')
+        self.assertContains(res, 'id="notif-panel"')
+        self.assertContains(res, 'aria-label="Notifiche"')
+
+    def test_campanella_assente_per_anonimi(self):
+        res = self.client.get("/login/")
+        self.assertEqual(res.status_code, 200)
+        self.assertNotContains(res, 'id="notif-btn"')

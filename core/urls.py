@@ -201,4 +201,7 @@ urlpatterns = [
         views.segnalazione_riapri_api,
         name="segnalazione_riapri_api",
     ),
+    # API — Notifiche
+    path("api/notifiche/", views.notifiche_api, name="notifiche_api"),
+    path("api/notifiche/lette/", views.notifiche_lette_api, name="notifiche_lette_api"),
 ]

@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Campanella delle notifiche in alto a destra: avvisa tutti gli utenti quando qualcuno propone una nuova feature o segnala un problema; le notifiche spariscono una volta visualizzate
+
 ## [0.1.3] - 2026-09-02
 
 ### Added

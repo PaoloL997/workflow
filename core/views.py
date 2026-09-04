@@ -73,6 +73,7 @@ from .services.commesse import (
     update_stato_esterno,
 )
 from .services.import_old import importa_commessa_da_access
+from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -2426,3 +2427,29 @@ def segnalazione_riapri_api(request, pk):
         return JsonResponse({"error": "Segnalazione non trovata."}, status=404)
     except SegnalazioneForbidden:
         return JsonResponse({"error": "Permesso negato."}, status=403)
+
+
+# ── API: Notifiche ───────────────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def notifiche_api(request):
+    notifiche = list_notifiche(request.user)
+    return JsonResponse({"notifiche": notifiche, "count": len(notifiche)})
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def notifiche_lette_api(request):
+    data = {} if not request.body else _json_body(request)
+    if not isinstance(data, dict):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    ids = data.get("ids")
+    if ids is not None and not isinstance(ids, list):
+        return JsonResponse({"error": "Elenco notifiche non valido."}, status=400)
+    try:
+        lette = segna_lette(request.user, ids)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({"ok": True, "lette": lette, "count": count_notifiche(request.user)})
