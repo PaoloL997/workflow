@@ -172,9 +172,8 @@ Il file contiene **un foglio per ogni tabella selezionata**; la prima riga ripor
 | **Indirizzi spedizione** | Gli indirizzi di spedizione collegati |
 | **Documenti** | Tutti i documenti della commessa |
 | **Revisioni** | Tutte le revisioni dei documenti della commessa |
-| **Link file revisioni** | I percorsi file associati manualmente alle revisioni |
-| **Transmittal** | I transmittal emessi per la commessa |
-| **Transmittal revisioni** | Il collegamento fra transmittal e revisioni incluse |
+
+Il foglio **Revisioni** riporta, prima dei dati della revisione, gli identificativi del documento a cui appartiene (**Client Doc N°**, **Client Doc Class**, **Contractor Doc N°**, **B&R Doc**, **Item**) e chiude con la **lettera** della risposta del cliente (es. `A`, `C`).
 
 Il pulsante **Scarica** resta disabilitato finché non hai scelto sia la commessa sia almeno una tabella.
 

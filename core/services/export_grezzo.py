@@ -1,18 +1,20 @@
 """Raw per-job data export: one Excel sheet per database table.
 
-Sheets hold the tables exactly as stored (model column names, no formatting
-beyond the bold header row).
+Sheets hold the tables essentially as stored (model column names, no formatting
+beyond the bold header row); only the revisions sheet joins in the identifiers
+of its document and the letter of the client answer.
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime
+from operator import attrgetter
 
 import openpyxl
 from django.utils import timezone
 from openpyxl.styles import Font
 
-from ..models import Documento, IndirSped, Revisione, RevisioneFileLink, Testata, Transmittal
+from ..models import Documento, IndirSped, Revisione, Testata
 
 
 @dataclass(frozen=True)
@@ -24,20 +26,54 @@ class TabellaGrezza:
         label: Shown in the UI and used as the Excel sheet title.
         model: Django model the columns are derived from.
         queryset: Callable that returns the rows to export for a given job.
+        colonne: Explicit (header, getter) pairs; when empty every concrete
+            model field is exported, in declaration order.
     """
 
     key: str
     label: str
     model: type
     queryset: Callable
+    colonne: tuple = ()
+
+    @property
+    def _pairs(self):
+        if self.colonne:
+            return self.colonne
+        return tuple((f.attname, attrgetter(f.attname)) for f in self.model._meta.concrete_fields)
 
     @property
     def headers(self):
-        return [f.attname for f in self.model._meta.concrete_fields]
+        return [header for header, _ in self._pairs]
 
     def rows(self, job):
-        names = self.headers
-        return [[_cell(getattr(obj, name)) for name in names] for obj in self.queryset(job)]
+        getters = [getter for _, getter in self._pairs]
+        return [[_cell(getter(obj)) for getter in getters] for obj in self.queryset(job)]
+
+
+def _lettera_stato(revisione):
+    """Letter of the client answer (e.g. "A"), empty when there is none."""
+    return revisione.ext_status.lettera if revisione.ext_status_id else ""
+
+
+# Le revisioni portano gli identificativi del documento a cui appartengono:
+# gli id tecnici e il flag interno "ignora anomalie" non servono a chi legge.
+REVISIONI_COLONNE = (
+    ("client_doc_no", attrgetter("documento.client_doc_no")),
+    ("client_doc_class", attrgetter("documento.client_doc_class")),
+    ("contractor_doc_no", attrgetter("documento.contractor_doc_no")),
+    ("vendor_doc", attrgetter("documento.vendor_doc")),
+    ("item_no", attrgetter("documento.item_no")),
+    ("rev_no", attrgetter("rev_no")),
+    ("rev_let", attrgetter("rev_let")),
+    ("dis_plan_date", attrgetter("dis_plan_date")),
+    ("dis_act_date", attrgetter("dis_act_date")),
+    ("rec_plan_date", attrgetter("rec_plan_date")),
+    ("rec_act_date", attrgetter("rec_act_date")),
+    ("int_status", attrgetter("int_status")),
+    ("ext_status", _lettera_stato),
+    ("crea_nuova_rev", attrgetter("crea_nuova_rev")),
+)
 
 
 TABELLE = (
@@ -63,31 +99,12 @@ TABELLE = (
         "revisioni",
         "Revisioni",
         Revisione,
-        lambda job: Revisione.objects.filter(documento__testata_id=job).order_by(
-            "documento_id", "pk"
+        lambda job: (
+            Revisione.objects.filter(documento__testata_id=job)
+            .select_related("documento", "ext_status")
+            .order_by("documento_id", "pk")
         ),
-    ),
-    TabellaGrezza(
-        "revisioni_file_link",
-        "Link file revisioni",
-        RevisioneFileLink,
-        lambda job: RevisioneFileLink.objects.filter(revisione__documento__testata_id=job).order_by(
-            "pk"
-        ),
-    ),
-    TabellaGrezza(
-        "trasmittal",
-        "Transmittal",
-        Transmittal,
-        lambda job: Transmittal.objects.filter(testata_id=job).order_by("numero"),
-    ),
-    TabellaGrezza(
-        "trasmittal_revisioni",
-        "Transmittal revisioni",
-        Transmittal.revisioni.through,
-        lambda job: Transmittal.revisioni.through.objects.filter(
-            transmittal__testata_id=job
-        ).order_by("pk"),
+        colonne=REVISIONI_COLONNE,
     ),
 )
 

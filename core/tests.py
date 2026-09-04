@@ -44,6 +44,7 @@ from .services.commesse import (
     salva_file_link,
     serialize_revisione,
 )
+from .services.export_grezzo import _cell as _cella_grezza
 from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
@@ -2786,6 +2787,9 @@ class ScaricaDatiGrezziTestCase(TestCase):
             testata=self.testata,
             item_no="001",
             vendor_doc="GR01-QMDBI",
+            client_doc_no="CL-001",
+            client_doc_class="CLASSE-A",
+            contractor_doc_no="CTR-001",
             doc_title="Data book index",
         )
         self.stato = StatoEsterno.objects.create(nome="Approved", lettera="A")
@@ -2796,16 +2800,6 @@ class ScaricaDatiGrezziTestCase(TestCase):
             int_status="da_emettere",
             ext_status=self.stato,
         )
-        self.link = RevisioneFileLink.objects.create(
-            revisione=self.rev,
-            percorso="Z:/JOBS/GR01/doc.pdf",
-        )
-        self.trasm = Transmittal.objects.create(
-            testata=self.testata,
-            numero=1,
-            data_emissione=date(2026, 3, 20),
-        )
-        self.trasm.revisioni.add(self.rev)
 
         # Dati della seconda commessa: non devono finire nell'export di GR01.
         self.doc_altra = Documento.objects.create(
@@ -2930,10 +2924,9 @@ class ScaricaDatiGrezziTestCase(TestCase):
         self.assertEqual(len(righe), 2)
         self.assertEqual(dict(zip(righe[0], righe[1]))["id"], self.doc_altra.pk)
 
-    def test_revisioni_indirizzi_e_trasmittal_esportano_le_righe_collegate(self):
+    def test_revisioni_e_indirizzi_esportano_le_righe_collegate(self):
         self.client.force_login(self.user)
-        keys = "testate,indirizzi_spedizione,revisioni,revisioni_file_link,trasmittal"
-        wb = self._workbook(self._scarica(tabelle=keys + ",trasmittal_revisioni"))
+        wb = self._workbook(self._scarica(tabelle="testate,indirizzi_spedizione,revisioni"))
 
         commessa = self._righe(wb["Commessa"])
         self.assertEqual(dict(zip(commessa[0], commessa[1]))["job"], "GR01")
@@ -2943,20 +2936,57 @@ class ScaricaDatiGrezziTestCase(TestCase):
 
         revisioni = self._righe(wb["Revisioni"])
         riga_rev = dict(zip(revisioni[0], revisioni[1]))
-        self.assertEqual(riga_rev["documento_id"], self.doc.pk)
         self.assertEqual(riga_rev["rev_no"], 0)
-        self.assertEqual(riga_rev["ext_status_id"], self.stato.pk)
+        self.assertEqual(riga_rev["int_status"], "da_emettere")
 
-        link = self._righe(wb["Link file revisioni"])
-        self.assertEqual(dict(zip(link[0], link[1]))["percorso"], "Z:/JOBS/GR01/doc.pdf")
+    def test_revisioni_portano_i_dati_del_documento_e_la_lettera_dello_stato(self):
+        self.client.force_login(self.user)
+        wb = self._workbook(self._scarica(tabelle="revisioni"))
+        righe = self._righe(wb["Revisioni"])
+        headers = righe[0]
+        self.assertEqual(
+            headers,
+            [
+                "client_doc_no",
+                "client_doc_class",
+                "contractor_doc_no",
+                "vendor_doc",
+                "item_no",
+                "rev_no",
+                "rev_let",
+                "dis_plan_date",
+                "dis_act_date",
+                "rec_plan_date",
+                "rec_act_date",
+                "int_status",
+                "ext_status",
+                "crea_nuova_rev",
+            ],
+        )
+        riga = dict(zip(headers, righe[1]))
+        self.assertEqual(riga["client_doc_no"], "CL-001")
+        self.assertEqual(riga["client_doc_class"], "CLASSE-A")
+        self.assertEqual(riga["contractor_doc_no"], "CTR-001")
+        self.assertEqual(riga["vendor_doc"], "GR01-QMDBI")
+        self.assertEqual(riga["item_no"], "001")
+        self.assertEqual(riga["ext_status"], "A")
 
-        trasmittal = self._righe(wb["Transmittal"])
-        self.assertEqual(dict(zip(trasmittal[0], trasmittal[1]))["numero"], 1)
+    def test_revisione_senza_risposta_cliente_ha_la_lettera_vuota(self):
+        Revisione.objects.filter(pk=self.rev.pk).update(ext_status=None)
+        self.client.force_login(self.user)
+        wb = self._workbook(self._scarica(tabelle="revisioni"))
+        righe = self._righe(wb["Revisioni"])
+        # openpyxl rilegge una cella vuota come None.
+        self.assertIn(dict(zip(righe[0], righe[1]))["ext_status"], ("", None))
 
-        collegamenti = self._righe(wb["Transmittal revisioni"])
-        riga_m2m = dict(zip(collegamenti[0], collegamenti[1]))
-        self.assertEqual(riga_m2m["transmittal_id"], self.trasm.pk)
-        self.assertEqual(riga_m2m["revisione_id"], self.rev.pk)
+    def test_le_tabelle_esportabili_sono_solo_le_quattro_utili(self):
+        self.assertEqual(
+            [t["key"] for t in list_tabelle_grezze()],
+            ["testate", "indirizzi_spedizione", "documenti", "revisioni"],
+        )
+        for key in ("revisioni_file_link", "trasmittal", "trasmittal_revisioni"):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                resolve_tabelle_grezze([key])
 
     def test_tabella_vuota_esporta_il_solo_header(self):
         self.client.force_login(self.user)
@@ -2967,16 +2997,15 @@ class ScaricaDatiGrezziTestCase(TestCase):
 
     def test_le_date_restano_date_e_i_timestamp_perdono_il_fuso(self):
         self.client.force_login(self.user)
-        wb = self._workbook(self._scarica(tabelle="revisioni,revisioni_file_link"))
+        wb = self._workbook(self._scarica(tabelle="revisioni"))
         revisioni = self._righe(wb["Revisioni"])
         self.assertEqual(
             dict(zip(revisioni[0], revisioni[1]))["dis_plan_date"],
             datetime(2026, 3, 15),
         )
-        link = self._righe(wb["Link file revisioni"])
-        created_at = dict(zip(link[0], link[1]))["created_at"]
-        self.assertIsInstance(created_at, datetime)
-        self.assertIsNone(created_at.tzinfo)
+        aware = timezone.make_aware(datetime(2026, 3, 15, 8, 30))
+        self.assertEqual(_cella_grezza(aware), timezone.localtime(aware).replace(tzinfo=None))
+        self.assertIsNone(_cella_grezza(aware).tzinfo)
 
     # ── Errori ───────────────────────────────────────────────────────────────
 
