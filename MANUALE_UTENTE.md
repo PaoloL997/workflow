@@ -571,20 +571,33 @@ Usa i pulsanti **Verticale** / **Orizzontale** nella toolbar.
 - **Stato interno** (badge colorato)
 - **Risposta cliente** (badge con colore configurato)
 
-### 11.3 Ordinamento
+### 11.3 Colori delle risposte del cliente
+
+Le celle legate alla risposta del cliente usano il colore configurato sullo stato esterno, pieno e identico a quello della legenda:
+
+| Vista | Dove compare il colore |
+|-------|------------------------|
+| **Verticale** | Badge **Risposta cliente**; la riga resta tinta più tenue con il bordo sinistro del colore dello stato |
+| **Orizzontale** | Colonna **B&R Doc** (ultima risposta ricevuta) e cella **Status** di ogni revisione, con la lettera dello stato |
+
+Il testo dentro alle celle diventa automaticamente bianco o nero, quello dei due che si legge meglio sul colore: gli stati bianchi o gialli hanno testo nero, quelli neri, grigi scuri o molto saturi hanno testo bianco. Se un colore è così a metà strada da non reggere nessuno dei due, il fondo viene schiarito (o scurito) di pochi punti, quanto basta a leggere il testo restando lo stesso colore a vista.
+
+La legenda in alto nella vista orizzontale ripete la stessa coppia colore/lettera delle celle.
+
+### 11.4 Ordinamento
 
 Clicca sull'intestazione di una colonna per ordinare i dati.
 
-### 11.4 Apertura file
+### 11.5 Apertura file
 
 Clicca su una riga o su una data di ricezione effettiva per aprire il file collegato alla revisione (stessa logica descritta al §8).
 
-### 11.5 Esportazione Excel
+### 11.6 Esportazione Excel
 
 1. Clicca il pulsante **Esporta** (icona download).
 2. Viene scaricato `situazione_<job>.xlsx` con la vista corrente (verticale o orizzontale), inclusi i colori degli stati.
 
-### 11.6 Schermo intero
+### 11.7 Schermo intero
 
 Clicca l'icona schermo intero per espandere la tabella a tutto lo schermo. Clicca di nuovo per uscire.
 

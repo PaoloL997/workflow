@@ -47,6 +47,8 @@
       --radius-xl:   20px;
       /* Soft status/row tints: stronger in dark so highlights stay visible */
       --status-tint-pct: 12%;
+      /* Righe evidenziate dalla risposta cliente: tinta più decisa */
+      --status-tint-strong-pct: 20%;
     }
 
     /* System dark mode (no override set) */
@@ -86,6 +88,7 @@
           0 2px 8px   hsl(220 30% 2% / 0.56),
           0 8px 32px  hsl(220 30% 2% / 0.42);
         --status-tint-pct: 28%;
+        --status-tint-strong-pct: 34%;
       }
     }
 
@@ -125,6 +128,7 @@
         0 2px 8px   hsl(220 30% 2% / 0.56),
         0 8px 32px  hsl(220 30% 2% / 0.42);
       --status-tint-pct: 28%;
+      --status-tint-strong-pct: 34%;
     }
 
     /* Manual light override (forces light even on dark-system machines) */
@@ -163,6 +167,7 @@
         0 2px 8px   hsla(220,20%,0%,0.10),
         0 8px 32px  hsla(220,20%,0%,0.10);
       --status-tint-pct: 12%;
+      --status-tint-strong-pct: 20%;
     }
 
     /* ── Reset & Base ── */

@@ -11,6 +11,7 @@ from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
+from core.services.stato_esterno_colori import cell_colors, hex_to_rgb
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
@@ -1256,22 +1257,24 @@ def _draw_situazione_col_headers(pdf: FPDF, meta: dict) -> None:
     pdf.set_y(y + h1 + h2)
 
 
-def _hex_to_rgb(hex_color: str):
-    h = (hex_color or "").strip().lstrip("#")
-    if len(h) != 6:
-        return None
-    try:
-        return tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
-    except ValueError:
-        return None
-
-
-def _tint_rgb(hex_color: str, pct: float = 0.18):
-    """Blend hex color toward white (same idea as UI statusTintBackground)."""
-    rgb = _hex_to_rgb(hex_color)
+def _tint_rgb(hex_color: str, pct: float = 0.20):
+    """Blend hex color toward white (stessa quota della UI: --status-tint-strong-pct)."""
+    rgb = hex_to_rgb(hex_color)
     if not rgb:
         return None
     return tuple(int(c * pct + 255 * (1.0 - pct)) for c in rgb)
+
+
+def _status_cell_rgb(hex_color: str):
+    """``(fondo, testo)`` pieni per una cella risposta cliente, come nella UI.
+
+    Stessa coppia colore/testo usata dalle celle di situazione documenti
+    (``core.services.stato_esterno_colori``), così stampa e schermo coincidono.
+    """
+    if not hex_to_rgb(hex_color):
+        return None
+    cella = cell_colors(hex_color)
+    return hex_to_rgb(cella["bg"]), hex_to_rgb(cella["fg"])
 
 
 def _latest_ext_status_color(revs: list) -> str:
@@ -1403,12 +1406,14 @@ def _build_situazione_table(
         if pdf.get_y() + row_h > bottom_limit:
             pdf.add_page()
         cells = _situazione_row_values(doc, revs, max_revs, active_fixed)
-        vendor_fill = _tint_rgb(_latest_ext_status_color(revs))
+        vendor_colors = _status_cell_rgb(_latest_ext_status_color(revs))
         x = table_x0
         y = pdf.get_y()
         for i, ((text, overdue), w) in enumerate(zip(cells, widths)):
             color = (180, 0, 0) if overdue and text else (0, 0, 0)
-            fill = vendor_fill if i == vendor_col_idx else None
+            fill = None
+            if i == vendor_col_idx and vendor_colors:
+                fill, color = vendor_colors
             _draw_mm_cell(
                 pdf,
                 x,

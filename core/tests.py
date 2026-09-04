@@ -61,6 +61,17 @@ from .services.revisione_anomalie import (
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
 from .services.stato_esterno_codes import letter_for_status_name
+from .services.stato_esterno_colori import (
+    FALLBACK_BG,
+    MIN_CONTRAST,
+    TEXT_DARK,
+    TEXT_LIGHT,
+    cell_colors,
+    contrast_ratio,
+    hex_to_rgb,
+    readable_text_color,
+    rgb_to_hex,
+)
 
 User = get_user_model()
 
@@ -3044,3 +3055,147 @@ class ScaricaDatiGrezziTestCase(TestCase):
     def test_build_workbook_su_commessa_inesistente(self):
         with self.assertRaises(Testata.DoesNotExist):
             build_dati_grezzi_workbook("NOPE", ["documenti"])
+
+
+class ColoriRisposteClienteTests(SimpleTestCase):
+    """Colori delle celle legate alle risposte del cliente (viste situazione)."""
+
+    # ── Conversioni ──────────────────────────────────────────────────────────
+
+    def test_hex_to_rgb_accetta_le_forme_valide(self):
+        self.assertEqual(hex_to_rgb("#00B050"), (0, 176, 80))
+        self.assertEqual(hex_to_rgb("00b050"), (0, 176, 80))
+        self.assertEqual(hex_to_rgb("  #FFC000 "), (255, 192, 0))
+        self.assertEqual(hex_to_rgb("#FFF"), (255, 255, 255))
+
+    def test_hex_to_rgb_rifiuta_i_valori_non_validi(self):
+        for value in ["", None, "verde", "#12", "#12345", "#GGGGGG"]:
+            self.assertIsNone(hex_to_rgb(value), value)
+
+    def test_rgb_to_hex_normalizza_in_maiuscolo(self):
+        self.assertEqual(rgb_to_hex((0, 176, 80)), "#00B050")
+        self.assertEqual(rgb_to_hex((255.4, -3, 300)), "#FF00FF")
+
+    # ── Scelta del testo ─────────────────────────────────────────────────────
+
+    def test_testo_nero_su_colori_chiari(self):
+        # Bianco e quasi bianco: il testo bianco sparirebbe.
+        for colore in ["#FFFFFF", "#FEFEFE", "#FFFF00", "#FFC000", "#9E9E9E"]:
+            self.assertEqual(readable_text_color(colore), TEXT_DARK, colore)
+
+    def test_testo_bianco_su_colori_scuri(self):
+        # Nero e grigi scuri: il testo nero sparirebbe.
+        for colore in ["#000000", "#111111", "#404040", "#0070C0", "#D61D09"]:
+            self.assertEqual(readable_text_color(colore), TEXT_LIGHT, colore)
+
+    def test_testo_di_default_quando_il_colore_manca(self):
+        self.assertEqual(readable_text_color(""), readable_text_color(FALLBACK_BG))
+
+    # ── Colori della cella ───────────────────────────────────────────────────
+
+    def test_fondo_uguale_al_colore_configurato(self):
+        # Uniformità con la legenda: il colore inserito non viene sbiadito.
+        for colore in ["#00B050", "#FFC000", "#FFFFFF", "#000000", "#D61D09"]:
+            self.assertEqual(cell_colors(colore)["bg"], colore, colore)
+
+    def test_bianco_e_nero_restano_leggibili(self):
+        self.assertEqual(cell_colors("#FFFFFF"), {"bg": "#FFFFFF", "fg": TEXT_DARK})
+        self.assertEqual(cell_colors("#000000"), {"bg": "#000000", "fg": TEXT_LIGHT})
+
+    def test_mezzi_toni_spostati_quel_tanto_che_basta(self):
+        # Su #797979 nessuno dei due testi arriva al contrasto minimo: il fondo
+        # si sposta di pochi punti, restando lo stesso colore a vista.
+        cella = cell_colors("#797979")
+        self.assertNotEqual(cella["bg"], "#797979")
+        self.assertGreaterEqual(contrast_ratio(cella["bg"], cella["fg"]), MIN_CONTRAST)
+        scarto = max(abs(a - b) for a, b in zip(hex_to_rgb("#797979"), hex_to_rgb(cella["bg"])))
+        self.assertLessEqual(scarto, 25)
+
+    def test_contrasto_minimo_garantito_su_tutta_la_gamma(self):
+        passo = 51  # campiona 6 livelli per canale
+        for r in range(0, 256, passo):
+            for g in range(0, 256, passo):
+                for b in range(0, 256, passo):
+                    colore = rgb_to_hex((r, g, b))
+                    cella = cell_colors(colore)
+                    self.assertGreaterEqual(
+                        contrast_ratio(cella["bg"], cella["fg"]),
+                        MIN_CONTRAST,
+                        colore,
+                    )
+                    scarto = max(abs(a - b) for a, b in zip((r, g, b), hex_to_rgb(cella["bg"])))
+                    self.assertLessEqual(scarto, 25, colore)
+
+    def test_colore_mancante_o_invalido_usa_il_fallback(self):
+        atteso = {"bg": FALLBACK_BG, "fg": readable_text_color(FALLBACK_BG)}
+        for colore in ["", None, "  ", "non-un-colore"]:
+            self.assertEqual(cell_colors(colore), atteso, colore)
+
+
+class ColoriRisposteClienteApiTests(TestCase):
+    """I colori pronti per le celle viaggiano nei payload delle viste."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "colori_user",
+            "colori@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="COL01")
+        self.doc = Documento.objects.create(
+            testata=self.testata, item_no="001", vendor_doc="COL01-01-0001"
+        )
+        self.approved = StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        self.final = StatoEsterno.objects.create(
+            nome="Final - As Built", lettera="F", colore="#FFFFFF"
+        )
+
+    def test_serialize_revisione_include_i_colori_della_cella(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.approved)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["ext_status_colore"], "#00B050")
+        self.assertEqual(data["ext_status_bg"], "#00B050")
+        self.assertEqual(data["ext_status_fg"], TEXT_DARK)
+
+    def test_serialize_revisione_su_stato_bianco_usa_testo_nero(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.final)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["ext_status_bg"], "#FFFFFF")
+        self.assertEqual(data["ext_status_fg"], TEXT_DARK)
+
+    def test_serialize_revisione_senza_risposta_non_ha_colori(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["ext_status_bg"], "")
+        self.assertEqual(data["ext_status_fg"], "")
+
+    def test_situazione_api_include_i_colori_della_cella(self):
+        Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.approved)
+        response = self.client.get(f"/api/commesse/{self.testata.job}/situazione/")
+        self.assertEqual(response.status_code, 200)
+        revs = response.json()["revisioni_by_doc"][str(self.doc.pk)]
+        self.assertEqual(revs[0]["ext_status_bg"], "#00B050")
+        self.assertEqual(revs[0]["ext_status_fg"], TEXT_DARK)
+
+    def test_revisioni_sbloccabili_includono_i_colori_della_cella(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            rec_act_date="2025-06-01",
+            ext_status=self.final,
+            int_status="ricevuto",
+        )
+        items = list_revisioni_sbloccabili(self.testata.job)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["ext_status_bg"], "#FFFFFF")
+        self.assertEqual(items[0]["ext_status_fg"], TEXT_DARK)
+
+    def test_pdf_colora_la_cella_vendor_con_il_colore_pieno(self):
+        from src.pdf import _status_cell_rgb
+
+        self.assertEqual(_status_cell_rgb("#00B050"), ((0, 176, 80), hex_to_rgb(TEXT_DARK)))
+        self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
+        self.assertIsNone(_status_cell_rgb(""))

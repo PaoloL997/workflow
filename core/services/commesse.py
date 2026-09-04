@@ -17,6 +17,7 @@ from ..models import (
     StatoEsterno,
     Testata,
 )
+from .stato_esterno_colori import cell_colors
 
 MAX_PINNED_COMMESSE = 8
 
@@ -580,6 +581,9 @@ def serialize_revisione(r):
 
         label_map = dict(STATI_INTERNI_CHOICES)
         int_status_label = label_map.get(r.int_status, r.int_status)
+    # Colori pronti per le celle: fondo uguale al colore dello stato, testo
+    # bianco o nero scelto per contrasto (vedi stato_esterno_colori).
+    cella = cell_colors(r.ext_status.colore) if r.ext_status else {"bg": "", "fg": ""}
     return {
         "id": r.pk,
         "documento_id": r.documento_id,
@@ -595,6 +599,8 @@ def serialize_revisione(r):
         "ext_status_label": r.ext_status.nome if r.ext_status else "",
         "ext_status_lettera": r.ext_status.lettera if r.ext_status else "",
         "ext_status_colore": r.ext_status.colore if r.ext_status else "",
+        "ext_status_bg": cella["bg"],
+        "ext_status_fg": cella["fg"],
         "crea_nuova_rev": r.crea_nuova_rev,
     }
 

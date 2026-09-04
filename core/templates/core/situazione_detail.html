@@ -162,11 +162,20 @@
     white-space: nowrap;
   }
 
+  /* Stessa resa delle celle: colore pieno + lettera nel testo leggibile. */
   .sit-ext-legend-swatch {
-    width: 12px;
-    height: 12px;
-    border-radius: 3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 4px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: inset 0 0 0 1px hsla(0, 0%, 50%, 0.3);
   }
 
   #sit-container {
@@ -290,8 +299,13 @@
     background: var(--color-surface);
   }
 
-  .sit-horiz tbody td.sit-fix.sit-vendor-tinted {
-    background: var(--sit-vendor-tint) !important;
+  /* Celle legate alla risposta del cliente: colore pieno (uguale alla legenda)
+     e testo bianco/nero scelto per contrasto lato server. */
+  .sit-horiz td.sit-status-cell,
+  .sit-horiz tbody td.sit-fix.sit-status-cell {
+    background: var(--sit-status-bg) !important;
+    color: var(--sit-status-fg);
+    box-shadow: inset 0 0 0 1px hsla(0, 0%, 50%, 0.3);
   }
 
   /* Incremental z-index so rightmost fixed columns stack above scrolling revision cells */
@@ -354,6 +368,12 @@
     white-space: nowrap;
   }
 
+  /* Il badge risposta cliente usa il colore configurato: un filo di bordo lo
+     stacca dalla riga anche quando è bianco o quasi. */
+  .sit-ext-badge {
+    box-shadow: inset 0 0 0 1px hsla(0, 0%, 50%, 0.3);
+  }
+
   .stato-da-iniziare    { background: hsl(220,12%,20%); color: hsl(220,8%,55%); }
   .stato-in-lavorazione { background: hsl(210,80%,20%); color: hsl(210,80%,70%); }
   .stato-in-revisione   { background: hsl(42,80%,18%);  color: hsl(42,90%,72%);  }
@@ -362,8 +382,6 @@
   .stato-inviato        { background: hsl(46,85%,20%); color: hsl(46,95%,72%); }
   .stato-da-inviare     { background: hsl(220,12%,20%); color: hsl(220,8%,55%); }
   .stato-ricevuto       { background: hsl(145,55%,16%); color: hsl(145,60%,68%); }
-  .ext-commentato       { background: hsl(0,72%,20%); color: hsl(0,86%,74%); }
-  .ext-approvato        { background: hsl(145,55%,16%); color: hsl(145,60%,68%); }
 
   [data-theme="light"] .stato-da-iniziare    { background: hsl(220,14%,90%); color: hsl(220,10%,40%); }
   [data-theme="light"] .stato-in-lavorazione { background: hsl(210,80%,88%); color: hsl(210,80%,30%); }
@@ -373,8 +391,6 @@
   [data-theme="light"] .stato-inviato        { background: hsl(46,92%,88%); color: hsl(46,70%,30%); }
   [data-theme="light"] .stato-da-inviare     { background: hsl(220,14%,90%); color: hsl(220,10%,40%); }
   [data-theme="light"] .stato-ricevuto       { background: hsl(145,55%,88%); color: hsl(145,45%,28%); }
-  [data-theme="light"] .ext-commentato       { background: hsl(0,85%,90%); color: hsl(0,62%,34%); }
-  [data-theme="light"] .ext-approvato        { background: hsl(145,55%,88%); color: hsl(145,45%,28%); }
 
   /* ── Empty state ── */
   .empty-state {
@@ -1310,45 +1326,81 @@
     };
   }
 
+  /* ── Colori risposta cliente ──
+     Il fondo è il colore configurato sullo stato (uniforme alla legenda) e il
+     testo è bianco o nero, quello che ci si legge meglio sopra. I due valori
+     arrivano già calcolati dal server (services/stato_esterno_colori.py); qui
+     restano solo il fallback e la stessa scelta bianco/nero per i payload che
+     non li portano. */
+  const EXT_FALLBACK_BG = '#9E9E9E';
+  const EXT_TEXT_LIGHT  = '#FFFFFF';
+  const EXT_TEXT_DARK   = '#111111';
+
+  function hexToRgb(color) {
+    let h = String(color || '').trim().replace('#', '');
+    if (h.length === 3) h = h.split('').map(ch => ch + ch).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    return [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16));
+  }
+
+  function relLuminance(rgb) {
+    const [r, g, b] = rgb.map(v => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  function readableTextColor(color) {
+    const rgb = hexToRgb(color) || hexToRgb(EXT_FALLBACK_BG);
+    const lum = relLuminance(rgb);
+    const withDark  = (lum + 0.05) / (relLuminance(hexToRgb(EXT_TEXT_DARK)) + 0.05);
+    const withLight = (relLuminance(hexToRgb(EXT_TEXT_LIGHT)) + 0.05) / (lum + 0.05);
+    return withDark >= withLight ? EXT_TEXT_DARK : EXT_TEXT_LIGHT;
+  }
+
+  function extCellColors(rev) {
+    const bg = (rev?.ext_status_bg || rev?.ext_status_colore || '').trim() || EXT_FALLBACK_BG;
+    const fg = (rev?.ext_status_fg || '').trim() || readableTextColor(bg);
+    return { bg, fg };
+  }
+
+  function extCellStyleVars(colors) {
+    return `--sit-status-bg:${escHtml(colors.bg)};--sit-status-fg:${escHtml(colors.fg)};`;
+  }
+
   function getExtStatusMeta(rev) {
     const label = rev?.ext_status_label || '';
     if (!label) {
-      return { label: '', className: '', style: '' };
+      return { label: '', style: '' };
     }
-    const normalized = label.trim().toLowerCase();
-    if (normalized === 'commentato') {
-      return { label, className: 'ext-commentato', style: '' };
-    }
-    if (normalized === 'approvato') {
-      return { label, className: 'ext-approvato', style: '' };
-    }
-    const color = rev?.ext_status_colore || '#9E9E9E';
-    return { label, className: '', style: `background:${escHtml(color)};color:#fff` };
+    const { bg, fg } = extCellColors(rev);
+    return { label, style: `background:${escHtml(bg)};color:${escHtml(fg)}` };
   }
 
+  // Riga della vista verticale: tinta decisa ma non piena, perché la riga
+  // contiene anche testo neutro (date, titoli) oltre al badge colorato.
   function statusTintBackground(color) {
-    return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-pct), var(--color-surface))`;
+    return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-strong-pct, var(--status-tint-pct)), var(--color-surface))`;
   }
 
   function latestExtStatusMeta(revs) {
-    if (!revs || !revs.length) return { color: '', label: '' };
+    if (!revs || !revs.length) return { bg: '', fg: '', label: '' };
     for (let i = revs.length - 1; i >= 0; i--) {
-      const color = (revs[i].ext_status_colore || '').trim();
+      const color = (revs[i].ext_status_bg || revs[i].ext_status_colore || '').trim();
       if (color) {
-        return {
-          color,
-          label: (revs[i].ext_status_label || '').trim(),
-        };
+        const { bg, fg } = extCellColors(revs[i]);
+        return { bg, fg, label: (revs[i].ext_status_label || '').trim() };
       }
     }
-    return { color: '', label: '' };
+    return { bg: '', fg: '', label: '' };
   }
 
   function getRowHighlightStyle(rev) {
-    const extColor = rev?.ext_status_colore || '';
-    if (!extColor) return '';
-    const tint = statusTintBackground(extColor);
-    return `style="border-left-color:${escHtml(extColor)};background:${tint}"`;
+    if (!(rev?.ext_status_bg || rev?.ext_status_colore)) return '';
+    const { bg } = extCellColors(rev);
+    const tint = statusTintBackground(bg);
+    return `style="border-left-color:${escHtml(bg)};background:${tint}"`;
   }
 
   let _allDocs    = [];
@@ -1996,10 +2048,10 @@
     for (const { revs } of docRevs || []) {
       for (const rev of revs || []) {
         const label = (rev.ext_status_label || '').trim();
-        const color = (rev.ext_status_colore || '').trim();
+        const color = (rev.ext_status_bg || rev.ext_status_colore || '').trim();
         const letter = (rev.ext_status_lettera || '').trim();
         if (!label || !color || byLabel.has(label)) continue;
-        byLabel.set(label, { color, letter });
+        byLabel.set(label, { ...extCellColors(rev), letter });
       }
     }
     if (!byLabel.size) {
@@ -2009,10 +2061,12 @@
     const items = [...byLabel.entries()].sort((a, b) =>
       a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
     el.innerHTML = items.map(([label, meta]) => {
-      const text = meta.letter ? `${meta.letter} — ${label}` : label;
+      // Il riquadro ripete esattamente la cella: stesso colore, stessa lettera.
+      const swatchStyle = `background:${escHtml(meta.bg)};color:${escHtml(meta.fg)}`;
+      const swatchTitle = meta.letter ? ` title="${escHtml(label)}"` : '';
       return `<span class="sit-ext-legend-item">` +
-        `<span class="sit-ext-legend-swatch" style="background:${escHtml(meta.color)}" aria-hidden="true"></span>` +
-        `<span>${escHtml(text)}</span>` +
+        `<span class="sit-ext-legend-swatch" style="${swatchStyle}"${swatchTitle}>${escHtml(meta.letter)}</span>` +
+        `<span>${escHtml(label)}</span>` +
       `</span>`;
     }).join('');
     el.hidden = false;
@@ -2135,7 +2189,7 @@
       const extMeta = getExtStatusMeta(r);
       const rowStyle = getRowHighlightStyle(r);
       const extBadge = extMeta.label
-        ? `<span class="sit-ext-badge ${escHtml(extMeta.className)}"${extMeta.style ? ` style="${extMeta.style}"` : ''}>${escHtml(extMeta.label)}</span>`
+        ? `<span class="sit-ext-badge" style="${extMeta.style}">${escHtml(extMeta.label)}</span>`
         : `<span style="opacity:.35">\u2014</span>`;
       const intMeta   = getIntStatusMeta(r);
       const intLabel  = intMeta.label;
@@ -2288,9 +2342,9 @@
           val = fmtPlanningDate(planned.planned_receipt);
         } else if (col.key === 'vendor_doc') {
           val = escHtml(doc.vendor_doc || '\u2014');
-          if (extMeta.color) {
-            extraClass = ' sit-vendor-tinted';
-            extraStyle = `--sit-vendor-tint:${statusTintBackground(extMeta.color)};`;
+          if (extMeta.bg) {
+            extraClass = ' sit-status-cell';
+            extraStyle = extCellStyleVars(extMeta);
             if (extMeta.label) {
               titleAttr = ` title="${escHtml(extMeta.label)}"`;
             }
@@ -2321,8 +2375,11 @@
           }
           const statusTitle = extLabel ? ` title="${escHtml(extLabel)}"` : '';
           const statusText = extLetter || '\u2014';
+          // La cella Status porta il colore della risposta con testo leggibile.
+          const statusCls = extLabel ? ' sit-status-cell' : '';
+          const statusVars = extLabel ? extCellStyleVars(extCellColors(rev)) : '';
           if (extLetter || rev.rec_act_date) {
-            tbody += `<td class="sit-row-clickable" style="text-align:center;font-weight:700"${statusTitle} onclick="onRevBtnClick(${rev.id}, this)">${escHtml(statusText)}</td>`;
+            tbody += `<td class="sit-row-clickable${statusCls}" style="text-align:center;font-weight:700;${statusVars}"${statusTitle} onclick="onRevBtnClick(${rev.id}, this)">${escHtml(statusText)}</td>`;
           } else {
             tbody += `<td style="text-align:center;font-weight:700">\u2014</td>`;
           }
