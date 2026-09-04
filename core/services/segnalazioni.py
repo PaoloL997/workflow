@@ -165,7 +165,9 @@ def list_segnalazioni(user, tipo=None, stato=None, mine=False, top=None):
             raise ValueError("Parametro top non valido.")
         rows = list(qs.order_by("-score", "-created_at")[:top])
     else:
-        rows = list(qs.order_by("is_closed", "-score", "-created_at"))
+        # Elenco cronologico: le più recenti in cima, le chiuse in fondo.
+        # Per le più votate c'è già il filtro "Top 10 per voti".
+        rows = list(qs.order_by("is_closed", "-created_at", "-id"))
     miei = _miei_voti(user, [s.pk for s in rows])
     return [_serialize_annotated(s, miei) for s in rows]
 

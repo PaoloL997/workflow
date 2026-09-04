@@ -1,5 +1,6 @@
 import json
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -8,6 +9,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.test import Client, SimpleTestCase, TestCase
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
@@ -454,9 +456,7 @@ class ListaTrasmittalTest(TestCase):
         self.assertEqual(path, _trasmittal_path(self.tmp, "25089", 7))
 
     def test_percorso_resolves_padded_filename(self):
-        written = _write_trasmittal(
-            self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf"
-        )
+        written = _write_trasmittal(self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf")
         from core.services.trasmittal_archivio import percorso_trasmittal
 
         path = percorso_trasmittal("25089", 1)
@@ -481,9 +481,7 @@ class ListaTrasmittalTest(TestCase):
             percorso_trasmittal("25056", 7)
 
     def test_lists_from_da_spedire_when_dcc_missing(self):
-        folder = (
-            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
-        )
+        folder = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         folder.mkdir(parents=True)
         (folder / "Transmittal 25089-5.pdf").write_bytes(b"%PDF")
         from core.services.trasmittal_archivio import (
@@ -499,9 +497,7 @@ class ListaTrasmittalTest(TestCase):
 
     def test_prefers_dcc_over_da_spedire(self):
         _write_trasmittal(self.tmp, "25089", 1)
-        fallback = (
-            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
-        )
+        fallback = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         fallback.mkdir(parents=True)
         (fallback / "Transmittal 25089-9.pdf").write_bytes(b"%PDF")
         from core.services.trasmittal_archivio import lista_trasmittal, trasmittal_in_da_spedire
@@ -591,14 +587,7 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertFalse(body["in_da_spedire"])
 
     def test_storico_reads_from_da_spedire_and_flags(self):
-        folder = (
-            Path(self.tmp)
-            / "25089"
-            / "PROGETTO"
-            / "DCC"
-            / "DA SPEDIRE"
-            / "TRANSMITTAL"
-        )
+        folder = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         folder.mkdir(parents=True)
         (folder / "Transmittal 25089-4.pdf").write_bytes(b"%PDF")
         response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
@@ -2526,6 +2515,40 @@ class SegnalazioniTestCase(TestCase):
         self.assertEqual(len(top), 10)
         self.assertEqual([s["titolo"] for s in top[:3]], ["Chiuso top", "Alto", "Medio"])
         self.assertNotIn("Zero", [s["titolo"] for s in top])
+
+    def test_list_ordered_by_created_at_desc(self):
+        """L'elenco è cronologico (le più recenti in cima), i voti non contano."""
+        votata = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Vecchia ma votata",
+            testo="x",
+        )
+        recente = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.PROBLEMA,
+            titolo="Recente senza voti",
+            testo="x",
+        )
+        chiusa = Segnalazione.objects.create(
+            autore=self.reader,
+            tipo=TipoSegnalazione.FEATURE,
+            titolo="Chiusa recentissima",
+            testo="x",
+            stato=StatoSegnalazione.CHIUSO,
+        )
+        base = timezone.now()
+        for s, delta in ((votata, -3), (recente, -1), (chiusa, 0)):
+            Segnalazione.objects.filter(pk=s.pk).update(created_at=base + timedelta(hours=delta))
+        SegnalazioneVoto.objects.create(segnalazione=votata, utente=self.writer, valore=1)
+        SegnalazioneVoto.objects.create(segnalazione=votata, utente=self.voter, valore=1)
+
+        self.client.force_login(self.reader)
+        titoli = [s["titolo"] for s in self.client.get("/api/segnalazioni/").json()["segnalazioni"]]
+        self.assertEqual(
+            titoli,
+            ["Recente senza voti", "Vecchia ma votata", "Chiusa recentissima"],
+        )
 
     def test_invalid_list_params(self):
         self.client.force_login(self.reader)

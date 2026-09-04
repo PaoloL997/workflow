@@ -24,6 +24,8 @@ def serialize_notifica(n):
     return {
         "id": n.pk,
         "testo": n.testo,
+        # Il nome dell'autore va reso in grassetto nel testo della notifica.
+        "autore": n.segnalazione.autore.nome_completo,
         "segnalazione_id": n.segnalazione_id,
         "tipo": n.segnalazione.tipo,
         "created_at": _iso(n.created_at),
@@ -50,7 +52,7 @@ def notifica_nuova_segnalazione(segnalazione):
 def _non_lette_qs(user):
     return (
         Notifica.objects.filter(destinatario=user, letta_il__isnull=True)
-        .select_related("segnalazione")
+        .select_related("segnalazione", "segnalazione__autore")
         .order_by("-created_at", "-id")
     )
 
