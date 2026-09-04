@@ -167,9 +167,9 @@ def register_view(request):
                 return redirect("home")
             except IntegrityError:
                 error = "Impossibile completare la registrazione. Riprova tra qualche minuto."
-            except Exception:
-                logger.exception("Errore imprevisto durante la registrazione di %s", username)
-                error = "Errore durante la registrazione. Riprova."
+            except ValidationError:
+                logger.exception("Errore di convalida durante la registrazione di %s", username)
+                error = "Errore di convalida durante la registrazione. Riprova."
     return render(request, "core/register.html", {"error": error})
 
 
