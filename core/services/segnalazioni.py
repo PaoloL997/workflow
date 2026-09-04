@@ -9,6 +9,7 @@ from ..models import (
     StatoSegnalazione,
     TipoSegnalazione,
 )
+from .notifiche import notifica_nuova_segnalazione
 
 TIPO_VALUES = {c.value for c in TipoSegnalazione}
 STATO_VALUES = {c.value for c in StatoSegnalazione}
@@ -184,6 +185,7 @@ def create_segnalazione(user, tipo, titolo, testo):
     if len(testo) > MAX_TESTO:
         raise ValueError(f"La descrizione può avere al massimo {MAX_TESTO} caratteri.")
     s = Segnalazione.objects.create(autore=user, tipo=tipo, titolo=titolo, testo=testo)
+    notifica_nuova_segnalazione(s)
     return get_segnalazione(s.pk, user)
 
 

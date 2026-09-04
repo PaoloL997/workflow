@@ -6,6 +6,7 @@ from .models import (
     CartellaModelloDocumento,
     Documento,
     ModelloDocumento,
+    Notifica,
     Permesso,
     Reparto,
     Revisione,
@@ -243,3 +244,20 @@ class SegnalazioneAdmin(admin.ModelAdmin):
     readonly_fields = ("autore", "created_at", "chiuso_da", "chiuso_il")
     raw_id_fields = ("autore", "chiuso_da")
     inlines = [SegnalazioneCommentoInline]
+
+
+@admin.register(Notifica)
+class NotificaAdmin(admin.ModelAdmin):
+    list_display = ("id", "destinatario", "testo", "created_at", "letta_il")
+    list_filter = ("letta_il",)
+    search_fields = (
+        "testo",
+        "destinatario__username",
+        "destinatario__first_name",
+        "destinatario__last_name",
+    )
+    readonly_fields = ("destinatario", "segnalazione", "testo", "created_at", "letta_il")
+    raw_id_fields = ("destinatario", "segnalazione")
+
+    def has_add_permission(self, request):
+        return False

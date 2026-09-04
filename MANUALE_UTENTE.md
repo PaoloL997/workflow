@@ -133,6 +133,26 @@ In basso a destra trovi il pulsante circolare per cambiare tema. La preferenza v
 
 In alto a sinistra compare sempre **Brembana&Rolle / Gestione di commessa**. Nelle pagine interne alla commessa è presente un pulsante per tornare alla dashboard della commessa o alla Home.
 
+### 3.5 Notifiche
+
+In alto a destra, subito a sinistra dell'icona del tuo profilo, c'è una **campanella**. Un pallino rosso con il numero indica quante notifiche non hai ancora letto.
+
+**Quando arriva una notifica:**
+
+- Quando un collega propone una nuova feature — *"Mario Rossi ha proposto una nuova feature"*
+- Quando un collega segnala un problema — *"Mario Rossi ha evidenziato un problema"*
+
+La notifica viene inviata a tutti gli utenti attivi tranne a chi ha creato la segnalazione.
+
+**Come si usano:**
+
+1. Clicca la campanella: si apre l'elenco delle notifiche non lette, dalla più recente.
+2. Clicca una notifica per aprire la pagina **Proposte e segnalazioni** (`/segnalazioni/`).
+3. Una volta aperto l'elenco le notifiche risultano lette: il contatore si azzera e alla prossima apertura non compaiono più.
+4. Clicca fuori dal riquadro o premi **Esc** per chiudere.
+
+Il contatore si aggiorna automaticamente ogni minuto, senza ricaricare la pagina.
+
 ---
 
 ## 4. Home e gestione commesse

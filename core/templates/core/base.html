@@ -368,6 +368,97 @@
       user-select: none;
     }
 
+    /* ── Notifiche (campanella, fissa top-right accanto all'avatar) ── */
+    .notif-btn {
+      position: fixed;
+      top: 20px;
+      right: 76px;
+      z-index: 100;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-surface);
+      color: var(--color-text-secondary);
+      border: 1px solid var(--color-border);
+      box-shadow: 0 2px 8px hsla(0,0%,0%,0.12);
+      transition: transform 0.18s, box-shadow 0.18s, color 0.18s;
+    }
+    .notif-btn:hover {
+      transform: scale(1.07);
+      color: var(--color-text-primary);
+      box-shadow: 0 4px 18px hsla(0,0%,0%,0.18);
+    }
+    .notif-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 4px;
+      border-radius: 9px;
+      background: var(--color-danger);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+      border: 2px solid var(--color-bg);
+      box-sizing: content-box;
+    }
+    .notif-badge[hidden] { display: none; }
+
+    .notif-panel {
+      position: fixed;
+      top: 68px;
+      right: 24px;
+      z-index: 150;
+      width: min(340px, calc(100vw - 32px));
+      max-height: min(60vh, 420px);
+      overflow-y: auto;
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-elevated);
+    }
+    .notif-panel[hidden] { display: none; }
+    .notif-panel-header {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--color-text-primary);
+      border-bottom: 1px solid var(--color-border);
+    }
+    .notif-item {
+      display: block;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--color-border);
+      color: inherit;
+      text-decoration: none;
+    }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item:hover { background: var(--color-elevated); text-decoration: none; }
+    .notif-item-text {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--color-text-primary);
+    }
+    .notif-item-date {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+    .notif-empty {
+      padding: 20px 16px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-text-secondary);
+    }
+
     .permission-toast {
       position: fixed;
       bottom: 28px;
@@ -406,6 +497,8 @@
   <script>
     window.USER_CAN_WRITE = {{ user_can_write|yesno:"true,false" }};
     window.USER_IS_ADMIN = {{ user_is_admin|yesno:"true,false" }};
+    /* Referenced here so the CSRF cookie is always set for global fetch calls */
+    window.CSRF_TOKEN = '{{ csrf_token }}';
 
     /* Date display: 10 jan 2026 — available before page scripts in content */
     var MONTHS_SHORT = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
@@ -431,6 +524,21 @@
       <span class="account-initial">{{ user.first_name|slice:":1"|default:user.username|slice:":1" }}</span>
     {% endif %}
   </a>
+
+  <!-- ── Notifiche — campanella a sinistra dell'avatar ── -->
+  <button type="button" class="notif-btn" id="notif-btn"
+          aria-label="Notifiche" title="Notifiche"
+          aria-haspopup="true" aria-expanded="false" aria-controls="notif-panel">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+    </svg>
+    <span class="notif-badge" id="notif-badge" hidden></span>
+  </button>
+
+  <div class="notif-panel" id="notif-panel" role="region" aria-label="Elenco notifiche" hidden>
+    <div class="notif-panel-header">Notifiche</div>
+    <div id="notif-list"></div>
+  </div>
 
   <!-- ── App brand — always visible next to back button ── -->
   <div class="app-brand" aria-hidden="true">
@@ -566,6 +674,112 @@
         openSpotlight();
       }
     });
+  </script>
+
+  <script>
+    /* ── Notifiche (campanella globale) ── */
+    (function () {
+      'use strict';
+
+      var btn = document.getElementById('notif-btn');
+      var panel = document.getElementById('notif-panel');
+      var badge = document.getElementById('notif-badge');
+      var list = document.getElementById('notif-list');
+      if (!btn || !panel || !badge || !list) return;
+
+      var POLL_MS = 60000;
+      var items = [];
+
+      function formatNotifDate(iso) {
+        if (!iso) return '';
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        var mon = MONTHS_SHORT[d.getMonth()];
+        var hh = String(d.getHours()).padStart(2, '0');
+        var mm = String(d.getMinutes()).padStart(2, '0');
+        return d.getDate() + ' ' + mon + ' ' + d.getFullYear() + ', ' + hh + ':' + mm;
+      }
+
+      function setBadge(n) {
+        if (n > 0) {
+          badge.textContent = n > 99 ? '99+' : String(n);
+          badge.hidden = false;
+          btn.setAttribute('title', n === 1 ? '1 notifica' : n + ' notifiche');
+        } else {
+          badge.textContent = '';
+          badge.hidden = true;
+          btn.setAttribute('title', 'Notifiche');
+        }
+      }
+
+      function render() {
+        if (!items.length) {
+          list.innerHTML = '<div class="notif-empty">Nessuna nuova notifica.</div>';
+          return;
+        }
+        list.innerHTML = items.map(function (n) {
+          return '<a class="notif-item" href="/segnalazioni/">' +
+            '<span class="notif-item-text">' + escHtml(n.testo) + '</span>' +
+            '<span class="notif-item-date">' + escHtml(formatNotifDate(n.created_at)) + '</span>' +
+            '</a>';
+        }).join('');
+      }
+
+      async function load() {
+        try {
+          var res = await fetch('/api/notifiche/', { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) return;
+          var data = await res.json();
+          items = data.notifiche || [];
+          setBadge(items.length);
+        } catch (e) { /* offline: riprova al prossimo giro */ }
+      }
+
+      async function markRead() {
+        var ids = items.map(function (n) { return n.id; });
+        if (!ids.length) return;
+        try {
+          await fetch('/api/notifiche/lette/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': window.CSRF_TOKEN || '',
+            },
+            body: JSON.stringify({ ids: ids }),
+          });
+          setBadge(0);
+        } catch (e) { /* riproveremo alla prossima apertura */ }
+      }
+
+      function closePanel() {
+        panel.hidden = true;
+        btn.setAttribute('aria-expanded', 'false');
+      }
+
+      async function openPanel() {
+        panel.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        await load();
+        render();
+        await markRead();
+      }
+
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (panel.hidden) { openPanel(); } else { closePanel(); }
+      });
+
+      document.addEventListener('click', function (e) {
+        if (!panel.hidden && !panel.contains(e.target) && !btn.contains(e.target)) closePanel();
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePanel();
+      });
+
+      load();
+      setInterval(function () { if (panel.hidden) load(); }, POLL_MS);
+    })();
   </script>
 
   {% block extra_scripts %}{% endblock %}

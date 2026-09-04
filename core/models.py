@@ -525,6 +525,43 @@ class SegnalazioneVoto(models.Model):
         return f"{self.utente_id}:{self.segnalazione_id}={self.valore}"
 
 
+class Notifica(models.Model):
+    """In-app notification shown in the bell menu, one row per recipient."""
+
+    destinatario = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notifiche",
+    )
+    segnalazione = models.ForeignKey(
+        Segnalazione,
+        on_delete=models.CASCADE,
+        related_name="notifiche",
+    )
+    testo = models.CharField(max_length=300)
+    created_at = models.DateTimeField(auto_now_add=True)
+    letta_il = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "notifiche"
+        verbose_name = "Notifica"
+        verbose_name_plural = "Notifiche"
+        ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["destinatario", "segnalazione"],
+                name="uniq_destinatario_segnalazione_notifica",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["destinatario", "letta_il"], name="idx_notifica_dest_letta"),
+        ]
+
+    def __str__(self):
+        return f"{self.destinatario_id}: {self.testo}"
+
+
 class SegnalazioneCommento(models.Model):
     segnalazione = models.ForeignKey(
         Segnalazione,

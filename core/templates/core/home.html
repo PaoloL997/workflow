@@ -389,7 +389,7 @@
   .segnalazioni-prompt {
     position: fixed;
     top: 20px;
-    right: 96px;
+    right: 148px; /* lascia spazio ad avatar + campanella notifiche */
     height: 40px;
     display: flex;
     align-items: center;
@@ -413,10 +413,11 @@
     text-decoration: underline;
   }
 
-  @media (max-width: 800px) {
+  /* Su schermi stretti la scritta va a capo per non finire sotto la navbar */
+  @media (max-width: 1120px) {
     .segnalazioni-prompt {
       font-size: 12px;
-      max-width: 42vw;
+      max-width: min(42vw, 170px);
       white-space: normal;
       text-align: right;
       line-height: 1.25;
