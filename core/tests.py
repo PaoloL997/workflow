@@ -454,9 +454,7 @@ class ListaTrasmittalTest(TestCase):
         self.assertEqual(path, _trasmittal_path(self.tmp, "25089", 7))
 
     def test_percorso_resolves_padded_filename(self):
-        written = _write_trasmittal(
-            self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf"
-        )
+        written = _write_trasmittal(self.tmp, "25089", 1, filename="Transmittal 25089-01.pdf")
         from core.services.trasmittal_archivio import percorso_trasmittal
 
         path = percorso_trasmittal("25089", 1)
@@ -481,9 +479,7 @@ class ListaTrasmittalTest(TestCase):
             percorso_trasmittal("25056", 7)
 
     def test_lists_from_da_spedire_when_dcc_missing(self):
-        folder = (
-            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
-        )
+        folder = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         folder.mkdir(parents=True)
         (folder / "Transmittal 25089-5.pdf").write_bytes(b"%PDF")
         from core.services.trasmittal_archivio import (
@@ -499,9 +495,7 @@ class ListaTrasmittalTest(TestCase):
 
     def test_prefers_dcc_over_da_spedire(self):
         _write_trasmittal(self.tmp, "25089", 1)
-        fallback = (
-            Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
-        )
+        fallback = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         fallback.mkdir(parents=True)
         (fallback / "Transmittal 25089-9.pdf").write_bytes(b"%PDF")
         from core.services.trasmittal_archivio import lista_trasmittal, trasmittal_in_da_spedire
@@ -591,14 +585,7 @@ class TrasmittalStoricoApiTest(TestCase):
         self.assertFalse(body["in_da_spedire"])
 
     def test_storico_reads_from_da_spedire_and_flags(self):
-        folder = (
-            Path(self.tmp)
-            / "25089"
-            / "PROGETTO"
-            / "DCC"
-            / "DA SPEDIRE"
-            / "TRANSMITTAL"
-        )
+        folder = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         folder.mkdir(parents=True)
         (folder / "Transmittal 25089-4.pdf").write_bytes(b"%PDF")
         response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
