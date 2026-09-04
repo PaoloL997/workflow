@@ -5,6 +5,7 @@
 ### Added
 
 - Campanella delle notifiche in alto a destra: avvisa tutti gli utenti quando qualcuno propone una nuova feature o segnala un problema; le notifiche spariscono una volta visualizzate
+- Nuova voce di menu **Scarica**: si cerca una commessa, si spuntano le tabelle desiderate (con "Seleziona tutte") e si scarica un Excel con i dati grezzi, un foglio per tabella e il solo header in grassetto
 
 ## [0.1.3] - 2026-09-02
 

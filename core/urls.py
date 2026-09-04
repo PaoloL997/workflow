@@ -52,6 +52,7 @@ urlpatterns = [
     path("commesse/<str:job>/emissione/", views.emissione_detail_view, name="emissione_detail"),
     path("commesse/<str:job>/ricezione/", views.ricezione_detail_view, name="ricezione_detail"),
     path("commesse/<str:job>/situazione/", views.situazione_detail_view, name="situazione_detail"),
+    path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
     path("api/commesse/<str:job>/", views.commessa_api_detail, name="commessa_api_detail"),
@@ -90,6 +91,11 @@ urlpatterns = [
     path("api/commesse/<str:job>/documenti/", views.documenti_api, name="documenti_api"),
     path("api/commesse/<str:job>/situazione/", views.situazione_api, name="situazione_api"),
     path("api/commesse/<str:job>/export/", views.export_documenti, name="export_documenti"),
+    path(
+        "api/commesse/<str:job>/dati-grezzi/",
+        views.export_dati_grezzi,
+        name="export_dati_grezzi",
+    ),
     path(
         "api/commesse/<str:job>/situazione/export/",
         views.export_situazione,

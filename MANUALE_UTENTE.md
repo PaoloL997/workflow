@@ -108,6 +108,7 @@ Su ogni pagina trovi una barra centrale con:
 |------|----------|
 | **Home** | Torna alla pagina principale con le commesse recenti |
 | **Cerca** | Apre la ricerca rapida (Spotlight) |
+| **Scarica** | Scarica i dati grezzi di una commessa in Excel (`/scarica/`) |
 | **Impostazioni** | Apre il pannello amministrazione Django (`/admin/`) |
 
 ### 3.2 Ricerca commesse (Spotlight)
@@ -152,6 +153,30 @@ La notifica viene inviata a tutti gli utenti attivi tranne a chi ha creato la se
 4. Clicca fuori dal riquadro o premi **Esc** per chiudere.
 
 Il contatore si aggiorna automaticamente ogni minuto, senza ricaricare la pagina.
+
+### 3.6 Scarica dati grezzi
+
+La voce **Scarica** della navbar (`/scarica/`) permette di esportare in Excel i dati di una commessa così come sono salvati sul database, senza elaborazioni né formattazioni.
+
+**Come si usa:**
+
+1. Nel campo **Commessa** digita job o cliente e scegli la commessa dai risultati (usa **Cambia** per sceglierne un'altra).
+2. Spunta le **tabelle** da esportare, oppure usa **Seleziona tutte**.
+3. Clicca **Scarica**: il browser scarica un file `{job}_dati_grezzi_{gg_mm_aaaa}.xlsx`.
+
+Il file contiene **un foglio per ogni tabella selezionata**; la prima riga riporta i nomi delle colonne in grassetto, le righe successive i dati grezzi.
+
+| Tabella | Contenuto |
+|---------|-----------|
+| **Commessa** | La riga di testata della commessa |
+| **Indirizzi spedizione** | Gli indirizzi di spedizione collegati |
+| **Documenti** | Tutti i documenti della commessa |
+| **Revisioni** | Tutte le revisioni dei documenti della commessa |
+| **Link file revisioni** | I percorsi file associati manualmente alle revisioni |
+| **Transmittal** | I transmittal emessi per la commessa |
+| **Transmittal revisioni** | Il collegamento fra transmittal e revisioni incluse |
+
+Il pulsante **Scarica** resta disabilitato finché non hai scelto sia la commessa sia almeno una tabella.
 
 ---
 
