@@ -9,6 +9,7 @@ from django.db.models import Prefetch
 
 from ..models import Documento, Revisione
 from .commesse import serialize_revisione
+from .stato_esterno_colori import cell_colors
 
 
 def _parse_optional_date(value) -> date_type | None:
@@ -36,6 +37,7 @@ def list_revisioni_sbloccabili(job: str) -> list[dict]:
         if not latest.ext_status_id:
             continue
         ext = latest.ext_status
+        cella = cell_colors(ext.colore) if ext else {"bg": "", "fg": ""}
         result.append(
             {
                 "revisione_id": latest.pk,
@@ -47,6 +49,8 @@ def list_revisioni_sbloccabili(job: str) -> list[dict]:
                 "rev_let": latest.rev_let or "",
                 "ext_status_label": ext.nome if ext else "",
                 "ext_status_colore": ext.colore if ext else "",
+                "ext_status_bg": cella["bg"],
+                "ext_status_fg": cella["fg"],
                 "rec_act_date": latest.rec_act_date.isoformat() if latest.rec_act_date else None,
             }
         )
