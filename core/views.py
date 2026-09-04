@@ -72,6 +72,8 @@ from .services.commesse import (
     update_revisione,
     update_stato_esterno,
 )
+from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
+from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
@@ -2453,3 +2455,31 @@ def notifiche_lette_api(request):
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     return JsonResponse({"ok": True, "lette": lette, "count": count_notifiche(request.user)})
+
+
+# ── HTML + Export: Dati grezzi ───────────────────────────────────────────────
+
+
+@login_required
+def scarica_view(request):
+    return render(request, "core/scarica.html", {"tabelle": list_tabelle_grezze()})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def export_dati_grezzi(request, job):
+    """Excel con un foglio per ciascuna tabella grezza richiesta della commessa."""
+    keys = []
+    for raw in request.GET.getlist("tabelle"):
+        keys.extend(raw.split(","))
+    try:
+        wb = build_dati_grezzi_workbook(job, keys)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    today = _date.today()
+    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    filename = f"{job.replace(' ', '_')}_dati_grezzi_{date_part}.xlsx"
+    return _xlsx_response(wb, filename)
