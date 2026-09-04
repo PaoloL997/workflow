@@ -1,3 +1,2 @@
 # Technical debt
-
-No outstanding items currently tracked.
+- core/views.py register_view: broad `except Exception` on line 170 swallows all exceptions during user registration, providing a generic error message and not distinguishing between database integrity errors, validation errors, and other unexpected issues. Replace with specific exception handling (e.g., `except ValidationError:`) so only anticipated errors are caught and unexpected errors propagate for proper debugging.
