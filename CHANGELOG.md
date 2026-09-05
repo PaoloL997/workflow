@@ -5,6 +5,7 @@
 ### Added
 
 - Campanella delle notifiche in alto a destra: avvisa tutti gli utenti quando qualcuno propone una nuova feature o segnala un problema; le notifiche spariscono una volta visualizzate
+- Controllo giornaliero di congruenza con Business Central: cliente, PO, descrizione e data consegna delle commesse aperte vengono riconfrontati con l'ERP e aggiornati se cambiati (un valore vuoto in BC non cancella mai un dato inserito nel sistema). Le modifiche applicate sono elencate in *Informazioni archivio* della commessa e nell'admin. Comando `python manage.py sync_business_central` (opzioni `--job`, `--tutte`, `--dry-run`), da schedulare una volta al giorno
 - Nuova voce di menu **Scarica**: si cerca una commessa, si spuntano le tabelle desiderate (Commessa, Indirizzi spedizione, Documenti, Revisioni; con "Seleziona tutte") e si scarica un Excel con i dati grezzi, un foglio per tabella e il solo header in grassetto. Il foglio Revisioni riporta Client Doc N°, Client Doc Class, Contractor Doc N°, B&R Doc, Item e la lettera della risposta del cliente al posto degli id tecnici
 
 ### Changed

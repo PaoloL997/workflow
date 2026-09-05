@@ -120,6 +120,39 @@ class Testata(models.Model):
         return self.job
 
 
+class AggiornamentoBC(models.Model):
+    """Traccia di un campo della testata riallineato a Business Central.
+
+    Una riga per campo modificato dal controllo giornaliero di congruenza
+    (vedi ``core.services.bc_sync``).
+    """
+
+    testata = models.ForeignKey(
+        Testata,
+        to_field="job",
+        db_column="Job",
+        on_delete=models.CASCADE,
+        related_name="aggiornamenti_bc",
+    )
+    campo = models.CharField(db_column="Campo", max_length=50)
+    valore_precedente = models.CharField(db_column="ValorePrecedente", max_length=300, blank=True)
+    valore_nuovo = models.CharField(db_column="ValoreNuovo", max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = True
+        db_table = "aggiornamenti_bc"
+        verbose_name = "Aggiornamento da Business Central"
+        verbose_name_plural = "Aggiornamenti da Business Central"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["testata", "created_at"], name="idx_agg_bc_testata_data"),
+        ]
+
+    def __str__(self):
+        return f"{self.testata_id}: {self.campo}"
+
+
 class CommessaPin(models.Model):
     user = models.ForeignKey(
         User,

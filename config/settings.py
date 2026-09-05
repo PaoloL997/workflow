@@ -255,6 +255,13 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        # Servizi applicativi, fra cui il controllo giornaliero di congruenza
+        # con Business Central (core.services.bc_sync).
+        "core.services": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "django": {
             "handlers": ["console", "file"],
             "level": "INFO",

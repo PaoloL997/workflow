@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
 from .models import (
+    AggiornamentoBC,
     CartellaModelloDocumento,
     Documento,
     ModelloDocumento,
@@ -258,6 +259,18 @@ class NotificaAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("destinatario", "segnalazione", "testo", "created_at", "letta_il")
     raw_id_fields = ("destinatario", "segnalazione")
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(AggiornamentoBC)
+class AggiornamentoBCAdmin(admin.ModelAdmin):
+    list_display = ("id", "testata", "campo", "valore_precedente", "valore_nuovo", "created_at")
+    list_filter = ("campo",)
+    search_fields = ("testata__job", "valore_precedente", "valore_nuovo")
+    readonly_fields = ("testata", "campo", "valore_precedente", "valore_nuovo", "created_at")
+    raw_id_fields = ("testata",)
 
     def has_add_permission(self, request):
         return False
