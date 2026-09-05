@@ -193,15 +193,29 @@ def close_commessa(job):
 # ── ERP fetch ─────────────────────────────────────────────────────────────────
 
 
-def fetch_from_bc(job):
-    from src.erp.business_central import BusinessCentral
+def fetch_from_bc(job, bc=None):
+    """Dati della commessa letti da Business Central.
 
-    bc = BusinessCentral()
+    Args:
+        job: Numero commessa da cercare in BC.
+        bc: Connettore già aperto da riusare (utile per il controllo
+            giornaliero su molte commesse). Se omesso ne viene aperto e chiuso
+            uno dedicato.
+
+    Returns:
+        Dict con i campi trovati (vuoto se la commessa non esiste in BC).
+    """
+    connessione_propria = bc is None
+    if connessione_propria:
+        from src.erp.business_central import BusinessCentral
+
+        bc = BusinessCentral()
     try:
         ana = bc.get_commessa_anagrafica(job)
         com = bc.get_commessa_commerciale(job)
     finally:
-        bc.close()
+        if connessione_propria:
+            bc.close()
 
     result = {}
     if ana is not None and not ana.empty:

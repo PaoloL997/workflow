@@ -145,6 +145,38 @@ Script in `deploy/`:
 | `web.config` | Template IIS → proxy a `127.0.0.1:8000` |
 | `rollback-wfastcgi.ps1` | Ripristina web.config wfastcgi |
 | `iis-workflow-pool.ps1` | AlwaysRunning / idle timeout |
+| `install-bc-sync-task.ps1` | Registra il controllo giornaliero Business Central |
+
+## Allineamento giornaliero con Business Central
+
+Alla creazione di una commessa, cliente, PO, descrizione e data consegna vengono precompilati da
+Business Central. Poiché in BC quei dati possono cambiare, un controllo giornaliero li riconfronta
+e aggiorna le commesse disallineate, registrando ogni modifica (visibile in *Informazioni archivio*
+della commessa e nell'admin sotto *Aggiornamenti da Business Central*).
+
+```bash
+# Tutte le commesse aperte
+python manage.py sync_business_central
+
+# Anteprima senza salvare / singola commessa / includi anche le commesse chiuse
+python manage.py sync_business_central --dry-run
+python manage.py sync_business_central --job 26010
+python manage.py sync_business_central --tutte
+```
+
+Un valore vuoto in Business Central non sovrascrive mai un dato già inserito nel sistema.
+
+Schedulazione:
+
+```powershell
+# Windows Server: attività pianificata giornaliera (default 06:00)
+powershell -ExecutionPolicy Bypass -File .\deploy\install-bc-sync-task.ps1 -At 06:00
+```
+
+```cron
+# Linux/Docker: crontab dell'host, ogni giorno alle 06:00
+0 6 * * * docker compose -f /percorso/workflow/docker-compose.yml exec -T web python manage.py sync_business_central >> /var/log/workflow-bc-sync.log 2>&1
+```
 
 ## Database
 

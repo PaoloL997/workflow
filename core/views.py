@@ -29,6 +29,7 @@ from .models import (
     User,
 )
 from .permissions import api_write_required
+from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.commesse import (
     close_commessa,
     create_commessa,
@@ -319,7 +320,14 @@ def archivio_detail_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    return render(request, "core/archivio_detail.html", {"testata": testata})
+    return render(
+        request,
+        "core/archivio_detail.html",
+        {
+            "testata": testata,
+            "aggiornamenti_bc": list_aggiornamenti_bc(job, limit=10),
+        },
+    )
 
 
 @login_required

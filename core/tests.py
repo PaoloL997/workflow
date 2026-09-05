@@ -1,19 +1,22 @@
+import io
 import json
 import tempfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.management import call_command
 from django.test import Client, SimpleTestCase, TestCase
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .models import (
+    AggiornamentoBC,
     CommessaPin,
     Documento,
     IndirSped,
@@ -32,8 +35,15 @@ from .models import (
     TipoSegnalazione,
     Transmittal,
 )
+from .services.bc_sync import (
+    BusinessCentralNonDisponibile,
+    confronta_commessa,
+    list_aggiornamenti,
+    sincronizza_commesse,
+)
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
+    fetch_from_bc,
     format_revisione_label,
     list_documenti,
     list_home_commesse,
@@ -3199,3 +3209,379 @@ class ColoriRisposteClienteApiTests(TestCase):
         self.assertEqual(_status_cell_rgb("#00B050"), ((0, 176, 80), hex_to_rgb(TEXT_DARK)))
         self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
         self.assertIsNone(_status_cell_rgb(""))
+
+
+# ── Update dati da Business Central ───────────────────────────────────────────
+
+
+class _FakeBusinessCentral:
+    """Connettore Business Central finto con dati preparati per commessa.
+
+    Un valore ``Exception`` fra i dati viene sollevato al posto della risposta,
+    così da simulare una query fallita su una singola commessa.
+    """
+
+    def __init__(self, dati_per_job, conn=True):
+        self.dati_per_job = dati_per_job
+        self.conn = "connessione-finta" if conn else None
+        self.jobs_richiesti = []
+        self.chiusa = False
+
+    def dati_commessa(self, job):
+        self.jobs_richiesti.append(job)
+        dati = self.dati_per_job.get(job, {})
+        if isinstance(dati, Exception):
+            raise dati
+        return dict(dati)
+
+    def close(self):
+        self.chiusa = True
+
+
+class SincronizzazioneBusinessCentralTests(TestCase):
+    """Controllo giornaliero di congruenza fra Business Central e le commesse."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(
+            job="26010",
+            client="Cliente Vecchio",
+            po_no="PO-1",
+            job_detail="Descrizione vecchia",
+            delivery_date=date(2026, 1, 10),
+        )
+
+    def _attiva_bc(self, dati_per_job, conn=True):
+        """Sostituisce connettore e lettura BC con un doppio di test."""
+        fake = _FakeBusinessCentral(dati_per_job, conn=conn)
+        connessione = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        lettura = patch(
+            "core.services.bc_sync.fetch_from_bc",
+            side_effect=lambda job, bc=None: bc.dati_commessa(job),
+        )
+        connessione.start()
+        lettura.start()
+        self.addCleanup(connessione.stop)
+        self.addCleanup(lettura.stop)
+        return fake
+
+    @staticmethod
+    def _dati_bc(**overrides):
+        dati = {
+            "job": "26010",
+            "client": "Cliente Nuovo",
+            "job_detail": "Descrizione nuova",
+            "po_no": "PO-2",
+            "delivery_date": "2026-03-01",
+        }
+        dati.update(overrides)
+        return dati
+
+    def test_aggiorna_i_campi_disallineati(self):
+        self._attiva_bc({"26010": self._dati_bc()})
+
+        report = sincronizza_commesse()
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Nuovo")
+        self.assertEqual(self.testata.po_no, "PO-2")
+        self.assertEqual(self.testata.job_detail, "Descrizione nuova")
+        self.assertEqual(self.testata.delivery_date, date(2026, 3, 1))
+        self.assertEqual(report["controllate"], 1)
+        self.assertEqual(report["aggiornate"], 1)
+        self.assertEqual(report["non_trovate"], [])
+        self.assertEqual(report["errori"], [])
+        self.assertEqual(len(report["aggiornamenti"]), 4)
+
+    def test_accetta_una_data_timestamp_da_bc(self):
+        self._attiva_bc({"26010": self._dati_bc(delivery_date=pd.Timestamp("2026-03-01"))})
+
+        sincronizza_commesse()
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.delivery_date, date(2026, 3, 1))
+
+    def test_ogni_modifica_viene_registrata(self):
+        self._attiva_bc({"26010": self._dati_bc(job_detail="Descrizione vecchia", po_no="PO-1")})
+
+        sincronizza_commesse()
+
+        registrati = {
+            (a.campo, a.valore_precedente, a.valore_nuovo)
+            for a in AggiornamentoBC.objects.filter(testata=self.testata)
+        }
+        self.assertEqual(
+            registrati,
+            {
+                ("client", "Cliente Vecchio", "Cliente Nuovo"),
+                ("delivery_date", "2026-01-10", "2026-03-01"),
+            },
+        )
+
+    def test_valori_vuoti_in_bc_non_sovrascrivono(self):
+        self._attiva_bc(
+            {
+                "26010": {
+                    "job": "26010",
+                    "client": "   ",
+                    "po_no": None,
+                    "job_detail": float("nan"),
+                    "delivery_date": "",
+                }
+            }
+        )
+
+        report = sincronizza_commesse()
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Vecchio")
+        self.assertEqual(self.testata.po_no, "PO-1")
+        self.assertEqual(self.testata.job_detail, "Descrizione vecchia")
+        self.assertEqual(self.testata.delivery_date, date(2026, 1, 10))
+        self.assertEqual(report["aggiornate"], 0)
+        self.assertFalse(AggiornamentoBC.objects.exists())
+
+    def test_dati_gia_allineati_non_producono_modifiche(self):
+        self._attiva_bc(
+            {
+                "26010": {
+                    "job": "26010",
+                    "client": "Cliente Vecchio",
+                    "po_no": "PO-1",
+                    "job_detail": "Descrizione vecchia",
+                    "delivery_date": "2026-01-10",
+                }
+            }
+        )
+
+        report = sincronizza_commesse()
+
+        self.assertEqual(report["controllate"], 1)
+        self.assertEqual(report["aggiornate"], 0)
+        self.assertEqual(report["aggiornamenti"], [])
+        self.assertFalse(AggiornamentoBC.objects.exists())
+
+    def test_dry_run_mostra_le_differenze_senza_salvarle(self):
+        self._attiva_bc({"26010": self._dati_bc()})
+
+        report = sincronizza_commesse(dry_run=True)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Vecchio")
+        self.assertFalse(AggiornamentoBC.objects.exists())
+        self.assertTrue(report["dry_run"])
+        self.assertEqual(report["aggiornate"], 1)
+        self.assertEqual(len(report["aggiornamenti"]), 4)
+
+    def test_le_commesse_chiuse_sono_escluse(self):
+        Testata.objects.create(job="25001", actual_delivery_date=date(2025, 12, 31))
+        fake = self._attiva_bc({"26010": self._dati_bc()})
+
+        sincronizza_commesse()
+
+        self.assertEqual(fake.jobs_richiesti, ["26010"])
+
+    def test_le_commesse_chiuse_si_possono_includere(self):
+        Testata.objects.create(job="25001", actual_delivery_date=date(2025, 12, 31))
+        fake = self._attiva_bc({"26010": self._dati_bc()})
+
+        sincronizza_commesse(includi_chiuse=True)
+
+        self.assertEqual(fake.jobs_richiesti, ["25001", "26010"])
+
+    def test_si_puo_controllare_una_sola_commessa(self):
+        Testata.objects.create(job="26011")
+        fake = self._attiva_bc({"26010": self._dati_bc()})
+
+        sincronizza_commesse(jobs=["26010"])
+
+        self.assertEqual(fake.jobs_richiesti, ["26010"])
+
+    def test_commessa_assente_in_bc_viene_segnalata(self):
+        self._attiva_bc({})
+
+        report = sincronizza_commesse()
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Vecchio")
+        self.assertEqual(report["non_trovate"], ["26010"])
+        self.assertEqual(report["aggiornate"], 0)
+
+    def test_un_errore_non_blocca_le_altre_commesse(self):
+        Testata.objects.create(job="26011", client="Altro Cliente")
+        self._attiva_bc(
+            {
+                "26010": RuntimeError("query fallita"),
+                "26011": {"job": "26011", "client": "Cliente Nuovo"},
+            }
+        )
+
+        report = sincronizza_commesse()
+
+        self.assertEqual(report["controllate"], 2)
+        self.assertEqual(report["aggiornate"], 1)
+        self.assertEqual(report["errori"], [{"job": "26010", "errore": "query fallita"}])
+        self.assertEqual(Testata.objects.get(job="26011").client, "Cliente Nuovo")
+
+    def test_connessione_non_disponibile_solleva_errore(self):
+        fake = self._attiva_bc({"26010": self._dati_bc()}, conn=False)
+
+        with self.assertRaises(BusinessCentralNonDisponibile):
+            sincronizza_commesse()
+
+        self.assertTrue(fake.chiusa)
+        self.assertFalse(AggiornamentoBC.objects.exists())
+
+    def test_la_connessione_viene_chiusa_a_fine_controllo(self):
+        fake = self._attiva_bc({"26010": self._dati_bc()})
+
+        sincronizza_commesse()
+
+        self.assertTrue(fake.chiusa)
+
+    def test_valore_bc_troppo_lungo_viene_troncato_e_resta_allineato(self):
+        descrizione = "X" * 400
+        self._attiva_bc({"26010": self._dati_bc(job_detail=descrizione)})
+
+        sincronizza_commesse()
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.job_detail, "X" * 300)
+
+        # Secondo giro: il valore troncato non deve risultare di nuovo diverso.
+        report = sincronizza_commesse()
+        self.assertEqual(report["aggiornate"], 0)
+        self.assertEqual(AggiornamentoBC.objects.filter(campo="job_detail").count(), 1)
+
+    def test_confronta_ignora_i_campi_non_sincronizzati(self):
+        differenze = confronta_commessa(self.testata, {"job": "99999", "requisition": "BID-9"})
+
+        self.assertEqual(differenze, [])
+
+    def test_lista_aggiornamenti_per_la_pagina_archivio(self):
+        self._attiva_bc({"26010": self._dati_bc()})
+        sincronizza_commesse()
+
+        voci = {v["campo"]: v for v in list_aggiornamenti("26010")}
+
+        self.assertEqual(voci["client"]["etichetta"], "Cliente")
+        self.assertEqual(voci["client"]["nuovo"], "Cliente Nuovo")
+        # Le date sono già pronte per l'interfaccia (10 jan 2026 → 1 mar 2026).
+        self.assertEqual(voci["delivery_date"]["precedente"], "10 jan 2026")
+        self.assertEqual(voci["delivery_date"]["nuovo"], "1 mar 2026")
+
+    def test_fetch_from_bc_riusa_il_connettore_aperto(self):
+        bc = Mock()
+        bc.get_commessa_anagrafica.return_value = pd.DataFrame(
+            [{"commessa": "26010", "descrizione": "Descrizione BC", "cliente": "Cliente BC"}]
+        )
+        bc.get_commessa_commerciale.return_value = pd.DataFrame(
+            [{"commessa": "26010", "po_cliente": "PO-BC", "data_consegna": "2026-03-01"}]
+        )
+
+        dati = fetch_from_bc("26010", bc=bc)
+
+        self.assertEqual(dati["client"], "Cliente BC")
+        self.assertEqual(dati["job_detail"], "Descrizione BC")
+        self.assertEqual(dati["po_no"], "PO-BC")
+        self.assertEqual(dati["delivery_date"], "2026-03-01")
+        bc.close.assert_not_called()
+
+
+class ComandoSyncBusinessCentralTests(TestCase):
+    """Il comando ``sync_business_central``, pensato per l'esecuzione giornaliera."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="26010", client="Cliente Vecchio")
+
+    def _attiva_bc(self, dati_per_job, conn=True):
+        fake = _FakeBusinessCentral(dati_per_job, conn=conn)
+        connessione = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        lettura = patch(
+            "core.services.bc_sync.fetch_from_bc",
+            side_effect=lambda job, bc=None: bc.dati_commessa(job),
+        )
+        connessione.start()
+        lettura.start()
+        self.addCleanup(connessione.stop)
+        self.addCleanup(lettura.stop)
+        return fake
+
+    def test_il_comando_aggiorna_e_riepiloga(self):
+        self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+        out = io.StringIO()
+
+        call_command("sync_business_central", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Nuovo")
+        output = out.getvalue()
+        self.assertIn("26010: Cliente: Cliente Vecchio → Cliente Nuovo", output)
+        self.assertIn("Controllate 1 commesse, aggiornate 1", output)
+
+    def test_il_comando_in_dry_run_non_salva(self):
+        self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+        out = io.StringIO()
+
+        call_command("sync_business_central", "--dry-run", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Vecchio")
+        self.assertIn("[dry-run]", out.getvalue())
+
+    def test_il_comando_accetta_una_singola_commessa(self):
+        Testata.objects.create(job="26011")
+        fake = self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+
+        call_command("sync_business_central", "--job", "26010", stdout=io.StringIO())
+
+        self.assertEqual(fake.jobs_richiesti, ["26010"])
+
+    def test_il_comando_segnala_una_commessa_inesistente(self):
+        self._attiva_bc({})
+        err = io.StringIO()
+
+        call_command("sync_business_central", "--job", "99999", stderr=err)
+
+        self.assertIn("non trovata", err.getvalue())
+
+    def test_il_comando_segnala_business_central_non_raggiungibile(self):
+        self._attiva_bc({"26010": {"job": "26010"}}, conn=False)
+        err = io.StringIO()
+
+        call_command("sync_business_central", stderr=err)
+
+        self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
+
+
+class ArchivioAggiornamentiBCViewTests(TestCase):
+    """La pagina Informazioni archivio mostra le modifiche arrivate da BC."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "bc_user",
+            "bc@brembanarolle.com",
+            "pw",
+            permesso=Permesso.READING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="26010", client="Cliente Nuovo")
+
+    def test_la_pagina_elenca_gli_aggiornamenti(self):
+        AggiornamentoBC.objects.create(
+            testata=self.testata,
+            campo="client",
+            valore_precedente="Cliente Vecchio",
+            valore_nuovo="Cliente Nuovo",
+        )
+
+        response = self.client.get(f"/commesse/{self.testata.job}/archivio/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Aggiornamenti da Business Central")
+        self.assertContains(response, "Cliente Vecchio")
+
+    def test_senza_aggiornamenti_mostra_lo_stato_allineato(self):
+        response = self.client.get(f"/commesse/{self.testata.job}/archivio/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Nessun aggiornamento da Business Central")
