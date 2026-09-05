@@ -12,6 +12,7 @@ from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
 from core.services.stato_esterno_colori import cell_colors, hex_to_rgb
+from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
@@ -29,6 +30,7 @@ def _register_unicode_font(pdf, family):
             pdf.add_font(family, style, str(p))
         return family
     return "Helvetica"
+
 
 # Usable table width on A4 with 15mm side margins.
 _TABLE_WIDTH_MM = 180.0
@@ -818,6 +820,14 @@ def _cell_text_pt(
     _text_pt(pdf, x, y_top, text, size, bold=bold)
 
 
+def _int_status_code(rev: dict) -> str:
+    """Effective internal status of a serialized revision (see stato_interno)."""
+    code = rev.get("int_status_eff")
+    if code is None:
+        code = rev.get("int_status")
+    return (code or "").strip()
+
+
 def _planned_dates_for_latest_rev(revs: list) -> dict:
     """Mirror UI plannedDatesForLatestRev for Submission / Receipt planning cols."""
     if not revs:
@@ -826,7 +836,7 @@ def _planned_dates_for_latest_rev(revs: list) -> dict:
     ext_label = (latest.get("ext_status_label") or "").strip().lower()
     if ext_label == "approved":
         return {"planned_send": None, "planned_receipt": None}
-    int_status = (latest.get("int_status") or "").strip()
+    int_status = _int_status_code(latest)
     if int_status == "inviato_al_cliente":
         return {"planned_send": None, "planned_receipt": latest.get("rec_plan_date")}
     if int_status != "ricevuto":
@@ -1432,13 +1442,13 @@ def _build_situazione_table(
 
 
 def _int_status_export_label(rev: dict | None) -> str:
-    """Match UI getIntStatusMeta: empty int_status → \"Da inviare\"."""
+    """Match UI getIntStatusMeta: effective status, empty → \"Da inviare\"."""
     if not rev:
-        return "Da inviare"
-    code = (rev.get("int_status") or "").strip()
-    if not code:
-        return "Da inviare"
-    return (rev.get("int_status_label") or code).strip()
+        return DA_INVIARE_LABEL
+    label = (rev.get("int_status_eff_label") or "").strip()
+    if label:
+        return label
+    return stato_interno_label(rev.get("int_status"))
 
 
 def _row_highlight_hex(rev: dict | None) -> str:

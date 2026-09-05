@@ -12,6 +12,7 @@ from .revisioni_cleanup import (
     find_orphan_indices,
 )
 from .stato_esterno_codes import STATUS_LETTER_MAP
+from .stato_interno import stato_interno_effettivo
 from .trasmittal_archivio import sync_trasmittal_da_cartella
 
 logger = logging.getLogger(__name__)
@@ -43,18 +44,19 @@ def _to_date(val):
     return val
 
 
-def int_status_from_dates(dis_act_date, rec_act_date) -> str:
-    """Derive workflow int_status from Access dispatch/receipt dates.
+def int_status_from_access(dis_act_date, rec_act_date, ext_status=None) -> str:
+    """Derive workflow int_status from the Access dispatch/receipt/status data.
 
-    - receipt recorded → ricevuto
-    - dispatch recorded (no receipt yet) → inviato_al_cliente
+    - receipt recorded, or a client response already given → ricevuto
+    - dispatch recorded (nothing back yet) → inviato_al_cliente
     - neither → empty (UI: Da inviare / da emettere)
     """
-    if rec_act_date:
-        return "ricevuto"
-    if dis_act_date:
-        return "inviato_al_cliente"
-    return ""
+    return stato_interno_effettivo(
+        "",
+        dis_act_date=dis_act_date,
+        rec_act_date=rec_act_date,
+        ha_risposta_cliente=bool(ext_status),
+    )
 
 
 def _to_str(val, default=""):
@@ -196,6 +198,7 @@ def importa_commessa_da_access(job: str) -> dict:
         for _, rv in doc_revs.iterrows():
             dis_act_date = _to_date(rv["DisActDate"])
             rec_act_date = _to_date(rv["RecActDate"])
+            ext_status = _get_stato_esterno(rv["Status"])
             Revisione.objects.create(
                 documento=doc,
                 rev_no=_to_int(rv["RevNo"]),
@@ -204,8 +207,8 @@ def importa_commessa_da_access(job: str) -> dict:
                 dis_act_date=dis_act_date,
                 rec_plan_date=_to_date(rv["RecPlanDate"]),
                 rec_act_date=rec_act_date,
-                int_status=int_status_from_dates(dis_act_date, rec_act_date),
-                ext_status=_get_stato_esterno(rv["Status"]),
+                int_status=int_status_from_access(dis_act_date, rec_act_date, ext_status),
+                ext_status=ext_status,
             )
             rev_count += 1
 

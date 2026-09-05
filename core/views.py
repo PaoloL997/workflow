@@ -94,6 +94,7 @@ from .services.segnalazioni import (
     riapri_segnalazione,
     set_voto,
 )
+from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 
 logger = logging.getLogger(__name__)
 
@@ -1544,13 +1545,13 @@ def _export_situazione_xlsx(job, payload, *, vista):
         return str(rev["rev_no"]) if rev.get("rev_no") is not None else ""
 
     def _int_status_label(rev):
-        # Match UI getIntStatusMeta: empty → "Da inviare"
+        # Match UI getIntStatusMeta: effective status, empty → "Da inviare"
         if not rev:
-            return "Da inviare"
-        code = (rev.get("int_status") or "").strip()
-        if not code:
-            return "Da inviare"
-        return (rev.get("int_status_label") or code).strip()
+            return DA_INVIARE_LABEL
+        label = (rev.get("int_status_eff_label") or "").strip()
+        if label:
+            return label
+        return stato_interno_label(rev.get("int_status"))
 
     row_idx = 3
     for d in docs:

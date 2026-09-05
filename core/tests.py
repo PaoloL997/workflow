@@ -1515,6 +1515,30 @@ class ImportOldTests(TestCase):
         self.assertEqual(doc.contractor_doc_no, "CTR-99")
 
     @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_sets_ricevuto_when_client_answered_without_dates(self, mock_fetch):
+        StatoEsterno.objects.create(nome="Approved", colore="#00B050", crea_nuova_rev=False)
+        frames = self._frames()
+        frames["revisioni"] = pd.DataFrame(
+            [
+                {
+                    "VendorDoc": "99999-01",
+                    "RevNo": 0,
+                    "RevLet": "A",
+                    "DisPlanDate": None,
+                    "DisActDate": None,
+                    "RecPlanDate": None,
+                    "RecActDate": None,
+                    "Status": "A",
+                }
+            ]
+        )
+        mock_fetch.return_value = frames
+        importa_commessa_da_access("99999")
+        rev = Revisione.objects.get()
+        self.assertEqual(rev.int_status, "ricevuto")
+        self.assertIsNotNone(rev.ext_status)
+
+    @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_excludes_orphan_after_approved(self, mock_fetch):
         StatoEsterno.objects.create(nome="Approved", colore="#00B050", crea_nuova_rev=False)
         frames = self._frames()
@@ -3199,3 +3223,56 @@ class ColoriRisposteClienteApiTests(TestCase):
         self.assertEqual(_status_cell_rgb("#00B050"), ((0, 176, 80), hex_to_rgb(TEXT_DARK)))
         self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
         self.assertIsNone(_status_cell_rgb(""))
+
+
+class StatoInternoEffettivoTests(TestCase):
+    """Lo stato interno mostrato quando in archivio è rimasto vuoto."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="INT01")
+        self.doc = Documento.objects.create(
+            testata=self.testata, item_no="001", vendor_doc="INT01-01-0001"
+        )
+        self.approved = StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+
+    def test_risposta_cliente_senza_stato_salvato_e_ricevuta(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.approved)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["int_status"], "")
+        self.assertEqual(data["int_status_eff"], "ricevuto")
+        self.assertEqual(data["int_status_eff_label"], "Ricevuto")
+
+    def test_data_di_invio_senza_stato_salvato_e_inviata(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, dis_act_date=date(2025, 1, 1))
+        data = serialize_revisione(rev)
+        self.assertEqual(data["int_status_eff"], "inviato_al_cliente")
+
+    def test_revisione_senza_nulla_resta_da_inviare(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0)
+        data = serialize_revisione(rev)
+        self.assertEqual(data["int_status_eff"], "")
+        self.assertEqual(data["int_status_eff_label"], "Da inviare")
+
+    def test_stato_salvato_ha_la_precedenza(self):
+        rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            int_status="in_lavorazione",
+            ext_status=self.approved,
+        )
+        data = serialize_revisione(rev)
+        self.assertEqual(data["int_status_eff"], "in_lavorazione")
+
+    def test_documento_con_risposta_cliente_non_e_da_emettere(self):
+        Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.approved)
+        doc = list_documenti(self.testata.job)[0]
+        self.assertEqual(doc["latest_int_status"], "ricevuto")
+        self.assertEqual(doc["latest_int_status_label"], "Ricevuto")
+
+    def test_etichetta_export_segue_lo_stato_effettivo(self):
+        from src.pdf import _int_status_export_label
+
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, ext_status=self.approved)
+        self.assertEqual(_int_status_export_label(serialize_revisione(rev)), "Ricevuto")
+        self.assertEqual(_int_status_export_label(None), "Da inviare")
+        self.assertEqual(_int_status_export_label({}), "Da inviare")

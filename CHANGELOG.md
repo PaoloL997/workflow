@@ -11,6 +11,10 @@
 
 - Situazione documenti: le celle legate alla risposta del cliente usano il colore configurato sullo stato, pieno e uguale a quello della legenda, al posto della vecchia tinta sbiadita. Il testo diventa automaticamente bianco o nero — quello dei due che si legge meglio — così restano leggibili anche gli stati bianchi, gialli, neri o grigi. Nella vista orizzontale sono colorate la colonna B&R Doc e la cella Status di ogni revisione (con la lettera dello stato), nella vista verticale il badge Risposta cliente, con la riga evidenziata in modo più deciso di prima. La legenda ripete la stessa coppia colore/lettera delle celle e il PDF orizzontale usa gli stessi colori
 
+### Fixed
+
+- Le revisioni che hanno già la risposta del cliente non risultano più «Da inviare»: quando lo stato interno in archivio è vuoto viene dedotto dai fatti registrati (risposta del cliente o data di rientro → Ricevuto, data di invio → Inviato al cliente). Vale in situazione documenti, negli export Excel e PDF e negli elenchi di emissione e ricezione, dove queste revisioni non compaiono più come da emettere
+
 ## [0.1.3] - 2026-09-02
 
 ### Added

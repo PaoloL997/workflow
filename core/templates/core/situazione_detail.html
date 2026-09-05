@@ -1315,13 +1315,21 @@
     ricevuto:          'stato-ricevuto',
   };
 
+  /* Lo stato interno mostrato è quello effettivo calcolato dal server
+     (services/stato_interno.py): se non è mai stato salvato viene dedotto dalla
+     risposta del cliente e dalle date effettive, così le revisioni già emesse
+     non restano «Da inviare». */
+  function intStatusCode(rev) {
+    return (rev?.int_status_eff ?? rev?.int_status) || '';
+  }
+
   function getIntStatusMeta(rev) {
-    const intStatus = rev?.int_status || '';
+    const intStatus = intStatusCode(rev);
     if (!intStatus) {
       return { label: 'Da inviare', className: 'stato-da-inviare' };
     }
     return {
-      label: STATI_LABEL[intStatus] || rev?.int_status_label || '',
+      label: STATI_LABEL[intStatus] || rev?.int_status_eff_label || rev?.int_status_label || '',
       className: STATI_CLASS[intStatus] || '',
     };
   }
@@ -1611,10 +1619,11 @@
     if (extLabel === 'approved') {
       return { planned_send: null, planned_receipt: null };
     }
-    if ((latest.int_status || '') === 'inviato_al_cliente') {
+    const intStatus = intStatusCode(latest);
+    if (intStatus === 'inviato_al_cliente') {
       return { planned_send: null, planned_receipt: latest.rec_plan_date || null };
     }
-    if ((latest.int_status || '') !== 'ricevuto') {
+    if (intStatus !== 'ricevuto') {
       return { planned_send: latest.dis_plan_date || null, planned_receipt: null };
     }
     return { planned_send: null, planned_receipt: null };

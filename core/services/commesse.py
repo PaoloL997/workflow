@@ -18,6 +18,11 @@ from ..models import (
     Testata,
 )
 from .stato_esterno_colori import cell_colors
+from .stato_interno import (
+    stato_interno_effettivo,
+    stato_interno_effettivo_da_revisione,
+    stato_interno_label,
+)
 
 MAX_PINNED_COMMESSE = 8
 
@@ -304,7 +309,9 @@ def serialize_documento(d, reparto_acronimi=None, rev_let_flag=None):
     label_map = dict(STATI_INTERNI_CHOICES)
     latest_rev = d.revisioni.select_related("ext_status").order_by("-rev_no", "-pk").first()
     rev0 = d.revisioni.filter(rev_no=0).first()
-    latest_int_status = latest_rev.int_status if latest_rev else ""
+    # Stato interno dedotto quando quello salvato è vuoto: una revisione con la
+    # risposta del cliente (o con le date effettive) non è più da emettere.
+    latest_int_status = stato_interno_effettivo_da_revisione(latest_rev) if latest_rev else ""
     latest_int_status_label = (
         label_map.get(latest_int_status, latest_int_status) if latest_int_status else ""
     )
@@ -581,6 +588,14 @@ def serialize_revisione(r):
 
         label_map = dict(STATI_INTERNI_CHOICES)
         int_status_label = label_map.get(r.int_status, r.int_status)
+    # ``int_status_eff`` è lo stato da mostrare: quello salvato se c'è, altrimenti
+    # dedotto dai fatti registrati (vedi services/stato_interno.py).
+    int_status_eff = stato_interno_effettivo(
+        r.int_status,
+        dis_act_date=r.dis_act_date,
+        rec_act_date=r.rec_act_date,
+        ha_risposta_cliente=bool(r.ext_status_id),
+    )
     # Colori pronti per le celle: fondo uguale al colore dello stato, testo
     # bianco o nero scelto per contrasto (vedi stato_esterno_colori).
     cella = cell_colors(r.ext_status.colore) if r.ext_status else {"bg": "", "fg": ""}
@@ -595,6 +610,8 @@ def serialize_revisione(r):
         "rec_act_date": r.rec_act_date.isoformat() if r.rec_act_date else None,
         "int_status": r.int_status,
         "int_status_label": int_status_label,
+        "int_status_eff": int_status_eff,
+        "int_status_eff_label": stato_interno_label(int_status_eff),
         "ext_status": r.ext_status_id,
         "ext_status_label": r.ext_status.nome if r.ext_status else "",
         "ext_status_lettera": r.ext_status.lettera if r.ext_status else "",
