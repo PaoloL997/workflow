@@ -1017,7 +1017,7 @@
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
   </svg>
-  v0.1.3
+  v0.1.4
 </button>
 
 <!-- ── Modal: Changelog / version ── -->
@@ -1029,7 +1029,7 @@
           <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
         </svg>
         <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
-        <span class="version-modal-tag">v0.1.3</span>
+        <span class="version-modal-tag">v0.1.4</span>
       </div>
       <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
     </div>
@@ -1037,9 +1037,21 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
-          <li>Il numero del trasmittal viene precompilato in base all’ultimo documento in Z:\JOBS\{commessa}\PROGETTO\DCC\TRANSMITTAL</li>
-          <li>È possibile visualizzare lo storico dei trasmittal per ciascuna commessa e visualizzare il file in anteprima</li>
-          <li>È possibile annullare l’invio di un trasmittal in caso di errore</li>
+          <li>Campanella delle notifiche in alto a destra: avvisa tutti quando qualcuno propone una nuova feature o segnala un problema, e sparisce una volta letta</li>
+          <li>Controllo giornaliero con Business Central alle 17:00: cliente, PO, descrizione e data di consegna delle commesse aperte vengono riallineati all’ERP (un valore vuoto in BC non cancella mai un dato già inserito). Le modifiche applicate sono elencate in <em>Informazioni archivio</em> della commessa</li>
+          <li>Nuova voce di menu <strong>Scarica</strong>: si cerca una commessa, si spuntano le tabelle desiderate (Commessa, Indirizzi spedizione, Documenti, Revisioni) e si scarica un Excel con i dati grezzi, un foglio per tabella</li>
+        </ul>
+      </section>
+      <section>
+        <h3 class="version-modal-section-title">Modifiche</h3>
+        <ul class="version-modal-list">
+          <li>Situazione documenti: le celle legate alla risposta del cliente usano il colore pieno dello stato, uguale a quello della legenda, con il testo bianco o nero a seconda di quale si legge meglio. Vale per la colonna B&amp;R Doc e le celle Status nella vista orizzontale, per il badge Risposta cliente in quella verticale e per il PDF orizzontale</li>
+        </ul>
+      </section>
+      <section>
+        <h3 class="version-modal-section-title">Correzioni</h3>
+        <ul class="version-modal-list">
+          <li>Le revisioni che hanno già la risposta del cliente non risultano più «Da inviare»: lo stato viene dedotto dai fatti registrati (risposta o data di rientro → Ricevuto, data di invio → Inviato al cliente), in situazione documenti, negli export Excel e PDF e negli elenchi di emissione e ricezione</li>
         </ul>
       </section>
     </div>
