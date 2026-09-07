@@ -6,6 +6,7 @@ from .models import (
     AggiornamentoBC,
     CartellaModelloDocumento,
     Documento,
+    EsecuzioneSchedulata,
     ModelloDocumento,
     Notifica,
     Permesso,
@@ -259,6 +260,15 @@ class NotificaAdmin(admin.ModelAdmin):
     )
     readonly_fields = ("destinatario", "segnalazione", "testo", "created_at", "letta_il")
     raw_id_fields = ("destinatario", "segnalazione")
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(EsecuzioneSchedulata)
+class EsecuzioneSchedulataAdmin(admin.ModelAdmin):
+    list_display = ("nome", "ultima_esecuzione", "esito")
+    readonly_fields = ("nome", "ultima_esecuzione", "esito")
 
     def has_add_permission(self, request):
         return False

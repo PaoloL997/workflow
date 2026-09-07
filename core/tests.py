@@ -1,7 +1,8 @@
 import io
 import json
+import sys
 import tempfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -19,6 +20,7 @@ from .models import (
     AggiornamentoBC,
     CommessaPin,
     Documento,
+    EsecuzioneSchedulata,
     IndirSped,
     Notifica,
     Permesso,
@@ -35,6 +37,7 @@ from .models import (
     TipoSegnalazione,
     Transmittal,
 )
+from .services import scheduler
 from .services.bc_sync import (
     BusinessCentralNonDisponibile,
     confronta_commessa,
@@ -3627,6 +3630,120 @@ class ComandoSyncBusinessCentralTests(TestCase):
         call_command("sync_business_central", stderr=err)
 
         self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
+
+
+class SchedulerBusinessCentralTests(TestCase):
+    """Lo scheduler interno che lancia la sincronizzazione BC una volta al giorno."""
+
+    def setUp(self):
+        self.oggi = timezone.localtime().date()
+
+    @staticmethod
+    def _momento(giorno, ora, minuto):
+        """Istante locale, con il fuso della configurazione."""
+        return timezone.make_aware(datetime.combine(giorno, time(ora, minuto)))
+
+    def _sync_finta(self, **report):
+        """Sostituisce la sincronizzazione vera con un doppio di test."""
+        dati = {
+            "controllate": 3,
+            "aggiornate": 1,
+            "non_trovate": [],
+            "errori": [],
+        }
+        dati.update(report)
+        finta = patch("core.services.scheduler.sincronizza_commesse", return_value=dati)
+        mock = finta.start()
+        self.addCleanup(finta.stop)
+        return mock
+
+    def _stato(self):
+        return EsecuzioneSchedulata.objects.get(nome=scheduler.NOME_JOB)
+
+    def test_non_esegue_prima_dell_orario(self):
+        adesso = self._momento(self.oggi, 16, 59)
+
+        self.assertFalse(scheduler._deve_eseguire(None, adesso))
+
+    def test_esegue_dopo_l_orario(self):
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler._deve_eseguire(None, adesso))
+
+    def test_non_riesegue_nello_stesso_giorno(self):
+        ultima = self._momento(self.oggi, 17, 2)
+        adesso = self._momento(self.oggi, 18, 0)
+
+        self.assertFalse(scheduler._deve_eseguire(ultima, adesso))
+
+    def test_recupera_l_esecuzione_persa(self):
+        """Server spento alle 17:00 e riacceso alle 19:00: la sync parte comunque."""
+        ultima = self._momento(self.oggi - timedelta(days=1), 17, 0)
+        adesso = self._momento(self.oggi, 19, 0)
+
+        self.assertTrue(scheduler._deve_eseguire(ultima, adesso))
+
+    def test_esegue_la_sync_e_registra_l_esito(self):
+        sync = self._sync_finta()
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        sync.assert_called_once_with()
+        stato = self._stato()
+        self.assertEqual(timezone.localtime(stato.ultima_esecuzione), adesso)
+        self.assertIn("controllate 3", stato.esito)
+        self.assertIn("aggiornate 1", stato.esito)
+
+    def test_un_secondo_giro_non_riesegue(self):
+        sync = self._sync_finta()
+        adesso = self._momento(self.oggi, 17, 1)
+
+        scheduler.esegui_se_dovuto(adesso=adesso)
+        eseguito = scheduler.esegui_se_dovuto(adesso=self._momento(self.oggi, 17, 6))
+
+        self.assertFalse(eseguito)
+        self.assertEqual(sync.call_count, 1)
+
+    def test_business_central_non_disponibile_non_propaga(self):
+        finta = patch(
+            "core.services.scheduler.sincronizza_commesse",
+            side_effect=BusinessCentralNonDisponibile("ERP irraggiungibile"),
+        )
+        sync = finta.start()
+        self.addCleanup(finta.stop)
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        self.assertIn("errore", self._stato().esito)
+        # Un tentativo al giorno: dopo un errore si ritenta domani, non subito.
+        self.assertFalse(scheduler.esegui_se_dovuto(adesso=self._momento(self.oggi, 17, 6)))
+        self.assertEqual(sync.call_count, 1)
+
+    def test_un_errore_imprevisto_resta_nel_giro(self):
+        finta = patch(
+            "core.services.scheduler.sincronizza_commesse",
+            side_effect=RuntimeError("driver ODBC assente"),
+        )
+        finta.start()
+        self.addCleanup(finta.stop)
+
+        scheduler.esegui_se_dovuto(adesso=self._momento(self.oggi, 17, 1))
+
+        self.assertIn("driver ODBC assente", self._stato().esito)
+
+    def test_orario_malformato_ricade_sul_predefinito(self):
+        with self.settings(BC_SYNC_ORARIO="mezzogiorno"):
+            self.assertEqual(scheduler._ora_schedulata(), scheduler.ORARIO_PREDEFINITO)
+
+    def test_lo_scheduler_non_parte_durante_i_test(self):
+        with patch.object(sys, "argv", ["manage.py", "test"]):
+            self.assertFalse(scheduler._processo_adatto())
+
+    def test_lo_scheduler_parte_sotto_il_server_wsgi(self):
+        with patch.object(sys, "argv", ["gunicorn", "config.wsgi:application"]):
+            self.assertTrue(scheduler._processo_adatto())
 
 
 class ArchivioAggiornamentiBCViewTests(TestCase):

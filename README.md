@@ -145,7 +145,6 @@ Script in `deploy/`:
 | `web.config` | Template IIS → proxy a `127.0.0.1:8000` |
 | `rollback-wfastcgi.ps1` | Ripristina web.config wfastcgi |
 | `iis-workflow-pool.ps1` | AlwaysRunning / idle timeout |
-| `install-bc-sync-task.ps1` | Registra il controllo giornaliero Business Central |
 
 ## Allineamento giornaliero con Business Central
 
@@ -153,6 +152,31 @@ Alla creazione di una commessa, cliente, PO, descrizione e data consegna vengono
 Business Central. Poiché in BC quei dati possono cambiare, un controllo giornaliero li riconfronta
 e aggiorna le commesse disallineate, registrando ogni modifica (visibile in *Informazioni archivio*
 della commessa e nell'admin sotto *Aggiornamenti da Business Central*).
+
+Il controllo parte **da solo**: l'applicazione avvia un thread interno (`core/services/scheduler.py`)
+che ogni giorno alle **17:00** esegue la sincronizzazione. Non c'è nessuna attività pianificata né
+crontab da registrare sul server: si aggiorna con `git pull` e un riavvio del servizio.
+
+```env
+# .env — valori predefiniti
+BC_SYNC_SCHEDULER=True          # attivo in produzione, spento quando DEBUG=True
+BC_SYNC_ORARIO=17:00
+BC_SYNC_INTERVALLO_SECONDI=300  # ogni quanto il thread controlla se è ora
+```
+
+Dettagli utili:
+
+- **Una sola esecuzione al giorno**, anche con più worker (`gunicorn --workers 3`): il turno si
+  prenota su una riga PostgreSQL con `SELECT ... FOR UPDATE SKIP LOCKED`, gli altri processi escono
+  subito.
+- **Recupero**: se il server era spento alle 17:00, la sincronizzazione parte al primo controllo
+  utile dopo l'avvio (la condizione è «sono passate le 17:00 e oggi non ho ancora girato»).
+- **In caso di errore** (ERP irraggiungibile) l'esito viene registrato e si ritenta il giorno dopo:
+  un tentativo al giorno, niente retry a raffica.
+- **Esito visibile** nell'admin sotto *Esecuzioni schedulate*: data dell'ultima esecuzione e
+  riepilogo. Cancellando quella riga si forza una nuova esecuzione al controllo successivo.
+
+Il comando resta disponibile per esecuzioni manuali e anteprime:
 
 ```bash
 # Tutte le commesse aperte
@@ -166,17 +190,8 @@ python manage.py sync_business_central --tutte
 
 Un valore vuoto in Business Central non sovrascrive mai un dato già inserito nel sistema.
 
-Schedulazione:
-
-```powershell
-# Windows Server: attività pianificata giornaliera (default 06:00)
-powershell -ExecutionPolicy Bypass -File .\deploy\install-bc-sync-task.ps1 -At 06:00
-```
-
-```cron
-# Linux/Docker: crontab dell'host, ogni giorno alle 06:00
-0 6 * * * docker compose -f /percorso/workflow/docker-compose.yml exec -T web python manage.py sync_business_central >> /var/log/workflow-bc-sync.log 2>&1
-```
+Le modifiche a `BC_SYNC_*` richiedono un riavvio: `Restart-Service WorkflowWaitress` su Windows,
+`docker compose up -d` con Docker.
 
 ## Database
 

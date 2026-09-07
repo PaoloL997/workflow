@@ -209,6 +209,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 FILESERVER_JOBS_PATH = os.environ.get("FILESERVER_JOBS_PATH", r"Z:\JOBS")
 
+# Scheduler interno (core.services.scheduler): allinea le commesse a Business
+# Central una volta al giorno, senza cron né attività pianificate sul server.
+# Spento in sviluppo, così un runserver lasciato aperto non riscrive i dati veri.
+BC_SYNC_SCHEDULER = env_bool("BC_SYNC_SCHEDULER", not DEBUG)
+BC_SYNC_ORARIO = os.environ.get("BC_SYNC_ORARIO", "17:00")
+BC_SYNC_INTERVALLO_SECONDI = int(os.environ.get("BC_SYNC_INTERVALLO_SECONDI", "300"))
+
 ACCESS_MDB_PATH = os.environ.get(
     "ACCESS_MDB_PATH",
     r"Z:\Gestione Documenti\Gestione Documenti 2003.mdb",

@@ -618,3 +618,26 @@ class SegnalazioneCommento(models.Model):
 
     def __str__(self):
         return f"Commento #{self.pk}"
+
+
+class EsecuzioneSchedulata(models.Model):
+    """Ultima esecuzione di un lavoro periodico avviato dall'applicazione.
+
+    Una riga per lavoro (vedi ``core.services.scheduler``). Vive in database e
+    non in memoria perché è ciò che garantisce una sola esecuzione al giorno
+    anche quando il sito gira su più processi o viene riavviato.
+    """
+
+    nome = models.CharField(primary_key=True, max_length=50)
+    ultima_esecuzione = models.DateTimeField(null=True, blank=True)
+    esito = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "esecuzioni_schedulate"
+        verbose_name = "Esecuzione schedulata"
+        verbose_name_plural = "Esecuzioni schedulate"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return f"{self.nome}: {self.ultima_esecuzione or 'mai eseguito'}"

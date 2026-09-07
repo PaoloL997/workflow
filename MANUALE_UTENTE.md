@@ -304,7 +304,7 @@ Gli indirizzi vengono usati nella generazione del PDF trasmittal.
 
 ### 6.3 Aggiornamenti da Business Central
 
-Ogni giorno il sistema riconfronta con **Business Central** i dati che l'ERP aveva precompilato alla creazione della commessa — **Cliente**, **PO cliente**, **Descrizione** e **Data consegna** — e aggiorna la commessa se in BC sono cambiati.
+Ogni giorno alle **17:00** il sistema riconfronta con **Business Central** i dati che l'ERP aveva precompilato alla creazione della commessa — **Cliente**, **PO cliente**, **Descrizione** e **Data consegna** — e aggiorna la commessa se in BC sono cambiati.
 
 La sezione elenca le ultime dieci modifiche applicate, con data, campo e valore precedente → nuovo. Se non compare nulla, i dati della commessa sono allineati a BC.
 
@@ -313,9 +313,11 @@ Regole del controllo:
 - vengono controllate le commesse **aperte** (senza data consegna effettiva);
 - un valore **vuoto** in Business Central non sovrascrive mai un dato già inserito nel sistema;
 - gli altri campi (tempi di revisione, indirizzi, documenti…) non vengono toccati;
-- una commessa non presente in BC viene semplicemente saltata.
+- una commessa non presente in BC viene semplicemente saltata;
+- se il server era spento alle 17:00, il controllo viene recuperato alla prima riaccensione;
+- se Business Central non risponde, l'errore viene registrato e si ritenta il giorno successivo.
 
-Lo storico completo è consultabile nel pannello **admin** alla voce *Aggiornamenti da Business Central*.
+Lo storico completo è consultabile nel pannello **admin** alla voce *Aggiornamenti da Business Central*; data ed esito dell'ultima esecuzione sono sotto *Esecuzioni schedulate*.
 
 ---
 
@@ -635,6 +637,7 @@ Richiede un account con privilegi di staff. Qui si gestiscono le entità di conf
 | **Documenti / Revisioni** | Consultazione e modifica avanzata |
 | **Link file revisione** | Collegamenti manuali ai file |
 | **Aggiornamenti da Business Central** | Storico (sola lettura) dei campi riallineati all'ERP |
+| **Esecuzioni schedulate** | Data ed esito dell'ultimo controllo automatico con l'ERP (sola lettura) |
 
 ### 12.1 Configurare un modello documento
 
@@ -800,7 +803,7 @@ Quando crei una nuova commessa e digiti il Job, l'app interroga **Business Centr
 
 ### I dati presi da Business Central restano aggiornati?
 
-Sì: ogni giorno il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.3](#63-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
+Sì: ogni giorno alle 17:00 il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.3](#63-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
 
 ### Come importo dati dal vecchio database Access?
 
