@@ -10,6 +10,8 @@ from .models import (
     ModelloDocumento,
     Notifica,
     Permesso,
+    QualityControlPlan,
+    QualityControlPlanItem,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -289,3 +291,19 @@ class AggiornamentoBCAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+class QualityControlPlanItemInline(admin.TabularInline):
+    model = QualityControlPlanItem
+    extra = 0
+    fields = ("item_no", "descrizione", "ordine")
+    ordering = ("ordine", "id")
+
+
+@admin.register(QualityControlPlan)
+class QualityControlPlanAdmin(admin.ModelAdmin):
+    list_display = ("id", "testata", "doc_no", "project", "owner", "data", "prepared_by")
+    search_fields = ("testata__job", "doc_no", "project", "owner", "purchaser")
+    readonly_fields = ("created_at", "updated_at")
+    raw_id_fields = ("testata", "prepared_by_user")
+    inlines = (QualityControlPlanItemInline,)

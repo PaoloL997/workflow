@@ -77,6 +77,17 @@ from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
+from .services.quality_control_plan import TITOLO as QCP_TITOLO
+from .services.quality_control_plan import VENDOR as QCP_VENDOR
+from .services.quality_control_plan import (
+    create_piano,
+    dati_precompilati,
+    list_piani,
+    serialize_piano,
+)
+from .services.quality_control_plan import (
+    nome_utente as qcp_nome_utente,
+)
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -351,6 +362,27 @@ def ricezione_detail_view(request, job):
 
 
 @login_required
+def quality_control_plan_view(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    # Titolo, Vendor, Job n., Data e Prepared by arrivano già col render: così il
+    # modal si apre pieno anche mentre la lettura da Business Central è in corso.
+    return render(
+        request,
+        "core/quality_control_plan.html",
+        {
+            "testata": testata,
+            "qcp_titolo": QCP_TITOLO,
+            "qcp_vendor": QCP_VENDOR,
+            "oggi": _date.today().isoformat(),
+            "prepared_by": qcp_nome_utente(request.user),
+        },
+    )
+
+
+@login_required
 def situazione_detail_view(request, job):
     try:
         testata = get_commessa(job)
@@ -531,6 +563,47 @@ def indirizzo_api_detail(request, pk):
         return JsonResponse({"ok": True})
     except IndirSped.DoesNotExist:
         return JsonResponse({"error": "Indirizzo non trovato."}, status=404)
+
+
+# ── API: Quality Control Plan ────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def quality_control_plan_prefill_api(request, job):
+    """Valori proposti per un nuovo piano.
+
+    Risponde sempre 200 se la commessa esiste: quando Business Central non è
+    raggiungibile i suoi campi restano vuoti, il resto è comunque precompilato e
+    ``warning`` spiega cosa manca. Un ERP giù non deve impedire di creare.
+    """
+    try:
+        return JsonResponse(dati_precompilati(job, request.user))
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["GET", "POST"])
+def quality_control_plan_api(request, job):
+    if request.method == "GET":
+        try:
+            return JsonResponse({"quality_control_plans": list_piani(job)})
+        except Testata.DoesNotExist:
+            return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    data = _json_body(request)
+    if data is None:
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        piano = create_piano(job, data, request.user)
+        return JsonResponse({"ok": True, "data": serialize_piano(piano)}, status=201)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    except ValidationError as exc:
+        return JsonResponse({"error": exc.message_dict}, status=400)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
 
 
 # ── API: Documenti ───────────────────────────────────────────────────────────

@@ -647,3 +647,92 @@ class EsecuzioneSchedulata(models.Model):
 
     def __str__(self):
         return f"{self.nome}: {self.ultima_esecuzione or 'mai eseguito'}"
+
+
+class QualityControlPlan(models.Model):
+    """Testata di un piano dei controlli qualità, congelata alla creazione.
+
+    I dati anagrafici arrivano da Business Central quando il piano viene creato e
+    da lì restano fermi: BC cambia nel tempo e contiene refusi che l'utente
+    corregge a mano, ma un documento emesso deve restare identico a com'era.
+
+    Titolo, Vendor e Job N° non sono colonne: i primi due sono costanti uguali su
+    ogni riga, il terzo è ``testata_id``. Salvarli sarebbe duplicare un dato che
+    non può divergere.
+    """
+
+    testata = models.ForeignKey(
+        Testata,
+        to_field="job",
+        db_column="Job",
+        on_delete=models.CASCADE,
+        related_name="quality_control_plans",
+    )
+    doc_no = models.CharField(db_column="DocNo", max_length=100, blank=True, verbose_name="Doc n.")
+    location = models.CharField(db_column="Location", max_length=200, blank=True)
+    sheet = models.CharField(db_column="Sheet", max_length=50, blank=True, verbose_name="Foglio")
+    project = models.CharField(db_column="Project", max_length=300, blank=True)
+    dwg_no = models.CharField(db_column="DwgNo", max_length=100, blank=True, verbose_name="Dwg n.")
+    owner = models.CharField(db_column="Owner", max_length=200, blank=True)
+    po_no = models.CharField(db_column="PONo", max_length=100, blank=True, verbose_name="PO n.")
+    data = models.DateField(db_column="Data", null=True, blank=True)
+    purchaser = models.CharField(db_column="Purchaser", max_length=200, blank=True)
+    descrizione_item = models.CharField(db_column="DescrizioneItem", max_length=300, blank=True)
+    serial_no = models.CharField(
+        db_column="SerialNo", max_length=100, blank=True, verbose_name="Serial n."
+    )
+    prepared_by = models.CharField(db_column="PreparedBy", max_length=200, blank=True)
+    prepared_by_user = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="quality_control_plans",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = True
+        db_table = "quality_control_plan"
+        verbose_name = "Quality Control Plan"
+        verbose_name_plural = "Quality Control Plan"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["testata", "created_at"], name="idx_qcp_testata_data"),
+        ]
+
+    def __str__(self):
+        return f"{self.testata_id} — QCP {self.doc_no or self.pk}"
+
+
+class QualityControlPlanItem(models.Model):
+    """Item coperto da un Quality Control Plan.
+
+    Un piano può coprire più item, quindi gli item stanno su righe proprie invece
+    che dentro un'unica stringa separata da "/", che è il problema che ha oggi
+    ``Documento.item_no``.
+    """
+
+    piano = models.ForeignKey(
+        QualityControlPlan,
+        db_column="IdQCP",
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    item_no = models.CharField(db_column="ItemNo", max_length=200, verbose_name="Item")
+    descrizione = models.CharField(db_column="Descrizione", max_length=300, blank=True)
+    ordine = models.PositiveSmallIntegerField(db_column="Ordine", default=0)
+
+    class Meta:
+        managed = True
+        db_table = "quality_control_plan_items"
+        verbose_name = "Item del Quality Control Plan"
+        verbose_name_plural = "Item del Quality Control Plan"
+        ordering = ["ordine", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=["piano", "item_no"], name="uniq_qcp_item"),
+        ]
+
+    def __str__(self):
+        return self.item_no

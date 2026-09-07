@@ -24,6 +24,8 @@ from .models import (
     IndirSped,
     Notifica,
     Permesso,
+    QualityControlPlan,
+    QualityControlPlanItem,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -63,6 +65,9 @@ from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
+from .services.quality_control_plan import MAX_ITEMS, dati_precompilati
+from .services.quality_control_plan import TITOLO as QCP_TITOLO
+from .services.quality_control_plan import VENDOR as QCP_VENDOR
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -4083,3 +4088,326 @@ class ArchivioAggiornamentiBCViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nessun aggiornamento da Business Central")
+
+
+class _FakeBCQcp:
+    """Connettore Business Central finto per il Quality Control Plan.
+
+    ``conn=False`` simula un ERP irraggiungibile; un'``Exception`` al posto dei
+    dati simula una query fallita.
+    """
+
+    def __init__(self, testata=None, items=None, conn=True):
+        self.conn = "connessione-finta" if conn else None
+        self._testata = testata
+        self._items = items
+        self.chiusa = False
+
+    @staticmethod
+    def _df(dati):
+        if isinstance(dati, Exception):
+            raise dati
+        return None if dati is None else pd.DataFrame(dati)
+
+    def get_qcp_testata(self, job):
+        return self._df(self._testata)
+
+    def get_qcp_items(self, job):
+        return self._df(self._items)
+
+    def close(self):
+        self.chiusa = True
+
+
+QCP_API = "/api/commesse/26010/quality-control-plan/"
+QCP_PREFILL = "/api/commesse/26010/quality-control-plan/prefill/"
+QCP_PAGE = "/commesse/26010/quality-control-plan/"
+
+_BC_TESTATA = [
+    {
+        "progetto": "MOPCO UREA REVAMP PROJECT",
+        "location": "STABILIMENTO DI VALBREMBO",
+        "owner": "MOPCO",
+        "purchaser": "THYSSENKRUPP UHDE GmbH",
+        "po_cliente": "4000244916",
+    }
+]
+_BC_ITEMS = [
+    {"item": "ITEM 2253E001", "descrizione": "COLUMN HEATER", "quantita": 3},
+    {"item": "ITEM 2253E003", "descrizione": "PRE-EVAPORATOR", "quantita": 3},
+]
+
+
+class QualityControlPlanTests(TestCase):
+    """Sezione Quality Control Plan: pagina, precompilazione, creazione, elenco."""
+
+    def setUp(self):
+        self.client = Client()
+        self.testata = Testata.objects.create(
+            job="26010",
+            client="CLIENTE LOCALE",
+            po_no="PO-LOCALE",
+            time_cli_doc_rev=10,
+            time_ven_doc_rev=5,
+        )
+        self.writer = User.objects.create_user(
+            "qcp_writer",
+            "qcp-writer@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Paolo",
+            last_name="Litta",
+        )
+        self.reader = User.objects.create_user(
+            "qcp_reader", "qcp-reader@brembanarolle.com", "pw", permesso=Permesso.READING
+        )
+        self.client.force_login(self.writer)
+
+    def _crea(self, **payload):
+        payload.setdefault("items", ["ITEM A"])
+        return self.client.post(QCP_API, data=json.dumps(payload), content_type="application/json")
+
+    @staticmethod
+    def _bc(**kwargs):
+        return patch(
+            "core.services.quality_control_plan._apri_connessione",
+            return_value=_FakeBCQcp(**kwargs),
+        )
+
+    # -- Pagina --
+
+    def test_la_pagina_si_apre_e_mostra_il_pulsante_crea(self):
+        response = self.client.get(QCP_PAGE)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "core/quality_control_plan.html")
+        self.assertContains(response, "Quality Control Plan")
+        self.assertContains(response, 'id="btn-crea"')
+
+    def test_la_pagina_di_una_commessa_inesistente_e_404(self):
+        response = self.client.get("/commesse/NOPE/quality-control-plan/")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_un_utente_in_sola_lettura_non_vede_il_pulsante(self):
+        self.client.force_login(self.reader)
+
+        response = self.client.get(QCP_PAGE)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'id="btn-crea"')
+
+    def test_la_card_compare_nella_pagina_di_commessa(self):
+        response = self.client.get("/commesse/26010/")
+
+        self.assertContains(response, "/commesse/26010/quality-control-plan/")
+        self.assertContains(response, "Quality Control Plan")
+
+    # -- Precompilazione --
+
+    def test_precompilazione_con_bc_disponibile(self):
+        with self._bc(testata=_BC_TESTATA, items=_BC_ITEMS):
+            response = self.client.get(QCP_PREFILL)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["bc_disponibile"])
+        self.assertIsNone(body["warning"])
+        dati = body["data"]
+        self.assertEqual(dati["project"], "MOPCO UREA REVAMP PROJECT")
+        self.assertEqual(dati["location"], "STABILIMENTO DI VALBREMBO")
+        self.assertEqual(dati["owner"], "MOPCO")
+        self.assertEqual(dati["purchaser"], "THYSSENKRUPP UHDE GmbH")
+        self.assertEqual(dati["po_no"], "4000244916")
+        self.assertEqual(len(body["items"]), 2)
+        self.assertEqual(body["items"][0]["descrizione"], "COLUMN HEATER")
+
+    def test_precompilazione_con_bc_irraggiungibile_non_fallisce(self):
+        with self._bc(conn=False):
+            response = self.client.get(QCP_PREFILL)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["bc_disponibile"])
+        self.assertTrue(body["warning"])
+        self.assertEqual(body["items"], [])
+        # Tutto cio che non dipende da BC resta comunque precompilato.
+        dati = body["data"]
+        self.assertEqual(dati["job_no"], "26010")
+        self.assertEqual(dati["titolo"], QCP_TITOLO)
+        self.assertEqual(dati["vendor"], QCP_VENDOR)
+        self.assertEqual(dati["prepared_by"], "Paolo Litta")
+        self.assertEqual(dati["data"], date.today().isoformat())
+        self.assertEqual(dati["po_no"], "PO-LOCALE")
+        self.assertEqual(dati["purchaser"], "CLIENTE LOCALE")
+        self.assertEqual(dati["location"], "")
+
+    def test_precompilazione_con_query_in_errore_non_da_500(self):
+        with self._bc(testata=RuntimeError("boom"), items=None):
+            response = self.client.get(QCP_PREFILL)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.json()["bc_disponibile"])
+
+    def test_bc_vuoto_non_sovrascrive_i_dati_del_sistema(self):
+        vuoto = [{"progetto": "", "location": "", "owner": "", "purchaser": "", "po_cliente": ""}]
+        with self._bc(testata=vuoto, items=[]):
+            dati = self.client.get(QCP_PREFILL).json()["data"]
+
+        self.assertEqual(dati["po_no"], "PO-LOCALE")
+        self.assertEqual(dati["purchaser"], "CLIENTE LOCALE")
+
+    def test_gli_item_duplicati_di_bc_compaiono_una_volta_sola(self):
+        doppi = _BC_ITEMS + [{"item": "ITEM 2253E001", "descrizione": "ALTRO", "quantita": 1}]
+        with self._bc(testata=_BC_TESTATA, items=doppi):
+            items = self.client.get(QCP_PREFILL).json()["items"]
+
+        self.assertEqual([i["item_no"] for i in items], ["ITEM 2253E001", "ITEM 2253E003"])
+
+    def test_la_precompilazione_chiude_il_connettore(self):
+        fake = _FakeBCQcp(testata=_BC_TESTATA, items=_BC_ITEMS)
+        with patch("core.services.quality_control_plan._apri_connessione", return_value=fake):
+            dati_precompilati("26010", self.writer)
+
+        self.assertTrue(fake.chiusa)
+
+    def test_precompilazione_su_commessa_inesistente_e_404(self):
+        response = self.client.get("/api/commesse/NOPE/quality-control-plan/prefill/")
+
+        self.assertEqual(response.status_code, 404)
+
+    # -- Creazione --
+
+    def test_creazione_salva_testata_e_item(self):
+        response = self._crea(
+            doc_no="26010-QCP-01",
+            project="PROGETTO",
+            owner="OWNER",
+            data="2026-09-07",
+            items=["ITEM A", "ITEM B"],
+        )
+
+        self.assertEqual(response.status_code, 201)
+        piano = QualityControlPlan.objects.get()
+        self.assertEqual(piano.testata_id, "26010")
+        self.assertEqual(piano.doc_no, "26010-QCP-01")
+        self.assertEqual(piano.prepared_by_user, self.writer)
+        self.assertEqual(
+            [(i.item_no, i.ordine) for i in piano.items.all()],
+            [("ITEM A", 0), ("ITEM B", 1)],
+        )
+
+    def test_le_costanti_non_sono_sovrascrivibili_dal_client(self):
+        response = self._crea(titolo="HACK", vendor="ACME", job_no="99999")
+
+        dati = response.json()["data"]
+        self.assertEqual(dati["titolo"], QCP_TITOLO)
+        self.assertEqual(dati["vendor"], QCP_VENDOR)
+        self.assertEqual(dati["job_no"], "26010")
+
+    def test_creazione_senza_item_rifiutata(self):
+        response = self._crea(items=[])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("item", response.json()["error"].lower())
+        self.assertEqual(QualityControlPlan.objects.count(), 0)
+
+    def test_item_duplicati_non_generano_errore_di_vincolo(self):
+        response = self._crea(items=["A", "A", "B"])
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(QualityControlPlanItem.objects.count(), 2)
+
+    def test_troppi_item_rifiutati(self):
+        response = self._crea(items=[f"ITEM {n}" for n in range(MAX_ITEMS + 1)])
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(QualityControlPlan.objects.count(), 0)
+
+    def test_prepared_by_vuoto_usa_l_utente_loggato(self):
+        self._crea(prepared_by="")
+
+        self.assertEqual(QualityControlPlan.objects.get().prepared_by, "Paolo Litta")
+
+    def test_body_non_json_rifiutato(self):
+        response = self.client.post(QCP_API, data=b"{", content_type="application/json")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "JSON non valido.")
+
+    def test_creazione_su_commessa_inesistente_e_404(self):
+        response = self.client.post(
+            "/api/commesse/NOPE/quality-control-plan/",
+            data=json.dumps({"items": ["A"]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_la_creazione_non_dipende_da_business_central(self):
+        with self._bc(conn=False):
+            response = self._crea(items=["ITEM A"])
+
+        self.assertEqual(response.status_code, 201)
+
+    # -- Elenco --
+
+    def test_elenco_espone_percentuale_zero_e_item(self):
+        self._crea(doc_no="QCP-1", items=["ITEM A", "ITEM B"], data="2026-09-07")
+
+        piani = self.client.get(QCP_API).json()["quality_control_plans"]
+
+        self.assertEqual(len(piani), 1)
+        self.assertEqual(piani[0]["percentuale"], 0)
+        self.assertEqual(piani[0]["items_label"], "ITEM A / ITEM B")
+        self.assertEqual(piani[0]["data_display"], "7 sep 2026")
+
+    def test_elenco_solo_della_commessa_richiesta(self):
+        Testata.objects.create(job="26011")
+        altro = QualityControlPlan.objects.create(testata_id="26011", doc_no="ALTRO")
+        QualityControlPlanItem.objects.create(piano=altro, item_no="X")
+
+        piani = self.client.get(QCP_API).json()["quality_control_plans"]
+
+        self.assertEqual(piani, [])
+
+    def test_elenco_su_commessa_inesistente_e_404(self):
+        response = self.client.get("/api/commesse/NOPE/quality-control-plan/")
+
+        self.assertEqual(response.status_code, 404)
+
+    # -- Permessi --
+
+    def test_un_utente_in_sola_lettura_non_puo_creare(self):
+        self.client.force_login(self.reader)
+
+        response = self._crea()
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["error"], "Permesso negato.")
+        self.assertEqual(QualityControlPlan.objects.count(), 0)
+
+    def test_un_utente_in_sola_lettura_puo_elencare(self):
+        self.client.force_login(self.reader)
+
+        self.assertEqual(self.client.get(QCP_API).status_code, 200)
+
+    def test_le_api_richiedono_autenticazione(self):
+        self.client.logout()
+
+        self.assertEqual(self.client.get(QCP_API).status_code, 401)
+        self.assertEqual(self.client.get(QCP_PREFILL).status_code, 401)
+
+
+class BusinessCentralQueryTests(SimpleTestCase):
+    """La query commerciale puntava a una tabella inesistente e falliva in silenzio."""
+
+    def test_la_query_commerciale_usa_la_tabella_di_estensione(self):
+        from src.erp.queries import COMMESSA_COMMERCIALE
+
+        self.assertIn("BREMBANA$Job$437dbf0e-84ff-417a-965d-ed2bb9650972$ext", COMMESSA_COMMERCIALE)
+        # La tabella col GUID dell'app NBT_BRL non esiste: quel GUID sta nel nome
+        # della colonna, non in quello della tabella.
+        self.assertNotIn(
+            "[BREMBANA$Job$d71d761a-a85c-4b10-8459-d30c64b4a709]", COMMESSA_COMMERCIALE
+        )

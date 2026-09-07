@@ -7,7 +7,12 @@ import pandas as pd
 import pyodbc
 from dotenv import load_dotenv
 
-from src.erp.queries import COMMESSA_ANAGRAFICA, COMMESSA_COMMERCIALE
+from src.erp.queries import (
+    COMMESSA_ANAGRAFICA,
+    COMMESSA_COMMERCIALE,
+    QCP_ITEMS,
+    QCP_TESTATA,
+)
 
 load_dotenv()
 
@@ -97,6 +102,16 @@ class BusinessCentral:
         """Dati commerciali della commessa: PO cliente e data consegna."""
         logger.debug("get_commessa_commerciale(%s)", numero_commessa)
         return self.fetch(COMMESSA_COMMERCIALE, params=(numero_commessa,))
+
+    def get_qcp_testata(self, numero_commessa: str) -> pd.DataFrame | None:
+        """Dati di testata per il Quality Control Plan: progetto, stabilimento, owner."""
+        logger.debug("get_qcp_testata(%s)", numero_commessa)
+        return self.fetch(QCP_TESTATA, params=(numero_commessa,))
+
+    def get_qcp_items(self, numero_commessa: str) -> pd.DataFrame | None:
+        """Item della commessa dalla distinta di fornitura (scope of supply)."""
+        logger.debug("get_qcp_items(%s)", numero_commessa)
+        return self.fetch(QCP_ITEMS, params=(numero_commessa,))
 
     def close(self) -> None:
         """Close the database connection."""

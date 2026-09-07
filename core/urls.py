@@ -52,6 +52,11 @@ urlpatterns = [
     path("commesse/<str:job>/emissione/", views.emissione_detail_view, name="emissione_detail"),
     path("commesse/<str:job>/ricezione/", views.ricezione_detail_view, name="ricezione_detail"),
     path("commesse/<str:job>/situazione/", views.situazione_detail_view, name="situazione_detail"),
+    path(
+        "commesse/<str:job>/quality-control-plan/",
+        views.quality_control_plan_view,
+        name="quality_control_plan",
+    ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
@@ -84,6 +89,17 @@ urlpatterns = [
         name="commessa_revisione_sblocca_api",
     ),
     path("api/erp/", views.erp_api, name="erp_api"),
+    # API — Quality Control Plan
+    path(
+        "api/commesse/<str:job>/quality-control-plan/",
+        views.quality_control_plan_api,
+        name="quality_control_plan_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/prefill/",
+        views.quality_control_plan_prefill_api,
+        name="quality_control_plan_prefill_api",
+    ),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),

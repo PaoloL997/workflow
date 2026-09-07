@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Nuova sezione **Quality Control Plan** nella pagina di commessa, accanto a Informazioni archivio, Elenco documenti e le altre. La pagina elenca i piani della commessa come righe sottili con nome, item coperti, chi li ha preparati, la data e un anello di avanzamento con la percentuale al centro (per ora ferma a zero: la regola di completamento arriverà con gli step). Il pulsante **Crea QCP** apre un modulo con i sedici campi di testata, precompilati da Business Central dove il dato esiste (Project, Location, Owner, Purchaser, P.O. n.) e dal sistema per il resto (Job n., data odierna, chi sta compilando); Doc n., Sheet, Dwg n. e Serial n. restano da compilare a mano finché non avranno una regola di calcolo. Gli item si scelgono uno o più alla volta dalla distinta di fornitura dell'ERP, e la descrizione item segue il primo item scelto senza mai sovrascrivere quello che hai scritto. Se Business Central non risponde il modulo si apre lo stesso, avvisa quali campi mancano e lascia creare il piano a mano
+
+### Fixed
+
+- I dati commerciali letti da Business Central (PO cliente e data di consegna) tornano ad arrivare davvero: la query puntava a una tabella inesistente e falliva in silenzio, quindi quei due campi non sono mai stati precompilati alla creazione di una commessa né allineati dal controllo giornaliero
+
 ### Changed
 
 - La revisione si legge sempre come dice l'archivio: con il flag **Revisioni con lettera** attivo esce ovunque la lettera (A, B, C…), con il flag spento esce ovunque il numero (0, 1, 2…). Vale per situazione documenti (viste orizzontale e verticale, comprese le intestazioni di colonna), elenco documenti, emissione, ricezione, sblocco e anomalie revisioni, per gli export Excel e PDF, per il trasmittal e per l'admin. Se il valore richiesto non è compilato viene ricavato dall'altro (0 ↔ A, 1 ↔ B, … 26 ↔ AA), quindi non compaiono più numeri al posto delle lettere sulle revisioni senza `RevLet`
