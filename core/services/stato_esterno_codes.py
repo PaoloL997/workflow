@@ -18,6 +18,33 @@ _STATUS_NAME_ALIASES = {
     "Commented-To be resubmitted-Work can proceed": "C",
 }
 
+# Letter → PDF legend wording (the alias when there is one, else the name).
+PDF_STATUS_LABELS = {
+    **STATUS_LETTER_MAP,
+    **{letter: alias for alias, letter in _STATUS_NAME_ALIASES.items()},
+}
+
+# Letter → colore di default della risposta del cliente. Sono i colori creati
+# all'import da Access: valgono finché l'admin non ne configura uno a sistema.
+DEFAULT_STATUS_COLORS = {
+    "A": "#00B050",
+    "C": "#D61D09",
+    "F": "#FFC000",
+    "I": "#D61D09",
+    "O": "#D61D09",
+    "R": "#D61D09",
+    "S": "#B8B8B8",
+    "Z": "#FFC000",
+}
+
+# Legenda STATUS di ripiego per il PDF: ``(lettera, nome, colore)`` in ordine
+# alfabetico di lettera, usata quando non c'è nessuna risposta del cliente a
+# sistema (vedi services/stato_esterno_legenda.py).
+DEFAULT_STATUS_LEGEND = [
+    (letter, PDF_STATUS_LABELS[letter], colore)
+    for letter, colore in sorted(DEFAULT_STATUS_COLORS.items())
+]
+
 
 def _normalize_status_name(nome: str) -> str:
     return "".join(ch for ch in (nome or "").lower() if ch.isalnum())

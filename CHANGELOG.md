@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- I colori della legenda STATUS nell'header del PDF di situazione documenti seguono le risposte del cliente configurate nell'admin: quadratino, lettera e descrizione arrivano dagli stati a sistema (colore mancante → default storico della lettera, lettera mancante → dedotta dal nome) invece di essere fissi nel codice. Vale sia per la vista orizzontale sia per quella verticale
+
 ## [0.1.4] - 2026-09-07
 
 ### Added
