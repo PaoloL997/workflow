@@ -601,6 +601,8 @@ Il testo dentro alle celle diventa automaticamente bianco o nero, quello dei due
 
 La legenda in alto nella vista orizzontale ripete la stessa coppia colore/lettera delle celle.
 
+Anche la legenda **STATUS** nell'header del PDF (viste orizzontale e verticale) è costruita sulle risposte del cliente messe a sistema: lettera, nome e colore del quadratino sono quelli configurati nell'admin, quindi cambiando un colore là il PDF successivo esce già aggiornato. Se una risposta non ha il colore si usa quello storico della sua lettera; se una risposta non ha la lettera, questa viene dedotta dal nome e, se il nome non è riconosciuto, la risposta resta fuori dalla legenda (nelle celle del PDF gli stati sono identificati proprio dalla lettera). Nel riquadro ci stanno al massimo dieci righe: oltre quel numero entrano le prime in ordine di lettera. Se nell'admin non c'è nessuna risposta del cliente, il PDF stampa la legenda storica delle otto risposte standard.
+
 ### 11.4 Ordinamento
 
 Clicca sull'intestazione di una colonna per ordinare i dati.

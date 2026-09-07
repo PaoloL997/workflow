@@ -11,21 +11,17 @@ from .revisioni_cleanup import (
     drop_orphan_revisioni,
     find_orphan_indices,
 )
-from .stato_esterno_codes import STATUS_LETTER_MAP
+from .stato_esterno_codes import DEFAULT_STATUS_COLORS, STATUS_LETTER_MAP
 from .stato_interno import stato_interno_effettivo
 from .trasmittal_archivio import sync_trasmittal_da_cartella
 
 logger = logging.getLogger(__name__)
 
+# Nome e colore con cui viene creata una risposta del cliente mancante: sono i
+# default condivisi con la legenda del PDF (vedi stato_esterno_codes).
 _STATUS_MAP = {
-    "A": {"nome": STATUS_LETTER_MAP["A"], "colore": "#00B050"},
-    "I": {"nome": STATUS_LETTER_MAP["I"], "colore": "#D61D09"},
-    "C": {"nome": STATUS_LETTER_MAP["C"], "colore": "#D61D09"},
-    "F": {"nome": STATUS_LETTER_MAP["F"], "colore": "#FFC000"},
-    "Z": {"nome": STATUS_LETTER_MAP["Z"], "colore": "#FFC000"},
-    "O": {"nome": STATUS_LETTER_MAP["O"], "colore": "#D61D09"},
-    "R": {"nome": STATUS_LETTER_MAP["R"], "colore": "#D61D09"},
-    "S": {"nome": STATUS_LETTER_MAP["S"], "colore": "#B8B8B8"},
+    letter: {"nome": STATUS_LETTER_MAP[letter], "colore": colore}
+    for letter, colore in DEFAULT_STATUS_COLORS.items()
 }
 
 __REPARTO_MAP = {

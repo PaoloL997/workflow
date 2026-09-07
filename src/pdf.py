@@ -11,7 +11,8 @@ from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
-from core.services.stato_esterno_colori import cell_colors, hex_to_rgb
+from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
+from core.services.stato_esterno_legenda import legenda_stati_esterni
 from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -626,28 +627,14 @@ _HEADER_NATURAL_WIDTH_PT = _H_OFF_STATUS + _H_STATUS_WIDTH
 _H_OFF_VALBREMBO = 304.10  # "Valbrembo (BG) - ITALY" label
 _H_OFF_LOGO0, _H_OFF_LOGO1 = 6.2, 208.3
 
-_STATUS_LEGEND = [
-    ("A", "Approved"),
-    ("C", "Commented-To be resubmitted-Work can proceed"),
-    ("F", "Final - As Built"),
-    ("I", "Commented-To be issued as Final"),
-    ("O", "Old"),
-    ("R", "Rejected - Work can not proceed"),
-    ("S", "Superseeded"),
-    ("Z", "For Information"),
-]
-
-# Canonical swatch colors (aligned with import_old / StatoEsterno defaults).
-_STATUS_COLORS = {
-    "A": (0, 176, 80),
-    "C": (214, 29, 9),
-    "F": (255, 192, 0),
-    "I": (214, 29, 9),
-    "O": (214, 29, 9),
-    "R": (214, 29, 9),
-    "S": (184, 184, 184),
-    "Z": (255, 192, 0),
-}
+# STATUS legend layout (pt): reference sheet has 8 rows starting at 49.5 with a
+# 9.7 step. With more rows the step shrinks so they stay inside the header box.
+_LEGEND_TOP_PT = 49.5
+_LEGEND_STEP_PT = 9.7
+_LEGEND_BOTTOM_PT = 127.2
+_LEGEND_SWATCH_PT = 8.0
+# Beyond this the rows would be unreadable: extra statuses are left out.
+_LEGEND_MAX_ROWS = 10
 
 
 def _pt(value: float) -> float:
@@ -695,6 +682,8 @@ class SituazioneDocumentiPDF(FPDF):
         self._sit_table_meta = None
         self._sit_include_status = True
         self._sit_draw_col_headers = True
+        # Voci della legenda STATUS; None = leggile dalle risposte a sistema.
+        self._sit_status_legend = None
 
     def header(self):
         # Document Status block + column headers on every page.
@@ -711,6 +700,7 @@ class SituazioneDocumentiPDF(FPDF):
             left_pt=left_pt,
             right_pt=right_pt,
             include_status=bool(self._sit_include_status),
+            status_legend=self._sit_status_legend,
         )
         meta = self._sit_table_meta
         if meta and self._sit_draw_col_headers:
@@ -965,6 +955,40 @@ def _header_layout(left: float, right: float, *, include_status: bool = True) ->
     }
 
 
+def _status_legend_entries(legend=None) -> list:
+    """Legend rows as ``(lettera, nome, rgb)``, colored like the table cells.
+
+    ``legend`` is the serialized list from
+    ``core.services.stato_esterno_legenda`` (admin-configured client
+    responses); when omitted it is read from the database, so the swatches
+    always follow the colors currently set by the admin.
+    """
+    voci = legenda_stati_esterni() if legend is None else legend
+    entries = []
+    for voce in voci or []:
+        lettera = (voce.get("lettera") or "").strip()
+        nome = (voce.get("nome") or "").strip()
+        if not lettera or not nome:
+            continue
+        # Stesso fondo delle celle risposta cliente (vedi _status_cell_rgb).
+        colori = _status_cell_rgb(voce.get("colore") or "")
+        rgb = colori[0] if colori else hex_to_rgb(FALLBACK_BG)
+        entries.append((lettera, nome, rgb))
+        if len(entries) == _LEGEND_MAX_ROWS:
+            break
+    return entries
+
+
+def _legend_row_ys(count: int) -> list:
+    """Baselines (pt) for ``count`` legend rows, kept inside the header box."""
+    if count <= 0:
+        return []
+    if count == 1:
+        return [_LEGEND_TOP_PT]
+    step = min(_LEGEND_STEP_PT, (_LEGEND_BOTTOM_PT - _LEGEND_TOP_PT) / (count - 1))
+    return [_LEGEND_TOP_PT + i * step for i in range(count)]
+
+
 def _build_situazione_header(
     pdf: FPDF,
     testata: dict,
@@ -973,11 +997,13 @@ def _build_situazione_header(
     left_pt: float,
     right_pt: float,
     include_status: bool = True,
+    status_legend=None,
 ) -> None:
     """Draw the Document Status header fitted to ``[left_pt, right_pt]``.
 
     The block spans exactly the table width. When ``include_status`` is True,
     STATUS keeps a fixed width on the right; otherwise content fills the band.
+    ``status_legend`` overrides the client responses read from the database.
     """
     left = float(left_pt)
     right = float(right_pt)
@@ -1061,19 +1087,24 @@ def _build_situazione_header(
             align="center",
         )
 
-        # STATUS legend — fixed-width column on the right
-        legend_ys = [49.5, 59.2, 68.9, 78.6, 88.3, 98.1, 107.8, 117.5]
+        # STATUS legend — fixed-width column on the right, colors from the
+        # client responses configured by the admin.
+        entries = _status_legend_entries(status_legend)
+        legend_ys = _legend_row_ys(len(entries))
+        step = legend_ys[1] - legend_ys[0] if len(legend_ys) > 1 else _LEGEND_STEP_PT
         legend_max_w = _H_STATUS_WIDTH - 6.0 - 14.0
-        swatch = 8.0  # pt
-        for (code, label), ly in zip(_STATUS_LEGEND, legend_ys):
-            rgb = _STATUS_COLORS.get(code, (158, 158, 158))
+        swatch = max(3.0, min(_LEGEND_SWATCH_PT, step - 1.5))
+        max_size = max(4.5, min(7.7, step - 1.5))
+        for (code, label, rgb), ly in zip(entries, legend_ys):
             sx, sy = x_status + 3.0, ly + 1.0
             pdf.set_fill_color(*rgb)
             pdf.set_draw_color(120, 120, 120)
             pdf.set_line_width(0.1)
             pdf.rect(_pt(sx), _pt(sy), _pt(swatch), _pt(swatch), style="DF")
             line = f"{code}: {label}"
-            size = _fit_font_size(pdf, line, legend_max_w, preferred=7.7, minimum=4.5, bold=True)
+            size = _fit_font_size(
+                pdf, line, legend_max_w, preferred=max_size, minimum=4.5, bold=True
+            )
             pdf.set_font(font, "B", size)
             while len(line) > len(code) + 2 and pdf.get_string_width(line) > _pt(legend_max_w):
                 label = label[:-1]
@@ -1540,6 +1571,7 @@ def genera_situazione_documenti_pdf(
     revisioni_by_doc=None,
     rev_let_flag=False,
     vista="orizzontale",
+    status_legend=None,
 ):
     """
     Generate a Situazione documenti PDF (Document Status header + table).
@@ -1552,12 +1584,15 @@ def genera_situazione_documenti_pdf(
         revisioni_by_doc: map documento_id -> list of serialized revisioni.
         rev_let_flag: whether revision headers use letters.
         vista: 'orizzontale' | 'verticale' — selects table layout.
+        status_legend: STATUS legend rows; defaults to the client responses
+            configured by the admin (letters, names and colors).
 
     Returns:
         bytes — the PDF content
     """
     docs = list(documenti or [])
     rev_map = revisioni_by_doc or {}
+    legend = legenda_stati_esterni() if status_legend is None else list(status_legend)
 
     if vista == "verticale":
         rows = _situazione_verticale_flat_rows(docs, rev_map, bool(rev_let_flag))
@@ -1568,6 +1603,7 @@ def genera_situazione_documenti_pdf(
             include_status=True,
             omit_empty_columns=True,
             grouped_plan_actual_headers=True,
+            status_legend=legend,
         )
 
     active_fixed = _active_fixed_doc_columns(docs)
@@ -1588,6 +1624,7 @@ def genera_situazione_documenti_pdf(
     pdf._sit_report_date = report_date_str
     pdf._sit_include_status = True
     pdf._sit_draw_col_headers = True
+    pdf._sit_status_legend = legend
     pdf._sit_header_left_pt = band_x0 / _PT
     pdf._sit_header_right_pt = (band_x0 + band_w) / _PT
 
@@ -1741,6 +1778,7 @@ def genera_planned_docs_pdf(
     include_status=False,
     omit_empty_columns=False,
     grouped_plan_actual_headers=False,
+    status_legend=None,
 ):
     """PDF with Document Status header (optionally without STATUS) + flat table.
 
@@ -1756,6 +1794,8 @@ def genera_planned_docs_pdf(
         omit_empty_columns: when True, drop columns with no values in ``docs``.
         grouped_plan_actual_headers: when True, draw Planning/Actual macro
             headers above date columns (situazione verticale).
+        status_legend: STATUS legend rows; defaults to the client responses
+            configured by the admin. Only used when ``include_status``.
 
     Returns:
         bytes — the PDF content
@@ -1792,6 +1832,10 @@ def genera_planned_docs_pdf(
     pdf._sit_include_status = bool(include_status)
     pdf._sit_draw_col_headers = False
     pdf._sit_table_meta = None
+    if include_status:
+        pdf._sit_status_legend = (
+            legenda_stati_esterni() if status_legend is None else list(status_legend)
+        )
     pdf._sit_header_left_pt = _TABLE_MARGIN_MM / _PT
     pdf._sit_header_right_pt = (_TABLE_MARGIN_MM + band_w_mm) / _PT
 

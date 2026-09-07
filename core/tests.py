@@ -73,7 +73,7 @@ from .services.revisione_anomalie import (
 )
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
-from .services.stato_esterno_codes import letter_for_status_name
+from .services.stato_esterno_codes import DEFAULT_STATUS_COLORS, letter_for_status_name
 from .services.stato_esterno_colori import (
     FALLBACK_BG,
     MIN_CONTRAST,
@@ -85,6 +85,7 @@ from .services.stato_esterno_colori import (
     readable_text_color,
     rgb_to_hex,
 )
+from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
 
 User = get_user_model()
 
@@ -3236,6 +3237,131 @@ class ColoriRisposteClienteApiTests(TestCase):
         self.assertEqual(_status_cell_rgb("#00B050"), ((0, 176, 80), hex_to_rgb(TEXT_DARK)))
         self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
         self.assertIsNone(_status_cell_rgb(""))
+
+
+class LegendaStatusPdfTests(TestCase):
+    """La legenda STATUS dell'header PDF segue le risposte messe a sistema."""
+
+    def _colori_disegnati(self, vista="orizzontale", **kwargs):
+        """Colori passati a ``set_fill_color`` generando il PDF situazione."""
+        from src.pdf import SituazioneDocumentiPDF, genera_situazione_documenti_pdf
+
+        originale = SituazioneDocumentiPDF.set_fill_color
+        chiamate = []
+
+        def spia(pdf, *args):
+            chiamate.append(tuple(args))
+            return originale(pdf, *args)
+
+        with patch.object(SituazioneDocumentiPDF, "set_fill_color", spia):
+            genera_situazione_documenti_pdf(
+                {"job": "LEG01", "client": "ACME"},
+                documenti=[],
+                revisioni_by_doc={},
+                vista=vista,
+                **kwargs,
+            )
+        return chiamate
+
+    # ── Voci della legenda ───────────────────────────────────────────────────
+
+    def test_legenda_usa_lettera_nome_e_colore_configurati(self):
+        StatoEsterno.objects.create(nome="Rejected", lettera="R", colore="#8B0000")
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#0070C0")
+        self.assertEqual(
+            legenda_stati_esterni(),
+            [
+                {"lettera": "A", "nome": "Approved", "colore": "#0070C0"},
+                {"lettera": "R", "nome": "Rejected", "colore": "#8B0000"},
+            ],
+        )
+
+    def test_lettera_dedotta_dal_nome_quando_non_e_configurata(self):
+        StatoEsterno.objects.create(nome="Final - As Built", colore="#FFC000")
+        self.assertEqual(legenda_stati_esterni()[0]["lettera"], "F")
+
+    def test_colore_mancante_ricade_sul_default_della_lettera(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="")
+        self.assertEqual(legenda_stati_esterni()[0]["colore"], DEFAULT_STATUS_COLORS["A"])
+
+    def test_risposta_senza_lettera_riconoscibile_resta_fuori(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        StatoEsterno.objects.create(nome="Stato inventato", colore="#123456")
+        self.assertEqual([voce["lettera"] for voce in legenda_stati_esterni()], ["A"])
+
+    def test_senza_risposte_a_sistema_resta_la_legenda_canonica(self):
+        self.assertEqual(legenda_stati_esterni(), legenda_default())
+        self.assertEqual(
+            [voce["lettera"] for voce in legenda_default()],
+            ["A", "C", "F", "I", "O", "R", "S", "Z"],
+        )
+
+    # ── Righe disegnate nel PDF ──────────────────────────────────────────────
+
+    def test_le_voci_del_pdf_usano_il_fondo_delle_celle(self):
+        from src.pdf import _status_legend_entries
+
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#FFFFFF")
+        self.assertEqual(_status_legend_entries(), [("A", "Approved", (255, 255, 255))])
+
+    def test_voce_con_colore_non_valido_usa_il_fallback(self):
+        from src.pdf import _status_legend_entries
+
+        voci = [{"lettera": "A", "nome": "Approved", "colore": "non-un-colore"}]
+        self.assertEqual(_status_legend_entries(voci)[0][2], hex_to_rgb(FALLBACK_BG))
+
+    def test_le_voci_si_fermano_alle_righe_disponibili(self):
+        from src.pdf import _LEGEND_MAX_ROWS, _status_legend_entries
+
+        voci = [
+            {"lettera": chr(ord("A") + i), "nome": f"Stato {i}", "colore": "#00B050"}
+            for i in range(_LEGEND_MAX_ROWS + 3)
+        ]
+        self.assertEqual(len(_status_legend_entries(voci)), _LEGEND_MAX_ROWS)
+
+    def test_le_righe_restano_dentro_il_riquadro_status(self):
+        from src.pdf import _HEADER_BOTTOM_PT, _LEGEND_MAX_ROWS, _legend_row_ys
+
+        otto = _legend_row_ys(8)
+        # Otto voci = layout storico del foglio di riferimento.
+        self.assertEqual(len(otto), 8)
+        self.assertAlmostEqual(otto[0], 49.5)
+        self.assertAlmostEqual(otto[1] - otto[0], 9.7)
+        for count in range(1, _LEGEND_MAX_ROWS + 1):
+            ys = _legend_row_ys(count)
+            self.assertEqual(len(ys), count)
+            self.assertLess(ys[-1], _HEADER_BOTTOM_PT, count)
+
+    # ── PDF generato ─────────────────────────────────────────────────────────
+
+    def test_il_pdf_orizzontale_usa_i_colori_a_sistema(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#0070C0")
+        colori = self._colori_disegnati(vista="orizzontale")
+        self.assertIn((0, 112, 192), colori)
+        # Il vecchio verde fisso non viene più disegnato.
+        self.assertNotIn((0, 176, 80), colori)
+
+    def test_il_pdf_verticale_usa_i_colori_a_sistema(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#0070C0")
+        colori = self._colori_disegnati(vista="verticale")
+        self.assertIn((0, 112, 192), colori)
+        self.assertNotIn((0, 176, 80), colori)
+
+    def test_cambiare_colore_a_sistema_cambia_la_legenda(self):
+        approved = StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        self.assertIn((0, 176, 80), self._colori_disegnati())
+        approved.colore = "#0070C0"
+        approved.save(update_fields=["colore"])
+        colori = self._colori_disegnati()
+        self.assertIn((0, 112, 192), colori)
+        self.assertNotIn((0, 176, 80), colori)
+
+    def test_legenda_passata_a_mano_ha_la_precedenza(self):
+        StatoEsterno.objects.create(nome="Approved", lettera="A", colore="#00B050")
+        voci = [{"lettera": "A", "nome": "Approved", "colore": "#0070C0"}]
+        colori = self._colori_disegnati(status_legend=voci)
+        self.assertIn((0, 112, 192), colori)
+        self.assertNotIn((0, 176, 80), colori)
 
 
 class StatoInternoEffettivoTests(TestCase):
