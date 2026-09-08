@@ -84,6 +84,7 @@ from .services.revisione_anomalie import (
     ignora_anomalie_revisione,
     serialize_anomalie_gruppi,
 )
+from .services.revisione_label import format_revisione_label
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.segnalazioni import (
     SegnalazioneClosed,
@@ -735,6 +736,14 @@ def _trasmittal_documents(testata, doc_ids):
                 "contractor_doc_no": doc.contractor_doc_no or "",
                 "doc_title": doc.doc_title or "",
                 "rev_no": rev.rev_no if rev else "",
+                # Lettera o numero secondo il flag di archivio (vedi revisione_label).
+                "rev_label": format_revisione_label(
+                    rev.rev_no if rev else None,
+                    rev.rev_let if rev else "",
+                    testata.rev_let_flag,
+                )
+                if rev
+                else "",
                 "dis_plan_date": rev.dis_plan_date.isoformat()
                 if (rev and rev.dis_plan_date)
                 else None,
@@ -1546,11 +1555,7 @@ def _export_situazione_xlsx(job, payload, *, vista):
     def _rev_label(rev):
         if not rev:
             return ""
-        if rev_let_flag:
-            return rev.get("rev_let") or (
-                str(rev["rev_no"]) if rev.get("rev_no") is not None else ""
-            )
-        return str(rev["rev_no"]) if rev.get("rev_no") is not None else ""
+        return format_revisione_label(rev.get("rev_no"), rev.get("rev_let"), rev_let_flag)
 
     def _int_status_label(rev):
         # Match UI getIntStatusMeta: effective status, empty → "Da inviare"

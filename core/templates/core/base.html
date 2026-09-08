@@ -540,6 +540,46 @@
     function fmtDate(iso) {
       return formatDate(iso);
     }
+
+    /* ── Revisione: lettera o numero secondo il flag di archivio ──
+       Stessa regola del server (core/services/revisione_label.py): flag attivo
+       → sempre lettera (A, B, C…), flag spento → sempre numero (0, 1, 2…). */
+    function revNumeroInLettera(revNo) {
+      let n = revNumeroIntero(revNo);
+      if (n === null || n < 0) return '';
+      let label = '';
+      n += 1;
+      while (n > 0) {
+        const resto = (n - 1) % 26;
+        label = String.fromCharCode(65 + resto) + label;
+        n = Math.floor((n - 1) / 26);
+      }
+      return label;
+    }
+    function revLetteraInNumero(revLet) {
+      const sigla = String(revLet ?? '').trim().toUpperCase();
+      if (!sigla || !/^[A-Z]+$/.test(sigla)) return null;
+      let n = 0;
+      for (const ch of sigla) n = n * 26 + (ch.charCodeAt(0) - 64);
+      return n - 1;
+    }
+    function revNumeroIntero(value) {
+      if (value === null || value === undefined || String(value).trim() === '') return null;
+      const n = Number(String(value).trim());
+      return Number.isInteger(n) ? n : null;
+    }
+    function formatRevLabel(rev, revLetFlag) {
+      if (!rev) return '';
+      const lettera = String(rev.rev_let ?? '').trim();
+      if (revLetFlag) {
+        if (lettera && revLetteraInNumero(lettera) !== null) return lettera.toUpperCase();
+        return revNumeroInLettera(lettera !== '' ? lettera : rev.rev_no);
+      }
+      let numero = revNumeroIntero(rev.rev_no);
+      if (numero === null) numero = revLetteraInNumero(lettera);
+      if (numero === null) numero = revNumeroIntero(lettera);
+      return numero === null ? '' : String(numero);
+    }
   </script>
   <div id="permission-toast" class="permission-toast" role="alert" aria-live="assertive"></div>
   {% block content %}{% endblock %}
