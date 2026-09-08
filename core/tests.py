@@ -47,12 +47,12 @@ from .services.bc_sync import (
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
     fetch_from_bc,
-    format_revisione_label,
     list_documenti,
     list_home_commesse,
     list_situazione,
     list_stati_esterni,
     pin_commessa,
+    revisioni_by_doc_for_job,
     risolvi_file_revisione,
     salva_file_link,
     serialize_revisione,
@@ -70,6 +70,11 @@ from .services.revisione_anomalie import (
     classifica_revisione,
     ignora_anomalie_revisione,
     serialize_anomalie_gruppi,
+)
+from .services.revisione_label import (
+    format_revisione_label,
+    lettera_a_numero,
+    numero_a_lettera,
 )
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
@@ -2187,15 +2192,50 @@ class DateDisplayFormatTests(SimpleTestCase):
         self.assertEqual(_fmt_date("2026-01-10", ""), "10 jan 2026")
 
 
+class RevisioneEtichettaTests(SimpleTestCase):
+    """Lettera e numero sono due scritture dello stesso dato (revisione_label)."""
+
+    def test_numero_convertito_in_lettera(self):
+        self.assertEqual(numero_a_lettera(0), "A")
+        self.assertEqual(numero_a_lettera(1), "B")
+        self.assertEqual(numero_a_lettera(25), "Z")
+        self.assertEqual(numero_a_lettera(26), "AA")
+        self.assertEqual(numero_a_lettera(27), "AB")
+        self.assertEqual(numero_a_lettera("3"), "D")
+        self.assertEqual(numero_a_lettera(None), "")
+        self.assertEqual(numero_a_lettera(-1), "")
+
+    def test_lettera_convertita_in_numero(self):
+        self.assertEqual(lettera_a_numero("A"), 0)
+        self.assertEqual(lettera_a_numero("b"), 1)
+        self.assertEqual(lettera_a_numero("Z"), 25)
+        self.assertEqual(lettera_a_numero("AA"), 26)
+        self.assertIsNone(lettera_a_numero(""))
+        self.assertIsNone(lettera_a_numero("1"))
+        self.assertIsNone(lettera_a_numero(None))
+
+    def test_con_flag_attivo_si_vede_sempre_la_lettera(self):
+        self.assertEqual(format_revisione_label(1, "A", True), "A")
+        self.assertEqual(format_revisione_label(1, "a", True), "A")
+        # Lettera non compilata: si ricava dal numero.
+        self.assertEqual(format_revisione_label(0, "", True), "A")
+        self.assertEqual(format_revisione_label(2, "", True), "C")
+        self.assertEqual(format_revisione_label(26, None, True), "AA")
+        # Lettera compilata con un numero: viene comunque convertita.
+        self.assertEqual(format_revisione_label(None, "2", True), "C")
+        self.assertEqual(format_revisione_label(None, "", True), "")
+
+    def test_con_flag_spento_si_vede_sempre_il_numero(self):
+        self.assertEqual(format_revisione_label(1, "A", False), "1")
+        self.assertEqual(format_revisione_label(0, "", False), "0")
+        # Numero non compilato: si ricava dalla lettera.
+        self.assertEqual(format_revisione_label(None, "B", False), "1")
+        self.assertEqual(format_revisione_label(None, "AA", False), "26")
+        self.assertEqual(format_revisione_label(None, "", False), "")
+
+
 class RevisioneLabelDisplayTests(TestCase):
     """Revision display depends on Testata.rev_let_flag, not on rev_let alone."""
-
-    def test_format_revisione_label_uses_flag(self):
-        self.assertEqual(format_revisione_label(1, "A", True), "A")
-        self.assertEqual(format_revisione_label(1, "A", False), "1")
-        self.assertEqual(format_revisione_label(1, "", True), "1")
-        self.assertEqual(format_revisione_label(None, "B", True), "B")
-        self.assertEqual(format_revisione_label(None, "B", False), "")
 
     def test_list_documenti_ignores_rev_let_when_flag_false(self):
         t = Testata.objects.create(job="REVFLG1", rev_let_flag=False)
@@ -2220,6 +2260,144 @@ class RevisioneLabelDisplayTests(TestCase):
         Testata.objects.create(job="REVFLG3", rev_let_flag=True)
         data = list_situazione("REVFLG3")
         self.assertTrue(data["rev_let_flag"])
+
+    def test_list_documenti_deriva_la_lettera_quando_manca(self):
+        t = Testata.objects.create(job="REVFLG4", rev_let_flag=True)
+        doc = Documento.objects.create(testata=t, vendor_doc="REVFLG4-01")
+        Revisione.objects.create(documento=doc, rev_no=2, rev_let="")
+
+        self.assertEqual(list_documenti("REVFLG4")[0]["latest_rev_display"], "C")
+
+    def test_list_documenti_deriva_il_numero_quando_manca(self):
+        t = Testata.objects.create(job="REVFLG5", rev_let_flag=False)
+        doc = Documento.objects.create(testata=t, vendor_doc="REVFLG5-01")
+        Revisione.objects.create(documento=doc, rev_no=None, rev_let="C")
+
+        self.assertEqual(list_documenti("REVFLG5")[0]["latest_rev_display"], "2")
+
+    def test_str_della_revisione_segue_il_flag(self):
+        con_lettera = Testata.objects.create(job="REVFLG6", rev_let_flag=True)
+        senza_lettera = Testata.objects.create(job="REVFLG7", rev_let_flag=False)
+        doc_lettera = Documento.objects.create(testata=con_lettera, vendor_doc="REVFLG6-01")
+        doc_numero = Documento.objects.create(testata=senza_lettera, vendor_doc="REVFLG7-01")
+        rev_lettera = Revisione.objects.create(documento=doc_lettera, rev_no=1, rev_let="")
+        rev_numero = Revisione.objects.create(documento=doc_numero, rev_no=1, rev_let="B")
+
+        self.assertEqual(rev_lettera.etichetta(), "B")
+        self.assertEqual(str(rev_lettera), "Rev B")
+        self.assertEqual(rev_numero.etichetta(), "1")
+        self.assertEqual(str(rev_numero), "Rev 1")
+
+
+class RevisioneLabelExportTests(TestCase):
+    """Excel, PDF e trasmittal stampano la revisione come dice l'archivio."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "revexp_user",
+            "revexp@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="REVEXP1", client="ACME", rev_let_flag=True)
+        self.doc = Documento.objects.create(
+            testata=self.testata,
+            item_no="001",
+            vendor_doc="REVEXP1-01",
+            doc_title="Data book index",
+        )
+        # Nessuna lettera in archivio: deve comunque uscire "B" (rev_no 1).
+        self.rev = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            rev_let="",
+            dis_plan_date=date(2026, 3, 15),
+        )
+
+    def _colonna_rev(self, vista="orizzontale"):
+        import openpyxl
+
+        response = self.client.get(
+            f"/api/commesse/{self.testata.job}/situazione/export/?format=xlsx&vista={vista}"
+        )
+        self.assertEqual(response.status_code, 200)
+        ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        # Le colonne fisse hanno l'intestazione in riga 1 (unita con la riga 2).
+        intestazioni = [cell.value for cell in ws[1]]
+        col = intestazioni.index("Rev.") + 1
+        return [ws.cell(row=r, column=col).value for r in range(3, ws.max_row + 1)]
+
+    def test_export_xlsx_usa_la_lettera_col_flag_attivo(self):
+        self.assertEqual(self._colonna_rev(), ["B"])
+        self.assertEqual(self._colonna_rev(vista="verticale"), ["B"])
+
+    def test_export_xlsx_usa_il_numero_col_flag_spento(self):
+        self.testata.rev_let_flag = False
+        self.testata.save(update_fields=["rev_let_flag"])
+        self.rev.rev_let = "B"
+        self.rev.save(update_fields=["rev_let"])
+
+        self.assertEqual(self._colonna_rev(), ["1"])
+
+    def test_intestazione_pdf_situazione_segue_il_flag(self):
+        from src.pdf import _rev_group_label
+
+        revs = [[{"rev_no": 0, "rev_let": ""}, {"rev_no": 1, "rev_let": ""}]]
+        self.assertEqual(_rev_group_label(revs, 0, True), "Rev. A")
+        self.assertEqual(_rev_group_label(revs, 1, True), "Rev. B")
+        self.assertEqual(_rev_group_label(revs, 0, False), "Rev. 0")
+        # Posizione senza revisioni: l'etichetta resta coerente col flag.
+        self.assertEqual(_rev_group_label([[]], 2, True), "Rev. C")
+        self.assertEqual(_rev_group_label([[]], 2, False), "Rev. 2")
+
+    def test_righe_pdf_verticale_seguono_il_flag(self):
+        from src.pdf import _situazione_verticale_flat_rows
+
+        documenti = list_documenti(self.testata.job)
+        rev_map = revisioni_by_doc_for_job(self.testata.job)
+        righe = _situazione_verticale_flat_rows(documenti, rev_map, True)
+        self.assertEqual([r["rev_label"] for r in righe], ["B"])
+        righe_numero = _situazione_verticale_flat_rows(documenti, rev_map, False)
+        self.assertEqual([r["rev_label"] for r in righe_numero], ["1"])
+
+    def test_documenti_del_trasmittal_portano_la_revisione_giusta(self):
+        from core.views import _trasmittal_documents
+        from src.pdf import _cell_value_for_col
+
+        documents = _trasmittal_documents(self.testata, [self.doc.pk])
+        self.assertEqual(documents[0]["rev_label"], "B")
+        self.assertEqual(_cell_value_for_col(documents[0], "rev_no"), "B")
+
+        self.testata.rev_let_flag = False
+        self.testata.save(update_fields=["rev_let_flag"])
+        documents = _trasmittal_documents(self.testata, [self.doc.pk])
+        self.assertEqual(documents[0]["rev_label"], "1")
+        self.assertEqual(_cell_value_for_col(documents[0], "rev_no"), "1")
+
+    def test_le_pagine_ricevono_il_flag_e_l_helper_condiviso(self):
+        """Le tabelle costruite in JS formattano la revisione con la regola condivisa."""
+        for url in (
+            f"/commesse/{self.testata.job}/documenti/",
+            f"/commesse/{self.testata.job}/situazione/",
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "function formatRevLabel(rev, revLetFlag)")
+                self.assertContains(response, "REV_LET_FLAG = true")
+
+    def test_export_emissione_xlsx_usa_la_lettera(self):
+        import openpyxl
+
+        response = self.client.get(f"/api/commesse/{self.testata.job}/emissione/export/")
+        self.assertEqual(response.status_code, 200)
+        ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        col = [cell.value for cell in ws[1]].index("Rev.") + 1
+        self.assertEqual(
+            [ws.cell(row=r, column=col).value for r in range(2, ws.max_row + 1)], ["B"]
+        )
 
 
 class CommessaPinTestCase(TestCase):

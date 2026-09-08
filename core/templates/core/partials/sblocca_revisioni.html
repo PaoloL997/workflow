@@ -179,12 +179,8 @@
 
   if (!btn || !backdrop || !confirmBackdrop) return;
 
-  function formatRevLabel(item) {
-    if (REV_LET_FLAG) {
-      return item.rev_let || (item.rev_no != null ? String(item.rev_no) : '');
-    }
-    return item.rev_no != null ? String(item.rev_no) : '';
-  }
+  /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
+  const formatRevLabel = (item) => window.formatRevLabel(item, REV_LET_FLAG);
 
   let _items = [];
   let _pending = null;

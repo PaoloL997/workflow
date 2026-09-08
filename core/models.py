@@ -416,11 +416,17 @@ class Revisione(models.Model):
         verbose_name_plural = "Revisioni"
         ordering = ["rev_no"]
 
+    def etichetta(self):
+        """Lettera o numero della revisione, secondo il flag della testata."""
+        from .services.revisione_label import format_revisione_label
+
+        return format_revisione_label(
+            self.rev_no, self.rev_let, self.documento.testata.rev_let_flag
+        )
+
     def __str__(self):
-        label = f"Rev {self.rev_no}" if self.rev_no is not None else f"Rev #{self.pk}"
-        if self.rev_let:
-            label += self.rev_let
-        return label
+        etichetta = self.etichetta()
+        return f"Rev {etichetta}" if etichetta else f"Rev #{self.pk}"
 
 
 class RevisioneFileLink(models.Model):

@@ -151,15 +151,14 @@ class TransmittalAdmin(admin.ModelAdmin):
 
     def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "revisioni":
-            kwargs["queryset"] = Revisione.objects.select_related("documento").order_by(
+            kwargs["queryset"] = Revisione.objects.select_related("documento__testata").order_by(
                 "documento__testata_id", "documento__vendor_doc", "rev_no", "pk"
             )
             field = super().formfield_for_manytomany(db_field, request, **kwargs)
 
             def label(rev):
-                rev_label = f"Rev {rev.rev_no}" if rev.rev_no is not None else "Rev"
-                if rev.rev_let:
-                    rev_label += rev.rev_let
+                etichetta = rev.etichetta()
+                rev_label = f"Rev {etichetta}" if etichetta else "Rev"
                 vendor = rev.documento.vendor_doc or f"doc {rev.documento_id}"
                 return f"#{rev.pk} — {vendor} {rev_label}"
 
@@ -211,6 +210,7 @@ class RevisioneAdmin(admin.ModelAdmin):
         "id",
         "documento",
         "rev_no",
+        "etichetta",
         "int_status",
         "ext_status",
         "dis_plan_date",
@@ -220,6 +220,11 @@ class RevisioneAdmin(admin.ModelAdmin):
     search_fields = ("documento__vendor_doc", "documento__testata__job")
     list_filter = ("int_status",)
     raw_id_fields = ("documento",)
+    list_select_related = ("documento__testata",)
+
+    @admin.display(description="Rev. mostrata")
+    def etichetta(self, obj):
+        return obj.etichetta()
 
 
 class SegnalazioneCommentoInline(admin.TabularInline):

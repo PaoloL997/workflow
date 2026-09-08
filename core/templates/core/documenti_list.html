@@ -1208,7 +1208,7 @@
         <textarea id="f-remarks" placeholder="Note libere…"></textarea>
       </div>
       <div class="fg">
-        <label for="f-dis-plan-date-rev0">Data invio prevista (Rev. 0)</label>
+        <label for="f-dis-plan-date-rev0">Data invio prevista (Rev. {% if testata.rev_let_flag %}A{% else %}0{% endif %})</label>
         <input type="date" id="f-dis-plan-date-rev0">
       </div>
     </div>
@@ -1583,12 +1583,8 @@
     }
     strip.innerHTML = '';
     revs.forEach(function(r, i) {
-      var label = 'Rev. ';
-      if (REV_LET_FLAG) {
-        label += (r.rev_let || (r.rev_no !== null && r.rev_no !== undefined ? r.rev_no : '—'));
-      } else {
-        label += (r.rev_no !== null && r.rev_no !== undefined ? r.rev_no : '—');
-      }
+      /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
+      var label = 'Rev. ' + (window.formatRevLabel(r, REV_LET_FLAG) || '—');
       var cls = 'doc-rev-mini' + (i === revs.length - 1 ? ' doc-rev-mini--latest' : '');
       var btn = document.createElement('button');
       btn.type = 'button';

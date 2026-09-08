@@ -1583,12 +1583,9 @@
     return String(value == null ? '' : value).toLowerCase().trim();
   }
 
+  /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
   function formatRevLabel(r) {
-    if (!r) return '';
-    if (REV_LET_FLAG) {
-      return r.rev_let || (r.rev_no != null ? String(r.rev_no) : '');
-    }
-    return r.rev_no != null ? String(r.rev_no) : '';
+    return window.formatRevLabel(r, REV_LET_FLAG);
   }
 
   function getColumnFilterValue(row, key) {
@@ -2296,7 +2293,8 @@
           if (label !== '') return `Rev. ${escHtml(label)}`;
         }
       }
-      return `Rev. ${r}`;
+      /* Nessuna revisione a questa posizione: si usa comunque lettera o numero. */
+      return `Rev. ${escHtml(formatRevLabel({ rev_no: r }))}`;
     }
 
     let thead = '<thead><tr>';

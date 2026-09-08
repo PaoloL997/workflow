@@ -17,6 +17,7 @@ from ..models import (
     StatoEsterno,
     Testata,
 )
+from .revisione_label import format_revisione_label
 from .stato_esterno_colori import cell_colors
 from .stato_interno import (
     stato_interno_effettivo,
@@ -27,19 +28,6 @@ from .stato_interno import (
 MAX_PINNED_COMMESSE = 8
 
 # ── Serializers ───────────────────────────────────────────────────────────────
-
-
-def format_revisione_label(rev_no, rev_let, rev_let_flag):
-    """Return the revision label based on the archive flag.
-
-    If ``rev_let_flag`` is True, show the letter (fallback to number if empty).
-    Otherwise always show the number, ignoring ``rev_let``.
-    """
-    if rev_let_flag:
-        if rev_let:
-            return rev_let
-        return str(rev_no) if rev_no is not None else ""
-    return str(rev_no) if rev_no is not None else ""
 
 
 def serialize_testata(t, pinned=None):

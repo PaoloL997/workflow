@@ -11,6 +11,7 @@ from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
+from core.services.revisione_label import format_revisione_label
 from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
 from core.services.stato_esterno_legenda import legenda_stati_esterni
 from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
@@ -446,6 +447,11 @@ def _cell_value_for_col(doc, key):
     if key == "dis_plan_date":
         return format_display_date(doc.get("dis_plan_date")) or ""
     if key == "rev_no":
+        # ``rev_label`` è già lettera o numero secondo il flag di archivio;
+        # ``rev_no`` resta il ripiego per i chiamanti che non lo passano.
+        label = doc.get("rev_label")
+        if label not in (None, ""):
+            return str(label)
         rev = doc.get("rev_no")
         return "" if rev is None else str(rev)
     return str(doc.get(key) or "").strip()
@@ -548,7 +554,8 @@ def genera_trasmittal_pdf(
         testata: dict with keys job, po_no, job_detail, client
         addresses: list of dicts with keys consignee, address, zip_code, city, country, attn, ph_no
         documents: list of dicts with keys item_no, vendor_doc, client_doc_no,
-            contractor_doc_no, doc_title, rev_no, dis_plan_date (ISO; shown in REQUIRED BY)
+            contractor_doc_no, doc_title, rev_no, dis_plan_date (ISO; shown in REQUIRED BY);
+            rev_label (opzionale) sostituisce rev_no nella colonna REV. quando presente
         date_str: ISO date string (e.g. '2025-01-15')
         our_ref: trasmittal reference number (user-provided)
         city: city name for the date header (e.g. 'Schio')
@@ -844,23 +851,17 @@ def _is_date_overdue(iso) -> bool:
     return d < date.today()
 
 
-def _format_rev_label(rev_no, rev_let, rev_let_flag: bool) -> str:
-    """Local copy of format_revisione_label to keep pdf.py free of Django imports."""
-    if rev_let_flag:
-        if rev_let:
-            return str(rev_let)
-        return str(rev_no) if rev_no is not None else ""
-    return str(rev_no) if rev_no is not None else ""
-
-
 def _rev_group_label(revs_by_index: list, rev_idx: int, rev_let_flag: bool) -> str:
     for revs in revs_by_index:
         if rev_idx < len(revs):
             rev = revs[rev_idx]
-            label = _format_rev_label(rev.get("rev_no"), rev.get("rev_let") or "", rev_let_flag)
+            label = format_revisione_label(
+                rev.get("rev_no"), rev.get("rev_let") or "", rev_let_flag
+            )
             if label:
                 return f"Rev. {label}"
-    return f"Rev. {rev_idx}"
+    # Nessuna revisione a questa posizione: si usa comunque lettera o numero.
+    return f"Rev. {format_revisione_label(rev_idx, '', rev_let_flag)}"
 
 
 def _revs_for_doc(revisioni_by_doc: dict, doc_id) -> list:
@@ -1517,7 +1518,7 @@ def _situazione_verticale_flat_rows(
                     "penalty": "Yes" if doc.get("doc_penalty") else "",
                     "payment": "Yes" if doc.get("doc_payment") else "",
                     "rev_label": (
-                        _format_rev_label(
+                        format_revisione_label(
                             rev.get("rev_no"),
                             rev.get("rev_let") or "",
                             rev_let_flag,

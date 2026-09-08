@@ -274,13 +274,19 @@ Questa sezione configura i parametri che governano il calcolo automatico delle d
 |-------|-------------|---------|
 | **Revisione cliente** | Giorni concessi al cliente per rispondere | All'emissione: `Data ricezione prevista = Data emissione + giorni cliente` |
 | **Revisione interna** | Giorni a disposizione di B&R per emettere la revisione successiva | Alla ricezione con nuova rev.: `Data invio prevista = Data ricezione + giorni interni` |
-| **Revisioni con lettera** | Usa lettere alfabetiche (A, B, C…) invece del solo numero | Attiva la numerazione con lettera per le revisioni |
+| **Revisioni con lettera** | Usa lettere alfabetiche (A, B, C…) invece del solo numero | Decide come si legge la revisione in tutta l'applicazione |
 
 **Procedura:**
 
 1. Inserisci i valori nei campi numerici.
 2. Attiva/disattiva il toggle **Revisioni con lettera** se necessario.
 3. Clicca **Salva modifiche**.
+
+#### Come viene mostrata la revisione
+
+Questo toggle è l'unica cosa che decide come si legge la revisione: con il flag **attivo** si vede sempre la lettera (A, B, C…), con il flag **spento** si vede sempre il numero (0, 1, 2…). Vale per ogni schermata (elenco documenti, situazione documenti in entrambe le viste comprese le intestazioni di colonna, emissione, ricezione, sblocco e anomalie revisioni) e per ogni stampa o export (Excel, PDF, trasmittal).
+
+Numero e lettera sono due modi di scrivere lo stesso dato (`0 = A`, `1 = B`, … `25 = Z`, `26 = AA`): se sulla revisione manca il valore richiesto, viene ricavato dall'altro. Cambiare il toggle non modifica quindi i dati, solo la loro lettura.
 
 ### 6.2 Indirizzi di consegna
 
@@ -757,7 +763,8 @@ Questo è il ciclo tipico di vita di un documento:
 | Campo | Descrizione |
 |-------|-------------|
 | **Rev. No** | Numero revisione (0, 1, 2…) |
-| **Rev. Let** | Lettera revisione (A, B, C…) se attivo il flag in archivio |
+| **Rev. Let** | Lettera revisione (A, B, C…) |
+| | Quale dei due si vede a schermo e nelle stampe dipende solo dal flag **Revisioni con lettera** in archivio (§6.1); se il valore manca viene ricavato dall'altro |
 | **Inv. previsto** | Data pianificata di invio al cliente |
 | **Inv. effettivo** | Data effettiva di invio |
 | **Ric. previsto** | Data entro cui ci si aspetta la risposta |

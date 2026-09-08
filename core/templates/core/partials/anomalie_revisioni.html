@@ -353,13 +353,8 @@
   const resolveBody = document.getElementById('anom-resolve-body');
   const resolveErrEl = document.getElementById('anom-resolve-error');
 
-  function formatRevLabel(rev) {
-    if (!rev) return '';
-    if (REV_LET_FLAG) {
-      return rev.rev_let || (rev.rev_no != null ? String(rev.rev_no) : '');
-    }
-    return rev.rev_no != null ? String(rev.rev_no) : '';
-  }
+  /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
+  const formatRevLabel = (rev) => window.formatRevLabel(rev, REV_LET_FLAG);
 
   if (!banner || !backdrop || !resolveBackdrop) return;
 
