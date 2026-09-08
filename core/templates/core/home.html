@@ -267,20 +267,20 @@
     width: 100%;
     max-width: 1280px;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px;
   }
 
   @media (max-width: 1024px) {
-    .commesse-grid { grid-template-columns: repeat(3, 1fr); }
+    .commesse-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
 
   @media (max-width: 720px) {
-    .commesse-grid { grid-template-columns: repeat(2, 1fr); }
+    .commesse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   @media (max-width: 480px) {
-    .commesse-grid { grid-template-columns: 1fr; }
+    .commesse-grid { grid-template-columns: minmax(0, 1fr); }
   }
 
   .commessa-card {
@@ -1087,6 +1087,22 @@
     </svg>`;
   }
 
+  /* Centra l'ultima riga della griglia quando è incompleta, senza
+     rompere l'allineamento a colonne delle righe piene sopra. */
+  function centerLastGridRow(grid) {
+    const items = Array.from(grid.querySelectorAll('.commessa-card'));
+    items.forEach(el => { el.style.gridColumnStart = ''; });
+    if (!items.length) return;
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+    if (columns <= 1) return;
+    const remainder = items.length % columns;
+    if (remainder === 0) return;
+    const offset = Math.floor((columns - remainder) / 2);
+    items.slice(items.length - remainder).forEach((el, i) => {
+      el.style.gridColumnStart = String(offset + i + 1);
+    });
+  }
+
   function renderGrid(commesse) {
     const grid = document.getElementById('commesse-grid');
     if (!commesse.length) {
@@ -1118,7 +1134,14 @@
     grid.querySelectorAll('.card-pin').forEach(btn => {
       btn.addEventListener('click', onPinClick);
     });
+    centerLastGridRow(grid);
   }
+
+  let _gridResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_gridResizeTimer);
+    _gridResizeTimer = setTimeout(() => centerLastGridRow(document.getElementById('commesse-grid')), 150);
+  });
 
   async function onPinClick(e) {
     e.preventDefault();
