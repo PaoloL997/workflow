@@ -656,9 +656,10 @@ class QualityControlPlan(models.Model):
     da lì restano fermi: BC cambia nel tempo e contiene refusi che l'utente
     corregge a mano, ma un documento emesso deve restare identico a com'era.
 
-    Titolo, Vendor e Job N° non sono colonne: i primi due sono costanti uguali su
-    ogni riga, il terzo è ``testata_id``. Salvarli sarebbe duplicare un dato che
-    non può divergere.
+    Vendor e Job N° non sono colonne: il primo è una costante uguale su ogni riga,
+    il secondo è ``testata_id``. Salvarli sarebbe duplicare un dato che non può
+    divergere. Il titolo invece è una colonna: si propone come
+    ``{job}-QCP{lettera}`` ma l'utente può cambiarlo, quindi va conservato.
     """
 
     testata = models.ForeignKey(
@@ -668,6 +669,7 @@ class QualityControlPlan(models.Model):
         on_delete=models.CASCADE,
         related_name="quality_control_plans",
     )
+    titolo = models.CharField(db_column="Titolo", max_length=200, blank=True)
     doc_no = models.CharField(db_column="DocNo", max_length=100, blank=True, verbose_name="Doc n.")
     location = models.CharField(db_column="Location", max_length=200, blank=True)
     sheet = models.CharField(db_column="Sheet", max_length=50, blank=True, verbose_name="Foglio")
@@ -703,7 +705,7 @@ class QualityControlPlan(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.testata_id} — QCP {self.doc_no or self.pk}"
+        return self.titolo or f"{self.testata_id} — QCP {self.doc_no or self.pk}"
 
 
 class QualityControlPlanItem(models.Model):

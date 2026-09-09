@@ -104,7 +104,7 @@ class BusinessCentral:
         return self.fetch(COMMESSA_COMMERCIALE, params=(numero_commessa,))
 
     def get_qcp_testata(self, numero_commessa: str) -> pd.DataFrame | None:
-        """Dati di testata per il Quality Control Plan: progetto, stabilimento, owner."""
+        """Dati di testata per il Quality Control Plan: progetto, owner, purchaser, PO."""
         logger.debug("get_qcp_testata(%s)", numero_commessa)
         return self.fetch(QCP_TESTATA, params=(numero_commessa,))
 

@@ -65,8 +65,7 @@ from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
-from .services.quality_control_plan import MAX_ITEMS, dati_precompilati
-from .services.quality_control_plan import TITOLO as QCP_TITOLO
+from .services.quality_control_plan import MAX_ITEMS, dati_precompilati, titolo_predefinito
 from .services.quality_control_plan import VENDOR as QCP_VENDOR
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -4126,7 +4125,6 @@ QCP_PAGE = "/commesse/26010/quality-control-plan/"
 _BC_TESTATA = [
     {
         "progetto": "MOPCO UREA REVAMP PROJECT",
-        "location": "STABILIMENTO DI VALBREMBO",
         "owner": "MOPCO",
         "purchaser": "THYSSENKRUPP UHDE GmbH",
         "po_cliente": "4000244916",
@@ -4215,7 +4213,6 @@ class QualityControlPlanTests(TestCase):
         self.assertIsNone(body["warning"])
         dati = body["data"]
         self.assertEqual(dati["project"], "MOPCO UREA REVAMP PROJECT")
-        self.assertEqual(dati["location"], "STABILIMENTO DI VALBREMBO")
         self.assertEqual(dati["owner"], "MOPCO")
         self.assertEqual(dati["purchaser"], "THYSSENKRUPP UHDE GmbH")
         self.assertEqual(dati["po_no"], "4000244916")
@@ -4234,13 +4231,13 @@ class QualityControlPlanTests(TestCase):
         # Tutto cio che non dipende da BC resta comunque precompilato.
         dati = body["data"]
         self.assertEqual(dati["job_no"], "26010")
-        self.assertEqual(dati["titolo"], QCP_TITOLO)
+        self.assertEqual(dati["titolo"], "26010-QCPA")
         self.assertEqual(dati["vendor"], QCP_VENDOR)
         self.assertEqual(dati["prepared_by"], "Paolo Litta")
         self.assertEqual(dati["data"], date.today().isoformat())
         self.assertEqual(dati["po_no"], "PO-LOCALE")
         self.assertEqual(dati["purchaser"], "CLIENTE LOCALE")
-        self.assertEqual(dati["location"], "")
+        self.assertEqual(dati["location"], "")  # l'utente non ha uno stabilimento
 
     def test_precompilazione_con_query_in_errore_non_da_500(self):
         with self._bc(testata=RuntimeError("boom"), items=None):
@@ -4250,7 +4247,7 @@ class QualityControlPlanTests(TestCase):
         self.assertFalse(response.json()["bc_disponibile"])
 
     def test_bc_vuoto_non_sovrascrive_i_dati_del_sistema(self):
-        vuoto = [{"progetto": "", "location": "", "owner": "", "purchaser": "", "po_cliente": ""}]
+        vuoto = [{"progetto": "", "owner": "", "purchaser": "", "po_cliente": ""}]
         with self._bc(testata=vuoto, items=[]):
             dati = self.client.get(QCP_PREFILL).json()["data"]
 
@@ -4298,10 +4295,9 @@ class QualityControlPlanTests(TestCase):
         )
 
     def test_le_costanti_non_sono_sovrascrivibili_dal_client(self):
-        response = self._crea(titolo="HACK", vendor="ACME", job_no="99999")
+        response = self._crea(vendor="ACME", job_no="99999")
 
         dati = response.json()["data"]
-        self.assertEqual(dati["titolo"], QCP_TITOLO)
         self.assertEqual(dati["vendor"], QCP_VENDOR)
         self.assertEqual(dati["job_no"], "26010")
 
@@ -4397,6 +4393,114 @@ class QualityControlPlanTests(TestCase):
 
         self.assertEqual(self.client.get(QCP_API).status_code, 401)
         self.assertEqual(self.client.get(QCP_PREFILL).status_code, 401)
+
+    # -- Titolo --
+
+    def test_il_titolo_proposto_parte_dalla_lettera_a(self):
+        self.assertEqual(titolo_predefinito("26010"), "26010-QCPA")
+
+    def test_il_titolo_proposto_avanza_di_una_lettera_a_ogni_piano(self):
+        self._crea(titolo="26010-QCPA")
+
+        self.assertEqual(titolo_predefinito("26010"), "26010-QCPB")
+
+    def test_la_lettera_riparte_dalla_piu_alta_gia_usata(self):
+        # Un titolo riscritto a mano non deve far riproporre una lettera già usata.
+        self._crea(titolo="26010-QCPC")
+
+        self.assertEqual(titolo_predefinito("26010"), "26010-QCPD")
+
+    def test_i_titoli_fuori_schema_non_spostano_la_lettera(self):
+        self._crea(titolo="Piano di prova")
+
+        self.assertEqual(titolo_predefinito("26010"), "26010-QCPA")
+
+    def test_la_lettera_conta_solo_i_piani_della_commessa(self):
+        Testata.objects.create(job="26011")
+        QualityControlPlan.objects.create(testata_id="26011", titolo="26011-QCPA")
+
+        self.assertEqual(titolo_predefinito("26010"), "26010-QCPA")
+
+    def test_il_titolo_scritto_dall_utente_viene_salvato(self):
+        response = self._crea(titolo="Piano collaudi finali")
+
+        self.assertEqual(response.json()["data"]["titolo"], "Piano collaudi finali")
+        self.assertEqual(QualityControlPlan.objects.get().titolo, "Piano collaudi finali")
+
+    def test_titolo_vuoto_ricade_su_quello_proposto(self):
+        response = self._crea(titolo="   ")
+
+        self.assertEqual(response.json()["data"]["titolo"], "26010-QCPA")
+
+    def test_la_pagina_porta_gia_il_titolo_proposto(self):
+        response = self.client.get(QCP_PAGE)
+
+        self.assertContains(response, "26010-QCPA")
+
+    # -- Sede --
+
+    def _sede(self, nome):
+        return Stabilimento.objects.create(nome=nome)
+
+    def test_la_precompilazione_propone_la_sede_dell_utente(self):
+        self.writer.stabilimento = self._sede("Valbrembo")
+        self.writer.save(update_fields=["stabilimento"])
+
+        with self._bc(testata=_BC_TESTATA, items=_BC_ITEMS):
+            body = self.client.get(QCP_PREFILL).json()
+
+        self.assertEqual(body["data"]["location"], "Valbrembo")
+
+    def test_la_precompilazione_elenca_le_sedi_in_impostazioni(self):
+        self._sede("Valbrembo")
+        self._sede("Adro")
+
+        with self._bc(conn=False):
+            body = self.client.get(QCP_PREFILL).json()
+
+        self.assertEqual(body["sedi"], ["Adro", "Valbrembo"])
+
+    def test_la_pagina_rende_le_sedi_come_opzioni(self):
+        self._sede("Valbrembo")
+
+        response = self.client.get(QCP_PAGE)
+
+        self.assertContains(response, '<option value="Valbrembo"')
+
+    def test_una_sede_dell_elenco_viene_salvata(self):
+        self._sede("Valbrembo")
+
+        response = self._crea(location="Valbrembo")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(QualityControlPlan.objects.get().location, "Valbrembo")
+
+    def test_una_sede_fuori_elenco_viene_rifiutata(self):
+        self._sede("Valbrembo")
+
+        response = self._crea(location="STABILIMENTO DI VALBREMBO")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Sede non valida", response.json()["error"])
+        self.assertEqual(QualityControlPlan.objects.count(), 0)
+
+    def test_la_sede_puo_restare_vuota(self):
+        self._sede("Valbrembo")
+
+        response = self._crea(location="")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(QualityControlPlan.objects.get().location, "")
+
+    def test_la_sede_salvata_non_segue_la_rinomina_dello_stabilimento(self):
+        # Il piano è un documento: resta com'era anche se l'anagrafica cambia.
+        sede = self._sede("Valbrembo")
+        self._crea(location="Valbrembo")
+
+        sede.nome = "Valbrembo (BG)"
+        sede.save(update_fields=["nome"])
+
+        self.assertEqual(QualityControlPlan.objects.get().location, "Valbrembo")
 
 
 class BusinessCentralQueryTests(SimpleTestCase):

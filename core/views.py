@@ -77,13 +77,15 @@ from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
-from .services.quality_control_plan import TITOLO as QCP_TITOLO
 from .services.quality_control_plan import VENDOR as QCP_VENDOR
 from .services.quality_control_plan import (
     create_piano,
     dati_precompilati,
     list_piani,
+    nome_stabilimento,
+    sedi_disponibili,
     serialize_piano,
+    titolo_predefinito,
 )
 from .services.quality_control_plan import (
     nome_utente as qcp_nome_utente,
@@ -367,17 +369,21 @@ def quality_control_plan_view(request, job):
         testata = get_commessa(job)
     except Testata.DoesNotExist:
         raise Http404
-    # Titolo, Vendor, Job n., Data e Prepared by arrivano già col render: così il
-    # modal si apre pieno anche mentre la lettura da Business Central è in corso.
+    # Titolo, Vendor, Job n., Data, Sede e Prepared by arrivano già col render:
+    # così il modal si apre pieno anche mentre la lettura da Business Central è
+    # in corso. Il titolo viene poi rinfrescato dalla precompilazione, che sa
+    # quanti piani esistono in quel momento.
     return render(
         request,
         "core/quality_control_plan.html",
         {
             "testata": testata,
-            "qcp_titolo": QCP_TITOLO,
+            "qcp_titolo": titolo_predefinito(testata.job),
             "qcp_vendor": QCP_VENDOR,
             "oggi": _date.today().isoformat(),
             "prepared_by": qcp_nome_utente(request.user),
+            "sedi": sedi_disponibili(),
+            "sede_utente": nome_stabilimento(request.user),
         },
     )
 

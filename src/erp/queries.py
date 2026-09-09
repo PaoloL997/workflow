@@ -2,7 +2,7 @@
 # Ogni costante è una stringa parametrizzata con ? come placeholder (stile pyodbc).
 #
 # Due GUID ricorrono nei nomi degli oggetti BC:
-#   437dbf0e-… identifica le tabelle standard (Job, Location) e la loro estensione
+#   437dbf0e-… identifica le tabelle standard (Job) e la loro estensione
 #   d71d761a-… identifica l'app custom NBT_BRL. Attenzione: per i campi aggiuntivi
 #              sulla commessa questo GUID sta nel nome della COLONNA, non della
 #              tabella — le colonne vivono su [BREMBANA$Job$437dbf0e-…$ext].
@@ -50,12 +50,10 @@ COMMESSA_COMMERCIALE = """
 """
 
 # ── Query 3: testata del Quality Control Plan ──────────────────────────────────
-# Tabelle: Job (standard) + Job$ext (campi NBT_BRL) + Location (per il nome dello
-# stabilimento, che sulla Job è solo un codice).
+# Tabelle: Job (standard) + Job$ext (campi NBT_BRL).
 #
 # Campi restituiti:
 #   progetto   → nome del progetto        → QualityControlPlan.project
-#   location   → stabilimento produttivo  → QualityControlPlan.location
 #   owner      → destinatario finale della fornitura → QualityControlPlan.owner
 #   purchaser  → cliente fatturato        → QualityControlPlan.purchaser
 #   po_cliente → riferimento ordine       → QualityControlPlan.po_no
@@ -67,7 +65,6 @@ QCP_TESTATA = """
     SELECT
         CAST(e.[NBT_BRL Project$d71d761a-a85c-4b10-8459-d30c64b4a709]
              AS NVARCHAR(MAX)) AS progetto,
-        CAST(l.Name AS NVARCHAR(MAX)) AS location,
         CAST(e.[NBT_BRL Customer Dest_ Name$d71d761a-a85c-4b10-8459-d30c64b4a709]
              AS NVARCHAR(MAX)) AS owner,
         CAST(j.[Bill-to Name] AS NVARCHAR(MAX)) AS purchaser,
@@ -76,8 +73,6 @@ QCP_TESTATA = """
     FROM [BREMBANA$Job$437dbf0e-84ff-417a-965d-ed2bb9650972] j
     LEFT JOIN [BREMBANA$Job$437dbf0e-84ff-417a-965d-ed2bb9650972$ext] e
            ON e.No_ = j.No_
-    LEFT JOIN [BREMBANA$Location$437dbf0e-84ff-417a-965d-ed2bb9650972] l
-           ON l.Code = j.[Location Code]
     WHERE j.No_ = ?
 """
 

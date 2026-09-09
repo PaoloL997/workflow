@@ -471,7 +471,7 @@
     <div class="form-grid">
       <div class="fg">
         <label for="f-titolo">Titolo</label>
-        <input type="text" id="f-titolo" value="{{ qcp_titolo }}" readonly>
+        <input type="text" id="f-titolo" value="{{ qcp_titolo }}" autocomplete="off">
       </div>
       <div class="fg">
         <label for="f-doc-no">Doc n.</label>
@@ -479,7 +479,12 @@
       </div>
       <div class="fg">
         <label for="f-location">Location</label>
-        <input type="text" id="f-location" autocomplete="off">
+        <select id="f-location">
+          <option value="">—</option>
+          {% for sede in sedi %}
+            <option value="{{ sede }}"{% if sede == sede_utente %} selected{% endif %}>{{ sede }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="fg">
@@ -621,7 +626,7 @@
   }
 
   function rowHtml(p) {
-    var nome = p.doc_no || p.titolo;
+    var nome = p.titolo || p.doc_no;
     var sub = p.descrizione_item || p.project || '';
     return '' +
       '<div class="qcp-row">' +
@@ -667,15 +672,16 @@
   var msPanel       = document.getElementById('f-items-panel');
   var msPlaceholder = document.getElementById('f-items-placeholder');
 
-  /* Campi che il precompilamento può riempire. Titolo, Job n. e Vendor no: sono
-     costanti già nel markup e in sola lettura. */
-  var CAMPI = ['doc_no', 'location', 'sheet', 'project', 'dwg_no', 'owner',
+  /* Campi che il precompilamento può riempire. Job n. e Vendor no: sono costanti
+     già nel markup e in sola lettura. */
+  var CAMPI = ['titolo', 'doc_no', 'location', 'sheet', 'project', 'dwg_no', 'owner',
                'po_no', 'data', 'purchaser', 'descrizione_item', 'serial_no', 'prepared_by'];
 
   function campo(nome) {
     return document.getElementById('f-' + nome.replace(/_/g, '-'));
   }
 
+  var TITOLO_PROPOSTO = "{{ qcp_titolo|escapejs }}";
   var itemsDisponibili = [];
   var itemsScelti = [];
   var toccati = Object.create(null);   // campi già modificati a mano
@@ -689,8 +695,10 @@
       var el = campo(nome);
       if (el) el.value = '';
     });
+    campo('titolo').value = TITOLO_PROPOSTO;
     campo('data').value = "{{ oggi|escapejs }}";
     campo('prepared_by').value = "{{ prepared_by|escapejs }}";
+    campo('location').value = "{{ sede_utente|escapejs }}";
     itemsDisponibili = [];
     itemsScelti = [];
     toccati = Object.create(null);
@@ -761,8 +769,24 @@
     if (el) el.addEventListener('input', function () { toccati[nome] = true; });
   });
 
+  function aggiornaSedi(sedi) {
+    if (!Array.isArray(sedi)) return;
+    var sel = campo('location');
+    var scelta = sel.value;
+    sel.innerHTML = '<option value="">—</option>' + sedi.map(function (nome) {
+      return '<option value="' + escHtml(nome) + '">' + escHtml(nome) + '</option>';
+    }).join('');
+    sel.value = scelta;
+  }
+
   function applicaPrecompilazione(body) {
     var dati = body.data || {};
+    // Prima l'elenco, poi i valori: una sede appena aggiunta in impostazioni
+    // deve esistere fra le opzioni prima di poter essere selezionata.
+    aggiornaSedi(body.sedi);
+    // Il titolo proposto dipende dai piani già creati, che possono essere
+    // cambiati da quando la pagina è stata aperta.
+    if (dati.titolo) TITOLO_PROPOSTO = dati.titolo;
     CAMPI.forEach(function (nome) {
       var el = campo(nome);
       // Non si sovrascrive un campo che l'utente ha già toccato mentre BC caricava.
