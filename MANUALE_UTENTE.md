@@ -617,10 +617,14 @@ Clicca sull'intestazione di una colonna per ordinare i dati.
 
 Clicca su una riga o su una data di ricezione effettiva per aprire il file collegato alla revisione (stessa logica descritta al §8).
 
-### 11.6 Esportazione Excel
+### 11.6 Esportazione Excel e PDF
 
 1. Clicca il pulsante **Esporta** (icona download).
-2. Viene scaricato `situazione_<job>.xlsx` con la vista corrente (verticale o orizzontale), inclusi i colori degli stati.
+2. Scegli il formato:
+   - **Excel** (senza header): viene scaricato `situazione_documenti_<vista>_<job>.xlsx` con la vista corrente.
+   - **PDF** (con header Document Status): viene scaricato il PDF della vista corrente.
+
+Entrambe le viste, verticale e orizzontale, offrono i due formati. L'Excel della vista orizzontale riproduce la tabella a schermo: una riga per documento, il gruppo **Planning** (Submission date, Receipt date) e un gruppo per ogni revisione (Dispatch, Received, Status). La colonna **B&R Doc** e le celle **Status** hanno gli stessi colori della risposta del cliente visti a schermo. L'Excel della vista verticale ha una riga per ogni revisione, senza colori.
 
 ### 11.7 Schermo intero
 

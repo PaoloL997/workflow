@@ -2316,22 +2316,32 @@ class RevisioneLabelExportTests(TestCase):
             dis_plan_date=date(2026, 3, 15),
         )
 
-    def _colonna_rev(self, vista="orizzontale"):
+    def _foglio(self, vista):
         import openpyxl
 
         response = self.client.get(
             f"/api/commesse/{self.testata.job}/situazione/export/?format=xlsx&vista={vista}"
         )
         self.assertEqual(response.status_code, 200)
-        ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        return openpyxl.load_workbook(io.BytesIO(response.content)).active
+
+    def _colonna_rev(self):
+        """Valori della colonna Rev. dell'Excel verticale."""
+        ws = self._foglio("verticale")
         # Le colonne fisse hanno l'intestazione in riga 1 (unita con la riga 2).
         intestazioni = [cell.value for cell in ws[1]]
         col = intestazioni.index("Rev.") + 1
         return [ws.cell(row=r, column=col).value for r in range(3, ws.max_row + 1)]
 
+    def _gruppi_rev_orizzontale(self):
+        """Intestazioni dei gruppi revisione dell'Excel orizzontale."""
+        ws = self._foglio("orizzontale")
+        return [c.value for c in ws[1] if str(c.value or "").startswith("Rev.")]
+
     def test_export_xlsx_usa_la_lettera_col_flag_attivo(self):
         self.assertEqual(self._colonna_rev(), ["B"])
-        self.assertEqual(self._colonna_rev(vista="verticale"), ["B"])
+        # Unico gruppo, etichettato dalla revisione presente (rev_no 1).
+        self.assertEqual(self._gruppi_rev_orizzontale(), ["Rev. B"])
 
     def test_export_xlsx_usa_il_numero_col_flag_spento(self):
         self.testata.rev_let_flag = False
@@ -2340,6 +2350,7 @@ class RevisioneLabelExportTests(TestCase):
         self.rev.save(update_fields=["rev_let"])
 
         self.assertEqual(self._colonna_rev(), ["1"])
+        self.assertEqual(self._gruppi_rev_orizzontale(), ["Rev. 1"])
 
     def test_intestazione_pdf_situazione_segue_il_flag(self):
         from src.pdf import _rev_group_label
@@ -3415,6 +3426,118 @@ class ColoriRisposteClienteApiTests(TestCase):
         self.assertEqual(_status_cell_rgb("#00B050"), ((0, 176, 80), hex_to_rgb(TEXT_DARK)))
         self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
         self.assertIsNone(_status_cell_rgb(""))
+
+
+class SituazioneOrizzontaleXlsxTests(TestCase):
+    """L'Excel della vista orizzontale riproduce la tabella a schermo."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "sitxls_user",
+            "sitxls@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="SITXLS1", rev_let_flag=False)
+        self.commented = StatoEsterno.objects.create(
+            nome="Commented", lettera="C", colore="#D61D09"
+        )
+        self.doc = Documento.objects.create(
+            testata=self.testata, item_no="001", vendor_doc="SITXLS1-01", doc_title="Index"
+        )
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=1,
+            dis_act_date=date(2026, 2, 1),
+            rec_plan_date=date(2026, 3, 1),
+        )
+        Documento.objects.create(testata=self.testata, item_no="002", vendor_doc="SITXLS1-02")
+
+    def _foglio(self):
+        import openpyxl
+
+        response = self.client.get(
+            f"/api/commesse/{self.testata.job}/situazione/export/?format=xlsx&vista=orizzontale"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            'filename="situazione_documenti_orizzontale_SITXLS1.xlsx"',
+            response["Content-Disposition"],
+        )
+        return openpyxl.load_workbook(io.BytesIO(response.content)).active
+
+    def _riga(self, ws, vendor_doc):
+        col = [c.value for c in ws[1]].index("B&R Doc") + 1
+        return next(r for r in range(3, ws.max_row + 1) if ws.cell(r, col).value == vendor_doc)
+
+    def test_una_riga_per_documento_con_gruppi_per_revisione(self):
+        ws = self._foglio()
+        intestazioni = [c.value for c in ws[1]]
+        self.assertEqual(
+            intestazioni[:6],
+            ["Client Doc N°", "Client Doc Class", "Contractor Doc N°", "B&R Doc", "Title", "Item"],
+        )
+        self.assertEqual(
+            [v for v in intestazioni if v], intestazioni[:6] + ["Planning", "Rev. 0", "Rev. 1"]
+        )
+        self.assertEqual(
+            [c.value for c in ws[2]][6:],
+            ["Submission date", "Receipt date"] + ["Dispatch", "Received", "Status"] * 2,
+        )
+        # Due righe di intestazione + una riga per ciascuno dei due documenti.
+        self.assertEqual(ws.max_row, 4)
+
+    def test_valori_di_planning_e_revisioni(self):
+        from .date_fmt import format_display_date
+
+        ws = self._foglio()
+        row = self._riga(ws, "SITXLS1-01")
+        col = [c.value for c in ws[1]].index("Rev. 0") + 1
+        self.assertEqual(
+            [ws.cell(row, c).value for c in range(col, col + 6)],
+            [
+                format_display_date(date(2026, 1, 10)),
+                format_display_date(date(2026, 1, 20)),
+                "C",
+                format_display_date(date(2026, 2, 1)),
+                None,
+                None,
+            ],
+        )
+        # Ultima revisione inviata: resta pianificato solo il rientro.
+        self.assertEqual(ws.cell(row, col - 2).value, None)
+        self.assertEqual(ws.cell(row, col - 1).value, format_display_date(date(2026, 3, 1)))
+
+    def test_b_r_doc_e_status_hanno_il_colore_della_risposta(self):
+        ws = self._foglio()
+        row = self._riga(ws, "SITXLS1-01")
+        intestazioni = [c.value for c in ws[1]]
+        vendor = ws.cell(row, intestazioni.index("B&R Doc") + 1)
+        status_rev0 = ws.cell(row, intestazioni.index("Rev. 0") + 3)
+        status_rev1 = ws.cell(row, intestazioni.index("Rev. 1") + 3)
+        for cell in (vendor, status_rev0):
+            self.assertEqual(cell.fill.fgColor.rgb[-6:], "D61D09")
+            self.assertEqual(cell.font.color.rgb[-6:], TEXT_LIGHT.lstrip("#"))
+        self.assertTrue(status_rev0.font.bold)
+        self.assertIsNone(status_rev1.fill.fill_type)
+
+        senza_revisioni = ws.cell(self._riga(ws, "SITXLS1-02"), intestazioni.index("B&R Doc") + 1)
+        self.assertIsNone(senza_revisioni.fill.fill_type)
+
+    def test_la_pagina_apre_il_menu_excel_pdf_in_ogni_vista(self):
+        response = self.client.get(f"/commesse/{self.testata.job}/situazione/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="btn-export" type="button" onclick="toggleExportMenu(')
+        self.assertNotContains(response, "exportSituazione(")
 
 
 class LegendaStatusPdfTests(TestCase):

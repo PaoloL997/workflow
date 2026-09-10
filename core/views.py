@@ -15,7 +15,13 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from src.pdf import genera_planned_docs_pdf, genera_situazione_documenti_pdf, genera_trasmittal_pdf
+from src.pdf import (
+    _planned_dates_for_latest_rev,
+    _rev_group_label,
+    genera_planned_docs_pdf,
+    genera_situazione_documenti_pdf,
+    genera_trasmittal_pdf,
+)
 
 from .models import (
     Documento,
@@ -1489,8 +1495,8 @@ def export_ricezione(request, job):
 # ── Export: Situazione documenti ─────────────────────────────────────────────
 
 
-def _export_situazione_xlsx(job, payload, *, vista):
-    """Flat Excel for situazione with Planning/Actual grouped date headers."""
+def _export_situazione_verticale_xlsx(job, payload):
+    """Excel of the vista verticale: one row per revision, Planning/Actual date groups."""
     from .date_fmt import format_display_date
 
     docs = payload.get("documenti") or []
@@ -1570,13 +1576,7 @@ def _export_situazione_xlsx(job, payload, *, vista):
     for d in docs:
         revs = rev_map.get(d["id"]) or rev_map.get(str(d["id"])) or []
         revs = sorted(revs, key=lambda r: (r.get("rev_no") is None, r.get("rev_no") or 0))
-        if vista == "verticale" and revs:
-            rows = revs
-        elif revs:
-            rows = [revs[-1]]
-        else:
-            rows = [None]
-        for rev in rows:
+        for rev in revs or [None]:
             dis_plan = rev.get("dis_plan_date") if rev else None
             rec_plan = rev.get("rec_plan_date") if rev else None
             values = [
@@ -1615,7 +1615,128 @@ def _export_situazione_xlsx(job, payload, *, vista):
     ws.freeze_panes = "A3"
 
     safe_job = job.replace(" ", "_")
-    return _xlsx_response(wb, f"situazione_documenti_{vista}_{safe_job}.xlsx")
+    return _xlsx_response(wb, f"situazione_documenti_verticale_{safe_job}.xlsx")
+
+
+def _paint_xlsx_status_cell(cell, rev, *, bold=False):
+    """Fill ``cell`` with the client-response colors of ``rev``, as in the UI."""
+    bg = (rev.get("ext_status_bg") or "").lstrip("#")
+    fg = (rev.get("ext_status_fg") or "").lstrip("#")
+    if not bg:
+        return
+    cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
+    cell.font = Font(color=fg or None, bold=bold)
+
+
+# Fixed columns of the vista orizzontale, same order as the UI table.
+_SITUAZIONE_ORIZZONTALE_FIXED = [
+    ("Client Doc N°", "client_doc_no"),
+    ("Client Doc Class", "client_doc_class"),
+    ("Contractor Doc N°", "contractor_doc_no"),
+    ("B&R Doc", "vendor_doc"),
+    ("Title", "doc_title"),
+    ("Item", "item_no"),
+]
+_SITUAZIONE_PLAN_SUB = ["Submission date", "Receipt date"]
+_SITUAZIONE_REV_SUB = ["Dispatch", "Received", "Status"]
+
+
+def _export_situazione_orizzontale_xlsx(job, payload):
+    """Excel of the vista orizzontale: one row per document, columns per revision.
+
+    B&R Doc takes the color of the latest client response, each Status cell the
+    color of its own revision (same pairs as the UI and the PDF).
+    """
+    from .date_fmt import format_display_date
+
+    docs = payload.get("documenti") or []
+    rev_map = payload.get("revisioni_by_doc") or {}
+    rev_let_flag = bool(payload.get("rev_let_flag"))
+
+    revs_list = []
+    for d in docs:
+        revs = rev_map.get(d["id"]) or rev_map.get(str(d["id"])) or []
+        revs_list.append(
+            sorted(revs, key=lambda r: (r.get("rev_no") is None, r.get("rev_no") or 0))
+        )
+    max_revs = max((len(revs) for revs in revs_list), default=0) or 1
+
+    fixed = _SITUAZIONE_ORIZZONTALE_FIXED
+    rev_sub = _SITUAZIONE_REV_SUB
+    leaf_headers = [label for label, _ in fixed] + _SITUAZIONE_PLAN_SUB + rev_sub * max_revs
+    first_rev_col = len(fixed) + len(_SITUAZIONE_PLAN_SUB) + 1
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Situazione"
+
+    # Row 1–2 headers: fixed cols span both rows; Planning and each Rev. group above subs.
+    for col_idx, (label, _) in enumerate(fixed, start=1):
+        ws.merge_cells(start_row=1, start_column=col_idx, end_row=2, end_column=col_idx)
+        _style_xlsx_header_cell(ws.cell(row=1, column=col_idx, value=label))
+        _style_xlsx_header_cell(ws.cell(row=2, column=col_idx))
+
+    groups = [("Planning", _SITUAZIONE_PLAN_SUB)] + [
+        (_rev_group_label(revs_list, r, rev_let_flag), rev_sub) for r in range(max_revs)
+    ]
+    start = len(fixed) + 1
+    for group_label, subs in groups:
+        end = start + len(subs) - 1
+        ws.merge_cells(start_row=1, start_column=start, end_row=1, end_column=end)
+        _style_xlsx_header_cell(ws.cell(row=1, column=start, value=group_label))
+        for offset, sub in enumerate(subs):
+            _style_xlsx_header_cell(ws.cell(row=1, column=start + offset))
+            _style_xlsx_header_cell(ws.cell(row=2, column=start + offset, value=sub))
+        start = end + 1
+
+    ws.row_dimensions[1].height = 20
+    ws.row_dimensions[2].height = 20
+
+    keys = [key for _, key in fixed]
+    vendor_col = keys.index("vendor_doc") + 1
+    title_col = keys.index("doc_title") + 1
+    center_cols = {keys.index("client_doc_class") + 1, keys.index("item_no") + 1}
+
+    row_idx = 3
+    for d, revs in zip(docs, revs_list):
+        planned = _planned_dates_for_latest_rev(revs)
+        values = [d.get(key) or "" for key in keys]
+        values += [
+            format_display_date(planned["planned_send"]),
+            format_display_date(planned["planned_receipt"]),
+        ]
+        for r in range(max_revs):
+            rev = revs[r] if r < len(revs) else None
+            if rev:
+                values += [
+                    format_display_date(rev.get("dis_act_date")),
+                    format_display_date(rev.get("rec_act_date")),
+                    (rev.get("ext_status_lettera") or "").strip(),
+                ]
+            else:
+                values += ["", "", ""]
+        for col_idx, value in enumerate(values, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=value)
+            _style_xlsx_data_cell(
+                cell,
+                center=col_idx in center_cols or col_idx > len(fixed),
+                wrap=col_idx == title_col,
+            )
+
+        latest = next((rev for rev in reversed(revs) if rev.get("ext_status_bg")), None)
+        if latest:
+            _paint_xlsx_status_cell(ws.cell(row=row_idx, column=vendor_col), latest)
+        for r, rev in enumerate(revs):
+            if (rev.get("ext_status_label") or "").strip():
+                status_cell = ws.cell(row=row_idx, column=first_rev_col + r * len(rev_sub) + 2)
+                _paint_xlsx_status_cell(status_cell, rev, bold=True)
+        row_idx += 1
+
+    _autosize_xlsx_columns(ws, leaf_headers, data_start_row=3)
+    ws.freeze_panes = ws.cell(row=3, column=len(fixed) + 1)
+
+    safe_job = job.replace(" ", "_")
+    return _xlsx_response(wb, f"situazione_documenti_orizzontale_{safe_job}.xlsx")
 
 
 @login_required
@@ -1634,7 +1755,9 @@ def export_situazione(request, job):
     payload = list_situazione(job)
     fmt = _export_format(request, default="pdf")
     if fmt == "xlsx":
-        return _export_situazione_xlsx(job, payload, vista=vista)
+        if vista == "orizzontale":
+            return _export_situazione_orizzontale_xlsx(job, payload)
+        return _export_situazione_verticale_xlsx(job, payload)
 
     pdf_bytes = genera_situazione_documenti_pdf(
         serialize_testata(testata),

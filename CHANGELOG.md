@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Situazione documenti: anche la vista orizzontale, oltre alla verticale, ha l'export in Excel accanto a quello in PDF (pulsante **Esporta** → Excel / PDF). L'Excel riproduce la tabella a schermo: una riga per documento, colonne fisse, gruppo Planning (Submission date, Receipt date) e un gruppo per ogni revisione (Dispatch, Received, Status), con la colonna B&R Doc e le celle Status colorate come la risposta del cliente
+
 ### Changed
 
 - La revisione si legge sempre come dice l'archivio: con il flag **Revisioni con lettera** attivo esce ovunque la lettera (A, B, C…), con il flag spento esce ovunque il numero (0, 1, 2…). Vale per situazione documenti (viste orizzontale e verticale, comprese le intestazioni di colonna), elenco documenti, emissione, ricezione, sblocco e anomalie revisioni, per gli export Excel e PDF, per il trasmittal e per l'admin. Se il valore richiesto non è compilato viene ricavato dall'altro (0 ↔ A, 1 ↔ B, … 26 ↔ AA), quindi non compaiono più numeri al posto delle lettere sulle revisioni senza `RevLet`

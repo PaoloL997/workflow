@@ -1154,7 +1154,7 @@
     <!-- ── Filter bar ── -->
     <div class="filter-bar">
       <div class="export-wrap">
-        <button class="toolbar-btn" id="btn-export" type="button" onclick="exportSituazione(this, event)" aria-label="Esporta" aria-haspopup="menu">
+        <button class="toolbar-btn" id="btn-export" type="button" onclick="toggleExportMenu(this, event)" aria-label="Esporta" aria-haspopup="menu">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
           </svg>
@@ -2438,19 +2438,6 @@
       + '/situazione/export/?vista=' + encodeURIComponent(_vista)
       + '&format=' + encodeURIComponent(format);
   }
-
-  window.exportSituazione = function (btn, event) {
-    // Vista orizzontale: PDF diretto (Document Status).
-    if (_vista === 'orizzontale') {
-      if (event) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-      window.location.href = exportSituazioneUrl('pdf');
-      return;
-    }
-    toggleExportMenu(btn, event);
-  };
 
   window.onExportFormatChosen = function (format) {
     const fmt = format === 'xlsx' ? 'xlsx' : 'pdf';
