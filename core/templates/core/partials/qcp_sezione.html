@@ -1,0 +1,75 @@
+{% comment %}
+Una sezione del corpo del piano, in una delle sue due viste.
+
+Con ``voce`` è la voce dell'elenco nella barra laterale: numero, titolo, step e
+avanzamento; un clic mostra la sezione. Senza, è il pannello con gli step: la
+pagina ne mostra uno alla volta, quello della voce scelta. Entrambe servono
+anche vuote, dentro i <template> da cui il JS crea le sezioni nuove.
+``attiva`` dice quale sezione si vede all'apertura della pagina.
+{% endcomment %}
+{% if voce %}
+<li class="qp-voce{% if attiva %} is-attiva{% endif %}" data-id="{{ sezione.id }}">
+  <button type="button" class="qp-voce-btn" aria-controls="ce-sez-{{ sezione.id }}" aria-current="{{ attiva|yesno:'true,false' }}"{% if not attiva %} tabindex="-1"{% endif %}>
+    <span class="ce-sez-n">{{ sezione.numero }}</span>
+    <span class="qp-voce-testo">
+      <span class="qp-voce-titolo">{{ sezione.titolo }}</span>
+      <span class="qp-voce-meta">{% if not sezione.steps %}No steps yet{% elif sezione.percentuale is None %}{{ sezione.steps|length }} step{{ sezione.steps|length|pluralize }}{% else %}{{ sezione.steps|length }} step{{ sezione.steps|length|pluralize }} · {{ sezione.percentuale }}%{% endif %}</span>
+      <span class="qp-barra qp-barra-mini" aria-hidden="true"{% if sezione.percentuale is None %} hidden{% endif %}><span style="width: {{ sezione.percentuale|default:0 }}%"></span></span>
+    </span>
+  </button>
+  {% if user_can_write %}
+    <span class="ce-maniglia" title="Drag to move the section" aria-hidden="true"><svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg></span>
+  {% endif %}
+</li>
+{% else %}
+<li class="ce-sezione" data-id="{{ sezione.id }}" id="ce-sez-{{ sezione.id }}"{% if not attiva %} hidden{% endif %}>
+  <div class="ce-sez-head">
+    <span class="ce-sez-n">{{ sezione.numero }}</span>
+    <h2 class="ce-sez-h"><span class="ce-sez-titolo">{{ sezione.titolo }}</span></h2>
+    {% if user_can_write %}
+      <input type="text" class="ce-sez-input" maxlength="200" autocomplete="off" aria-label="Section title" hidden>
+    {% endif %}
+    <span class="ce-sez-conta">{% if sezione.percentuale is not None %}{{ sezione.steps|length }} step{{ sezione.steps|length|pluralize }} · {{ sezione.percentuale }}% complete{% else %}{{ sezione.steps|length }} step{{ sezione.steps|length|pluralize }}{% endif %}</span>
+    {% if user_can_write %}
+      <span class="ce-cella-menu">
+        <button type="button" class="ce-dots" aria-label="Section actions" aria-haspopup="menu" aria-expanded="false">···</button>
+        <span class="ce-menu" role="menu" aria-label="Section actions" hidden>
+          <button type="button" class="ce-menu-item" role="menuitem" data-azione="rinomina-sezione">Rename</button>
+          <button type="button" class="ce-menu-item" role="menuitem" data-azione="su">Move up</button>
+          <button type="button" class="ce-menu-item" role="menuitem" data-azione="giu">Move down</button>
+          <button type="button" class="ce-menu-item ce-menu-item--danger" role="menuitem" data-azione="elimina-sezione">Delete</button>
+        </span>
+      </span>
+    {% endif %}
+  </div>
+  <p class="ce-errore" role="alert" hidden></p>
+  <div class="ce-tabella"{% if not sezione.steps %} hidden{% endif %}>
+    <div class="ce-riga ce-intesta" aria-hidden="true">
+      <span class="ce-intesta-man"></span>
+      <span class="ce-intesta-n">No.</span>
+      <span class="ce-intesta-step">Step</span>
+      <span class="ce-intesta-extent">Extent</span>
+      <span class="ce-punti">{% for ente in corpo.enti %}<span class="ce-intesta-ente"><span class="ce-ente-pos">{{ ente.posizione }}</span><span class="ce-ente-nome">{{ ente.nome }}</span></span>{% endfor %}</span>
+    </div>
+    <ol class="ce-steps" aria-label="Section steps">
+      {% for step in sezione.steps %}{% include "core/partials/qcp_step.html" %}{% endfor %}
+    </ol>
+  </div>
+  <div class="ce-sez-vuota"{% if sezione.steps %} hidden{% endif %}>
+    <p class="ce-sez-vuota-titolo">No steps in this section</p>
+    {% if user_can_write %}
+      <p class="cv-empty">Add this phase's checks from the catalogue: they go at the end, in the order you pick them.</p>
+      <button type="button" class="ce-btn ce-btn-primary" data-azione="catalogo">+ Add steps from catalogue</button>
+    {% else %}
+      <p class="cv-empty">This phase has no checks yet.</p>
+    {% endif %}
+  </div>
+  <div class="ce-sez-piede">
+    {% if user_can_write %}
+      <button type="button" class="ce-link" data-azione="catalogo"{% if not sezione.steps %} hidden{% endif %}>+ Add steps from catalogue</button>
+    {% endif %}
+    <p class="ce-legenda">H hold · W witness · SW spot witness · R review · A approval</p>
+    {% if user_can_write %}<span class="ce-stato" role="status" aria-live="polite"></span>{% endif %}
+  </div>
+</li>
+{% endif %}

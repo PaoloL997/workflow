@@ -1,0 +1,2412 @@
+[
+  {
+    "titolo": "Documents Approval",
+    "steps": [
+      {
+        "codice": "PIM",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Calculations",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "R"
+        },
+        "remarks": "2"
+      },
+      {
+        "codice": "Drawings",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "A"
+        },
+        "remarks": "3"
+      },
+      {
+        "codice": "Material requirement specification",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Welding book",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "A"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Manufacturing & NDE procedures",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PWHT procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "LPWHT procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Bolt thightening procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Hydrotest procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Preservation  procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Painting procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Mock-up test procedure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Coating inspector qualification",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "NDE Operators qualification",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Welders & welding operators",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "A",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Validation",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "W"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Material identification & Receivment inspection",
+    "steps": [
+      {
+        "codice": "Plates 3.1-VT,DC & marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Plates: UT check on plates 12.5 MM",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Forgings 3.1-VT,DC & marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Forgings: UT check on forgings",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "In B&R workshop"
+      },
+      {
+        "codice": "Exchanger tubes 3.1-VT,DC & marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Exchanger tubes - PMI",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Gaskets 3.1-VT,DC & marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Gaskets: PMI",
+        "extent": 0.05,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Bolts & nuts 3.1-VT,DC & marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Formed Head",
+    "steps": [
+      {
+        "codice": "Formed head-Hot Forming",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-Normalizing",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-Tempering",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-VT",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "W"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-DC",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "W"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-MT",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Formed head-Check of mechanical properties",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "W"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "NDE & inspection on buttering (for bundle support strip welding) on back side of tubesheet",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "NDE & inspection on 1st pass (309LMo buffer layer) of weld overlay of tubesheets",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PMI-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Ferrite check @ Surface-Inspections 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Shell in two sections (including tubesheets to shell welds) in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Thickness measurement (baseline thickness measurement)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PA on all nozzle joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "Air leak test @ 1,0 Bar (g)-Reinf. Pads",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Template insertion-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "PWHT of Shell (in two sections)",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Equipment in furnace",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Shell in two sections (including tubesheets to shell welds) after PWHT",
+    "steps": [
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": "6"
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PA on all nozzle joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Air leak test @ 1,0 Bar (g)-Reinf. Pads",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Template insertion-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "NDE & inspection on 1st pass (309LMo buffer layer) of weld overlay of tubesheets after PWHT",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT-Inspections after 1st pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "NDE & inspection after final pass of weld overlay of tubesheets",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PMI-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Ferrite check @ Surface-Inspections after last pass (duplex)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "CA @ -3,0mm depth-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Inspection on tube bundle",
+    "steps": [
+      {
+        "codice": "VT & DC-Tubesheets",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": "AFTER DRILLING"
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": null
+        },
+        "remarks": "BEFORE TTS WELDING"
+      },
+      {
+        "codice": "VT & DC-Complete bundle",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "W"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Shell closure seams in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Bundle insertion-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      }
+    ]
+  },
+  {
+    "titolo": "Local PWHT of shell closure seams",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Local PWHT by electrical resistances",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Shell closure seams after local PWHT",
+    "steps": [
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Welding and inspection on tube to tubesheet welds",
+    "steps": [
+      {
+        "codice": "Mock-up execution -Tubes to tubesheet joint",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Mock-up testing-Tubes to tubesheet joint",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT & DC-Exchanger tubes fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Weld monitoring-Tubes to tubesheet joint",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Tubes to tubesheet joint",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Air leak test-Tubes to tubesheet joint before exp.",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Light expansion-Complete welding",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Tubes to tubesheet joint after exp.",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": null
+        },
+        "remarks": "AFTER TTS WELDING"
+      }
+    ]
+  },
+  {
+    "titolo": "Upper vessel in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Thickness measurement (baseline thickness measurement)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "RT on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      }
+    ]
+  },
+  {
+    "titolo": "PWHT of Upper vessel",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Equipment in furnace",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Upper vessel after PWHT",
+    "steps": [
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": "6"
+      },
+      {
+        "codice": "RT on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Elbows (nozzle N2A & N2B) in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "RT on elbows butt joint-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      }
+    ]
+  },
+  {
+    "titolo": "PWHT of Elbows (nozzle N2A & N2B)",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Equipment in furnace",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Elbows (Nozzle N2A & N2B) after PWHT",
+    "steps": [
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": "6"
+      },
+      {
+        "codice": "RT on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Elbows to shell welds (nozzle N2A & N2B) and upper vessel to shell welds (Nozzle N1A & N1B) in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "RT on elbows butt joint-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      }
+    ]
+  },
+  {
+    "titolo": "Local PWHT of elbows to shell welds (nozzle N2A & N2B) and upper vessel to shell welds (Nozzle N1A & N1B)",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Local PWHT by electrical resistances",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Elbows to shell welds (nozzle N2A & N2B) and upper vessel to shell welds (Nozzle N1A & N1B) after local PWHT",
+    "steps": [
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "H"
+        },
+        "remarks": "6"
+      },
+      {
+        "codice": "RT on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Channel (before pass partition plate welds) in \"as welded\" conditions",
+    "steps": [
+      {
+        "codice": "MT-Weld bevel",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT under lifting lug-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "(*)"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": "6"
+      },
+      {
+        "codice": "Thickness measurement (baseline thickness measurement)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PA on all nozzle joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT on lifting devices-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      }
+    ]
+  },
+  {
+    "titolo": "Channel pass partition plates weld overlay",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PMI-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Ferrite check @ Surface-Inspections after last pass (duplex)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Pass partition plates welds to internal side of channel",
+    "steps": [
+      {
+        "codice": "VT-Complete base welding fit-up",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": "* SEE DEDICATED SHEET"
+      },
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Pass partition plate - MT/PT",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "PWHT of Channel",
+    "steps": [
+      {
+        "codice": "PWHT thermocouples placement",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Equipment in furnace",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Channel after PWHT",
+    "steps": [
+      {
+        "codice": "VT-Internal visual inspection-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DC-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "TOFD/PA on all butt joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PA on all nozzle joints-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "UT on lifting devices-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "MT on all welds of pressure parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "MT on removed att.s welds-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": "4"
+      },
+      {
+        "codice": "Pass partition plate - MT/PT",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PT-Inspections after last pass",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "PD-Main welds: Hardness Test (225HB)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Hydrostatic test",
+    "steps": [
+      {
+        "codice": "Bolt tightening",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Shell side in pressure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": "1"
+      },
+      {
+        "codice": "Drain immediately after final hydrostatic test",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Bolt tightening",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Tube side in pressure",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": "1"
+      },
+      {
+        "codice": "Drain immediately after final hydrostatic test",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Checks after channels removals",
+    "steps": [
+      {
+        "codice": "Drying with warm air (T<70°C)",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": "BOTH SIDES"
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Pickling and passivation",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Painting of shell and channel (including internal surfaces of channel)",
+    "steps": [
+      {
+        "codice": "Steel surface preparation",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Pre-cleaning",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Blotter",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Environmental condition",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Surface cleanliness",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Dust test",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Anchoring profile",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Water soluble salts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Wet film thickness",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "DFT",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Visual examination",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Adhesion",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Channel assembly",
+    "steps": [
+      {
+        "codice": "VT & DC-Anodhe",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "F/SW",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "VT-Complete equipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Bolt tightening",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Air leak test-Tubes to tubesheet joint before exp.",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  },
+  {
+    "titolo": "Final Inspections",
+    "steps": [
+      {
+        "codice": "Name plate review",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Asme name plate review",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "H"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Item marking check",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Commissioning & spare parts",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "W",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Nitrogen purging",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Preparation for shipment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Closing of NCR",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "R"
+        },
+        "remarks": "IF ANY"
+      },
+      {
+        "codice": "Review and Assessment",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Issue of Asme MDR",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "R",
+          "A.I.": "R"
+        },
+        "remarks": null
+      },
+      {
+        "codice": "Issue of release note",
+        "extent": 1.0,
+        "punti": {
+          "B&R": "H",
+          "LNG CANADA": "H",
+          "A.I.": "-"
+        },
+        "remarks": null
+      }
+    ]
+  }
+]

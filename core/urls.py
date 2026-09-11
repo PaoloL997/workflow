@@ -45,6 +45,7 @@ urlpatterns = [
     # HTML — Home
     path("", views.home_view, name="home"),
     path("profilo/", views.profilo_view, name="profilo"),
+    path("utenti/<int:pk>/firma/", views.firma_utente_view, name="firma_utente"),
     path("commesse/", views.commesse_list_view, name="commesse_list"),
     path("commesse/<str:job>/", views.commessa_detail_view, name="commessa_detail"),
     path("commesse/<str:job>/documenti/", views.documenti_list_view, name="documenti_list"),
@@ -56,6 +57,11 @@ urlpatterns = [
         "commesse/<str:job>/quality-control-plan/",
         views.quality_control_plan_view,
         name="quality_control_plan",
+    ),
+    path(
+        "commesse/<str:job>/quality-control-plan/<int:pk>/",
+        views.quality_control_plan_detail_view,
+        name="quality_control_plan_detail",
     ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
@@ -100,6 +106,70 @@ urlpatterns = [
         views.quality_control_plan_prefill_api,
         name="quality_control_plan_prefill_api",
     ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/",
+        views.quality_control_plan_api_detail,
+        name="quality_control_plan_api_detail",
+    ),
+    # API — Corpo del Quality Control Plan: sezioni, step e punti d'intervento
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/",
+        views.quality_control_plan_corpo_api,
+        name="quality_control_plan_corpo_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/sezioni/",
+        views.quality_control_plan_sezioni_api,
+        name="quality_control_plan_sezioni_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/sezioni/<int:sid>/",
+        views.quality_control_plan_sezione_api,
+        name="quality_control_plan_sezione_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/sezioni/<int:sid>/steps/",
+        views.quality_control_plan_sezione_steps_api,
+        name="quality_control_plan_sezione_steps_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/steps/<int:stid>/",
+        views.quality_control_plan_step_api,
+        name="quality_control_plan_step_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/steps/<int:stid>/punti/",
+        views.quality_control_plan_step_punti_api,
+        name="quality_control_plan_step_punti_api",
+    ),
+    # API — Firme dei punti d'intervento e avanzamento del piano
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/punti/<int:pid>/firma/",
+        views.quality_control_plan_punto_firma_api,
+        name="quality_control_plan_punto_firma_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/punti/<int:pid>/firme/",
+        views.quality_control_plan_punto_firme_api,
+        name="quality_control_plan_punto_firme_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/corpo/steps/<int:stid>/firma/",
+        views.quality_control_plan_step_firma_api,
+        name="quality_control_plan_step_firma_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/firme/<int:fid>/annulla/",
+        views.quality_control_plan_firma_annulla_api,
+        name="quality_control_plan_firma_annulla_api",
+    ),
+    path(
+        "api/commesse/<str:job>/quality-control-plan/<int:pk>/avanzamento/",
+        views.quality_control_plan_avanzamento_api,
+        name="quality_control_plan_avanzamento_api",
+    ),
+    # API — Catalogo attività QCP (anagrafica globale, non legata alla commessa)
+    path("api/catalogo-qcp/", views.catalogo_qcp_api, name="catalogo_qcp_api"),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),

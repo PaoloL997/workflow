@@ -272,6 +272,37 @@
   .btn-save:hover { background: var(--color-accent-hover); }
   .btn-save:active { transform: scale(0.97); }
 
+  /* ── Immagine di firma ── */
+  .firma-campo { padding: 13px 0 18px; }
+  .firma-anteprima {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 84px;
+    padding: 10px;
+    border: 1px dashed var(--color-border);
+    border-radius: 12px;
+    /* Scacchiera leggera: si vede se il PNG è davvero trasparente. */
+    background:
+      repeating-conic-gradient(hsla(0,0%,50%,0.08) 0% 25%, transparent 0% 50%) 0 0 / 16px 16px;
+  }
+  .firma-anteprima img { max-height: 72px; max-width: 100%; object-fit: contain; }
+  .firma-vuota { font-size: 13px; color: var(--color-text-secondary); text-align: center; }
+  .firma-azioni { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
+  .firma-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .btn-firma {
+    padding: 7px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .firma-input:focus-visible + .btn-firma { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+  .firma-file { font-size: 13px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+  .firma-rimuovi { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-primary); cursor: pointer; }
+  .firma-aiuto { margin: 10px 0 0; font-size: 12px; line-height: 1.5; color: var(--color-text-secondary); }
+  .firma-errore { display: block; text-align: left; }
+
   @media (max-width: 640px) {
     .page { padding: 0 16px 80px; }
     .profile-card { flex-direction: column; }
@@ -423,6 +454,31 @@
             </div>
           </div>
 
+          <div class="fields-section">
+            <div class="fields-section-title">Firma</div>
+
+            <div class="firma-campo">
+              <div class="firma-anteprima" id="p-firma-anteprima">
+                {% if user.firma %}
+                  <img src="{% url 'firma_utente' user.pk %}?v={{ user.firma.name|urlencode }}" alt="La tua immagine di firma">
+                {% else %}
+                  <span class="firma-vuota">Nessuna immagine: per firmare gli step del Quality Control Plan devi caricarne una.</span>
+                {% endif %}
+              </div>
+              <div class="firma-azioni">
+                <input type="file" id="p-firma" name="firma" accept="image/png,image/jpeg"
+                       class="firma-input" aria-describedby="p-firma-aiuto">
+                <label class="btn-firma" for="p-firma">{% if user.firma %}Sostituisci immagine{% else %}Carica immagine{% endif %}</label>
+                <span class="firma-file" id="p-firma-file"></span>
+                {% if user.firma %}
+                  <label class="firma-rimuovi"><input type="checkbox" name="rimuovi_firma" value="1"> Rimuovi</label>
+                {% endif %}
+              </div>
+              <p class="firma-aiuto" id="p-firma-aiuto">PNG con sfondo trasparente, oppure JPEG, al massimo 1 MB. Serve per firmare gli step del Quality Control Plan, e compare su quelli che firmi: è una firma elettronica semplice, che registra chi ha firmato e quando. Si salva con "Salva modifiche".</p>
+              {% if errors.firma %}<span class="field-error firma-errore" role="alert">{{ errors.firma }}</span>{% endif %}
+            </div>
+          </div>
+
           <div class="save-row">
             <button type="submit" class="btn-save">Salva modifiche</button>
           </div>
@@ -464,6 +520,19 @@
     if (this.files && this.files[0]) {
       document.getElementById('form-profile').submit();
     }
+  });
+
+  /* Immagine di firma: anteprima e nome del file scelto, prima di salvare.
+     Formato e dimensione li controlla il server. */
+  document.getElementById('p-firma').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    document.getElementById('p-firma-file').textContent = file ? file.name : '';
+    if (!file) return;
+    var img = document.createElement('img');
+    img.alt = 'Anteprima della nuova immagine di firma';
+    img.src = URL.createObjectURL(file);
+    var anteprima = document.getElementById('p-firma-anteprima');
+    anteprima.replaceChildren(img);
   });
 </script>
 {% endblock %}

@@ -1,0 +1,2835 @@
+{% extends "core/base.html" %}
+{% load static %}
+
+{% block title %}{{ piano.doc_no|default:piano.titolo }} — Quality Control Plan{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ─────────────────────────────────────────────
+     PAGINA DEL PIANO
+     La testata a tutta larghezza, poi il corpo in due colonne: a sinistra
+     avanzamento ed elenco delle sezioni, a destra la sezione scelta. Carta e
+     fondo sono variabili della pagina, ricavate dai colori dell'app: nel tema
+     chiaro la "superficie" è più scura dello sfondo.
+  ───────────────────────────────────────────── */
+  .cv-page {
+    --cv-carta: var(--bg);
+    --cv-fondo: var(--bg-alt);
+    --cv-fascia: color-mix(in srgb, var(--cv-fondo) 45%, var(--cv-carta));
+    --cv-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    /* Testo sui fondi colorati: il colore di stato mescolato al testo, così
+       resta leggibile nei due temi. */
+    --qp-ambra-testo: color-mix(in srgb, var(--amber) 50%, var(--text));
+    --qp-verde-testo: color-mix(in srgb, var(--green) 80%, var(--text));
+    --qp-accent-testo: color-mix(in srgb, var(--accent) 85%, var(--text));
+    min-height: 100vh;
+    padding: 0 44px 40px;
+    background: var(--cv-fondo);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .cv-page { --cv-carta: var(--surface); --cv-fondo: var(--bg); }
+  }
+  :root[data-theme="dark"] .cv-page { --cv-carta: var(--surface); --cv-fondo: var(--bg); }
+
+  .cv-mono { font-family: var(--cv-mono); letter-spacing: 0; }
+
+  /* Un valore vuoto mostra un trattino, uguale su tutta la pagina: basta che
+     l'elemento resti vuoto, senza segnaposti scritti nel markup. */
+  .cv-val:empty::before {
+    content: "—";
+    font-family: inherit;
+    font-weight: 400;
+    color: var(--color-text-secondary);
+  }
+  .cv-empty { margin: 0; font-size: 13px; color: var(--color-text-secondary); }
+
+  .cv-label {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .cv-label-mono {
+    font-family: var(--cv-mono);
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  /* Per chi usa uno screen reader: le sigle e l'intestazione delle colonne
+     sono nascoste, quindi ogni valore dice di che campo è. */
+  .ce-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Il [hidden] del browser perde contro le regole display delle classi. */
+  .cv-page [hidden], .ce-backdrop[hidden], .ce-backdrop [hidden] { display: none !important; }
+
+  /* ── Navbar: la stessa delle altre pagine ── */
+  .navbar {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 28px 0 0;
+    margin-bottom: 14px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 22px;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    transition: color 0.18s, background 0.18s;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+  }
+  .nav-item:hover { color: var(--color-text-primary); text-decoration: none; }
+
+  /* ─────────────────────────────────────────────
+     TESTATA
+  ───────────────────────────────────────────── */
+  .qp-testata {
+    margin: 0 0 16px;
+    background: var(--cv-carta);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .qp-testata-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px 32px; flex-wrap: wrap;
+    padding: 18px 22px 16px;
+  }
+  .qp-testata-id { min-width: 0; }
+  .qp-briciole { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+  .qp-briciole a { color: inherit; text-decoration: none; }
+  .qp-briciole a:hover { color: var(--color-text-primary); text-decoration: underline; }
+  .qp-titolo-riga { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin: 6px 0; }
+  .cv-title {
+    margin: 0;
+    font-family: var(--cv-mono);
+    font-size: 25px; font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--color-text-primary);
+    overflow-wrap: anywhere;
+  }
+  .cv-rev {
+    padding: 2px 8px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent) var(--status-tint-pct), transparent);
+    color: var(--qp-accent-testo);
+    font-family: var(--cv-mono);
+    font-size: 12px; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .qp-stato {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--amber) var(--status-tint-pct), transparent);
+    color: var(--qp-ambra-testo);
+    font-size: 12px; font-weight: 600;
+  }
+  .qp-stato::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+  .qp-stato.is-completo { background: color-mix(in srgb, var(--green) var(--status-tint-pct), transparent); color: var(--qp-verde-testo); }
+  .qp-stato.is-completo::before { background: var(--green); }
+  .qp-sottotitolo {
+    margin: 0;
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+    font-size: 14px; color: var(--color-text-primary);
+  }
+  .qp-sep { color: var(--color-text-secondary); }
+  .qp-item { font-size: 13px; }
+  .qp-item-desc { font-size: 13px; color: var(--color-text-secondary); }
+
+  .qp-azioni { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .qp-persona { display: flex; align-items: center; gap: 10px; margin-right: 6px; }
+  .cv-avatar {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--color-text-primary);
+    color: var(--cv-carta);
+    font-size: 12px; font-weight: 700;
+  }
+  .qp-persona-label { display: block; font-size: 12px; color: var(--color-text-secondary); }
+  .qp-persona-nome { display: block; font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+  .qp-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--cv-carta);
+    color: var(--color-text-primary);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .qp-btn:hover:not([aria-disabled="true"]) { background: var(--cv-fascia); }
+  .qp-btn[aria-disabled="true"] { color: var(--color-text-secondary); cursor: not-allowed; }
+  .qp-btn .ce-freccia { transition: transform 0.15s; }
+  .qp-btn[aria-expanded="true"] .ce-freccia { transform: rotate(180deg); }
+
+  /* Fascia dei dati di commessa: celle separate da un bordo */
+  .qp-fascia {
+    display: flex; flex-wrap: wrap; align-items: stretch;
+    background: var(--cv-fascia);
+    border-top: 1px solid var(--color-border);
+  }
+  .qp-fatti { display: flex; flex-wrap: wrap; margin: 0; }
+  .qp-fatto { min-width: 0; padding: 10px 18px; border-right: 1px solid var(--color-border); }
+  .qp-fatto dt { margin-bottom: 3px; }
+  .qp-fatto dd { margin: 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .qp-unita { color: var(--color-text-secondary); font-weight: 500; }
+  .qp-fatto-enti { display: flex; align-items: center; gap: 12px; border-right: none; }
+  .qp-fatto-enti dt { margin: 0; }
+  .qp-enti { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .qp-enti li { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 500; }
+  .cv-ente-n {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border-radius: 5px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--color-text-primary);
+    color: var(--cv-carta);
+    font-family: var(--cv-mono);
+    font-size: 12px; font-weight: 700;
+  }
+  .qp-requisiti {
+    margin: 0 0 0 auto; padding: 10px 18px;
+    list-style: none;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px;
+  }
+  .qp-req {
+    padding: 3px 10px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--green) var(--status-tint-pct), transparent);
+    color: var(--qp-verde-testo);
+    font-size: 12px; font-weight: 600;
+  }
+  .qp-req-nessuno { font-size: 12px; color: var(--color-text-secondary); }
+
+  /* Copertina: si apre e si chiude dal pulsante "Copertina" */
+  .qp-copertina {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid var(--color-border);
+  }
+  .qp-cop-blocco { min-width: 0; padding: 16px 22px 18px; }
+  .qp-cop-blocco + .qp-cop-blocco { border-left: 1px solid var(--color-border); }
+  .qp-cop-titolo { margin: 0 0 10px; }
+  .qp-campi { margin: 0; display: flex; flex-direction: column; gap: 9px; }
+  .qp-campi dt { font-size: 12px; color: var(--color-text-secondary); }
+  .qp-campi dd { margin: 1px 0 0; font-size: 14px; font-weight: 600; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .qp-item-voce { display: block; font-size: 13px; line-height: 1.45; }
+  .qp-item-voce + .qp-item-voce { margin-top: 5px; }
+  .qp-item-no { display: block; font-weight: 600; }
+  .qp-item-voce-desc { display: block; font-weight: 400; color: var(--color-text-secondary); }
+  .qp-elenco { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .qp-elenco li { font-size: 14px; line-height: 1.45; color: var(--color-text-primary); overflow-wrap: anywhere; }
+
+  /* ─────────────────────────────────────────────
+     CORPO: barra laterale + sezione scelta
+  ───────────────────────────────────────────── */
+  .qp-corpo {
+    display: grid;
+    grid-template-columns: 274px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .qp-side {
+    position: sticky; top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--cv-carta);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+  /* La barra laterale scorre con la rotella, senza barra di scorrimento visibile. */
+  .qp-side, .qp-nav { scrollbar-width: none; }
+  .qp-side::-webkit-scrollbar, .qp-nav::-webkit-scrollbar { display: none; }
+  .qp-compilato { padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--color-border); }
+  .qp-compilato-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .qp-compilato-head h2 { margin: 0; }
+  .qp-pct { font-family: var(--cv-mono); font-size: 22px; font-weight: 700; color: var(--color-text-primary); }
+  .qp-barra { display: block; height: 6px; border-radius: 999px; background: var(--color-border); overflow: hidden; }
+  .qp-barra > span { display: block; height: 100%; border-radius: inherit; background: var(--color-accent); }
+  .qp-barra-mini { height: 4px; max-width: 190px; margin-top: 6px; }
+  .qp-compilato-conta { margin: 8px 0 0; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--color-text-secondary); }
+
+  .qp-sez-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  .qp-sez-head h2 { margin: 0; }
+  .qp-sez-conta { font-size: 12px; color: var(--color-text-secondary); }
+  .qp-nav { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .qp-voce { position: relative; border-radius: var(--radius-sm); }
+  .qp-voce-btn {
+    display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: start; gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    background: none; border: none; border-radius: inherit;
+    color: var(--color-text-primary);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .qp-voce-btn:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+  .qp-voce.is-attiva .qp-voce-btn {
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    box-shadow: inset 3px 0 0 var(--color-accent);
+  }
+  .qp-voce .ce-sez-n { background: var(--color-elevated); color: var(--color-text-primary); }
+  .qp-voce.is-attiva .ce-sez-n { background: var(--color-accent); color: #fff; }
+  .qp-voce-testo { min-width: 0; }
+  .qp-voce-titolo {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14px; font-weight: 500; line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .qp-voce.is-attiva .qp-voce-titolo { font-weight: 600; }
+  .qp-voce-meta { display: block; margin-top: 3px; font-size: 12px; color: var(--color-text-secondary); }
+  /* La maniglia delle sezioni compare passando sopra la voce, a destra. */
+  .qp-voce > .ce-maniglia { position: absolute; top: 8px; right: 4px; opacity: 0; }
+  .qp-voce:hover > .ce-maniglia, .qp-voce:focus-within > .ce-maniglia { opacity: 0.8; }
+
+  .qp-add-sezione {
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--color-accent);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .qp-add-sezione:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .ce-nuova-sezione { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .ce-nuova-sezione > .ce-errore { padding: 0; }
+  .ce-nuova-azioni { display: flex; justify-content: flex-end; gap: 8px; }
+
+  .qp-contenuto { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Pulsanti, link, messaggi del corpo ── */
+  .ce-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .ce-btn:hover:not(:disabled) { opacity: 0.85; }
+  .ce-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ce-btn-primary { background: var(--color-accent); border-color: transparent; color: #fff; }
+  .ce-link {
+    padding: 6px 8px;
+    background: none; border: none; border-radius: var(--radius-sm);
+    color: var(--color-accent);
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .ce-link:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .ce-avviso {
+    margin: 0;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--amber) var(--status-tint-pct), transparent);
+    font-size: 13px; line-height: 1.5;
+    color: var(--color-text-primary);
+  }
+  .ce-errore { margin: 0; font-size: 13px; color: var(--color-danger); }
+  .ce-stato { font-size: 12px; color: var(--color-text-secondary); }
+
+  .cv-page button:focus-visible, .cv-page input:focus-visible, .cv-page textarea:focus-visible,
+  .cv-page a:focus-visible, .ce-backdrop button:focus-visible, .ce-backdrop input:focus-visible,
+  .ce-backdrop select:focus-visible, .ce-menu .ce-menu-item:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+
+  /* Maniglia per trascinare: il trascinamento parte solo da qui. Le sezioni si
+     spostano anche da tastiera, con "Sposta su / giù" del loro menu ···. */
+  .ce-maniglia {
+    flex-shrink: 0;
+    width: 16px; height: 24px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 5px;
+    color: var(--color-text-secondary);
+    cursor: grab;
+  }
+  .ce-maniglia:empty { cursor: default; }
+  .ce-maniglia:not(:empty):hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+  .ce-step .ce-maniglia:not(:empty) { opacity: 0; }
+  .ce-step:hover .ce-maniglia:not(:empty), .ce-step:focus-within .ce-maniglia:not(:empty) { opacity: 1; }
+
+  /* ── Pannello della sezione ── */
+  .ce-sezioni { list-style: none; margin: 0; padding: 0; }
+  .ce-sezione {
+    background: var(--cv-carta);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: box-shadow 0.12s, border-color 0.12s;
+  }
+  .ce-sez-head {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 58px;
+    padding: 10px 14px 10px 18px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .ce-sez-n {
+    flex-shrink: 0;
+    min-width: 26px; height: 22px;
+    padding: 0 7px;
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--color-accent);
+    color: #fff;
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 700;
+  }
+  .ce-sez-h { min-width: 0; margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .ce-sez-conta { margin-right: auto; font-size: 13px; color: var(--color-text-secondary); white-space: nowrap; }
+  .ce-sezione > .ce-errore { padding: 8px 18px 0; }
+
+  /* Righe su due livelli, sulla stessa griglia. Primo livello: maniglia,
+     numero, descrizione, extent, un punto per ente. Secondo: gli altri testi
+     dello step, sotto la descrizione, che vanno a capo invece di far scorrere
+     la riga. Il terzo c'è solo in modifica: le azioni dello step. */
+  .ce-riga {
+    display: grid;
+    grid-template-columns: 16px 30px minmax(0, 1fr) 84px auto;
+    grid-template-areas:
+      "man n desc ext punti"
+      ". . det det det"
+      ". . fi fi fi"
+      ". . az az az";
+    align-items: center;
+    column-gap: 12px;
+  }
+  .ce-riga > .ce-maniglia, .ce-intesta-man { grid-area: man; }
+  .ce-step-n, .ce-intesta-n { grid-area: n; }
+  .ce-testo-descrizione, .ce-intesta-step { grid-area: desc; }
+  .ce-extent, .ce-intesta-extent { grid-area: ext; }
+  .ce-riga > .ce-punti { grid-area: punti; }
+  .ce-dettagli { grid-area: det; min-width: 0; display: flex; flex-wrap: wrap; column-gap: 18px; }
+  /* Una colonna per ente, larga quanto serve a scrivere per intero il nome più
+     lungo (--ce-ente-car, dal server) e mai più stretta di un punto. Con zero
+     enti la colonna resta vuota, senza bisogno di una griglia diversa. */
+  .ce-punti {
+    display: grid; grid-auto-flow: column; gap: 8px;
+    grid-auto-columns: max(52px, calc((var(--ce-ente-car, 0) + 2) * (1ch + 0.06em)));
+    font-family: var(--cv-mono); font-size: 12px;
+  }
+
+  .ce-intesta {
+    padding: 9px 14px 9px 18px;
+    border-bottom: 1px solid var(--color-border);
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .ce-intesta-n { text-align: right; }
+  .ce-intesta-extent { text-align: right; padding-right: 16px; }
+  .ce-intesta-ente { display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; }
+  .ce-ente-pos { color: var(--color-text-primary); font-weight: 700; }
+  .ce-ente-nome { white-space: nowrap; }
+
+  /* position: relative tiene dentro la lista le etichette per gli screen
+     reader (.ce-sr, assolute): senza, quando la lista scorre sporgerebbero e
+     allungherebbero la pagina. */
+  .ce-steps { position: relative; list-style: none; margin: 0; padding: 0; }
+  .ce-step { padding: 12px 14px 12px 18px; border-bottom: 1px solid var(--color-border); transition: background 0.12s; }
+  .ce-step:last-child { border-bottom: none; }
+  /* Chi può scrivere modifica uno step cliccandoci sopra, o con Invio. */
+  .ce-step[tabindex] { cursor: pointer; }
+  .ce-step[tabindex]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+  .ce-step.is-modifica { cursor: auto; }
+  .ce-step .ce-punto, .ce-step .ce-extent-input { cursor: pointer; }
+  .ce-step .ce-extent-input:focus { cursor: text; }
+  /* In modifica, sotto i testi, le azioni dello step. */
+  .ce-azioni-step { grid-area: az; display: none; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .ce-step.is-modifica .ce-azioni-step { display: flex; }
+  .ce-azioni-step { justify-content: flex-end; }
+  .ce-azioni-step .ce-btn { padding: 5px 12px; font-size: 12px; }
+  .ce-azioni-step .ce-btn-elimina { color: var(--color-danger); }
+  .ce-step-n {
+    text-align: right;
+    font-family: var(--cv-mono); font-size: 13px; font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+  .ce-testo { min-width: 0; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .ce-testo-descrizione { font-size: 15px; font-weight: 600; line-height: 1.35; }
+  .ce-coppia { display: inline-flex; align-items: baseline; gap: 6px; max-width: 100%; margin-top: 5px; font-size: 13px; line-height: 1.4; }
+  .ce-coppia.is-vuota { display: none; }
+  .ce-coppia-sigla {
+    flex-shrink: 0;
+    font-family: var(--cv-mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+  .ce-testo-reference_doc .ce-testo-val, .ce-testo-report_no .ce-testo-val { font-family: var(--cv-mono); font-size: 12px; }
+
+  /* Step aperto: i testi della riga diventano campi, al loro posto; anche
+     quelli vuoti compaiono, per poterli riempire. La descrizione resta sulla
+     prima riga; gli altri testi vanno in griglia sotto, quattro nella prima
+     fila e tre nella seconda, ognuno con la sua sigla a sinistra. Su una
+     colonna stretta diventano due per fila, poi uno. */
+  .ce-step.is-modifica { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .ce-step.is-modifica .ce-testo-val { display: none; }
+  .ce-step.is-modifica .ce-dettagli {
+    container-type: inline-size;
+    display: grid; grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 8px 18px;
+    margin-top: 6px;
+  }
+  .ce-step.is-modifica .ce-coppia { display: flex; align-items: flex-start; gap: 8px; margin: 0; grid-column: span 3; }
+  .ce-step.is-modifica .ce-testo-tecnica,
+  .ce-step.is-modifica .ce-testo-report_no,
+  .ce-step.is-modifica .ce-testo-remarks { grid-column: span 4; }
+  .ce-step.is-modifica .ce-coppia-sigla { width: 28px; padding-top: 12px; }
+  @container (max-width: 760px) { .ce-step.is-modifica .ce-coppia { grid-column: span 6; } }
+  @container (max-width: 420px) { .ce-step.is-modifica .ce-coppia { grid-column: span 12; } }
+  .ce-campo-riga {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%; min-width: 0;
+    min-height: 40px;
+    padding: 9px 10px;
+    border: 1px solid var(--color-border); border-radius: 6px;
+    background: var(--cv-carta);
+    color: var(--color-text-primary);
+    font: inherit;
+    resize: none;
+    overflow: hidden;
+  }
+  .ce-testo-descrizione .ce-campo-riga { min-height: 38px; padding: 7px 10px; }
+  .ce-testo-reference_doc .ce-campo-riga, .ce-testo-report_no .ce-campo-riga { font-family: var(--cv-mono); font-size: 12px; }
+  /* Il campo attivo lo dice il bordo, senza l'anello del resto della pagina. */
+  .ce-campo-riga:focus, .cv-page .ce-campo-riga:focus-visible { border-color: var(--color-accent); outline: none; }
+
+  .ce-extent {
+    display: flex; align-items: center; justify-content: flex-end; gap: 2px;
+    font-family: var(--cv-mono); font-size: 14px; font-weight: 600;
+    color: var(--color-text-primary);
+  }
+  .ce-extent-input {
+    width: 100%; min-width: 0;
+    padding: 4px 4px;
+    border: 1px solid transparent; border-radius: 6px;
+    background: transparent;
+    color: inherit; font: inherit;
+    text-align: right;
+  }
+  /* Il campo si mostra passando sulla riga, e resta visibile nello step aperto. */
+  .ce-step:hover .ce-extent-input, .ce-step.is-modifica .ce-extent-input { border-color: var(--color-border); background: var(--cv-carta); }
+  .ce-extent-input:focus { border-color: var(--color-accent); background: var(--cv-carta); outline: none; }
+  .ce-pct { color: var(--color-text-secondary); font-weight: 500; }
+
+  /* Punti d'intervento colorati per tipo: H ambra, W e SW accent, A verde, il
+     resto neutro; in una combinazione vince il primo di questi. "–" (non
+     coinvolto) è tenue e senza fondo, così i punti veri risaltano. Le stesse
+     tinte valgono per i codici del menu dei punti. */
+  .ce-punto, .ce-pm-codice, .ce-firma-sigla {
+    --tinta: var(--text-muted);
+    --tinta-testo: var(--text);
+    background: color-mix(in srgb, var(--tinta) var(--status-tint-pct), transparent);
+    color: var(--tinta-testo);
+  }
+  .ce-punto[data-punto*="A"], .ce-pm-voce[data-punto*="A"] .ce-pm-codice, .ce-firma-sigla[data-punto*="A"] { --tinta: var(--green); --tinta-testo: var(--qp-verde-testo); }
+  .ce-punto[data-punto*="W"], .ce-pm-voce[data-punto*="W"] .ce-pm-codice, .ce-firma-sigla[data-punto*="W"] { --tinta: var(--accent); --tinta-testo: var(--qp-accent-testo); }
+  .ce-punto[data-punto*="H"], .ce-pm-voce[data-punto*="H"] .ce-pm-codice, .ce-firma-sigla[data-punto*="H"] { --tinta: var(--amber); --tinta-testo: var(--qp-ambra-testo); }
+  .ce-punto {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    justify-self: center;
+    width: 52px; height: 30px;
+    border: 1px solid transparent; border-radius: var(--radius-sm);
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .ce-punto:hover:not(:disabled) { border-color: var(--tinta); }
+  .ce-punto.is-vuoto, .ce-pm-codice.is-vuoto { background: transparent; color: var(--color-text-secondary); font-weight: 400; }
+  .ce-punto.is-vuoto:hover:not(:disabled) { border-color: var(--color-border); }
+  .ce-punto:disabled, span.ce-punto { cursor: default; }
+
+  /* Stato di firma nella cella: un segno nell'angolo della sigla, sopra il
+     bordo, così la colonna non si allarga e la sigla resta leggibile. Anello
+     vuoto = da firmare, verde = firmato conforme, grigio = firmato "non
+     applicabile", rosso con "!" = non conforme; il non conforme colora di rosso
+     anche il bordo della cella, perché è la prima cosa che si cerca. Chi ha
+     firmato e quando lo dice il tooltip. */
+  .ce-firma-segno {
+    position: absolute; top: -5px; right: -5px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    font-family: var(--cv-mono); font-size: 9px; font-weight: 700; line-height: 1;
+    color: #fff;
+    box-shadow: 0 0 0 2px var(--cv-carta);
+    pointer-events: none;
+  }
+  .ce-punto:not(.is-vuoto) .ce-firma-segno { display: inline-flex; }
+  .ce-punto[data-firma-esito=""] .ce-firma-segno { background: var(--cv-carta); box-shadow: inset 0 0 0 1.5px var(--color-text-secondary), 0 0 0 2px var(--cv-carta); }
+  .ce-punto[data-firma-esito="conforme"] .ce-firma-segno { background: var(--green); }
+  .ce-punto[data-firma-esito="non_applicabile"] .ce-firma-segno { background: var(--text-muted); }
+  .ce-punto[data-firma-esito="conforme"] .ce-firma-segno::after,
+  .ce-punto[data-firma-esito="non_applicabile"] .ce-firma-segno::after { content: "✓"; }
+  .ce-punto[data-firma-esito="non_conforme"] { border-color: var(--red); box-shadow: inset 0 0 0 1px var(--red); }
+  .ce-punto[data-firma-esito="non_conforme"] .ce-firma-segno { background: var(--red); }
+  .ce-punto[data-firma-esito="non_conforme"] .ce-firma-segno::after { content: "!"; }
+
+  /* ── Firme dello step, nel dettaglio che si apre cliccando lo step ── */
+  .ce-firme {
+    grid-area: fi;
+    container-type: inline-size;
+    margin-top: 14px;
+    padding: 12px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--cv-carta);
+    cursor: auto;
+  }
+  .ce-firme-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-bottom: 2px; }
+  .ce-firme-titolo { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--color-text-secondary); }
+  .ce-firme-conta { margin-right: auto; font-size: 12px; color: var(--qp-verde-testo); }
+  .ce-firme-lista { list-style: none; margin: 0; padding: 0; }
+  .ce-firma-riga + .ce-firma-riga { border-top: 1px solid var(--color-border); }
+  /* Una riga per punto, in colonne: ente, punto, chi ha firmato (immagine,
+     nome, data ed esito) e a destra le azioni. Moduli e storico si aprono
+     sotto, allineati alla colonna di chi ha firmato. Su un pannello stretto la
+     riga torna a capo. */
+  .ce-firma-linea {
+    display: grid; grid-template-columns: 130px 52px minmax(0, 1fr) auto;
+    align-items: center; column-gap: 14px;
+    min-height: 56px;
+    padding: 9px 0;
+  }
+  .ce-firma-ente { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 14px; font-weight: 700; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .ce-firma-sigla {
+    flex-shrink: 0;
+    padding: 3px 0;
+    border-radius: 5px;
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 700;
+    text-align: center;
+  }
+  .ce-firma-stato { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--color-text-primary); }
+  .ce-firma-chi { display: inline-flex; align-items: center; gap: 12px; }
+  /* Fondo bianco in tutti e due i temi: l'immagine è inchiostro scuro, spesso
+     su trasparente, e sul fondo scuro non si leggerebbe. */
+  .ce-firma-img {
+    width: 122px; height: 38px;
+    padding: 2px 4px;
+    object-fit: contain;
+    border: 1px solid var(--color-border); border-radius: 6px;
+    background: #fff;
+  }
+  .ce-firma-extra { padding-left: calc(130px + 52px + 28px); }
+  @container (max-width: 620px) {
+    .ce-firma-linea { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+    .ce-firma-ente { min-width: 130px; }
+    .ce-firma-sigla { width: 52px; }
+    .ce-firma-stato { flex: 1 1 220px; }
+    .ce-firma-azioni { margin-left: auto; }
+    .ce-firma-extra { padding-left: 0; }
+  }
+  .ce-firma-da { color: var(--color-text-secondary); }
+  .ce-firma-note { flex-basis: 100%; font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+  .ce-esito-badge {
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--text-muted) var(--status-tint-pct), transparent);
+    font-size: 12px; font-weight: 600;
+  }
+  .ce-esito-badge[data-esito="conforme"] { background: color-mix(in srgb, var(--green) var(--status-tint-pct), transparent); color: var(--qp-verde-testo); }
+  .ce-esito-badge[data-esito="non_conforme"] { background: color-mix(in srgb, var(--red) var(--status-tint-pct), transparent); color: var(--color-danger); }
+  .ce-firma-azioni { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .ce-firme .ce-btn { padding: 5px 12px; font-size: 12px; }
+  .ce-firme .ce-btn[aria-disabled="true"] { opacity: 0.6; cursor: progress; }
+  .ce-link-pericolo { color: var(--color-danger); }
+  .ce-link-pericolo:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
+  .ce-firma-extra:empty { display: none; }
+  .ce-firma-form {
+    display: flex; flex-direction: column; gap: 8px;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+  .ce-esiti { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; border: none; }
+  .ce-esito { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--color-text-primary); cursor: pointer; }
+  .ce-esito input { accent-color: var(--color-accent); }
+  .ce-firma-testo {
+    width: 100%; min-height: 52px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-border); border-radius: 6px;
+    background: var(--cv-carta);
+    color: var(--color-text-primary);
+    font: inherit; font-size: 13px;
+    resize: vertical;
+  }
+  .ce-firma-testo:focus { border-color: var(--color-accent); outline: none; }
+  .ce-firma-bottoni { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ce-storico { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--color-text-secondary); }
+  .ce-storico li { padding: 6px 10px; border-left: 2px solid var(--color-border); }
+  .ce-storico li.is-valida { border-left-color: var(--green); }
+  .ce-storico strong { color: var(--color-text-primary); font-weight: 600; }
+  .ce-firme-vuoto, .ce-firme-nota { margin: 6px 0 0; font-size: 12px; color: var(--color-text-secondary); }
+  .ce-firme-avviso {
+    margin: 4px 0 6px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--amber) var(--status-tint-pct), transparent);
+    font-size: 13px; color: var(--color-text-primary);
+  }
+  .ce-firme-avviso a { color: var(--color-accent); font-weight: 600; }
+  .ce-cella-menu { display: flex; justify-content: center; }
+  .ce-step > .ce-errore { margin: 6px 0 0 58px; }
+
+  /* Sezione senza step, piano senza sezioni */
+  .ce-sez-vuota {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 40px 20px;
+    text-align: center;
+  }
+  .ce-sez-vuota-titolo, .ce-vuoto-titolo { margin: 0; font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
+  .ce-sez-vuota .cv-empty, .ce-vuoto .cv-empty { max-width: 480px; }
+  .ce-vuoto {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 48px 20px;
+    background: var(--cv-carta);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    text-align: center;
+  }
+
+  /* Piede del pannello: catalogo, legenda, stato di salvataggio */
+  .ce-sez-piede {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px;
+    min-height: 50px;
+    padding: 8px 18px;
+    border-top: 1px solid var(--color-border);
+  }
+  .ce-legenda { margin: 0 0 0 auto; font-size: 12px; color: var(--color-text-secondary); }
+
+  /* Campi dei moduli: catalogo, nuova sezione, rinomina */
+  .ce-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .ce-campo-etichetta { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+  .ce-campo input, .ce-campo select, .ce-sez-input {
+    width: 100%; min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+    background: var(--cv-carta);
+    color: var(--color-text-primary);
+    font-family: inherit; font-size: 14px;
+  }
+  .ce-campo input:focus, .ce-campo select:focus, .ce-sez-input:focus { border-color: var(--color-accent); outline: none; }
+  .ce-sez-input { flex: 1 1 auto; font-size: 16px; font-weight: 600; }
+
+  /* Trascinamento: dove cade l'elemento lo dice una linea (prima o dopo) o il
+     bordo (step lasciato su una sezione, in coda). */
+  .is-trascinato { opacity: 0.4; }
+  .ce-step.ce-drop-prima { box-shadow: inset 0 2px 0 var(--color-accent); }
+  .ce-step.ce-drop-dopo { box-shadow: inset 0 -2px 0 var(--color-accent); }
+  .qp-voce.ce-drop-prima { box-shadow: 0 -2px 0 var(--color-accent); }
+  .qp-voce.ce-drop-dopo { box-shadow: 0 2px 0 var(--color-accent); }
+  .qp-voce.ce-drop-dentro .qp-voce-btn { box-shadow: inset 0 0 0 2px var(--color-accent); }
+  .ce-sezione.ce-drop-dentro { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+  .ce-step.is-nuovo { animation: ce-nuovo 1.6s ease-out; }
+  @keyframes ce-nuovo { from { background: color-mix(in srgb, var(--accent) 18%, transparent); } to { background: transparent; } }
+
+  /* Menu ··· e menu dei punti: stesso aspetto del menu azioni dei documenti.
+     Posizione fissa calcolata dal JS, così nessun contenitore lo taglia. */
+  .ce-dots {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    padding: 0;
+    background: none; border: none; border-radius: var(--radius-sm);
+    color: var(--color-text-secondary);
+    font-family: inherit; font-size: 17px; letter-spacing: 3px; line-height: 1;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s;
+  }
+  .ce-dots:hover, .ce-dots[aria-expanded="true"] { background: var(--color-elevated); color: var(--color-text-primary); }
+  .ce-menu {
+    position: fixed;
+    z-index: 300;
+    min-width: 190px;
+    padding: 5px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-elevated);
+  }
+  .ce-menu-item {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%;
+    padding: 8px 11px;
+    background: transparent; border: none; border-radius: 10px;
+    color: var(--color-text-primary);
+    font-family: inherit; font-size: 14px; font-weight: 600;
+    text-align: left; text-decoration: none;
+    cursor: pointer;
+  }
+  .ce-menu-item:hover:not(:disabled), .ce-menu-item:focus { background: var(--color-elevated); outline: none; text-decoration: none; }
+  .ce-menu-item:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ce-menu-item--danger { color: var(--color-danger); }
+  .ce-menu-item--danger:hover:not(:disabled), .ce-menu-item--danger:focus { background: color-mix(in srgb, var(--red) 10%, transparent); }
+  .ce-pm-voce { font-weight: 500; }
+  .ce-pm-voce[aria-checked="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .ce-pm-codice {
+    flex-shrink: 0;
+    width: 34px;
+    padding: 3px 0;
+    border-radius: 6px;
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 700;
+    text-align: center;
+  }
+  .ce-pm-voce[aria-checked="true"] .ce-pm-codice { box-shadow: inset 0 0 0 1.5px var(--tinta); }
+  .ce-pm-nota { margin: 3px 11px 5px; font-size: 12px; color: var(--color-text-secondary); }
+
+  /* Catalogo */
+  html.ce-bloccato { overflow: hidden; }
+  .ce-backdrop {
+    position: fixed; inset: 0;
+    z-index: 400;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
+    background: hsl(220 30% 3% / 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .ce-modal {
+    display: flex; flex-direction: column; gap: 14px;
+    width: 100%; max-width: 760px; max-height: 88vh;
+    padding: 24px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+  }
+  .ce-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .ce-modal-titolo { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--color-text-primary); }
+  .ce-cat-dove { margin: 4px 0 0; font-size: 13px; color: var(--color-text-secondary); }
+  .ce-cat-dove strong { color: var(--color-text-primary); }
+  .ce-chiudi {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border: none; border-radius: 50%;
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+  }
+  .ce-chiudi:hover { background: var(--color-border); }
+  .ce-cat-filtri { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 240px); gap: 12px; }
+  .ce-cat-stato { margin: 0; min-height: 18px; font-size: 12px; color: var(--color-text-secondary); }
+  .ce-cat-lista {
+    flex: 1 1 auto;
+    min-height: 140px;
+    margin: 0; padding: 0;
+    list-style: none;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+  .ce-cat-lista li + li { border-top: 1px solid var(--color-border); }
+  .ce-cat-voce {
+    display: grid; grid-template-columns: 16px 22px minmax(0, 1fr); align-items: start; gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+  }
+  .ce-cat-voce:hover { background: color-mix(in srgb, var(--text) 5%, transparent); }
+  .ce-cat-voce input { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--color-accent); }
+  /* L'ordine di selezione è l'ordine d'inserimento: si vede sulla voce. */
+  .ce-cat-ordine {
+    height: 20px;
+    border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--cv-mono); font-size: 12px; font-weight: 700;
+  }
+  .ce-cat-ordine:not(:empty) { background: var(--color-accent); color: #fff; }
+  .ce-cat-desc { display: block; font-size: 14px; color: var(--color-text-primary); overflow-wrap: anywhere; }
+  .ce-cat-meta { display: block; margin-top: 2px; font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+  .ce-cat-ref { font-family: var(--cv-mono); color: var(--color-text-primary); }
+  .ce-modal-piede { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+  .ce-modal-piede > .ce-errore { flex-basis: 100%; }
+  .ce-cat-conta { margin-right: auto; font-size: 13px; color: var(--color-text-secondary); }
+
+  /* ── Theme toggle ── */
+  .theme-toggle {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
+    z-index: 90;
+  }
+  .theme-toggle:hover { box-shadow: var(--shadow-elevated); background: var(--color-surface); }
+  .theme-toggle:active { transform: scale(0.96); }
+  .theme-toggle .icon-sun  { display: none; }
+  .theme-toggle .icon-moon { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-sun  { display: block; }
+  :root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ce-step.is-nuovo { animation: none; }
+    .qp-btn .ce-freccia { transition: none; }
+  }
+  /* Schermi larghi: la pagina è alta quanto la finestra e non scorre. Scorrono
+     da sole l'elenco delle sezioni e la lista degli step della sezione aperta;
+     il resto resta fermo: in alto "Compilato", in basso "+ Aggiungi sezione",
+     e intorno agli step l'intestazione della sezione, le colonne e il piede.
+     Con una finestra troppo bassa il corpo tiene un'altezza minima e scorre
+     la pagina. */
+  @media (min-width: 961px) {
+    .cv-page { display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding-bottom: 16px; }
+    .navbar, .qp-testata { flex: none; }
+    .qp-corpo { flex: 1 1 auto; min-height: 300px; grid-template-rows: minmax(0, 1fr); align-items: stretch; }
+    .qp-side {
+      position: static; align-self: start;
+      max-height: 100%; min-height: 0;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .qp-compilato, .qp-sez-head, .qp-add-sezione, .ce-nuova-sezione { flex: none; }
+    .qp-nav { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+    .qp-contenuto { min-height: 0; }
+    .qp-contenuto > .ce-avviso, .ce-vuoto { flex: none; }
+    /* Ogni livello può restringersi fino alla lista degli step, che scorre. */
+    .ce-sezioni, .ce-sezione, .ce-tabella { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .ce-sez-head, .ce-sezione > .ce-errore, .ce-sez-vuota, .ce-sez-piede, .ce-intesta { flex: none; }
+    .ce-steps { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  }
+  @media (max-width: 1200px) {
+    .qp-copertina { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .qp-cop-blocco:nth-child(3) { border-left: none; }
+    .qp-cop-blocco:nth-child(n+3) { border-top: 1px solid var(--color-border); }
+  }
+  /* Stretta: la barra laterale va sopra la sezione e smette di seguire lo scorrimento. */
+  @media (max-width: 960px) {
+    .qp-corpo { grid-template-columns: minmax(0, 1fr); }
+    .qp-side { position: static; max-height: none; }
+    .qp-nav { max-height: 320px; overflow-y: auto; }
+  }
+  @media (max-width: 680px) {
+    .cv-page { padding: 0 16px 40px; }
+    .nav-item { padding: 10px 12px; }
+    .qp-testata-top { padding: 16px; }
+    .cv-title { font-size: 22px; }
+    /* I dati di commessa su due colonne: senza, le celle andrebbero a capo
+       lasciando bordi spaiati. */
+    .qp-fatti { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+    .qp-fatto { padding: 8px 12px; border-right: none; border-bottom: 1px solid var(--color-border); }
+    .qp-fatto:nth-child(odd) { border-right: 1px solid var(--color-border); }
+    .qp-fatto-enti { grid-column: 1 / -1; border-right: none !important; border-bottom: none; }
+    .qp-requisiti { margin-left: 0; justify-content: flex-start; padding: 8px 12px; }
+    .qp-copertina { grid-template-columns: minmax(0, 1fr); }
+    .qp-cop-blocco + .qp-cop-blocco { border-left: none; border-top: 1px solid var(--color-border); }
+    /* La riga dello step si ridispone: descrizione in alto, extent e punti
+       sotto, poi gli altri testi. */
+    .ce-riga {
+      grid-template-columns: 16px 26px 76px minmax(0, 1fr);
+      grid-template-areas:
+        "man n desc desc"
+        ". . ext punti"
+        ". . det det"
+        ". . fi fi"
+        ". . az az";
+      row-gap: 6px;
+    }
+    .ce-intesta { grid-template-areas: "man n desc desc" ". . ext punti"; }
+    /* Poco spazio: colonne degli enti strette, il nome va a capo ma resta intero. */
+    .ce-punti { grid-auto-columns: 60px; }
+    .ce-intesta-ente { flex-direction: column; gap: 0; }
+    .ce-ente-nome { white-space: normal; overflow-wrap: anywhere; text-align: center; }
+    .ce-step, .ce-intesta { padding-left: 10px; padding-right: 8px; }
+    .ce-step > .ce-errore { margin-left: 10px; }
+    .ce-legenda { margin-left: 0; }
+    .ce-cat-filtri { grid-template-columns: minmax(0, 1fr); }
+    .ce-modal { padding: 18px; max-height: 92vh; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- I valori vuoti restano elementi vuoti con classe cv-val: il trattino lo
+     mette il CSS, così la regola è la stessa su tutta la pagina. -->
+<div class="cv-page">
+
+  <nav class="navbar" aria-label="Navigazione principale">
+    <a href="{% url 'home' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+      </svg>
+      Home
+    </a>
+    <button class="nav-item" onclick="openSpotlight()" aria-label="Cerca">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+      </svg>
+      Cerca
+    </button>
+    <a href="{% url 'scarica' %}" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+      </svg>
+      Scarica
+    </a>
+    <a href="/admin/" class="nav-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+      </svg>
+      Impostazioni
+    </a>
+  </nav>
+
+  <!-- ── Testata del piano ── -->
+  <header class="qp-testata" aria-labelledby="cover-title">
+    <div class="qp-testata-top">
+      <div class="qp-testata-id">
+        <nav class="qp-briciole cv-label-mono" aria-label="Breadcrumb">
+          <a href="{% url 'commessa_detail' testata.job %}">Job {{ testata.job }}</a>
+          <span aria-hidden="true">›</span>
+          <a href="{% url 'quality_control_plan' testata.job %}">Quality control plan</a>
+          {% if piano.sheet %}<span aria-hidden="true">›</span><span>Sheet {{ piano.sheet }}</span>{% endif %}
+        </nav>
+        <div class="qp-titolo-riga">
+          <h1 class="cv-title" id="cover-title">{{ piano.doc_no|default:piano.titolo }}</h1>
+          <span class="cv-rev">Rev {{ piano.rev_no }}</span>
+          <span class="qp-stato{% if corpo.avanzamento.percentuale == 100 %} is-completo{% endif %}" id="qp-stato-piano">{% if corpo.avanzamento.percentuale == 100 %}Complete{% else %}In progress{% endif %}</span>
+        </div>
+        {% if piano.project or piano.items %}
+          <p class="qp-sottotitolo">
+            {% if piano.project %}<span>{{ piano.project }}</span>{% endif %}
+            {% if piano.project and piano.items %}<span class="qp-sep" aria-hidden="true">/</span>{% endif %}
+            {% if piano.items %}<span class="cv-mono qp-item">{{ piano.items_label }}</span>{% endif %}
+            {% if piano.items and piano.descrizione_item %}<span class="cv-mono qp-item-desc">{{ piano.descrizione_item }}</span>{% endif %}
+          </p>
+        {% endif %}
+      </div>
+      <div class="qp-azioni">
+        <div class="qp-persona">
+          {% if piano.prepared_by_iniziali %}<span class="cv-avatar" aria-hidden="true">{{ piano.prepared_by_iniziali }}</span>{% endif %}
+          <div>
+            <span class="qp-persona-label">Prepared by</span>
+            <span class="qp-persona-nome cv-val">{{ piano.prepared_by }}</span>
+          </div>
+        </div>
+        <button type="button" class="qp-btn" id="qp-btn-copertina" aria-expanded="false" aria-controls="qp-copertina">
+          <svg class="ce-freccia" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+          Cover
+        </button>
+        <button type="button" class="qp-btn" aria-disabled="true" title="Export is not available yet">Export</button>
+      </div>
+    </div>
+
+    <div class="qp-fascia">
+      <dl class="qp-fatti">
+        <div class="qp-fatto"><dt class="cv-label-mono">Job n.</dt><dd class="cv-mono cv-val">{{ piano.job_no }}</dd></div>
+        <div class="qp-fatto"><dt class="cv-label-mono">P.O. n.</dt><dd class="cv-mono cv-val">{{ piano.po_no }}</dd></div>
+        <div class="qp-fatto"><dt class="cv-label-mono">Location</dt><dd class="cv-val">{{ piano.location }}</dd></div>
+        <div class="qp-fatto"><dt class="cv-label-mono">Date</dt><dd class="cv-val">{{ piano.data_display }}</dd></div>
+        <div class="qp-fatto"><dt class="cv-label-mono">MDMT</dt><dd class="cv-mono cv-val">{% if piano.mdmt_numero %}{{ piano.mdmt_numero }} <span class="qp-unita">°C</span>{% endif %}</dd></div>
+        <div class="qp-fatto"><dt class="cv-label-mono">Inspection notice</dt><dd class="cv-val">{{ piano.notification_advice_time }}</dd></div>
+        <div class="qp-fatto qp-fatto-enti">
+          <dt class="cv-label-mono">Agencies</dt>
+          <dd>
+            {% if piano.agencies %}
+              <ol class="qp-enti" aria-label="Inspection agencies, in the order of the point columns">
+                {% for ente in piano.agencies %}<li><span class="cv-ente-n">{{ forloop.counter }}</span>{{ ente }}</li>{% endfor %}
+              </ol>
+            {% else %}
+              <span class="cv-empty">No agencies</span>
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+      <ul class="qp-requisiti" aria-label="Required">
+        {% if piano.asme_stamp %}<li class="qp-req">ASME stamp</li>{% endif %}
+        {% if piano.national_board %}<li class="qp-req">National board</li>{% endif %}
+        {% if piano.h2s_service %}<li class="qp-req">H2S</li>{% endif %}
+        {% if piano.lethal_service %}<li class="qp-req">Lethal service</li>{% endif %}
+        {% if not piano.requisiti_richiesti %}<li class="qp-req-nessuno">No requirements</li>{% endif %}
+      </ul>
+    </div>
+
+    <!-- Copertina: parti, identificativi, codici e spec. Aperta o chiusa lo
+         ricorda il browser. -->
+    <div class="qp-copertina" id="qp-copertina" hidden>
+      <section class="qp-cop-blocco" aria-labelledby="qp-cop-parti">
+        <h2 class="cv-label qp-cop-titolo" id="qp-cop-parti">Parties</h2>
+        <dl class="qp-campi">
+          <div><dt>Owner</dt><dd class="cv-val">{{ piano.owner }}</dd></div>
+          <div><dt>Purchaser</dt><dd class="cv-val">{{ piano.purchaser }}</dd></div>
+          <div><dt>Vendor</dt><dd class="cv-val">{{ piano.vendor }}</dd></div>
+        </dl>
+      </section>
+      <section class="qp-cop-blocco" aria-labelledby="qp-cop-identificativi">
+        <h2 class="cv-label qp-cop-titolo" id="qp-cop-identificativi">Identifiers</h2>
+        <dl class="qp-campi">
+          <div><dt>Dwg n.</dt><dd class="cv-mono cv-val">{{ piano.dwg_no }}</dd></div>
+          <div><dt>Serial n.</dt><dd class="cv-mono cv-val">{{ piano.serial_no }}</dd></div>
+          <div>
+            <dt>Item</dt>
+            <dd>
+              {% for item in piano.items %}
+                <span class="qp-item-voce"><span class="cv-mono qp-item-no">{{ item.item_no }}</span>{% if item.descrizione %}<span class="qp-item-voce-desc">{{ item.descrizione }}</span>{% endif %}</span>
+              {% empty %}
+                <span class="cv-empty">No items</span>
+              {% endfor %}
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section class="qp-cop-blocco" aria-labelledby="qp-cop-codici">
+        <h2 class="cv-label qp-cop-titolo" id="qp-cop-codici">Applicable codes</h2>
+        {% if piano.codes %}
+          <ul class="qp-elenco qp-codici">{% for codice in piano.codes %}<li>{{ codice }}</li>{% endfor %}</ul>
+        {% else %}
+          <p class="cv-empty">No codes</p>
+        {% endif %}
+      </section>
+      <section class="qp-cop-blocco" aria-labelledby="qp-cop-spec">
+        <h2 class="cv-label qp-cop-titolo" id="qp-cop-spec">Client specs</h2>
+        {% if piano.specs %}
+          <ul class="qp-elenco qp-spec">{% for spec in piano.specs %}<li>{{ spec }}</li>{% endfor %}</ul>
+        {% else %}
+          <p class="cv-empty">No specs</p>
+        {% endif %}
+      </section>
+    </div>
+  </header>
+
+  <!-- ── Corpo del piano: avanzamento e sezioni a sinistra, la sezione scelta
+       a destra. Chi può scrivere lo modifica qui; ogni modifica si salva subito. -->
+  <div class="qp-corpo ce{% if not corpo.enti %} ce-senza-enti{% endif %}" id="ce" style="--ce-ente-car: {{ corpo.ente_caratteri }}"
+       data-ha-firma="{% if user.firma %}1{% endif %}" data-url-profilo="{% url 'profilo' %}">
+    {% if user_can_write %}<p class="ce-sr" id="ce-aiuto-step">Press Enter to edit the step.</p>{% endif %}
+    <aside class="qp-side" aria-label="Plan progress and sections">
+      <section class="qp-compilato" aria-labelledby="qp-compilato-titolo">
+        <div class="qp-compilato-head">
+          <h2 class="cv-label" id="qp-compilato-titolo">Progress</h2>
+          <span class="qp-pct" id="qp-pct">{% if corpo.avanzamento.percentuale is not None %}{{ corpo.avanzamento.percentuale }}%{% endif %}</span>
+        </div>
+        <span class="qp-barra" id="qp-barra" role="progressbar" aria-labelledby="qp-compilato-titolo"
+              aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ corpo.avanzamento.percentuale|default:0 }}"{% if corpo.avanzamento.percentuale is None %} hidden{% endif %}><span style="width: {{ corpo.avanzamento.percentuale|default:0 }}%"></span></span>
+        <p class="qp-compilato-conta">
+          {% with firmati=corpo.avanzamento.firmati %}<span id="qp-completi">{{ firmati }} point{{ firmati|pluralize }} signed</span>{% endwith %}
+          <span id="qp-da-completare">{{ corpo.avanzamento.da_firmare }} to sign</span>
+        </p>
+      </section>
+
+      <div class="qp-sez-head">
+        <h2 class="cv-label" id="qp-sezioni-titolo">Sections</h2>
+        <span class="qp-sez-conta" id="ce-conteggio">{{ corpo.sezioni|length }} · {{ corpo.totale_step }} step{{ corpo.totale_step|pluralize }}</span>
+      </div>
+      <ol class="qp-nav" id="qp-nav" aria-labelledby="qp-sezioni-titolo">
+        {% for sezione in corpo.sezioni %}{% include "core/partials/qcp_sezione.html" with voce=True attiva=forloop.first %}{% endfor %}
+      </ol>
+
+      {% if user_can_write %}
+        <button type="button" class="qp-add-sezione" id="ce-add-sezione">+ Add section</button>
+        <form class="ce-nuova-sezione" id="ce-nuova-sezione" novalidate hidden>
+          <p class="ce-errore" role="alert" hidden></p>
+          <label class="ce-campo">
+            <span class="ce-campo-etichetta">New section title</span>
+            <input type="text" id="ce-nuova-titolo" maxlength="200" autocomplete="off">
+          </label>
+          <div class="ce-nuova-azioni">
+            <button type="button" class="ce-btn" data-azione="annulla-sezione">Cancel</button>
+            <button type="submit" class="ce-btn ce-btn-primary">Add</button>
+          </div>
+        </form>
+      {% endif %}
+    </aside>
+
+    <div class="qp-contenuto">
+      {% if not corpo.enti %}
+        <p class="ce-avviso">The plan has no inspection agencies, so the steps have no intervention point columns. Agencies come from the cover (Inspection agencies), in column order.</p>
+      {% endif %}
+
+      <ol class="ce-sezioni" id="ce-sezioni" aria-label="Selected section">
+        {% for sezione in corpo.sezioni %}{% include "core/partials/qcp_sezione.html" with voce=False attiva=forloop.first %}{% endfor %}
+      </ol>
+
+      <div class="ce-vuoto" id="ce-vuoto"{% if corpo.sezioni %} hidden{% endif %}>
+        <p class="ce-vuoto-titolo">No sections</p>
+        {% if user_can_write %}
+          <p class="cv-empty">The plan body is split into sections, for example "Documents approval" or "Material receiving". Add the first section, then its steps from the catalogue.</p>
+          <button type="button" class="ce-btn ce-btn-primary" data-azione="nuova-sezione">+ Add section</button>
+        {% else %}
+          <p class="cv-empty">This plan body has no sections yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if user_can_write %}
+    <!-- Modelli da cui il JS crea sezioni e step nuovi: lo stesso markup del server -->
+    <template id="ce-tpl-sezione">{% include "core/partials/qcp_sezione.html" with sezione=None voce=False attiva=False %}</template>
+    <template id="ce-tpl-voce">{% include "core/partials/qcp_sezione.html" with sezione=None voce=True attiva=False %}</template>
+    <template id="ce-tpl-step">{% include "core/partials/qcp_step.html" with step=corpo.prototipo_step %}</template>
+    {{ corpo.esiti_firma|json_script:"ce-esiti-firma" }}
+
+    <!-- Menu dei punti d'intervento: uno solo, si apre sotto la cella scelta. Un
+         ente può avere più stati insieme (R/SW): ogni stato si accende e si
+         spegne, "–" li toglie tutti. -->
+    <div class="ce-menu ce-punti-menu" id="ce-punti-menu" role="menu" aria-label="Intervention points, more than one allowed" hidden>
+      <p class="ce-pm-nota" aria-hidden="true">More than one allowed</p>
+      {% for punto in corpo.punti_disponibili %}
+        <button type="button" class="ce-menu-item ce-pm-voce" role="menuitemcheckbox" aria-checked="false"
+                data-punto="{{ punto.codice }}" data-etichetta="{{ punto.etichetta }}">
+          <span class="ce-pm-codice{% if punto.codice == '-' %} is-vuoto{% endif %}" aria-hidden="true">{% if punto.codice == '-' %}–{% else %}{{ punto.codice }}{% endif %}</span>
+          <span>{{ punto.etichetta }}</span>
+        </button>
+      {% endfor %}
+    </div>
+
+    <!-- Aggiungi step da catalogo -->
+    <div class="ce-backdrop" id="ce-catalogo" hidden>
+      <div class="ce-modal" role="dialog" aria-modal="true" aria-labelledby="ce-cat-titolo" aria-describedby="ce-cat-dove">
+        <div class="ce-modal-head">
+          <div>
+            <h2 class="ce-modal-titolo" id="ce-cat-titolo">Add steps from catalogue</h2>
+            <p class="ce-cat-dove" id="ce-cat-dove">Added at the end of section <strong id="ce-cat-sezione"></strong>, in the order you pick the activities.</p>
+          </div>
+          <button type="button" class="ce-chiudi" data-azione="chiudi-catalogo" aria-label="Close">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="ce-cat-filtri">
+          <label class="ce-campo">
+            <span class="ce-campo-etichetta">Search</span>
+            <input type="search" id="ce-cat-q" autocomplete="off" aria-describedby="ce-cat-stato">
+          </label>
+          <label class="ce-campo">
+            <span class="ce-campo-etichetta">Chapter</span>
+            <select id="ce-cat-capitolo">
+              <option value="">All chapters</option>
+              {% for capitolo in capitoli_catalogo %}<option value="{{ capitolo }}">{{ capitolo }}</option>{% endfor %}
+            </select>
+          </label>
+        </div>
+        <p class="ce-cat-stato" id="ce-cat-stato" role="status" aria-live="polite"></p>
+        <ul class="ce-cat-lista" id="ce-cat-lista" aria-label="Catalogue activities"></ul>
+        <div class="ce-modal-piede">
+          <p class="ce-errore" role="alert" hidden></p>
+          <span class="ce-cat-conta" id="ce-cat-conta">No activities selected</span>
+          <button type="button" class="ce-btn" data-azione="chiudi-catalogo">Cancel</button>
+          <button type="button" class="ce-btn ce-btn-primary" id="ce-cat-conferma" disabled>Add</button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
+  <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0s.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-12.37l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.39-1.41 0zM7.05 18.36l-1.06 1.06c-.39.39-.39 1.03 0 1.41s1.03.39 1.41 0l1.06-1.06c.39-.39.39-1.03 0-1.41s-1.03-.38-1.41 0z"/>
+  </svg>
+  <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+  </svg>
+</button>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/* ─────────────────────────────────────────────
+   PAGINA DEL PIANO
+   Per tutti: tema, copertina, scelta della sezione e menu. Per chi può
+   scrivere, l'editor del corpo: sezioni e step arrivano già disegnati dal
+   server, ogni modifica si salva subito con le API del corpo, che rispondono
+   col corpo intero, e da lì si aggiornano solo gli elementi che cambiano. Se il
+   server rifiuta, torna il valore di prima e l'errore compare vicino
+   all'elemento.
+───────────────────────────────────────────── */
+(function () {
+  'use strict';
+
+  /* ── Theme toggle ── */
+  var btnTema = document.getElementById('theme-toggle-btn');
+  btnTema.addEventListener('click', function () {
+    var current = document.documentElement.getAttribute('data-theme');
+    var isDark = current === 'dark' ||
+      (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('theme', next);
+  });
+
+  function tutti(radice, selettore) {
+    return Array.prototype.slice.call(radice.querySelectorAll(selettore));
+  }
+  function figli(el, selettore) {
+    return Array.prototype.filter.call(el.children, function (c) { return c.matches(selettore); });
+  }
+  function sezioneDi(el) { return el.closest('.ce-sezione'); }
+  function plurale(n, uno, molti) { return n + ' ' + (n === 1 ? uno : molti); }
+
+  /* ── Copertina: aperta o chiusa, la scelta resta nel browser ── */
+  var CHIAVE_COPERTINA = 'qcp-copertina-aperta';
+  var btnCopertina = document.getElementById('qp-btn-copertina');
+  var copertina = document.getElementById('qp-copertina');
+
+  function mostraCopertina(aperta) {
+    copertina.hidden = !aperta;
+    btnCopertina.setAttribute('aria-expanded', aperta ? 'true' : 'false');
+  }
+  try {
+    mostraCopertina(localStorage.getItem(CHIAVE_COPERTINA) === '1');
+  } catch (e) { /* storage non disponibile: resta chiusa */ }
+  btnCopertina.addEventListener('click', function () {
+    var aperta = copertina.hidden;
+    mostraCopertina(aperta);
+    try { localStorage.setItem(CHIAVE_COPERTINA, aperta ? '1' : '0'); } catch (e) { /* non si ricorda */ }
+  });
+
+  /* ── Sezione scelta ──
+     Si vede una sezione alla volta. La scelta sta nell'indirizzo (#sez-<id>),
+     così un ricaricamento o un link riportano alla stessa sezione; senza, la
+     prima. Cambiarla non ricarica la pagina. */
+  var ce = document.getElementById('ce');
+  var listaSez = document.getElementById('ce-sezioni');
+  var nav = document.getElementById('qp-nav');
+  var attiva = null;
+
+  function sezioneEl(id) { return listaSez.querySelector('.ce-sezione[data-id="' + id + '"]'); }
+  function voceEl(id) { return nav.querySelector('.qp-voce[data-id="' + id + '"]'); }
+  function stepEl(id) { return listaSez.querySelector('.ce-step[data-id="' + id + '"]'); }
+
+  function seleziona(id, scriviIndirizzo) {
+    var sezioni = figli(listaSez, '.ce-sezione');
+    var scelta = (id && sezioneEl(id)) || sezioni[0] || null;
+    if (scelta !== attiva) chiudiMenu(false);
+    sezioni.forEach(function (s) { s.hidden = s !== scelta; });
+    figli(nav, '.qp-voce').forEach(function (v) {
+      var on = !!scelta && v.dataset.id === scelta.dataset.id;
+      var bottone = v.querySelector('.qp-voce-btn');
+      v.classList.toggle('is-attiva', on);
+      bottone.setAttribute('aria-current', on ? 'true' : 'false');
+      bottone.tabIndex = on ? 0 : -1;
+    });
+    attiva = scelta;
+    if (scriviIndirizzo && scelta) history.replaceState(null, '', '#sez-' + scelta.dataset.id);
+    if (scelta) mostraVoce(voceEl(scelta.dataset.id));
+    return scelta;
+  }
+
+  // L'elenco delle sezioni scorre da solo: la voce scelta resta in vista, anche
+  // aprendo un link a una sezione in fondo. Si sposta solo l'elenco, mai la pagina.
+  function mostraVoce(voce) {
+    if (!voce) return;
+    var n = nav.getBoundingClientRect();
+    var v = voce.getBoundingClientRect();
+    if (v.top < n.top) nav.scrollTop -= n.top - v.top;
+    else if (v.bottom > n.bottom) nav.scrollTop += v.bottom - n.bottom;
+  }
+
+  function sezioneDaIndirizzo() {
+    var m = /^#sez-(\d+)$/.exec(location.hash);
+    return m ? m[1] : null;
+  }
+
+  nav.addEventListener('click', function (e) {
+    var bottone = e.target.closest('.qp-voce-btn');
+    if (!bottone) return;
+    var sez = seleziona(bottone.closest('.qp-voce').dataset.id, true);
+    // Con la barra sopra la sezione (schermi stretti) si porta la sezione in vista.
+    if (sez && window.matchMedia('(max-width: 960px)').matches) sez.scrollIntoView({ block: 'start' });
+  });
+
+  // Frecce su/giù, Home e Fine scorrono le sezioni, come un elenco di schede.
+  nav.addEventListener('keydown', function (e) {
+    var bottone = e.target.closest('.qp-voce-btn');
+    if (!bottone) return;
+    var bottoni = tutti(nav, '.qp-voce-btn');
+    var i = bottoni.indexOf(bottone);
+    var j = { ArrowDown: Math.min(i + 1, bottoni.length - 1), ArrowUp: Math.max(i - 1, 0), Home: 0, End: bottoni.length - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    seleziona(bottoni[j].closest('.qp-voce').dataset.id, true);
+    bottoni[j].focus();
+  });
+
+  // Anche un cambio d'indirizzo a pagina aperta (avanti/indietro, un link a
+  // #sez-…) cambia sezione: il browser non ricarica per il solo #.
+  window.addEventListener('hashchange', function () { seleziona(sezioneDaIndirizzo(), false); });
+
+  /* ── Menu ··· e menu dei punti ──
+     Frecce su/giù, Home/Fine per muoversi, Invio per scegliere, Esc per
+     chiudere e tornare al pulsante, Tab per uscire. */
+  var menuAperto = null;
+  var apertoDa = null;
+  var puntiMenu = document.getElementById('ce-punti-menu');   // solo per chi scrive
+  var modale = document.getElementById('ce-catalogo');        // idem
+  var azioni = null;   // le azioni dei menu dell'editor: le imposta la parte di scrittura
+
+  function vociMenu(menu) { return tutti(menu, '.ce-menu-item:not([disabled])'); }
+
+  function chiudiMenu(rimettiFuoco) {
+    if (!menuAperto) return;
+    menuAperto.hidden = true;
+    apertoDa.setAttribute('aria-expanded', 'false');
+    if (rimettiFuoco && document.contains(apertoDa)) apertoDa.focus();
+    menuAperto = null;
+    apertoDa = null;
+  }
+
+  function apriMenu(menu, bottone, voce) {
+    chiudiMenu(false);
+    menu.hidden = false;
+    menuAperto = menu;
+    apertoDa = bottone;
+    bottone.setAttribute('aria-expanded', 'true');
+    var r = bottone.getBoundingClientRect();
+    var m = menu.getBoundingClientRect();
+    var top = r.bottom + 6;
+    if (top + m.height > window.innerHeight - 8 && r.top - m.height - 6 > 8) top = r.top - m.height - 6;
+    menu.style.top = top + 'px';
+    menu.style.left = Math.max(8, Math.min(r.right - m.width, window.innerWidth - m.width - 8)) + 'px';
+    (voce || vociMenu(menu)[0]).focus({ preventScroll: true });
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (menuAperto && menuAperto.contains(t)) {
+      var voce = t.closest('.ce-menu-item');
+      if (voce && !voce.disabled && azioni) azioni(voce);
+      return;
+    }
+    var dots = t.closest('.ce-dots');
+    if (dots) {
+      var menu = dots.nextElementSibling;
+      if (menuAperto === menu) { chiudiMenu(true); return; }
+      if (azioni) preparaMenu(dots, menu);
+      apriMenu(menu, dots);
+      return;
+    }
+    var punto = t.closest('.ce-punto');
+    if (punto && !punto.disabled && puntiMenu) {
+      if (menuAperto === puntiMenu && apertoDa === punto) { chiudiMenu(true); return; }
+      apriPunti(punto);
+      return;
+    }
+    chiudiMenu(false);
+  });
+
+  // In cattura, così Esc chiude prima il menu e solo dopo, a un secondo Esc,
+  // il catalogo.
+  document.addEventListener('keydown', function (e) {
+    if (menuAperto) {
+      var voci = vociMenu(menuAperto);
+      var i = voci.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        var passo = e.key === 'ArrowDown' ? 1 : voci.length - 1;
+        voci[(i + passo) % voci.length].focus();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        voci[e.key === 'Home' ? 0 : voci.length - 1].focus();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        chiudiMenu(true);
+      } else if (e.key === 'Tab') {
+        chiudiMenu(false);
+      } else if (menuAperto === puntiMenu && e.key.length === 1) {
+        // Una lettera porta al punto che comincia con quella: S → SW, - → "–".
+        var trovata = voci.find(function (v) { return v.dataset.punto.charAt(0) === e.key.toUpperCase(); });
+        if (trovata) { e.preventDefault(); trovata.focus(); }
+      }
+      return;
+    }
+    if (e.key === 'Escape' && modale && !modale.hidden) {
+      e.preventDefault();
+      chiudiCatalogo();
+    }
+  }, true);
+
+  window.addEventListener('scroll', function () { chiudiMenu(false); }, true);
+  window.addEventListener('resize', function () { chiudiMenu(false); });
+
+  seleziona(sezioneDaIndirizzo(), false);
+
+  /* ─────────────────────────────────────────────
+     EDITOR DEL CORPO (solo per chi può scrivere)
+  ───────────────────────────────────────────── */
+  var tplSezione = document.getElementById('ce-tpl-sezione');
+  var tplVoce = document.getElementById('ce-tpl-voce');
+  var tplStep = document.getElementById('ce-tpl-step');
+  if (!tplSezione || !tplVoce || !tplStep) return;   // sola lettura: niente da modificare
+  azioni = eseguiVoce;
+
+  var PIANO = {{ piano.id }};
+  var API = '/api/commesse/' + encodeURIComponent("{{ testata.job|escapejs }}") +
+            '/quality-control-plan/' + PIANO + '/corpo/';
+  var API_PIANO = API.slice(0, -'corpo/'.length);
+  var API_CATALOGO = '/api/catalogo-qcp/';
+
+  var conteggioEl = document.getElementById('ce-conteggio');
+  var vuotoEl = document.getElementById('ce-vuoto');
+  var pctEl = document.getElementById('qp-pct');
+  var barraPiano = document.getElementById('qp-barra');
+  var completiEl = document.getElementById('qp-completi');
+  var daCompletareEl = document.getElementById('qp-da-completare');
+  var statoPianoEl = document.getElementById('qp-stato-piano');
+  var ETICHETTE = {};   // codice del punto → descrizione, dal menu dei punti
+  tutti(puntiMenu, '[data-punto]').forEach(function (voce) {
+    ETICHETTE[voce.dataset.punto] = voce.dataset.etichetta;
+  });
+
+  /* ── Messaggi ──
+     Il messaggio compare nel piede della sezione e dopo qualche secondo lascia
+     il posto all'ora dell'ultimo salvataggio. */
+  var timerStato = null;
+  var ultimoSalvataggio = '';
+  function scriviStato(testo) {
+    tutti(listaSez, '.ce-stato').forEach(function (el) { el.textContent = testo; });
+  }
+  function stato(testo) {
+    scriviStato(testo);
+    clearTimeout(timerStato);
+    timerStato = setTimeout(function () { scriviStato(ultimoSalvataggio); }, 2500);
+  }
+
+  // L'errore va vicino all'elemento: sotto la riga dello step, sotto
+  // l'intestazione della sezione, nel modulo della nuova sezione o nel piede
+  // del catalogo.
+  function erroreDi(contenitore) {
+    return contenitore.querySelector(':scope > .ce-errore') || contenitore.querySelector('.ce-errore');
+  }
+  function mostraErrore(contenitore, testo) {
+    var el = contenitore && document.contains(contenitore) ? erroreDi(contenitore) : null;
+    if (!el) { showPermissionDenied(testo); return; }
+    el.textContent = testo;
+    el.hidden = false;
+    clearTimeout(el._timer);
+    el._timer = setTimeout(function () { el.hidden = true; }, 8000);
+  }
+  function nascondiErrore(contenitore) {
+    var el = erroreDi(contenitore);
+    if (el) el.hidden = true;
+  }
+
+  /* ── API ── */
+  function testoErrore(errore) {
+    if (!errore) return 'Unexpected error: the change was not saved.';
+    if (typeof errore === 'string') return errore;
+    return Object.keys(errore).map(function (k) { return [].concat(errore[k]).join(' '); }).join(' ');
+  }
+
+  var inviate = 0;
+  var applicata = 0;
+
+  /* Se la chiamata riesce, il corpo della risposta aggiorna la pagina; se no la
+     promessa fallisce col messaggio da mostrare. Una risposta arrivata dopo
+     una più recente non riporta indietro la pagina. */
+  function chiama(metodo, percorso, dati) {
+    var n = ++inviate;
+    var opzioni = {
+      method: metodo,
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': window.CSRF_TOKEN || '' }
+    };
+    if (dati !== undefined) {
+      opzioni.headers['Content-Type'] = 'application/json';
+      opzioni.body = JSON.stringify(dati);
+    }
+    return fetch(API + percorso, opzioni)
+      .catch(function () { throw new Error('Network error: the change was not saved.'); })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          if (r.ok) {
+            var corpo = body.data || body;
+            if (metodo !== 'GET') {
+              ultimoSalvataggio = 'Salvato · ' + new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            }
+            if (n > applicata) { applicata = n; applica(corpo); }
+            return corpo;
+          }
+          if (isPermissionDeniedResponse(r, body)) throw new Error('You do not have permission to edit the plan.');
+          if (r.status === 404 && metodo !== 'GET') {
+            riallinea();
+            throw new Error('Item not found: someone else may have deleted it. The page has been refreshed.');
+          }
+          throw new Error(testoErrore(body.error));
+        });
+      });
+  }
+
+  function riallinea() { chiama('GET', '').catch(function () {}); }
+
+  function orario() {
+    return 'Saved · ' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // Firme: la risposta porta solo i punti toccati e l'avanzamento, non il corpo
+  // intero, quindi non passa da applica(). Senza dati è una lettura (storico).
+  function chiamaFirme(url, dati) {
+    var opzioni = { method: dati === undefined ? 'GET' : 'POST', credentials: 'same-origin', headers: {} };
+    if (dati !== undefined) {
+      opzioni.headers['X-CSRFToken'] = window.CSRF_TOKEN || '';
+      opzioni.headers['Content-Type'] = 'application/json';
+      opzioni.body = JSON.stringify(dati);
+    }
+    return fetch(url, opzioni)
+      .catch(function () { throw new Error('Network error: the signature was not recorded.'); })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          if (r.ok) {
+            if (dati !== undefined) ultimoSalvataggio = orario();
+            return body.data || body;
+          }
+          if (isPermissionDeniedResponse(r, body)) throw new Error('You do not have permission to sign.');
+          throw new Error(testoErrore(body.error));
+        });
+      });
+  }
+
+  /* ── Aggiornamento della pagina dal corpo del server ── */
+  function nuovaSezione(s) {
+    var li = tplSezione.content.firstElementChild.cloneNode(true);
+    li.dataset.id = s.id;
+    li.id = 'ce-sez-' + s.id;
+    return li;
+  }
+  function nuovaVoce(s) {
+    var li = tplVoce.content.firstElementChild.cloneNode(true);
+    li.dataset.id = s.id;
+    li.querySelector('.qp-voce-btn').setAttribute('aria-controls', 'ce-sez-' + s.id);
+    return li;
+  }
+  function nuovoStep(st) {
+    var li = tplStep.content.firstElementChild.cloneNode(true);
+    li.dataset.id = st.id;
+    return li;
+  }
+
+  // Sposta el alla posizione indice di padre solo se non c'è già: un nodo che
+  // resta al suo posto non perde il fuoco.
+  function posiziona(padre, el, indice) {
+    var al = padre.children[indice];
+    if (al !== el) padre.insertBefore(el, al || null);
+  }
+
+  function salvato(campo) {
+    return campo.dataset.salvato !== undefined ? campo.dataset.salvato : campo.defaultValue;
+  }
+
+  function percentuale(frazione) {
+    return String(Math.round(Number(frazione) * 1000) / 10).replace('.', ',');
+  }
+
+  // Anche composto: "R/SW" → "Review + Spot witness", come nel server.
+  function etichettaPunto(codice) {
+    return codice.split('/').map(function (stato) { return ETICHETTE[stato] || stato; }).join(' + ');
+  }
+
+  // Lo stato di firma di una cella, con le stesse parole del server (stato_firma).
+  function statoCella(btn) {
+    if (btn.dataset.punto === '-') return '';
+    if (!btn.dataset.firmaEsito) return 'to be signed';
+    return btn.dataset.firmaEsitoEtichetta.toLowerCase() + ', signed by ' +
+      btn.dataset.firmaUtente + ' on ' + btn.dataset.firmaQuando;
+  }
+
+  // Descrizione e tooltip della cella: ente, punto e stato di firma.
+  function etichettaCella(btn) {
+    var etichetta = etichettaPunto(btn.dataset.punto);
+    var stato = statoCella(btn);
+    btn.setAttribute('aria-label', btn.dataset.enteNome + ', intervention point: ' + etichetta + (stato ? ', ' + stato : ''));
+    btn.title = btn.dataset.enteNome + ': ' + etichetta + (stato ? ' — ' + stato : '');
+  }
+
+  function mostraPunto(btn, codice) {
+    btn.dataset.punto = codice;
+    btn.querySelector('.ce-punto-sigla').textContent = codice === '-' ? '–' : codice;
+    btn.classList.toggle('is-vuoto', codice === '-');
+    etichettaCella(btn);
+  }
+
+  // data-firma-* della cella ← campo della firma serializzata dal server.
+  var CAMPI_FIRMA = {
+    firmaId: 'id',
+    firmaEsitoEtichetta: 'esito_etichetta',
+    firmaUtente: 'utente',
+    firmaQuando: 'firmato_il_display',
+    firmaImmagine: 'immagine',
+    firmaNote: 'note'
+  };
+
+  // La firma valida di un punto (o nessuna) sulla sua cella: il segno
+  // nell'angolo lo disegna il CSS da data-firma-esito.
+  function impostaFirma(btn, p) {
+    if (p.id) btn.dataset.puntoId = p.id;
+    btn.dataset.firme = p.firme_registrate || 0;
+    btn.dataset.firmaEsito = p.firma ? p.firma.esito : '';
+    Object.keys(CAMPI_FIRMA).forEach(function (chiave) {
+      if (p.firma) btn.dataset[chiave] = p.firma[CAMPI_FIRMA[chiave]];
+      else delete btn.dataset[chiave];
+    });
+    etichettaCella(btn);
+  }
+
+  // Un testo della seconda riga senza valore non si vede (tranne in modifica).
+  function segnaVuoto(val, valore) {
+    var coppia = val.closest('.ce-coppia');
+    if (coppia) coppia.classList.toggle('is-vuota', !valore);
+  }
+
+  function aggiornaStep(li, st) {
+    var extent = li.querySelector('.ce-extent-input');
+    extent.dataset.salvato = percentuale(st.extent);
+    if (document.activeElement !== extent) extent.value = extent.dataset.salvato;
+    st.punti.forEach(function (p) {
+      var btn = li.querySelector('.ce-punto[data-ente="' + p.agency_id + '"]');
+      if (!btn) return;
+      // Una cella con salvataggi ancora in volo mostra già l'ultimo stato scelto:
+      // la risposta di una richiesta precedente non la deve riportare indietro.
+      if (!btn._inAttesa) mostraPunto(btn, p.punto);
+      impostaFirma(btn, p);
+    });
+    // Il pannello delle firme si ridisegna solo se le firme sono cambiate: un
+    // modulo di firma aperto non si perde per il salvataggio di un testo.
+    var pannello = li.querySelector('.ce-firme');
+    if (pannello && pannello.dataset.chiave !== chiaveFirme(li)) ridisegnaFirme(li);
+    // Il campo che si sta scrivendo non si tocca: il valore arriva col suo salvataggio.
+    tutti(li, '.ce-testo').forEach(function (cella) {
+      var valore = st[cella.dataset.campo] || '';
+      var val = cella.querySelector('.ce-testo-val');
+      val.textContent = valore;
+      segnaVuoto(val, valore);
+      var campo = cella.querySelector('.ce-campo-riga');
+      if (!campo) return;
+      campo.dataset.salvato = valore;
+      if (document.activeElement !== campo) {
+        campo.value = valore;
+        adatta(campo);
+      }
+    });
+  }
+
+  /* ── Avanzamento ──
+     Lo stesso conto del server: da firmare sono i punti con un ente coinvolto
+     (non "-"), firmati quelli con una firma valida (data-firma-esito). La
+     percentuale è intera e per difetto; una sezione senza punti da firmare non
+     ne ha, quindi niente barra. */
+  function avanzamentoDi(radice) {
+    var celle = tutti(radice, '.ce-punto').filter(function (c) { return c.dataset.punto !== '-'; });
+    var firmati = celle.filter(function (c) { return c.dataset.firmaEsito; }).length;
+    return {
+      totali: celle.length,
+      firmati: firmati,
+      pct: celle.length ? Math.floor(100 * firmati / celle.length) : null
+    };
+  }
+
+  function barra(el, pct) {
+    el.hidden = pct === null;
+    if (pct === null) return;
+    el.firstElementChild.style.width = pct + '%';
+    if (el.hasAttribute('aria-valuenow')) el.setAttribute('aria-valuenow', pct);
+  }
+
+  // Numeri, conteggi, avanzamento, stati vuoti ed elenco laterale dall'ordine
+  // dei pannelli: la numerazione degli step attraversa le sezioni, come nel server.
+  function rinumera() {
+    var sezioni = figli(listaSez, '.ce-sezione');
+    var numero = 0;
+    var totali = 0;
+    var firmati = 0;
+    sezioni.forEach(function (sez, i) {
+      var steps = tutti(sez, '.ce-step');
+      var av = avanzamentoDi(sez);
+      steps.forEach(function (st) {
+        numero += 1;
+        st.querySelector('.ce-step-n').textContent = numero;
+      });
+      totali += av.totali;
+      firmati += av.firmati;
+      var conta = plurale(steps.length, 'step', 'steps') + (av.pct === null ? '' : ' · ' + av.pct + '%');
+      sez.querySelector('.ce-sez-n').textContent = i + 1;
+      sez.querySelector('.ce-sez-conta').textContent = conta + (av.pct === null ? '' : ' complete');
+      sez.querySelector('.ce-tabella').hidden = !steps.length;
+      sez.querySelector('.ce-sez-vuota').hidden = steps.length > 0;
+      sez.querySelector('.ce-sez-piede [data-azione="catalogo"]').hidden = !steps.length;
+      var voce = voceEl(sez.dataset.id);
+      if (!voce) return;
+      posiziona(nav, voce, i);
+      voce.querySelector('.ce-sez-n').textContent = i + 1;
+      voce.querySelector('.qp-voce-titolo').textContent = sez.querySelector('.ce-sez-titolo').textContent;
+      voce.querySelector('.qp-voce-meta').textContent = steps.length ? conta : 'No steps yet';
+      barra(voce.querySelector('.qp-barra'), av.pct);
+    });
+    figli(nav, '.qp-voce').forEach(function (v) {
+      if (!sezioneEl(v.dataset.id)) v.remove();
+    });
+    conteggioEl.textContent = sezioni.length + ' · ' + plurale(numero, 'step', 'steps');
+    // Il piano ha sempre una percentuale: senza punti da firmare è 0.
+    var pct = totali ? Math.floor(100 * firmati / totali) : 0;
+    pctEl.textContent = pct + '%';
+    barra(barraPiano, pct);
+    completiEl.textContent = plurale(firmati, 'point signed', 'points signed');
+    daCompletareEl.textContent = (totali - firmati) + ' to sign';
+    var completo = totali > 0 && firmati === totali;
+    statoPianoEl.textContent = completo ? 'Complete' : 'In progress';
+    statoPianoEl.classList.toggle('is-completo', completo);
+    vuotoEl.hidden = sezioni.length > 0;
+    if (!attiva || !document.contains(attiva)) seleziona(null, false);
+  }
+
+  function applica(corpo) {
+    var sezioniViste = {};
+    var stepVisti = {};
+    corpo.sezioni.forEach(function (s, i) {
+      var li = sezioneEl(s.id) || nuovaSezione(s);
+      posiziona(listaSez, li, i);
+      li.querySelector('.ce-sez-titolo').textContent = s.titolo;
+      if (!voceEl(s.id)) nav.appendChild(nuovaVoce(s));
+      sezioniViste[s.id] = true;
+      var ol = li.querySelector('.ce-steps');
+      s.steps.forEach(function (st, j) {
+        var sli = stepEl(st.id) || nuovoStep(st);
+        posiziona(ol, sli, j);
+        aggiornaStep(sli, st);
+        stepVisti[st.id] = true;
+      });
+    });
+    tutti(listaSez, '.ce-step').forEach(function (el) {
+      if (!stepVisti[el.dataset.id]) el.remove();
+    });
+    figli(listaSez, '.ce-sezione').forEach(function (el) {
+      if (!sezioniViste[el.dataset.id]) el.remove();
+    });
+    if (menuAperto && !document.contains(apertoDa)) chiudiMenu(false);
+    rinumera();
+  }
+
+  /* ── Menu dell'editor ── */
+  // Sposta su / giù della sezione: disattivati dove non c'è posto.
+  function preparaMenu(dots, menu) {
+    var su = menu.querySelector('[data-azione="su"]');
+    var giu = menu.querySelector('[data-azione="giu"]');
+    if (!su || !giu) return;
+    var sezioni = figli(listaSez, '.ce-sezione');
+    var j = sezioni.indexOf(sezioneDi(dots));
+    su.disabled = j === 0;
+    giu.disabled = j === sezioni.length - 1;
+  }
+
+
+  // Un ente può avere più stati insieme ("R/SW"): ogni voce si accende e si
+  // spegne, nell'ordine in cui la scegli; "–" toglie tutti gli altri, e
+  // spegnere l'ultimo stato riporta a "–".
+  function componiPunto(attuale, stato) {
+    if (stato === '-') return '-';
+    var stati = attuale === '-' ? [] : attuale.split('/');
+    var i = stati.indexOf(stato);
+    if (i >= 0) stati.splice(i, 1);
+    else stati.push(stato);
+    return stati.length ? stati.join('/') : '-';
+  }
+
+  function segnaPunti(codice) {
+    var stati = codice.split('/');
+    tutti(puntiMenu, '[data-punto]').forEach(function (voce) {
+      voce.setAttribute('aria-checked', stati.indexOf(voce.dataset.punto) >= 0 ? 'true' : 'false');
+    });
+  }
+
+  function apriPunti(btn) {
+    segnaPunti(btn.dataset.punto);
+    apriMenu(puntiMenu, btn, puntiMenu.querySelector('[aria-checked="true"]'));
+  }
+
+  function eseguiVoce(voce) {
+    var da = apertoDa;
+    if (menuAperto === puntiMenu) {
+      // Il menu resta aperto per aggiungere altri stati; "–" lo chiude.
+      var nuovo = componiPunto(da.dataset.punto, voce.dataset.punto);
+      if (voce.dataset.punto === '-') chiudiMenu(true);
+      else segnaPunti(nuovo);
+      scegliPunto(da, nuovo);
+      return;
+    }
+    chiudiMenu(false);
+    var azione = voce.dataset.azione;
+    var sez = sezioneDi(da);
+    if (azione === 'rinomina-sezione') rinominaSezione(sez);
+    else if (azione === 'elimina-sezione') eliminaSezione(sez, da);
+    else if (sez) spostaSezioneDiUno(sez, azione === 'su' ? -1 : 1);
+  }
+
+  /* ── Punti d'intervento ── */
+  function scegliPunto(btn, codice) {
+    var prima = btn.dataset.punto;
+    if (codice === prima) return;
+    var step = btn.closest('.ce-step');
+    mostraPunto(btn, codice);
+    nascondiErrore(step);
+    btn._inAttesa = (btn._inAttesa || 0) + 1;
+    chiama('PATCH', 'steps/' + step.dataset.id + '/punti/',
+           { punti: [{ agency: Number(btn.dataset.ente), punto: codice }] })
+      .then(function () {
+        btn._inAttesa -= 1;
+        stato('Point saved.');
+      })
+      .catch(function (err) {
+        btn._inAttesa -= 1;
+        // Con altre scelte ancora in volo "prima" non è più lo stato giusto:
+        // si torna indietro solo se questa era l'ultima.
+        if (!btn._inAttesa) {
+          mostraPunto(btn, prima);
+          if (menuAperto === puntiMenu && apertoDa === btn) segnaPunti(prima);
+        }
+        mostraErrore(step, err.message);
+      });
+  }
+
+  /* ── Extent (in percentuale; l'API vuole la frazione) ── */
+  // La percentuale scritta, o il messaggio che spiega cosa non va.
+  function leggiPercentuale(testo) {
+    var t = String(testo).replace('%', '').trim().replace(',', '.');
+    if (!/^-?\d+(\.\d+)?$/.test(t)) return 'Invalid extent: enter a percentage between 0 and 100.';
+    var n = Number(t);
+    if (n < 0 || n > 100) return 'Extent out of range: it must be between 0 and 100%.';
+    if (Math.abs(n * 10 - Math.round(n * 10)) > 1e-9) return 'Extent: one decimal at most (for example 12.5).';
+    return n;
+  }
+
+  function salvaExtent(input) {
+    var step = input.closest('.ce-step');
+    var prima = salvato(input);
+    var letto = leggiPercentuale(input.value);
+    if (typeof letto === 'string') {
+      input.value = prima;
+      mostraErrore(step, letto);
+      return;
+    }
+    input.value = percentuale(letto / 100);
+    if (input.value === prima) return;
+    nascondiErrore(step);
+    chiama('PATCH', 'steps/' + step.dataset.id + '/', { extent: Math.round(letto * 10) / 1000 })
+      .then(function () { stato('Extent saved.'); })
+      .catch(function (err) {
+        input.value = prima;
+        mostraErrore(step, err.message);
+      });
+  }
+
+  /* ── Testi dello step: si correggono sulla riga, da "Modifica" nel menu ··· ──
+     I testi diventano campi al loro posto (anche quelli vuoti, per poterli
+     riempire) e ciascuno si salva quando lo lasci, come il resto della pagina.
+     Invio o un clic fuori dalla riga chiudono la modifica; Esc annulla il campo
+     in corso e la chiude. */
+  function valoreCella(step, nome) {
+    return step.querySelector('.ce-testo[data-campo="' + nome + '"] .ce-testo-val');
+  }
+
+  function adatta(campo) {
+    campo.style.height = 'auto';
+    campo.style.height = campo.scrollHeight + 2 + 'px';
+  }
+
+  // Con ``campo`` il fuoco va al testo cliccato, col cursore in fondo; senza
+  // (da tastiera) va alla descrizione, tutta selezionata.
+  function modificaStep(step, campo) {
+    if (!step.classList.contains('is-modifica')) {
+      step.classList.add('is-modifica');
+      tutti(step, '.ce-testo').forEach(function (cella) {
+        var campo = document.createElement('textarea');
+        campo.className = 'ce-campo-riga';
+        campo.rows = 1;
+        campo.dataset.campo = cella.dataset.campo;
+        campo.maxLength = Number(cella.dataset.max);
+        campo.required = cella.dataset.campo === 'descrizione';
+        campo.setAttribute('aria-label', cella.dataset.etichetta);
+        campo.value = campo.dataset.salvato = cella.querySelector('.ce-testo-val').textContent;
+        cella.appendChild(campo);
+        adatta(campo);
+      });
+      ridisegnaFirme(step);
+      stato('To close, click the step again outside the fields, or click outside the step.');
+    }
+    var scelto = campo && step.querySelector('.ce-campo-riga[data-campo="' + campo + '"]');
+    var primo = scelto || step.querySelector('.ce-campo-riga');
+    primo.focus();
+    if (scelto) primo.setSelectionRange(primo.value.length, primo.value.length);
+    else primo.select();
+  }
+
+  function fineModifica(step) {
+    if (!step.classList.contains('is-modifica')) return;
+    step.classList.remove('is-modifica');
+    tutti(step, '.ce-campo-riga, .ce-firme').forEach(function (el) { el.remove(); });
+  }
+
+  function salvaTesto(campo) {
+    var step = campo.closest('.ce-step');
+    var cella = valoreCella(step, campo.dataset.campo);
+    var prima = salvato(campo);
+    var valore = campo.value.trim();
+    if (valore === prima) { campo.value = prima; return; }
+    if (campo.dataset.campo === 'descrizione' && !valore) {
+      campo.value = prima;
+      mostraErrore(step, 'The step description is required.');
+      return;
+    }
+    cella.textContent = valore;
+    segnaVuoto(cella, valore);
+    var dati = {};
+    dati[campo.dataset.campo] = valore;
+    nascondiErrore(step);
+    chiama('PATCH', 'steps/' + step.dataset.id + '/', dati)
+      .then(function () { stato('Change saved.'); })
+      .catch(function (err) {
+        cella.textContent = prima;
+        segnaVuoto(cella, prima);
+        campo.value = prima;
+        mostraErrore(step, err.message);
+      });
+  }
+
+  ce.addEventListener('change', function (e) {
+    if (e.target.matches('.ce-extent-input')) salvaExtent(e.target);
+    else if (e.target.matches('.ce-campo-riga')) salvaTesto(e.target);
+  });
+
+  ce.addEventListener('input', function (e) {
+    if (e.target.matches('.ce-campo-riga')) adatta(e.target);
+  });
+
+  // La modifica finisce quando il fuoco lascia lo step (campi, extent e azioni
+  // sono dentro): dopo un giro di eventi, così il change del campo appena
+  // lasciato parte prima, col suo valore.
+  ce.addEventListener('focusout', function (e) {
+    var step = e.target.closest('.ce-step.is-modifica');
+    if (!step) return;
+    setTimeout(function () {
+      if (!step.contains(document.activeElement)) fineModifica(step);
+    }, 0);
+  });
+
+  /* ── Clic su uno step: si apre e si richiude sulla riga ──
+     Un clic sullo step lo apre, col fuoco sul testo cliccato; un altro clic
+     sullo step aperto, fuori da tutto ciò che si compila o si preme, lo
+     richiude. Punti, extent, maniglia, campi, pulsanti e il pannello delle
+     firme fanno la loro cosa e basta; se si stava selezionando del testo non
+     succede niente. Da tastiera: Invio sullo step apre, Esc in un campo chiude. */
+  ce.addEventListener('click', function (e) {
+    var elimina = e.target.closest('[data-step-azione="elimina"]');
+    if (elimina) { eliminaStep(elimina.closest('.ce-step'), elimina); return; }
+    var step = e.target.closest('.ce-step');
+    if (!step) return;
+    if (e.target.closest('.ce-punti, .ce-extent, .ce-maniglia, .ce-firme, button, input, textarea, select, label, a')) return;
+    if (String(window.getSelection()).trim()) return;
+    if (step.classList.contains('is-modifica')) {
+      fineModifica(step);
+      step.focus();
+      return;
+    }
+    var cella = e.target.closest('.ce-testo');
+    modificaStep(step, cella ? cella.dataset.campo : null);
+  });
+
+  /* ── Firme dei punti, nel dettaglio dello step ──
+     Firma elettronica semplice: l'utente autenticato dichiara che il controllo
+     è avvenuto, e si registrano chi, l'esito e quando. Una riga per ogni punto
+     con un ente coinvolto; i dati della firma stanno sulle celle della riga
+     (data-firma-*), così il pannello si disegna senza chiedere niente al
+     server. Dopo una firma o un annullamento il server manda solo i punti
+     toccati: si aggiornano le loro celle, il pannello e i conteggi. */
+  var ESITI = JSON.parse(document.getElementById('ce-esiti-firma').textContent);
+  // Per firmare serve la propria immagine di firma: senza, il pannello lo dice
+  // e porta al profilo invece di mostrare i pulsanti (il server rifiuta comunque).
+  var HA_FIRMA = ce.dataset.haFirma === '1';
+
+  function celleDaFirmare(step) {
+    return tutti(step, '.ce-punto').filter(function (c) {
+      return c.dataset.punto !== '-' && c.dataset.puntoId;
+    });
+  }
+
+  // Cosa il pannello mostra: se non cambia, non si ridisegna.
+  function chiaveFirme(step) {
+    return celleDaFirmare(step).map(function (c) {
+      return [c.dataset.puntoId, c.dataset.punto, c.dataset.firmaId || '', c.dataset.firme].join(':');
+    }).join('|');
+  }
+
+  function formFirma(step, per) {
+    var nome = 'esito-' + step.dataset.id + '-' + per;   // per: l'id del punto
+    return '<div class="ce-firma-form" data-per="' + per + '">' +
+      '<fieldset class="ce-esiti"><legend class="ce-sr">Inspection outcome</legend>' +
+      ESITI.map(function (esito, i) {
+        return '<label class="ce-esito"><input type="radio" name="' + nome + '" value="' + escHtml(esito.codice) + '"' +
+          (i === 0 ? ' checked' : '') + '> ' + escHtml(esito.etichetta) + '</label>';
+      }).join('') +
+      '</fieldset>' +
+      '<label class="ce-campo"><span class="ce-campo-etichetta">Notes (optional)</span>' +
+      '<textarea class="ce-firma-testo" rows="2" maxlength="2000"></textarea></label>' +
+      '<div class="ce-firma-bottoni">' +
+      '<button type="button" class="ce-btn ce-btn-primary" data-firma-azione="firma">Sign</button>' +
+      '<button type="button" class="ce-btn" data-firma-azione="chiudi">Back</button>' +
+      '</div></div>';
+  }
+
+  function formAnnullo() {
+    return '<div class="ce-firma-form">' +
+      '<label class="ce-campo"><span class="ce-campo-etichetta">Reason for voiding (required: it stays in the history)</span>' +
+      '<textarea class="ce-firma-testo" rows="2" maxlength="2000" required></textarea></label>' +
+      '<div class="ce-firma-bottoni">' +
+      '<button type="button" class="ce-btn ce-btn-primary" data-firma-azione="annulla">Void signature</button>' +
+      '<button type="button" class="ce-btn" data-firma-azione="chiudi">Back</button>' +
+      '</div></div>';
+  }
+
+  function rigaFirma(c) {
+    var sigla = escHtml(c.dataset.punto);
+    var storico = Number(c.dataset.firme)
+      ? '<button type="button" class="ce-link" data-firma-azione="storico" aria-expanded="false">History (' +
+        Number(c.dataset.firme) + ')</button>'
+      : '';
+    var stato;
+    var azioni;
+    if (c.dataset.firmaEsito) {
+      // Con l'immagine di firma: immagine, nome, data e ora. Senza: nome e data.
+      var immagine = c.dataset.firmaImmagine
+        ? '<img class="ce-firma-img" src="' + escHtml(c.dataset.firmaImmagine) + '" alt="Signature of ' +
+          escHtml(c.dataset.firmaUtente) + '">'
+        : '';
+      stato = '<span class="ce-firma-chi">' + immagine + '<span><strong>' + escHtml(c.dataset.firmaUtente) +
+        '</strong> · ' + escHtml(c.dataset.firmaQuando) + '</span></span>' +
+        '<span class="ce-esito-badge" data-esito="' + escHtml(c.dataset.firmaEsito) + '">' +
+        escHtml(c.dataset.firmaEsitoEtichetta) + '</span>' +
+        (c.dataset.firmaNote ? '<span class="ce-firma-note">' + escHtml(c.dataset.firmaNote) + '</span>' : '');
+      azioni = storico + '<button type="button" class="ce-link ce-link-pericolo" data-firma-azione="apri-annullo">Void signature</button>';
+    } else {
+      stato = '<span class="ce-firma-da">To be signed</span>';
+      azioni = storico + (HA_FIRMA ? '<button type="button" class="ce-btn" data-firma-azione="apri-firma">Sign</button>' : '');
+    }
+    return '<li class="ce-firma-riga" data-punto-id="' + escHtml(c.dataset.puntoId) + '">' +
+      '<div class="ce-firma-linea">' +
+      '<span class="ce-firma-ente"><span class="ce-ente-pos">' + escHtml(c.dataset.entePos) + '</span>' +
+      escHtml(c.dataset.enteNome) + '</span>' +
+      '<span class="ce-firma-sigla" data-punto="' + sigla + '">' + sigla + '</span>' +
+      '<span class="ce-firma-stato">' + stato + '</span>' +
+      '<span class="ce-firma-azioni">' + azioni + '</span>' +
+      '</div><div class="ce-firma-extra"></div></li>';
+  }
+
+  function ridisegnaFirme(step) {
+    var pannello = step.querySelector('.ce-firme');
+    if (!pannello) {
+      pannello = document.createElement('div');
+      pannello.className = 'ce-firme';
+      pannello.setAttribute('role', 'group');
+      pannello.setAttribute('aria-label', 'Step signatures');
+      step.querySelector('.ce-riga').insertBefore(pannello, step.querySelector('.ce-azioni-step'));
+    }
+    pannello.dataset.chiave = chiaveFirme(step);
+    var celle = celleDaFirmare(step);
+    if (!celle.length) {
+      pannello.innerHTML = '<p class="ce-firme-vuoto">Nothing to sign: every agency is "–".</p>';
+      return pannello;
+    }
+    var firmati = celle.filter(function (c) { return c.dataset.firmaEsito; }).length;
+    pannello.innerHTML =
+      '<div class="ce-firme-head"><span class="ce-firme-titolo">Signatures</span>' +
+      '<span class="ce-firme-conta">' + firmati + ' of ' + celle.length + ' signed</span>' +
+      '</div>' +
+      (!HA_FIRMA && firmati < celle.length
+        ? '<p class="ce-firme-avviso">To sign you need your signature image: <a href="' +
+          escHtml(ce.dataset.urlProfilo) + '">upload it in your profile</a>, then come back.</p>'
+        : '') +
+      '<ul class="ce-firme-lista">' + celle.map(rigaFirma).join('') + '</ul>' +
+      '<p class="ce-firme-nota">Simple electronic signature: it records who signed, with what outcome and when.</p>';
+    return pannello;
+  }
+
+  // Dopo una firma o un annullamento: le celle dei punti toccati, i conteggi e
+  // il pannello. Il fuoco resta nel pannello, così il dettaglio resta aperto.
+  function applicaFirme(dati, step, puntoId) {
+    dati.punti.forEach(function (p) {
+      var btn = listaSez.querySelector('.ce-punto[data-punto-id="' + p.id + '"]');
+      if (btn) impostaFirma(btn, p);
+    });
+    rinumera();
+    if (!step.classList.contains('is-modifica')) return;
+    var pannello = ridisegnaFirme(step);
+    var riga = puntoId && pannello.querySelector('.ce-firma-riga[data-punto-id="' + puntoId + '"]');
+    ((riga && riga.querySelector('button')) || pannello.querySelector('button') || step).focus();
+  }
+
+  function apriForm(contenitore, html, da) {
+    contenitore.innerHTML = html;
+    contenitore._da = da;
+    var primo = contenitore.querySelector('input:checked, textarea');
+    if (primo) primo.focus();
+  }
+
+  function chiudiForm(contenitore) {
+    var da = contenitore._da;
+    contenitore.innerHTML = '';
+    if (da && document.contains(da)) da.focus();
+  }
+
+  function mostraStorico(riga, bottone) {
+    var extra = riga.querySelector('.ce-firma-extra');
+    if (bottone.getAttribute('aria-expanded') === 'true') {
+      extra.innerHTML = '';
+      bottone.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    bottone.setAttribute('aria-expanded', 'true');
+    extra.innerHTML = '<p class="ce-firme-vuoto">Loading history…</p>';
+    chiamaFirme(API + 'punti/' + riga.dataset.puntoId + '/firme/')
+      .then(function (dati) {
+        extra.innerHTML = '<ul class="ce-storico" aria-label="Point signature history">' +
+          dati.firme.map(function (f) {
+            var testo = '<strong>' + escHtml(f.esito_etichetta) + '</strong> · ' + escHtml(f.utente) +
+              ', ' + escHtml(f.firmato_il_display) + (f.note ? ' — ' + escHtml(f.note) : '');
+            if (!f.valida) {
+              testo += '<br>Voided by ' + escHtml(f.annullata_da) + ', ' + escHtml(f.annullata_il_display) +
+                ': ' + escHtml(f.motivo_annullo);
+            }
+            return '<li class="' + (f.valida ? 'is-valida' : 'is-annullata') + '">' + testo + '</li>';
+          }).join('') + '</ul>';
+      })
+      .catch(function (err) {
+        extra.innerHTML = '';
+        bottone.setAttribute('aria-expanded', 'false');
+        mostraErrore(riga.closest('.ce-step'), err.message);
+      });
+  }
+
+  // Mentre la richiesta è in volo il pulsante non riparte. Niente "disabled":
+  // un pulsante disattivato perde il fuoco, e col fuoco fuori dallo step il
+  // dettaglio si chiuderebbe prima che arrivi la risposta.
+  function inCorso(bottone, attivo) {
+    if (attivo) bottone.setAttribute('aria-disabled', 'true');
+    else bottone.removeAttribute('aria-disabled');
+  }
+
+  function azioneFirma(bottone) {
+    var step = bottone.closest('.ce-step');
+    var riga = bottone.closest('.ce-firma-riga');
+    var azione = bottone.dataset.firmaAzione;
+    if (azione === 'apri-firma') {
+      apriForm(riga.querySelector('.ce-firma-extra'), formFirma(step, riga.dataset.puntoId), bottone);
+      return;
+    }
+    if (azione === 'apri-annullo') {
+      apriForm(riga.querySelector('.ce-firma-extra'), formAnnullo(), bottone);
+      return;
+    }
+    if (azione === 'storico') { mostraStorico(riga, bottone); return; }
+    if (azione === 'chiudi') { chiudiForm(bottone.closest('.ce-firma-extra')); return; }
+
+    var form = bottone.closest('.ce-firma-form');
+    var testo = form.querySelector('.ce-firma-testo');
+    nascondiErrore(step);
+    if (azione === 'firma') {
+      var per = form.dataset.per;
+      var scelto = form.querySelector('input[type="radio"]:checked');
+      inCorso(bottone, true);   // un secondo clic non parte; il database respinge comunque il doppione
+      chiamaFirme(API + 'punti/' + per + '/firma/', { esito: scelto ? scelto.value : '', note: testo.value.trim() })
+        .then(function (dati) {
+          applicaFirme(dati, step, per);
+          stato('Signature recorded.');
+        })
+        .catch(function (err) {
+          inCorso(bottone, false);
+          mostraErrore(step, err.message);
+        });
+    } else if (azione === 'annulla') {
+      if (!testo.value.trim()) {
+        mostraErrore(step, 'Enter the reason for voiding: it stays in the signature history.');
+        testo.focus();
+        return;
+      }
+      var cella = listaSez.querySelector('.ce-punto[data-punto-id="' + riga.dataset.puntoId + '"]');
+      inCorso(bottone, true);
+      chiamaFirme(API_PIANO + 'firme/' + cella.dataset.firmaId + '/annulla/', { motivo: testo.value.trim() })
+        .then(function (dati) {
+          applicaFirme(dati, step, riga.dataset.puntoId);
+          stato('Signature voided: it stays in the point history.');
+        })
+        .catch(function (err) {
+          inCorso(bottone, false);
+          mostraErrore(step, err.message);
+        });
+    }
+  }
+
+  ce.addEventListener('click', function (e) {
+    var bottone = e.target.closest('[data-firma-azione]');
+    if (bottone && bottone.getAttribute('aria-disabled') !== 'true') azioneFirma(bottone);
+  });
+
+  // Esc in un modulo di firma o di annullamento lo chiude, senza chiudere il dettaglio.
+  ce.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var extra = e.target.closest('.ce-firma-extra');
+    if (!extra || !extra.querySelector('.ce-firma-form')) return;
+    e.preventDefault();
+    chiudiForm(extra);
+  });
+
+  /* ── Rinomina sezione: il titolo diventa un campo, finché non lo lasci ── */
+  function rinominaSezione(sez) {
+    var input = sez.querySelector('.ce-sez-input');
+    input.value = sez.querySelector('.ce-sez-titolo').textContent;
+    input.dataset.salvato = input.value;
+    sez.querySelector('.ce-sez-h').hidden = true;
+    input.hidden = false;
+    input.focus();
+    input.select();
+  }
+
+  function fineRinomina(input, salva, rimettiFuoco) {
+    if (input.hidden) return;
+    var sez = sezioneDi(input);
+    var titolo = sez.querySelector('.ce-sez-titolo');
+    var prima = input.dataset.salvato;
+    var valore = input.value.trim();
+    input.hidden = true;
+    sez.querySelector('.ce-sez-h').hidden = false;
+    if (rimettiFuoco) sez.querySelector('.ce-dots').focus();
+    if (!salva || valore === prima) return;
+    if (!valore) {
+      mostraErrore(sez, 'The section title is required.');
+      return;
+    }
+    titolo.textContent = valore;
+    rinumera();
+    nascondiErrore(sez);
+    chiama('PATCH', 'sezioni/' + sez.dataset.id + '/', { titolo: valore })
+      .then(function () { stato('Section renamed.'); })
+      .catch(function (err) {
+        titolo.textContent = prima;
+        rinumera();
+        mostraErrore(sez, err.message);
+      });
+  }
+
+  ce.addEventListener('focusout', function (e) {
+    if (e.target.matches('.ce-sez-input')) fineRinomina(e.target, true, false);
+  });
+
+  ce.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (t.matches('.ce-sez-input')) {
+      if (e.key === 'Enter') { e.preventDefault(); fineRinomina(t, true, true); }
+      else if (e.key === 'Escape') { e.preventDefault(); fineRinomina(t, false, true); }
+      return;
+    }
+    if (t.matches('.ce-step') && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      modificaStep(t);
+      return;
+    }
+    if (t.matches('.ce-punto') && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      e.preventDefault();
+      apriPunti(t);
+      return;
+    }
+    if (t.matches('.ce-campo-riga')) {
+      var step = t.closest('.ce-step');
+      if (e.key === 'Escape') {
+        // Annulla il campo in corso e chiude la modifica; il fuoco torna allo step.
+        e.preventDefault();
+        t.value = salvato(t);
+        fineModifica(step);
+        step.focus();
+      } else if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        t.blur();   // il change salva, il focusout chiude la modifica
+      }
+      return;
+    }
+    if (!t.matches('.ce-extent-input')) return;
+    if (e.key === 'Escape') {
+      t.value = salvato(t);
+      t.blur();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      t.blur();   // il salvataggio parte dal change, come uscendo dal campo
+    }
+  });
+
+  /* ── Spostamenti ──
+     Il DOM si sposta subito e la numerazione si ricalcola; poi una sola
+     chiamata. Se fallisce, l'elemento torna dov'era. */
+  function spostaStep(step, destinazione, indice) {
+    var padre = step.parentNode;
+    var dopo = step.nextElementSibling;
+    var altri = figli(destinazione, '.ce-step').filter(function (x) { return x !== step; });
+    destinazione.insertBefore(step, altri[indice] || null);
+    if (step.parentNode === padre && step.nextElementSibling === dopo) return;
+    var arrivo = sezioneDi(destinazione);
+    var dati = { ordine: indice };
+    if (destinazione !== padre) dati.sezione = Number(arrivo.dataset.id);
+    rinumera();
+    nascondiErrore(step);
+    chiama('PATCH', 'steps/' + step.dataset.id + '/', dati)
+      .then(function () {
+        var dove = arrivo === attiva ? '' : ' to "' + arrivo.querySelector('.ce-sez-titolo').textContent + '"';
+        stato('Step moved' + dove + ': it is now no. ' + step.querySelector('.ce-step-n').textContent + '.');
+      })
+      .catch(function (err) {
+        if (document.contains(padre)) {
+          padre.insertBefore(step, dopo && dopo.parentNode === padre ? dopo : null);
+          rinumera();
+        }
+        mostraErrore(step, err.message);
+      });
+  }
+
+  function spostaSezione(sez, indice, rimettiFuoco) {
+    var dopo = sez.nextElementSibling;
+    var altre = figli(listaSez, '.ce-sezione').filter(function (x) { return x !== sez; });
+    listaSez.insertBefore(sez, altre[indice] || null);
+    if (sez.nextElementSibling === dopo) return;
+    rinumera();
+    if (rimettiFuoco) sez.querySelector('.ce-dots').focus();
+    nascondiErrore(sez);
+    chiama('PATCH', 'sezioni/' + sez.dataset.id + '/', { ordine: indice })
+      .then(function () { stato('Section moved.'); })
+      .catch(function (err) {
+        listaSez.insertBefore(sez, dopo && dopo.parentNode === listaSez ? dopo : null);
+        rinumera();
+        mostraErrore(sez, err.message);
+      });
+  }
+
+  function spostaSezioneDiUno(sez, verso) {
+    var sezioni = figli(listaSez, '.ce-sezione');
+    var j = sezioni.indexOf(sez) + verso;
+    if (j >= 0 && j < sezioni.length) spostaSezione(sez, j, true);
+  }
+
+  /* ── Trascinamento (HTML5) ──
+     Parte solo dalla maniglia: l'elemento diventa trascinabile finché il
+     tasto resta premuto, così testi e campi si selezionano come sempre. Gli
+     step si riordinano nella sezione aperta, o si lasciano su una voce
+     dell'elenco per spostarli in coda a quella sezione; le sezioni si
+     riordinano trascinando le voci dell'elenco. */
+  var trascina = null;   // { el, tipo: 'step' | 'sezione' }
+  var segno = null;      // { el, classe }: dove cadrà
+
+  function togliSegno() {
+    if (segno) segno.el.classList.remove(segno.classe);
+    segno = null;
+  }
+  function metti(el, classe) {
+    if (segno && segno.el === el && segno.classe === classe) return;
+    togliSegno();
+    el.classList.add(classe);
+    segno = { el: el, classe: classe };
+  }
+
+  ce.addEventListener('pointerdown', function (e) {
+    var maniglia = e.target.closest('.ce-maniglia');
+    if (!maniglia) return;
+    var el = maniglia.closest('.ce-step') || maniglia.closest('.qp-voce');
+    if (el) el.draggable = true;
+  });
+  document.addEventListener('pointerup', function () {
+    tutti(ce, '[draggable="true"]').forEach(function (el) { el.draggable = false; });
+  });
+
+  ce.addEventListener('dragstart', function (e) {
+    var el = e.target;
+    if (!(el instanceof Element) || !el.draggable || !el.matches('.ce-step, .qp-voce')) return;
+    chiudiMenu(false);
+    trascina = { el: el, tipo: el.matches('.ce-step') ? 'step' : 'sezione' };
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', el.dataset.id);
+    requestAnimationFrame(function () { if (trascina) el.classList.add('is-trascinato'); });
+  });
+
+  function metaDi(el, e) {
+    var r = el.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2;
+  }
+
+  // Dove cadrebbe l'elemento trascinato: prima o dopo un fratello, o in coda a
+  // una sezione (step lasciato su una voce dell'elenco o su una sezione vuota).
+  function destinazione(e) {
+    var t = e.target instanceof Element ? e.target : e.target.parentElement;
+    if (!t) return null;
+    var voce = t.closest('.qp-voce');
+    if (trascina.tipo === 'sezione') {
+      if (!voce || voce === trascina.el) return null;
+      return { el: voce, prima: metaDi(voce, e) };
+    }
+    var step = t.closest('.ce-step');
+    if (step === trascina.el) return null;
+    if (step) return { el: step, prima: metaDi(step.querySelector('.ce-riga'), e) };
+    if (voce) return { el: voce, dentro: true };
+    var sezione = t.closest('.ce-sezione');
+    return sezione ? { el: sezione, dentro: true } : null;
+  }
+
+  ce.addEventListener('dragover', function (e) {
+    if (!trascina) return;
+    var d = destinazione(e);
+    if (!d) { togliSegno(); return; }
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    metti(d.el, d.dentro ? 'ce-drop-dentro' : (d.prima ? 'ce-drop-prima' : 'ce-drop-dopo'));
+  });
+
+  ce.addEventListener('dragleave', function (e) {
+    if (trascina && !ce.contains(e.relatedTarget)) togliSegno();
+  });
+
+  ce.addEventListener('drop', function (e) {
+    if (!trascina) return;
+    var d = destinazione(e);
+    togliSegno();
+    if (!d) return;
+    e.preventDefault();
+    var el = trascina.el;
+    if (trascina.tipo === 'sezione') {
+      var sez = sezioneEl(el.dataset.id);
+      var altre = figli(listaSez, '.ce-sezione').filter(function (x) { return x !== sez; });
+      spostaSezione(sez, altre.indexOf(sezioneEl(d.el.dataset.id)) + (d.prima ? 0 : 1), false);
+      return;
+    }
+    var lista;
+    var indice;
+    if (d.dentro) {
+      var arrivo = d.el.matches('.qp-voce') ? sezioneEl(d.el.dataset.id) : d.el;
+      lista = arrivo.querySelector('.ce-steps');
+      indice = figli(lista, '.ce-step').filter(function (x) { return x !== el; }).length;
+    } else {
+      lista = d.el.parentNode;
+      var fratelli = figli(lista, '.ce-step').filter(function (x) { return x !== el; });
+      indice = fratelli.indexOf(d.el) + (d.prima ? 0 : 1);
+    }
+    spostaStep(el, lista, indice);
+  });
+
+  ce.addEventListener('dragend', function () {
+    if (trascina) {
+      trascina.el.classList.remove('is-trascinato');
+      trascina.el.draggable = false;
+    }
+    trascina = null;
+    togliSegno();
+  });
+
+  /* ── Eliminazione: conferma che dice cosa si perde ── */
+  function eliminaSezione(sez, da) {
+    var titolo = sez.querySelector('.ce-sez-titolo').textContent;
+    var n = tutti(sez, '.ce-step').length;
+    var conseguenza = n === 0
+      ? 'The section is empty.'
+      : (n === 1 ? 'Its step will be deleted too' : 'Its ' + n + ' steps will be deleted too') +
+        ', and the steps of the following sections will be renumbered.';
+    if (!confirm('Delete the section "' + titolo + '"?\n' + conseguenza + ' This cannot be undone.')) {
+      da.focus();
+      return;
+    }
+    var vicina = sez.nextElementSibling || sez.previousElementSibling;
+    chiama('DELETE', 'sezioni/' + sez.dataset.id + '/')
+      .then(function () {
+        stato('Section deleted.');
+        if (vicina && document.contains(vicina)) {
+          seleziona(vicina.dataset.id, true);
+          voceEl(vicina.dataset.id).querySelector('.qp-voce-btn').focus();
+        } else {
+          history.replaceState(null, '', location.pathname + location.search);
+          document.getElementById('ce-add-sezione').focus();
+        }
+      })
+      .catch(function (err) { mostraErrore(sez, err.message); });
+  }
+
+  function eliminaStep(step, da) {
+    var numero = step.querySelector('.ce-step-n').textContent;
+    var descrizione = valoreCella(step, 'descrizione').textContent;
+    if (!confirm('Delete step ' + numero + ' "' + descrizione + '"?\n' +
+                 'The following steps will be renumbered. This cannot be undone.')) {
+      da.focus();
+      return;
+    }
+    var sez = sezioneDi(step);
+    var vicino = step.nextElementSibling || step.previousElementSibling;
+    chiama('DELETE', 'steps/' + step.dataset.id + '/')
+      .then(function () {
+        stato('Step deleted.');
+        var fuoco = vicino && document.contains(vicino)
+          ? vicino
+          : sez.querySelector('.ce-sez-vuota [data-azione="catalogo"]');
+        if (fuoco) fuoco.focus();
+      })
+      .catch(function (err) { mostraErrore(step, err.message); });
+  }
+
+  /* ── Nuova sezione ── */
+  var formSezione = document.getElementById('ce-nuova-sezione');
+  var titoloNuova = document.getElementById('ce-nuova-titolo');
+  var aggiungiSezione = document.getElementById('ce-add-sezione');
+
+  function chiudiNuovaSezione() {
+    formSezione.hidden = true;
+    aggiungiSezione.hidden = false;
+    titoloNuova.value = '';
+    nascondiErrore(formSezione);
+    aggiungiSezione.focus();
+  }
+
+  aggiungiSezione.addEventListener('click', function () {
+    formSezione.hidden = false;
+    aggiungiSezione.hidden = true;
+    titoloNuova.focus();
+    formSezione.scrollIntoView({ block: 'nearest' });
+  });
+
+  formSezione.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var titolo = titoloNuova.value.trim();
+    if (!titolo) {
+      mostraErrore(formSezione, 'Enter the section title.');
+      titoloNuova.focus();
+      return;
+    }
+    var esistenti = {};
+    figli(listaSez, '.ce-sezione').forEach(function (s) { esistenti[s.dataset.id] = true; });
+    var invia = formSezione.querySelector('[type="submit"]');
+    invia.disabled = true;
+    nascondiErrore(formSezione);
+    chiama('POST', 'sezioni/', { titolo: titolo })
+      .then(function () {
+        formSezione.hidden = true;
+        aggiungiSezione.hidden = false;
+        titoloNuova.value = '';
+        var nuova = figli(listaSez, '.ce-sezione').find(function (s) { return !esistenti[s.dataset.id]; });
+        if (nuova) {
+          seleziona(nuova.dataset.id, true);
+          nuova.querySelector('.ce-sez-vuota [data-azione="catalogo"]').focus();
+        }
+        stato('Section added.');
+      })
+      .catch(function (err) {
+        mostraErrore(formSezione, err.message);
+        titoloNuova.focus();
+      })
+      .then(function () { invia.disabled = false; });
+  });
+
+  formSezione.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); chiudiNuovaSezione(); }
+  });
+
+  ce.addEventListener('click', function (e) {
+    var catalogo = e.target.closest('[data-azione="catalogo"]');
+    if (catalogo) { apriCatalogo(sezioneDi(catalogo), catalogo); return; }
+    if (e.target.closest('[data-azione="nuova-sezione"]')) { aggiungiSezione.click(); return; }
+    if (e.target.closest('[data-azione="annulla-sezione"]')) chiudiNuovaSezione();
+  });
+
+  /* ── Aggiungi step da catalogo ──
+     Ricerca con attesa di 250 ms mentre si scrive, filtro per capitolo, scelta
+     multipla. Le attività entrano nell'ordine in cui le scegli, con una sola
+     chiamata; la scelta resta anche cambiando ricerca. */
+  var catQ = document.getElementById('ce-cat-q');
+  var catCapitolo = document.getElementById('ce-cat-capitolo');
+  var catLista = document.getElementById('ce-cat-lista');
+  var catStato = document.getElementById('ce-cat-stato');
+  var catConta = document.getElementById('ce-cat-conta');
+  var catConferma = document.getElementById('ce-cat-conferma');
+  var catSezione = document.getElementById('ce-cat-sezione');
+  var cat = { sezione: null, da: null, scelte: [], trovate: {}, timer: null, richiesta: 0 };
+
+  function aggiornaScelte() {
+    var n = cat.scelte.length;
+    catConta.textContent = n === 0 ? 'No activities selected'
+      : (n === 1 ? '1 activity selected' : n + ' activities selected');
+    catConferma.disabled = n === 0;
+    catConferma.textContent = n ? 'Add ' + plurale(n, 'step', 'steps') : 'Add';
+    tutti(catLista, '.ce-cat-voce').forEach(function (voce) {
+      var i = cat.scelte.indexOf(Number(voce.querySelector('input').value));
+      voce.querySelector('.ce-cat-ordine').textContent = i >= 0 ? i + 1 : '';
+    });
+  }
+
+  function metaAttivita(a) {
+    var parti = [a.capitolo, a.tipo].filter(Boolean).map(escHtml);
+    if (a.reference_doc_risolto) parti.push('<span class="ce-cat-ref">' + escHtml(a.reference_doc_risolto) + '</span>');
+    return parti.join(' · ');
+  }
+
+  function mostraRisultati(body) {
+    cat.trovate = {};
+    catLista.innerHTML = body.attivita.map(function (a) {
+      cat.trovate[a.id] = a;
+      var scelta = cat.scelte.indexOf(a.id) >= 0;
+      return '<li><label class="ce-cat-voce">' +
+        '<input type="checkbox" value="' + a.id + '"' + (scelta ? ' checked' : '') + '>' +
+        '<span class="ce-cat-ordine" aria-hidden="true"></span>' +
+        '<span><span class="ce-cat-desc">' + escHtml(a.descrizione) + '</span>' +
+        '<span class="ce-cat-meta">' + metaAttivita(a) + '</span></span>' +
+        '</label></li>';
+    }).join('');
+    var filtrato = catQ.value.trim() || catCapitolo.value;
+    if (!body.totale) {
+      catStato.textContent = filtrato
+        ? 'No activities found: try fewer words or another chapter.'
+        : 'The catalogue has no active activities: ask an administrator to import it.';
+    } else if (body.troncato) {
+      catStato.textContent = 'First ' + body.attivita.length + ' of ' + body.totale +
+        ' activities: narrow the search to see the others.';
+    } else {
+      catStato.textContent = plurale(body.totale, 'activity', 'activities');
+    }
+    aggiornaScelte();
+  }
+
+  function cercaCatalogo() {
+    clearTimeout(cat.timer);
+    var n = ++cat.richiesta;
+    var parametri = new URLSearchParams({ piano: PIANO });
+    if (catQ.value.trim()) parametri.set('q', catQ.value.trim());
+    if (catCapitolo.value) parametri.set('capitolo', catCapitolo.value);
+    catStato.textContent = 'Searching…';
+    fetch(API_CATALOGO + '?' + parametri.toString(), { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+      .then(function (body) { if (n === cat.richiesta) mostraRisultati(body); })
+      .catch(function () {
+        if (n !== cat.richiesta) return;
+        catLista.innerHTML = '';
+        catStato.textContent = 'Could not load the catalogue: try again shortly.';
+      });
+  }
+
+  function apriCatalogo(sez, da) {
+    cat.sezione = sez;
+    cat.da = da;
+    cat.scelte = [];
+    catQ.value = '';
+    catCapitolo.value = '';
+    catLista.innerHTML = '';
+    catSezione.textContent = sez.querySelector('.ce-sez-titolo').textContent;
+    nascondiErrore(modale);
+    aggiornaScelte();
+    modale.hidden = false;
+    document.documentElement.classList.add('ce-bloccato');
+    catQ.focus();
+    cercaCatalogo();
+  }
+
+  function chiudiCatalogo() {
+    if (modale.hidden) return;
+    modale.hidden = true;
+    clearTimeout(cat.timer);
+    cat.richiesta += 1;   // una ricerca ancora in volo non riempie più la lista
+    document.documentElement.classList.remove('ce-bloccato');
+    if (cat.da && document.contains(cat.da) && cat.da.offsetParent !== null) cat.da.focus();
+  }
+
+  catQ.addEventListener('input', function () {
+    clearTimeout(cat.timer);
+    cat.timer = setTimeout(cercaCatalogo, 250);
+  });
+  catCapitolo.addEventListener('change', cercaCatalogo);
+
+  catLista.addEventListener('change', function (e) {
+    if (!e.target.matches('input[type="checkbox"]')) return;
+    var id = Number(e.target.value);
+    cat.scelte = cat.scelte.filter(function (x) { return x !== id; });
+    if (e.target.checked) cat.scelte.push(id);
+    aggiornaScelte();
+  });
+
+  catConferma.addEventListener('click', function () {
+    if (!cat.scelte.length) return;
+    var sez = cat.sezione;
+    var esistenti = {};
+    tutti(listaSez, '.ce-step').forEach(function (s) { esistenti[s.dataset.id] = true; });
+    catConferma.disabled = true;
+    nascondiErrore(modale);
+    chiama('POST', 'sezioni/' + sez.dataset.id + '/steps/', { attivita_ids: cat.scelte.slice() })
+      .then(function () {
+        cat.scelte = [];
+        if (!document.contains(sez)) { chiudiCatalogo(); return; }
+        seleziona(sez.dataset.id, true);
+        var nuovi = tutti(sez, '.ce-step').filter(function (s) { return !esistenti[s.dataset.id]; });
+        // Il pulsante che ha aperto il catalogo può essere sparito (lo stato
+        // vuoto della sezione): il fuoco va a quello nel piede.
+        if (cat.da && cat.da.offsetParent === null) cat.da = sez.querySelector('.ce-sez-piede [data-azione="catalogo"]');
+        chiudiCatalogo();
+        nuovi.forEach(function (s) {
+          s.classList.add('is-nuovo');
+          setTimeout(function () { s.classList.remove('is-nuovo'); }, 1600);
+        });
+        // Entrano in coda: la lista degli step scorre fino al primo nuovo.
+        if (nuovi.length) nuovi[0].scrollIntoView({ block: 'nearest' });
+        stato(nuovi.length === 1 ? '1 step added.' : nuovi.length + ' steps added.');
+      })
+      .catch(function (err) {
+        mostraErrore(modale, err.message);
+        aggiornaScelte();
+      });
+  });
+
+  // Chiusura: Esc (vedi sopra), Annulla, la ×, o un clic fuori dal riquadro.
+  // Il clic deve cominciare fuori: selezionare testo e rilasciare fuori non chiude.
+  var premutoFuori = false;
+  modale.addEventListener('mousedown', function (e) { premutoFuori = e.target === modale; });
+  modale.addEventListener('click', function (e) {
+    if ((e.target === modale && premutoFuori) || e.target.closest('[data-azione="chiudi-catalogo"]')) {
+      chiudiCatalogo();
+    }
+  });
+
+  // Il fuoco resta dentro al catalogo finché è aperto.
+  modale.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var focusabili = tutti(modale, 'button:not([disabled]), input:not([disabled]), select:not([disabled])')
+      .filter(function (el) { return el.offsetParent !== null; });
+    if (!focusabili.length) return;
+    var primo = focusabili[0];
+    var ultimo = focusabili[focusabili.length - 1];
+    if (e.shiftKey && document.activeElement === primo) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primo.focus(); }
+  });
+})();
+</script>
+{% endblock %}

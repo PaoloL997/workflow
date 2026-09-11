@@ -116,8 +116,104 @@
     border: 1px solid var(--color-border);
     border-radius: 12px;
     transition: background 0.15s;
+    position: relative;
   }
   .qcp-row:hover { background: var(--color-elevated); }
+  /* Tutta la riga porta all'anteprima: il link sta sul nome e si allarga a
+     coprire la riga. Il menu ··· viene dopo nel DOM, quindi resta sopra e
+     cliccabile per conto suo. */
+  .qcp-row-link { color: inherit; text-decoration: none; }
+  .qcp-row-link:hover { text-decoration: none; }
+  .qcp-row-link::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+  .qcp-row-link:focus-visible { outline: none; }
+  .qcp-row-link:focus-visible::after { box-shadow: 0 0 0 3px hsl(215 80% 60% / 0.35); }
+  .qcp-row.has-menu {
+    grid-template-columns: minmax(160px, 1.2fr) minmax(150px, 1.5fr) minmax(110px, 1fr) 96px 34px 32px;
+  }
+
+  /* ── Menu azioni per riga: lo stesso "···" dell'elenco documenti ── */
+  .doc-row-menu-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .doc-row-dots-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: none;
+    border: none;
+    border-radius: 8px;
+    color: var(--color-text-secondary);
+    font-size: 17px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+    transition: background 0.12s, color 0.12s;
+    padding: 0;
+  }
+  .doc-row-dots-btn:hover {
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+  }
+
+  .doc-row-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 176px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow:
+      0 16px 40px hsl(220 30% 3% / 0.3),
+      0 6px 14px hsl(220 30% 3% / 0.2);
+    padding: 5px;
+    z-index: 200;
+    display: none;
+  }
+  .doc-row-menu.open { display: block; }
+
+  .doc-row-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 9px 11px;
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: background 0.1s, color 0.1s;
+  }
+  .doc-row-menu-item:hover {
+    background: var(--color-elevated);
+  }
+  .doc-row-menu-item--danger { color: var(--color-danger); }
+  .doc-row-menu-item--danger:hover {
+    background: hsl(0 72% 54% / 0.1);
+    color: hsl(0 88% 62%);
+  }
+  [data-theme="light"] .doc-row-menu {
+    box-shadow:
+      0 16px 40px hsl(220 18% 60% / 0.2),
+      0 6px 14px hsl(220 18% 60% / 0.12);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) .doc-row-menu {
+      box-shadow:
+        0 16px 40px hsl(220 18% 60% / 0.2),
+        0 6px 14px hsl(220 18% 60% / 0.12);
+    }
+  }
 
   .qcp-row-name {
     font-size: 14px; font-weight: 600; color: var(--color-text-primary);
@@ -210,12 +306,14 @@
   .form-grid .full { grid-column: 1 / -1; }
 
   .fg { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .fg label {
+  .fg label,
+  .fg .fg-title {
     font-size: 12px; font-weight: 600;
     color: var(--color-text-secondary);
     letter-spacing: 0.02em; text-transform: uppercase;
   }
   .fg input[type="text"],
+  .fg input[type="number"],
   .fg input[type="date"],
   .fg select,
   .fg textarea {
@@ -241,8 +339,168 @@
     cursor: default;
   }
 
+  /* ── Requisiti ── */
+  .qcp-flags { display: flex; flex-wrap: wrap; gap: 10px 28px; padding-top: 4px; }
+  .fg label.qcp-flag {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 500;
+    letter-spacing: normal; text-transform: none;
+    color: var(--color-text-primary);
+    cursor: pointer;
+  }
+  .qcp-flag input { width: 16px; height: 16px; margin: 0; accent-color: var(--color-accent); }
+
+  /* ── Liste di testata: codici, spec, enti ── */
+  .qcp-lista-count {
+    margin-left: 6px;
+    font-weight: 500; letter-spacing: normal;
+    opacity: 0.7;
+  }
+  .qcp-lista-righe { display: flex; flex-direction: column; gap: 8px; }
+  .qcp-lista-righe:empty { display: none; }
+  .qcp-lista-riga { display: flex; align-items: center; gap: 8px; }
+  .fg .qcp-lista-riga input { flex: 1; min-width: 0; }
+  .qcp-lista-pos {
+    flex-shrink: 0;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  .qcp-lista-del {
+    flex-shrink: 0;
+    width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px;
+    background: none;
+    color: var(--color-text-secondary);
+    transition: background 0.12s, color 0.12s;
+  }
+  .qcp-lista-del:hover { background: hsl(0 72% 54% / 0.1); color: var(--color-danger); }
+  .qcp-lista-add {
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border-radius: 10px;
+    border: 1px dashed var(--color-border);
+    background: none;
+    color: var(--color-accent);
+    font-size: 13px; font-weight: 600;
+    font-family: inherit;
+    transition: border-color 0.15s, opacity 0.15s;
+  }
+  .qcp-lista-add:hover:not(:disabled) { border-color: var(--color-accent); }
+  .qcp-lista-add:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── Passi del modulo ──
+     Il [hidden] del browser perde contro .form-grid { display: grid } e
+     .btn { display: inline-flex }: senza questa regola pannelli e pulsanti
+     nascosti resterebbero visibili. */
+  .modal [hidden] { display: none !important; }
+
+  /* Indicatore: stesso aspetto del selettore Verticale/Orizzontale di
+     situazione documenti. */
+  .qcp-steps {
+    display: flex;
+    list-style: none; margin: 0; padding: 0;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--color-elevated);
+  }
+  .qcp-steps li { flex: 1 1 auto; min-width: 0; }
+  .qcp-steps li + li { border-left: 1px solid var(--color-border); }
+  .qcp-step {
+    width: 100%;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px; font-weight: 500; font-family: inherit;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+  }
+  .qcp-step:not(:disabled):not([aria-current]):hover {
+    background: hsla(0,0%,50%,0.08);
+    color: var(--color-text-primary);
+  }
+  .qcp-step[aria-current="step"] { background: var(--color-accent); color: #fff; }
+  .qcp-step:disabled { opacity: 0.45; cursor: not-allowed; }
+  .qcp-step-n {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    border: 1px solid currentColor;
+  }
+  .qcp-step[aria-current="step"] .qcp-step-n {
+    border-color: transparent;
+    background: hsl(0 0% 100% / 0.22);
+  }
+  /* Passo completato: il numero diventa una spunta ma resta nel DOM, così il nome
+     accessibile del pulsante ("1 Testata") non cambia. */
+  .qcp-step.is-done .qcp-step-n {
+    font-size: 0;
+    border-color: transparent;
+    background: var(--color-accent);
+    color: #fff;
+  }
+  .qcp-step.is-done .qcp-step-n::before { content: "✓"; content: "✓" / ""; font-size: 11px; }
+  .qcp-step-label { overflow: hidden; text-overflow: ellipsis; }
+
+  .form-grid .a-capo { grid-column-start: 1; }
+
+  /* ── Riepilogo ── */
+  .qcp-riep-intro { margin: 0 0 14px; }
+  .qcp-riepilogo { display: flex; flex-direction: column; gap: 16px; }
+  .qcp-riep-gruppo + .qcp-riep-gruppo {
+    border-top: 1px solid var(--color-border);
+    padding-top: 16px;
+  }
+  .qcp-riep-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .qcp-riep-titolo {
+    font-size: 15px; font-weight: 700;
+    letter-spacing: -0.01em; color: var(--color-text-primary);
+  }
+  .qcp-riep-mod {
+    background: none;
+    padding: 4px 8px;
+    border-radius: 8px;
+    color: var(--color-accent);
+    font-size: 13px; font-weight: 600; font-family: inherit;
+  }
+  .qcp-riep-mod:hover { background: var(--color-elevated); }
+  .qcp-riep-dl {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px 16px;
+    margin: 0;
+  }
+  .qcp-riep-voce { min-width: 0; }
+  .qcp-riep-voce.full { grid-column: 1 / -1; }
+  .qcp-riep-voce dt {
+    font-size: 12px; font-weight: 600;
+    color: var(--color-text-secondary);
+    letter-spacing: 0.02em; text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+  .qcp-riep-voce dd {
+    margin: 0;
+    font-size: 14px; color: var(--color-text-primary);
+    overflow-wrap: anywhere;
+  }
+  .qcp-riep-voce ol, .qcp-riep-voce ul { margin: 0; padding-left: 20px; }
+  .qcp-riep-vuoto { color: var(--color-text-secondary); opacity: 0.7; }
+
   .modal-footer {
     display: flex; align-items: center; justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 10px; padding-top: 4px;
   }
   .modal-error {
@@ -295,13 +553,12 @@
   }
   .qcp-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* Il pannello sta nel flusso del modulo invece che sopra: subito sotto c'è la
+     descrizione item, che si riempie mentre scegli e deve restare visibile. */
   .qcp-ms-panel {
     display: none;
-    position: absolute;
-    left: 0; right: 0; top: calc(100% + 4px);
     max-height: 220px;
     overflow-y: auto;
-    z-index: 20;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 10px;
@@ -325,7 +582,8 @@
     padding: 10px; font-size: 13px; font-style: italic;
     color: var(--color-text-secondary); opacity: 0.7;
   }
-  .qcp-ms-hint { font-size: 11px; color: var(--color-text-secondary); opacity: 0.75; }
+  .qcp-ms-hint,
+  .qcp-hint { font-size: 11px; color: var(--color-text-secondary); opacity: 0.75; }
 
   /* ── Toast ── */
   .toast {
@@ -373,14 +631,29 @@
 
   @media (max-width: 900px) {
     .form-grid { grid-template-columns: 1fr 1fr; }
+    .qcp-riep-dl { grid-template-columns: 1fr 1fr; }
   }
   @media (max-width: 760px) {
     .qcp-row { grid-template-columns: 1fr 34px; row-gap: 4px; }
+    .qcp-row.has-menu { grid-template-columns: 1fr 34px 32px; }
     .qcp-row-items, .qcp-row-by, .qcp-row-date { grid-column: 1; }
     .qcp-ring { grid-row: 1 / span 4; grid-column: 2; align-self: center; }
+    .qcp-row .doc-row-menu-wrap { grid-row: 1 / span 4; grid-column: 3; align-self: center; }
   }
   @media (max-width: 620px) {
     .form-grid { grid-template-columns: 1fr; }
+    .qcp-riep-dl { grid-template-columns: 1fr; }
+    /* Poco spazio: dell'indicatore restano i numeri e l'etichetta del passo
+       attivo. Le altre etichette si nascondono solo alla vista, così lo screen
+       reader continua a leggerle. */
+    .qcp-step { padding: 8px 6px; }
+    .qcp-step:not([aria-current]) .qcp-step-label {
+      position: absolute;
+      width: 1px; height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
     .page { padding: 0 20px 80px; }
   }
 </style>
@@ -430,13 +703,13 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        Crea QCP
+        Create QCP
       </button>
     </div>
     {% endif %}
 
     <div class="qcp-list" id="qcp-list">
-      <div class="qcp-empty">Caricamento…</div>
+      <div class="qcp-empty">Loading…</div>
     </div>
 
   </div><!-- /content -->
@@ -458,39 +731,52 @@
 <div class="modal-backdrop" id="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title" id="modal-title">Nuovo Quality Control Plan</span>
-      <button class="modal-close" id="modal-close" type="button" aria-label="Chiudi">
+      <span class="modal-title" id="modal-title">New Quality Control Plan</span>
+      <button class="modal-close" id="modal-close" type="button" aria-label="Close">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
     </div>
 
+    <!-- Indicatore dei passi. Lo stato iniziale lo rende già il server; il JS lo
+         aggiorna a ogni cambio di passo (mostraPasso). -->
+    <nav class="qcp-steps-nav" aria-label="Creation steps">
+      <ol class="qcp-steps">
+        <li><button type="button" class="qcp-step" data-vai="1" aria-current="step"><span class="qcp-step-n">1</span><span class="qcp-step-label" id="qcp-passo-1">Header</span></button></li>
+        <li><button type="button" class="qcp-step" data-vai="2" disabled><span class="qcp-step-n">2</span><span class="qcp-step-label" id="qcp-passo-2">Item</span></button></li>
+        <li><button type="button" class="qcp-step" data-vai="3" disabled><span class="qcp-step-n">3</span><span class="qcp-step-label" id="qcp-passo-3">Technical data</span></button></li>
+        <li><button type="button" class="qcp-step" data-vai="4" disabled><span class="qcp-step-n">4</span><span class="qcp-step-label" id="qcp-passo-4">Codes and agencies</span></button></li>
+        <li><button type="button" class="qcp-step" data-vai="5" disabled><span class="qcp-step-n">5</span><span class="qcp-step-label" id="qcp-passo-5">Summary</span></button></li>
+      </ol>
+    </nav>
+
     <div class="qcp-warn" id="qcp-warn" role="status"></div>
 
-    <div class="form-grid">
+    <!-- I campi che il server può rifiutare dichiarano in data-errore l'inizio dei
+         messaggi del service: così un errore alla creazione riporta al passo giusto
+         (passoDiErrore). -->
+
+    <!-- ── ① Testata ── -->
+    <section class="qcp-pannello form-grid" data-step="1" aria-labelledby="qcp-passo-1">
       <div class="fg">
-        <label for="f-titolo">Titolo</label>
+        <label for="f-titolo">Title</label>
         <input type="text" id="f-titolo" value="{{ qcp_titolo }}" autocomplete="off">
       </div>
       <div class="fg">
-        <label for="f-doc-no">Doc n.</label>
-        <input type="text" id="f-doc-no" autocomplete="off">
-      </div>
-      <div class="fg">
         <label for="f-location">Location</label>
-        <select id="f-location">
+        <select id="f-location" data-errore="Sede non valida">
           <option value="">—</option>
           {% for sede in sedi %}
             <option value="{{ sede }}"{% if sede == sede_utente %} selected{% endif %}>{{ sede }}</option>
           {% endfor %}
         </select>
       </div>
-
       <div class="fg">
         <label for="f-sheet">Sheet</label>
         <input type="text" id="f-sheet" autocomplete="off">
       </div>
+
       <div class="fg">
         <label for="f-project">Project</label>
         <input type="text" id="f-project" autocomplete="off">
@@ -499,20 +785,15 @@
         <label for="f-job-no">Job n.</label>
         <input type="text" id="f-job-no" value="{{ testata.job }}" readonly>
       </div>
-
-      <div class="fg">
-        <label for="f-dwg-no">Dwg n.</label>
-        <input type="text" id="f-dwg-no" autocomplete="off">
-      </div>
       <div class="fg">
         <label for="f-owner">Owner</label>
         <input type="text" id="f-owner" autocomplete="off">
       </div>
+
       <div class="fg">
         <label for="f-po-no">P.O. n.</label>
         <input type="text" id="f-po-no" autocomplete="off">
       </div>
-
       <div class="fg">
         <label for="f-data">Date</label>
         <input type="date" id="f-data" value="{{ oggi }}">
@@ -521,40 +802,155 @@
         <label for="f-purchaser">Purchaser</label>
         <input type="text" id="f-purchaser" autocomplete="off">
       </div>
+
       <div class="fg">
         <label for="f-vendor">Vendor</label>
         <input type="text" id="f-vendor" value="{{ qcp_vendor }}" readonly>
-      </div>
-
-      <div class="fg full qcp-ms">
-        <label for="f-items-box">Item n.</label>
-        <div class="qcp-ms-box" id="f-items-box" tabindex="0" role="button"
-             aria-haspopup="listbox" aria-expanded="false">
-          <span class="qcp-ms-placeholder" id="f-items-placeholder">Seleziona uno o più item…</span>
-        </div>
-        <div class="qcp-ms-panel" id="f-items-panel" role="listbox" aria-multiselectable="true"></div>
-        <span class="qcp-ms-hint">Gli item arrivano dalla distinta di fornitura in Business Central.</span>
-      </div>
-
-      <div class="fg full">
-        <label for="f-descrizione-item">Descrizione item</label>
-        <input type="text" id="f-descrizione-item" autocomplete="off" placeholder="es. GAS COOLER">
-      </div>
-
-      <div class="fg">
-        <label for="f-serial-no">Serial n.</label>
-        <input type="text" id="f-serial-no" autocomplete="off">
       </div>
       <div class="fg">
         <label for="f-prepared-by">Prepared by</label>
         <input type="text" id="f-prepared-by" value="{{ prepared_by }}" autocomplete="off">
       </div>
-    </div>
+    </section>
+
+    <!-- ── ② Item ── -->
+    <section class="qcp-pannello form-grid" data-step="2" aria-labelledby="qcp-passo-2" hidden>
+      <div class="fg full qcp-ms">
+        <label for="f-items-box">Item n.</label>
+        <div class="qcp-ms-box" id="f-items-box" tabindex="0" role="button"
+             aria-haspopup="listbox" aria-expanded="false"
+             data-errore="Seleziona almeno un item.|Elenco item non valido.|Troppi item selezionati.">
+          <span class="qcp-ms-placeholder" id="f-items-placeholder">Select one or more items…</span>
+        </div>
+        <div class="qcp-ms-panel" id="f-items-panel" role="listbox" aria-multiselectable="true"></div>
+        <span class="qcp-ms-hint">Items come from the scope of supply in Business Central.</span>
+      </div>
+
+      <div class="fg full">
+        <label for="f-descrizione-item">Item description</label>
+        <input type="text" id="f-descrizione-item" maxlength="300" autocomplete="off"
+               placeholder="e.g. GAS COOLER">
+      </div>
+    </section>
+
+    <!-- ── ③ Dati tecnici ── -->
+    <section class="qcp-pannello form-grid" data-step="3" aria-labelledby="qcp-passo-3" hidden>
+      <div class="fg">
+        <label for="f-dwg-base">Dwg (base)</label>
+        <input type="text" id="f-dwg-base" maxlength="20" autocomplete="off" placeholder="e.g. 01">
+      </div>
+      <div class="fg">
+        <label for="f-serial-base">Serial letter</label>
+        <input type="text" id="f-serial-base" maxlength="20" autocomplete="off" placeholder="e.g. A">
+      </div>
+      <div class="fg">
+        <label for="f-foglio-dwg">Drawing sheet</label>
+        <input type="text" id="f-foglio-dwg" maxlength="20" autocomplete="off" placeholder="e.g. 1">
+      </div>
+      <span class="qcp-hint full">
+        Doc n. and Serial n., below, are calculated from Dwg (base) and Serial letter; the drawing
+        sheet is used for Dwg n., which is calculated on save. A number other than the calculated
+        one can be forced from the admin.
+      </span>
+
+      <div class="fg">
+        <label for="f-doc-no">Doc n.</label>
+        <input type="text" id="f-doc-no" readonly>
+      </div>
+      <div class="fg">
+        <label for="f-serial-no">Serial n.</label>
+        <input type="text" id="f-serial-no" readonly>
+      </div>
+
+      <div class="fg a-capo">
+        <label for="f-rev-no">Rev n.</label>
+        <input type="number" id="f-rev-no" min="0" max="32767" step="1" value="0"
+               data-errore="Rev n.">
+      </div>
+      <div class="fg">
+        <label for="f-mdmt">MDMT</label>
+        <input type="text" id="f-mdmt" maxlength="50" autocomplete="off" placeholder="e.g. -29">
+        <span class="qcp-hint">Minimum design metal temperature, in °C.</span>
+      </div>
+      <div class="fg">
+        <label for="f-notification-advice-time">Notification advice time</label>
+        <input type="text" id="f-notification-advice-time" maxlength="200" autocomplete="off"
+               placeholder="e.g. 5 working days">
+      </div>
+
+      <div class="fg full" role="group" aria-labelledby="f-requisiti-title"
+           data-errore="Valore non valido per">
+        <span class="fg-title" id="f-requisiti-title">Requirements</span>
+        <div class="qcp-flags">
+          <label class="qcp-flag"><input type="checkbox" id="f-asme-stamp"> ASME stamp</label>
+          <label class="qcp-flag"><input type="checkbox" id="f-national-board"> National Board</label>
+          <label class="qcp-flag"><input type="checkbox" id="f-lethal-service"> Lethal service</label>
+          <label class="qcp-flag"><input type="checkbox" id="f-h2s-service"> H2S service</label>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── ④ Codici ed enti: tre istanze dello stesso componente (creaLista) ── -->
+    <section class="qcp-pannello form-grid" data-step="4" aria-labelledby="qcp-passo-4" hidden>
+      <div class="fg full qcp-lista" id="f-codes" role="group" aria-labelledby="f-codes-title"
+           data-max="{{ qcp_liste.codes.massimo }}" data-maxlength="{{ qcp_liste.codes.lunghezza }}"
+           data-etichetta="Applicable code" data-datalist="qcp-codici-proposti"
+           data-errore="{{ qcp_liste.codes.nome }}:"
+           data-placeholder="Pick from the list or type a code">
+        <span class="fg-title" id="f-codes-title">Applicable codes <span class="qcp-lista-count"></span></span>
+        <div class="qcp-lista-righe"></div>
+        <button type="button" class="qcp-lista-add">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add code
+        </button>
+      </div>
+      <datalist id="qcp-codici-proposti">
+        {% for codice in qcp_codici_proposti %}<option value="{{ codice }}">{% endfor %}
+      </datalist>
+
+      <div class="fg full qcp-lista" id="f-specs" role="group" aria-labelledby="f-specs-title"
+           data-max="{{ qcp_liste.specs.massimo }}" data-maxlength="{{ qcp_liste.specs.lunghezza }}"
+           data-etichetta="Client spec" data-errore="{{ qcp_liste.specs.nome }}:"
+           data-placeholder="e.g. Req. nr. L001-00000-MS-7303-1002">
+        <span class="fg-title" id="f-specs-title">Client specs <span class="qcp-lista-count"></span></span>
+        <div class="qcp-lista-righe"></div>
+        <button type="button" class="qcp-lista-add">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add spec
+        </button>
+      </div>
+
+      <div class="fg full qcp-lista" id="f-agencies" role="group" aria-labelledby="f-agencies-title"
+           data-max="{{ qcp_liste.agencies.massimo }}" data-maxlength="{{ qcp_liste.agencies.lunghezza }}"
+           data-etichetta="Inspection agency" data-numerata
+           data-errore="{{ qcp_liste.agencies.nome }}:"
+           data-placeholder="e.g. TÜV">
+        <span class="fg-title" id="f-agencies-title">Inspection agencies <span class="qcp-lista-count"></span></span>
+        <div class="qcp-lista-righe"></div>
+        <button type="button" class="qcp-lista-add">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add agency
+        </button>
+        <span class="qcp-hint">
+          The number is the agency's position: it is the order of the columns in the plan body.
+        </span>
+      </div>
+    </section>
+
+    <!-- ── ⑤ Riepilogo: lo costruisce renderRiepilogo() dai passi 1-4 ── -->
+    <section class="qcp-pannello" data-step="5" aria-labelledby="qcp-passo-5" hidden>
+      <p class="qcp-hint qcp-riep-intro">
+        Check the data before creating the plan: Edit takes you back to the step to fix.
+      </p>
+      <div class="qcp-riepilogo" id="qcp-riepilogo"></div>
+    </section>
 
     <div class="modal-footer">
-      <span class="modal-error" id="modal-error"></span>
-      <button class="btn btn-secondary" type="button" id="modal-cancel">Annulla</button>
-      <button class="btn btn-primary" type="button" id="modal-save">Crea</button>
+      <span class="modal-error" id="modal-error" role="alert"></span>
+      <button class="btn btn-secondary" type="button" id="modal-cancel">Cancel</button>
+      <button class="btn btn-secondary" type="button" id="modal-back" hidden>Back</button>
+      <button class="btn btn-primary" type="button" id="modal-next">Next</button>
+      <button class="btn btn-primary" type="button" id="modal-save" hidden>Create</button>
     </div>
   </div>
 </div>
@@ -568,6 +964,9 @@
   var JOB = "{{ testata.job|escapejs }}";
   var CSRF_COOKIE = 'workflow_csrftoken';
   var API = '/api/commesse/' + encodeURIComponent(JOB) + '/quality-control-plan/';
+  {% url 'quality_control_plan' testata.job as url_elenco %}
+  /* Anteprima di un piano: questo indirizzo seguito dall'id. */
+  var PAGINA = "{{ url_elenco|escapejs }}";
 
   /* Circonferenza dell'anello: 2πr con r = 15.5. */
   var RING_C = 97.389;
@@ -614,7 +1013,7 @@
   function ringHtml(pct) {
     var offset = (RING_C * (1 - pct / 100)).toFixed(3);
     return '' +
-      '<span class="qcp-ring" role="img" aria-label="Completamento ' + pct + '%">' +
+      '<span class="qcp-ring" role="img" aria-label="Completion ' + pct + '%">' +
         '<svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true">' +
           '<circle class="qcp-ring-track" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"/>' +
           '<circle class="qcp-ring-value" cx="18" cy="18" r="15.5" fill="none" stroke-width="3" ' +
@@ -625,12 +1024,32 @@
       '</span>';
   }
 
+  /* Il menu azioni è lo stesso "···" delle righe dell'elenco documenti. Chi è in
+     sola lettura non lo vede, come non vede il pulsante Crea QCP. */
+  var PUO_SCRIVERE = window.USER_CAN_WRITE === true;
+  var ICON_ELIMINA = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>';
+
+  var piani = [];
+
+  function menuHtml(p) {
+    return '' +
+      '<div class="doc-row-menu-wrap" data-id="' + p.id + '">' +
+        '<button type="button" class="doc-row-dots-btn" aria-label="Actions" aria-haspopup="true" aria-expanded="false">···</button>' +
+        '<div class="doc-row-menu" role="menu">' +
+          '<button type="button" class="doc-row-menu-item doc-row-menu-item--danger doc-row-menu-item--delete" role="menuitem">' +
+            ICON_ELIMINA + 'Delete' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
   function rowHtml(p) {
     var nome = p.titolo || p.doc_no;
     var sub = p.descrizione_item || p.project || '';
     return '' +
-      '<div class="qcp-row">' +
-        '<span class="qcp-row-name" title="' + escHtml(nome) + '">' + escHtml(nome) +
+      '<div class="qcp-row' + (PUO_SCRIVERE ? ' has-menu' : '') + '">' +
+        '<span class="qcp-row-name" title="' + escHtml(nome) + '">' +
+          '<a class="qcp-row-link" href="' + escHtml(PAGINA + p.id + '/') + '">' + escHtml(nome) + '</a>' +
           (sub ? '<span class="qcp-row-sub">' + escHtml(sub) + '</span>' : '') +
         '</span>' +
         '<span class="qcp-row-items" title="' + escHtml(p.items_label) + '">' +
@@ -639,7 +1058,14 @@
           escHtml(p.prepared_by || '—') + '</span>' +
         '<span class="qcp-row-date">' + escHtml(p.data_display || '—') + '</span>' +
         ringHtml(p.percentuale) +
+        (PUO_SCRIVERE ? menuHtml(p) : '') +
       '</div>';
+  }
+
+  function renderPiani() {
+    listEl.innerHTML = piani.length
+      ? piani.map(rowHtml).join('')
+      : '<div class="qcp-empty">No Quality Control Plans for this job.</div>';
   }
 
   function loadPiani() {
@@ -647,18 +1073,76 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (body) {
         if (!body) {
-          listEl.innerHTML = '<div class="qcp-empty">Errore nel caricamento dei piani.</div>';
+          listEl.innerHTML = '<div class="qcp-empty">Could not load the plans.</div>';
           return;
         }
-        var piani = body.quality_control_plans || [];
-        listEl.innerHTML = piani.length
-          ? piani.map(rowHtml).join('')
-          : '<div class="qcp-empty">Nessun Quality Control Plan per questa commessa.</div>';
+        piani = body.quality_control_plans || [];
+        renderPiani();
       })
       .catch(function () {
-        listEl.innerHTML = '<div class="qcp-empty">Errore di rete.</div>';
+        listEl.innerHTML = '<div class="qcp-empty">Network error.</div>';
       });
   }
+
+  /* ── Eliminazione ── */
+  function closeAllRowMenus() {
+    document.querySelectorAll('.doc-row-menu.open').forEach(function (m) {
+      m.classList.remove('open');
+      var btn = m.previousElementSibling;
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function eliminaPiano(id) {
+    if (!requireWrite()) return;
+    var piano = piani.find(function (p) { return p.id === id; });
+    var nome = piano ? (piano.titolo || piano.doc_no) : '';
+    var domanda = nome
+      ? 'Delete the Quality Control Plan "' + nome + '"? This cannot be undone.'
+      : 'Delete this Quality Control Plan? This cannot be undone.';
+    if (!confirm(domanda)) return;
+    apiFetch(API + id + '/', { method: 'DELETE' })
+      .then(function (r) {
+        return r.json().then(function (b) { return { ok: r.ok, status: r.status, body: b }; });
+      })
+      .then(function (res) {
+        if (!res.ok) {
+          if (isPermissionDeniedResponse(res, res.body)) return;
+          // Già eliminato da qualcun altro: l'elenco va solo riallineato.
+          if (res.status === 404) { loadPiani(); showToast('Quality Control Plan already deleted.'); return; }
+          throw new Error();
+        }
+        piani = piani.filter(function (p) { return p.id !== id; });
+        renderPiani();
+        showToast('Quality Control Plan deleted.');
+      })
+      .catch(function () { showToast('Could not delete the plan.'); });
+  }
+
+  // Delega sull'elenco: le righe vengono ricreate a ogni caricamento.
+  listEl.addEventListener('click', function (e) {
+    var dotsBtn = e.target.closest('.doc-row-dots-btn');
+    if (dotsBtn) {
+      e.stopPropagation();
+      var menu = dotsBtn.nextElementSibling;
+      var isOpen = menu.classList.contains('open');
+      closeAllRowMenus();
+      if (!isOpen) {
+        menu.classList.add('open');
+        dotsBtn.setAttribute('aria-expanded', 'true');
+      }
+      return;
+    }
+    var elimina = e.target.closest('.doc-row-menu-item--delete');
+    if (elimina) {
+      e.stopPropagation();
+      closeAllRowMenus();
+      eliminaPiano(parseInt(elimina.closest('.doc-row-menu-wrap').dataset.id, 10));
+    }
+  });
+
+  document.addEventListener('click', function () { closeAllRowMenus(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAllRowMenus(); });
 
   /* ─────────────────────────────────────────────
      MODAL
@@ -672,23 +1156,350 @@
   var msPanel       = document.getElementById('f-items-panel');
   var msPlaceholder = document.getElementById('f-items-placeholder');
 
-  /* Campi che il precompilamento può riempire. Job n. e Vendor no: sono costanti
-     già nel markup e in sola lettura. */
-  var CAMPI = ['titolo', 'doc_no', 'location', 'sheet', 'project', 'dwg_no', 'owner',
-               'po_no', 'data', 'purchaser', 'descrizione_item', 'serial_no', 'prepared_by'];
+  /* Campi che il precompilamento può riempire e che si inviano. Job n. e Vendor
+     no: sono costanti già nel markup e in sola lettura. Doc n., Dwg n. e Serial n.
+     nemmeno: si vedono calcolati, ma se si inviassero il server li salverebbe come
+     numeri scritti a mano e smetterebbero di seguire i dati tecnici. */
+  var CAMPI = ['titolo', 'location', 'sheet', 'project', 'owner',
+               'po_no', 'data', 'purchaser', 'descrizione_item', 'prepared_by',
+               'dwg_base', 'serial_base', 'foglio_dwg', 'rev_no', 'mdmt',
+               'notification_advice_time'];
+  /* Requisiti sì/no: checkbox, quindi letti con .checked e non con .value. */
+  var FLAG = ['asme_stamp', 'national_board', 'lethal_service', 'h2s_service'];
 
   function campo(nome) {
     return document.getElementById('f-' + nome.replace(/_/g, '-'));
   }
 
+  /* ── Numerazione ──
+     Stessa regola di QualityControlPlan._numero: {job}-{dwg base}-{sigla}{suffisso},
+     vuoto se manca un pezzo. È il riscontro che nell'Excel danno le formule del
+     foglio DATI; il numero vero lo calcola comunque il server. */
+  function numero(sigla, suffisso) {
+    var job = JOB.trim();
+    var base = campo('dwg_base').value.trim();
+    suffisso = suffisso.trim();
+    return (job && base && suffisso) ? job + '-' + base + '-' + sigla + suffisso : '';
+  }
+
+  function aggiornaNumeri() {
+    var serial = campo('serial_base').value;
+    // Il Dwg n. non è nel modulo: lo calcola il server da dwg base e foglio disegno.
+    var calcolati = {
+      doc_no: numero('QCP', serial),
+      serial_no: numero('SN', serial)
+    };
+    Object.keys(calcolati).forEach(function (nome) {
+      // Sola lettura, come Job n.: il numero si calcola, non si scrive.
+      campo(nome).value = calcolati[nome];
+    });
+  }
+
+  ['dwg_base', 'serial_base', 'foglio_dwg'].forEach(function (nome) {
+    campo(nome).addEventListener('input', aggiornaNumeri);
+  });
+
+  /* ── Lista dinamica ──
+     Un solo componente per Applicable codes, Client specs e Inspection agencies:
+     righe con un campo e il pulsante per toglierle, "Aggiungi" in fondo e un
+     contatore che si ferma al massimo. Quello che cambia fra le tre (massimo,
+     lunghezza, tendina, numerazione) sta negli attributi data-* del contenitore. */
+  var ICON_TOGLI = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+  function creaLista(root) {
+    var righe     = root.querySelector('.qcp-lista-righe');
+    var aggiungi  = root.querySelector('.qcp-lista-add');
+    var contatore = root.querySelector('.qcp-lista-count');
+    var massimo   = parseInt(root.dataset.max, 10);
+    var numerata  = root.hasAttribute('data-numerata');
+    var toccata   = false;   // l'utente ci ha messo mano: la precompilazione non la tocca più
+
+    function campiRiga() { return Array.prototype.slice.call(righe.querySelectorAll('input')); }
+
+    function aggiorna() {
+      var n = campiRiga().length;
+      contatore.textContent = n + '/' + massimo;
+      aggiungi.disabled = n >= massimo;
+      aggiungi.title = n >= massimo ? 'Maximum ' + massimo + ' rows' : '';
+      if (numerata) {
+        righe.querySelectorAll('.qcp-lista-pos').forEach(function (el, i) { el.textContent = i + 1; });
+      }
+    }
+
+    function aggiungiRiga(valore) {
+      if (campiRiga().length >= massimo) return null;
+      var riga = document.createElement('div');
+      riga.className = 'qcp-lista-riga';
+      riga.innerHTML = (numerata ? '<span class="qcp-lista-pos" aria-hidden="true"></span>' : '') +
+        '<input type="text" autocomplete="off">' +
+        '<button type="button" class="qcp-lista-del" aria-label="Remove row">' + ICON_TOGLI + '</button>';
+      var input = riga.querySelector('input');
+      input.value = valore || '';
+      input.maxLength = parseInt(root.dataset.maxlength, 10);
+      input.placeholder = root.dataset.placeholder || '';
+      input.setAttribute('aria-label', root.dataset.etichetta);
+      if (root.dataset.datalist) input.setAttribute('list', root.dataset.datalist);
+      righe.appendChild(riga);
+      aggiorna();
+      return input;
+    }
+
+    function imposta(valori) {
+      righe.innerHTML = '';
+      (valori || []).forEach(function (v) { aggiungiRiga(v); });
+      toccata = false;
+      aggiorna();
+    }
+
+    aggiungi.addEventListener('click', function () {
+      toccata = true;
+      var input = aggiungiRiga('');
+      if (input) input.focus();
+    });
+
+    righe.addEventListener('input', function () { toccata = true; });
+
+    righe.addEventListener('click', function (e) {
+      var togli = e.target.closest('.qcp-lista-del');
+      if (!togli) return;
+      toccata = true;
+      var riga = togli.closest('.qcp-lista-riga');
+      var indice = Array.prototype.indexOf.call(righe.children, riga);
+      riga.remove();
+      aggiorna();
+      // Il fuoco resta nella lista: sulla riga che ha preso il posto di quella
+      // tolta, o su "Aggiungi" se non ne restano.
+      var resto = campiRiga();
+      (resto[Math.min(indice, resto.length - 1)] || aggiungi).focus();
+    });
+
+    return {
+      imposta: imposta,
+      // Proposta della precompilazione: vale solo se l'utente non ha già scritto.
+      proponi: function (valori) { if (!toccata) imposta(valori); },
+      // Valori da inviare: le righe vuote non contano, i doppioni li scarta il server.
+      valori: function () {
+        return campiRiga().map(function (el) { return el.value.trim(); }).filter(Boolean);
+      }
+    };
+  }
+
+  var LISTE = {
+    codes: creaLista(document.getElementById('f-codes')),
+    specs: creaLista(document.getElementById('f-specs')),
+    agencies: creaLista(document.getElementById('f-agencies'))
+  };
+  var ENTE_PREDEFINITO = "{{ qcp_ente_predefinito|escapejs }}";
+
   var TITOLO_PROPOSTO = "{{ qcp_titolo|escapejs }}";
   var itemsDisponibili = [];
   var itemsScelti = [];
   var toccati = Object.create(null);   // campi già modificati a mano
-  var descrizioneToccata = false;
+  var descrizioneAuto = '';            // ultima descrizione proposta dagli item
+  var MAX_DESCRIZIONE = 300;           // max_length di descrizione_item
 
   function showError(msg) { modalError.textContent = msg; modalError.classList.add('show'); }
   function hideError() { modalError.classList.remove('show'); }
+
+  /* ─────────────────────────────────────────────
+     PASSI DEL MODULO
+     Testata, Item, Dati tecnici, Codici ed enti, Riepilogo. I campi restano
+     tutti nel DOM e si nascondono soltanto: precompilazione da BC e getFormData()
+     funzionano qualunque sia il passo visibile.
+  ───────────────────────────────────────────── */
+  var PASSI = 5;
+  var passo = 1;             // passo visibile
+  var raggiunto = 1;         // passo più avanzato visitato: l'indicatore non va oltre
+  var arrivoRiepilogo = 0;   // quando si è arrivati al riepilogo: vedi il clic su Crea
+  var modalEl     = backdrop.querySelector('.modal');
+  var passiBtn    = Array.prototype.slice.call(backdrop.querySelectorAll('.qcp-step'));
+  var btnIndietro = document.getElementById('modal-back');
+  var btnAvanti   = document.getElementById('modal-next');
+  var riepilogoEl = document.getElementById('qcp-riepilogo');
+  var FOCUSABILI  = 'input:not([readonly]):not([disabled]), select:not([disabled]), ' +
+                    'textarea:not([disabled]), button:not([disabled]), [tabindex="0"]';
+
+  function pannello(n) {
+    return backdrop.querySelector('.qcp-pannello[data-step="' + n + '"]');
+  }
+
+  /* senzaScroll: al cambio di passo la vista deve restare in cima al pannello
+     anche quando il fuoco va su un elemento in fondo (Crea, nel riepilogo). */
+  function focusPrimo(root, senzaScroll) {
+    if (!root) return;
+    var el = root.matches(FOCUSABILI) ? root : root.querySelector(FOCUSABILI);
+    if (el) el.focus({ preventScroll: !!senzaScroll });
+  }
+
+  function campiPasso(p) {
+    return Array.prototype.slice.call(pannello(p).querySelectorAll('input, select, textarea'));
+  }
+
+  /* Solo il controllo, senza toccare l'interfaccia: serve anche all'indicatore.
+     Il passo 2 vuole almeno un item, come il server; per il resto decide la
+     validazione del browser (data incompleta, Rev n. fuori dai limiti). */
+  function passoValido(p) {
+    if (p === 2 && !itemsScelti.length) return false;
+    return campiPasso(p).every(function (el) { return el.checkValidity(); });
+  }
+
+  function primoPassoNonValido(fino) {
+    for (var p = 1; p < fino; p++) {
+      if (!passoValido(p)) return p;
+    }
+    return 0;
+  }
+
+  /* Dice all'utente cosa non va nel passo p, che deve essere quello visibile:
+     il fumetto del browser non compare su un campo nascosto. */
+  function segnalaPasso(p) {
+    if (p === 2 && !itemsScelti.length) {
+      showError('Select at least one item.');   // lo stesso controllo del server
+      msBox.focus();
+      return;
+    }
+    var el = campiPasso(p).find(function (c) { return !c.checkValidity(); });
+    if (el) { el.focus(); el.reportValidity(); }
+  }
+
+  function renderPassi() {
+    passiBtn.forEach(function (btn) {
+      var p = parseInt(btn.dataset.vai, 10);
+      btn.disabled = p > raggiunto;
+      if (p === passo) btn.setAttribute('aria-current', 'step');
+      else btn.removeAttribute('aria-current');
+      btn.classList.toggle('is-done',
+        p !== passo && p < PASSI && p <= raggiunto && passoValido(p));
+    });
+  }
+
+  function mostraPasso(n) {
+    passo = n;
+    raggiunto = Math.max(raggiunto, n);
+    backdrop.querySelectorAll('.qcp-pannello').forEach(function (el) {
+      el.hidden = parseInt(el.dataset.step, 10) !== n;
+    });
+    btnIndietro.hidden = n === 1;
+    btnAvanti.hidden = n === PASSI;
+    modalSave.hidden = n !== PASSI;
+    if (n === PASSI) {
+      renderRiepilogo();
+      arrivoRiepilogo = Date.now();
+    }
+    renderPassi();
+    hideError();
+    focusPrimo(n === PASSI ? modalSave : pannello(n), true);
+    modalEl.scrollTop = 0;
+  }
+
+  /* Unica porta per cambiare passo: Avanti, Indietro, indicatore, "Modifica" del
+     riepilogo e Invio. Andando avanti si ricontrollano tutti i passi precedenti,
+     non solo quello attuale: altrimenti si potrebbe svuotare il passo 2, tornare
+     al primo e saltare al riepilogo dall'indicatore. */
+  function vaiA(n) {
+    if (n < 1 || n > PASSI || n === passo) return;
+    if (n > Math.max(raggiunto, passo + 1)) return;   // mai avanti su passi non visti
+    if (n > passo) {
+      var ko = primoPassoNonValido(n);
+      if (ko) {
+        if (ko !== passo) mostraPasso(ko);
+        segnalaPasso(ko);
+        return;
+      }
+    }
+    mostraPasso(n);
+  }
+
+  /* ── Riepilogo ──
+     Si costruisce leggendo i pannelli 1-4, così ordine ed etichette sono quelli
+     del modulo senza una seconda lista di campi da tenere allineata. I valori
+     vengono da getFormData(), cioè sono esattamente quelli che verranno inviati. */
+  // Stessa dicitura del documento stampato (REQUIRED / NOT REQUIRED in
+  // core/services/quality_control_plan.py).
+  var REQUIRED = 'REQUIRED';
+  var NOT_REQUIRED = 'NOT REQUIRED';
+
+  function valoreHtml(v) {
+    var testo = v === null || v === undefined ? '' : String(v).trim();
+    return testo ? escHtml(testo) : '<span class="qcp-riep-vuoto">—</span>';
+  }
+
+  function elencoHtml(valori, numerato) {
+    if (!valori.length) return valoreHtml('');
+    var tag = numerato ? 'ol' : 'ul';
+    return '<' + tag + '>' + valori.map(function (v) {
+      return '<li>' + escHtml(v) + '</li>';
+    }).join('') + '</' + tag + '>';
+  }
+
+  function voceHtml(etichetta, valore, piena) {
+    return '<div class="qcp-riep-voce' + (piena ? ' full' : '') + '">' +
+      '<dt>' + escHtml(etichetta) + '</dt><dd>' + valore + '</dd></div>';
+  }
+
+  function nomeCampo(el) { return el.id.slice(2).replace(/-/g, '_'); }
+
+  function vociPannello(p, dati) {
+    var html = '';
+    pannello(p).querySelectorAll(':scope > .fg').forEach(function (fg) {
+      if (fg.classList.contains('qcp-ms')) {
+        var codici = dati.items.map(function (i) { return i.item_no; });
+        html += voceHtml('Item n.', elencoHtml(codici), true);
+      } else if (fg.classList.contains('qcp-lista')) {
+        var titolo = fg.querySelector('.fg-title').firstChild.textContent.trim();
+        var valori = LISTE[fg.id.slice(2)].valori();
+        html += voceHtml(titolo, elencoHtml(valori, fg.hasAttribute('data-numerata')), true);
+      } else if (fg.querySelector('.qcp-flags')) {
+        fg.querySelectorAll('.qcp-flag input').forEach(function (cb) {
+          var etichetta = cb.parentNode.textContent.trim();
+          html += voceHtml(etichetta, escHtml(dati[nomeCampo(cb)] ? REQUIRED : NOT_REQUIRED));
+        });
+      } else {
+        var el = fg.querySelector('input[id], select[id]');
+        if (!el) return;
+        var nome = nomeCampo(el);
+        // Job n., Vendor, Doc n. e Serial n. non si inviano: si leggono dal campo.
+        var valore = nome in dati ? dati[nome] : el.value;
+        if (el.type === 'date') valore = valore ? formatDate(valore) : '';
+        html += voceHtml(el.labels[0].textContent.trim(), valoreHtml(valore),
+                         fg.classList.contains('full'));
+      }
+    });
+    return html;
+  }
+
+  function renderRiepilogo() {
+    var dati = getFormData();
+    riepilogoEl.innerHTML = [1, 2, 3, 4].map(function (p) {
+      var titolo = document.getElementById('qcp-passo-' + p).textContent.trim();
+      return '<div class="qcp-riep-gruppo">' +
+        '<div class="qcp-riep-head">' +
+          '<span class="qcp-riep-titolo">' + escHtml(titolo) + '</span>' +
+          '<button type="button" class="qcp-riep-mod" data-vai="' + p + '"' +
+                 ' aria-label="Edit ' + escHtml(titolo) + '">Edit</button>' +
+        '</div>' +
+        '<dl class="qcp-riep-dl">' + vociPannello(p, dati) + '</dl>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* Il passo che contiene ciò che il server ha rifiutato. Un errore di
+     validazione del modello arriva come {campo: [messaggi]} e il campo si trova
+     per nome; un errore del service è una frase, e si cerca l'elemento che ne
+     dichiara l'inizio in data-errore. Se non si capisce, si resta al riepilogo. */
+  function passoDiErrore(err) {
+    var el = null;
+    if (err && typeof err === 'object') {
+      Object.keys(err).some(function (k) { el = campo(k); return !!el; });
+    } else {
+      var testo = String(err || '');
+      el = Array.prototype.find.call(backdrop.querySelectorAll('[data-errore]'), function (c) {
+        return c.dataset.errore.split('|').some(function (p) { return testo.indexOf(p) === 0; });
+      }) || null;
+    }
+    var pan = el && el.closest('[data-step]');
+    return pan ? { passo: parseInt(pan.dataset.step, 10), el: el } : null;
+  }
 
   function clearForm() {
     CAMPI.forEach(function (nome) {
@@ -699,15 +1510,24 @@
     campo('data').value = "{{ oggi|escapejs }}";
     campo('prepared_by').value = "{{ prepared_by|escapejs }}";
     campo('location').value = "{{ sede_utente|escapejs }}";
+    campo('rev_no').value = '0';
+    FLAG.forEach(function (nome) { campo(nome).checked = false; });
+    LISTE.codes.imposta([]);
+    LISTE.specs.imposta([]);
+    LISTE.agencies.imposta([ENTE_PREDEFINITO]);
+    aggiornaNumeri();
     itemsDisponibili = [];
     itemsScelti = [];
     toccati = Object.create(null);
-    descrizioneToccata = false;
+    descrizioneAuto = '';
     renderChips();
     renderPanel();
     warnEl.classList.remove('show');
     warnEl.textContent = '';
     hideError();
+    // Ogni nuovo piano riparte dal primo passo.
+    raggiunto = 1;
+    mostraPasso(1);
   }
 
   function renderChips() {
@@ -715,13 +1535,13 @@
       return '<span class="qcp-chip"><span>' + escHtml(i.item_no) + '</span></span>';
     }).join('');
     msBox.innerHTML = chips ||
-      '<span class="qcp-ms-placeholder">Seleziona uno o più item…</span>';
+      '<span class="qcp-ms-placeholder">Select one or more items…</span>';
   }
 
   function renderPanel() {
     if (!itemsDisponibili.length) {
-      msPanel.innerHTML = '<div class="qcp-ms-empty">Nessun item da Business Central. ' +
-        'Puoi comunque scrivere il codice a mano nella descrizione.</div>';
+      msPanel.innerHTML = '<div class="qcp-ms-empty">No items from Business Central. ' +
+        'You can still type the code in the description.</div>';
       return;
     }
     msPanel.innerHTML = itemsDisponibili.map(function (i, idx) {
@@ -752,21 +1572,39 @@
       itemsScelti = itemsScelti.filter(function (s) { return s.item_no !== item.item_no; });
     }
     renderChips();
-    // La descrizione segue il primo item scelto, ma non sovrascrive mai quello
-    // che l'utente ha già scritto di suo.
-    if (!descrizioneToccata) {
-      campo('descrizione_item').value = itemsScelti.length ? (itemsScelti[0].descrizione || '') : '';
+    if (itemsScelti.length) hideError();   // toglie "Seleziona almeno un item."
+    // La descrizione segue gli item scelti finché è vuota o contiene ancora
+    // quella proposta: smette solo quando l'utente ci scrive qualcosa di suo,
+    // e riprende se lo cancella.
+    var el = campo('descrizione_item');
+    var attuale = el.value.trim();
+    if (!attuale || attuale === descrizioneAuto) {
+      descrizioneAuto = descrizioneDaItems();
+      el.value = descrizioneAuto;
     }
   });
+
+  /* Descrizioni degli item scelti, senza doppioni e nell'ordine di scelta, unite
+     da " / " come gli item nell'elenco dei piani. */
+  function descrizioneDaItems() {
+    var viste = [];
+    itemsScelti.forEach(function (i) {
+      var testo = (i.descrizione || '').trim();
+      if (testo && viste.indexOf(testo) === -1) viste.push(testo);
+    });
+    return viste.join(' / ').slice(0, MAX_DESCRIZIONE);
+  }
 
   document.addEventListener('click', function (e) {
     if (!msPanel.contains(e.target) && !msBox.contains(e.target)) msPanel.classList.remove('open');
   });
 
-  campo('descrizione_item').addEventListener('input', function () { descrizioneToccata = true; });
   CAMPI.forEach(function (nome) {
     var el = campo(nome);
     if (el) el.addEventListener('input', function () { toccati[nome] = true; });
+  });
+  FLAG.forEach(function (nome) {
+    campo(nome).addEventListener('change', function () { toccati[nome] = true; });
   });
 
   function aggiornaSedi(sedi) {
@@ -792,32 +1630,41 @@
       // Non si sovrascrive un campo che l'utente ha già toccato mentre BC caricava.
       if (el && !toccati[nome] && dati[nome]) el.value = dati[nome];
     });
+    FLAG.forEach(function (nome) {
+      if (!toccati[nome] && typeof dati[nome] === 'boolean') campo(nome).checked = dati[nome];
+    });
+    Object.keys(LISTE).forEach(function (nome) {
+      if (Array.isArray(dati[nome])) LISTE[nome].proponi(dati[nome]);
+    });
+    aggiornaNumeri();
     itemsDisponibili = body.items || [];
     renderPanel();
     if (body.warning) {
       warnEl.textContent = body.warning;
       warnEl.classList.add('show');
     }
+    // BC può rispondere quando l'utente è già al riepilogo: va rifatto.
+    if (passo === PASSI) renderRiepilogo();
   }
 
   function openModal() {
     if (!requireWrite()) return;
     clearForm();
     backdrop.classList.add('show');
-    campo('doc_no').focus();
-    msPanel.innerHTML = '<div class="qcp-ms-empty">Caricamento da Business Central…</div>';
+    campo('titolo').focus();
+    msPanel.innerHTML = '<div class="qcp-ms-empty">Loading from Business Central…</div>';
     // Il modal è già utilizzabile: la lettura da BC riempie il resto quando arriva.
     apiFetch(API + 'prefill/')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (body) {
         if (body) { applicaPrecompilazione(body); return; }
         renderPanel();
-        warnEl.textContent = 'Precompilazione non riuscita: compila i campi a mano.';
+        warnEl.textContent = 'Prefill failed: fill in the fields by hand.';
         warnEl.classList.add('show');
       })
       .catch(function () {
         renderPanel();
-        warnEl.textContent = 'Precompilazione non riuscita: compila i campi a mano.';
+        warnEl.textContent = 'Prefill failed: fill in the fields by hand.';
         warnEl.classList.add('show');
       });
   }
@@ -834,12 +1681,19 @@
       var el = campo(nome);
       data[nome] = el ? el.value.trim() : '';
     });
+    FLAG.forEach(function (nome) { data[nome] = campo(nome).checked; });
+    Object.keys(LISTE).forEach(function (nome) { data[nome] = LISTE[nome].valori(); });
     if (!data.data) data.data = null;
     return data;
   }
 
   modalSave.addEventListener('click', function () {
+    // Crea compare dove un attimo prima c'era Avanti: un doppio clic sul passo 4
+    // non deve creare il piano.
+    if (passo !== PASSI || Date.now() - arrivoRiepilogo < 600) return;
     if (!requireWrite()) return;
+    var ko = primoPassoNonValido(PASSI);
+    if (ko) { mostraPasso(ko); segnalaPasso(ko); return; }
     hideError();
     modalSave.disabled = true;
     apiFetch(API, { method: 'POST', body: JSON.stringify(getFormData()) })
@@ -850,18 +1704,22 @@
         modalSave.disabled = false;
         if (!res.ok) {
           if (isPermissionDeniedResponse(res, res.body)) return;
-          var msg = res.body.error || 'Errore.';
-          if (typeof msg === 'object') msg = Object.values(msg).flat().join(' ');
+          var err = res.body.error || 'Error.';
+          var msg = typeof err === 'object' ? Object.values(err).flat().join(' ') : err;
+          // Si torna al passo di ciò che è stato rifiutato. Il messaggio va
+          // mostrato dopo mostraPasso, che pulisce gli errori.
+          var dove = passoDiErrore(err);
+          if (dove) { mostraPasso(dove.passo); focusPrimo(dove.el); }
           showError(msg);
           return;
         }
         closeModal();
         loadPiani();
-        showToast('Quality Control Plan creato.');
+        showToast('Quality Control Plan created.');
       })
       .catch(function () {
         modalSave.disabled = false;
-        showError('Errore di rete.');
+        showError('Network error.');
       });
   });
 
@@ -869,6 +1727,30 @@
   if (btnCrea) btnCrea.addEventListener('click', openModal);
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  btnAvanti.addEventListener('click', function () { vaiA(passo + 1); });
+  btnIndietro.addEventListener('click', function () { vaiA(passo - 1); });
+  // Indicatore e "Modifica" del riepilogo portano il passo in data-vai.
+  modalEl.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-vai]');
+    if (b && !b.disabled) vaiA(parseInt(b.dataset.vai, 10));
+  });
+  // Invio tenuto premuto su Crea non deve ripetere la creazione.
+  modalSave.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.repeat) e.preventDefault();
+  });
+  /* Invio porta al passo successivo, ma solo dai campi semplici: non dalle righe
+     delle liste né dai campi con la tendina (lì Invio serve a scegliere una
+     proposta), e mai dal riepilogo. Non c'è un <form>, quindi Invio da solo non
+     crea mai il piano. */
+  backdrop.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || e.repeat || e.isComposing ||
+        e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    var el = e.target;
+    if (!el.matches || !el.matches('input[type="text"], input[type="number"], input[type="date"]')) return;
+    if (el.readOnly || el.closest('.qcp-lista') || el.hasAttribute('list') || passo >= PASSI) return;
+    e.preventDefault();
+    vaiA(passo + 1);
+  });
   backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && backdrop.classList.contains('show')) closeModal();

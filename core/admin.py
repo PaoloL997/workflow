@@ -4,6 +4,7 @@ from django.contrib.auth.admin import UserAdmin
 
 from .models import (
     AggiornamentoBC,
+    AttivitaQCP,
     CartellaModelloDocumento,
     Documento,
     EsecuzioneSchedulata,
@@ -11,7 +12,11 @@ from .models import (
     Notifica,
     Permesso,
     QualityControlPlan,
+    QualityControlPlanAgency,
+    QualityControlPlanCode,
     QualityControlPlanItem,
+    QualityControlPlanSignature,
+    QualityControlPlanSpec,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -23,6 +28,7 @@ from .models import (
     Transmittal,
     User,
 )
+from .services.quality_control_plan import sincronizza_punti
 
 
 @admin.register(Stabilimento)
@@ -40,7 +46,7 @@ class RepartoAdmin(admin.ModelAdmin):
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
-        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento")}),
+        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento", "firma")}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Profilo", {"fields": ("email", "ruolo", "reparto", "stabilimento")}),
@@ -300,10 +306,91 @@ class QualityControlPlanItemInline(admin.TabularInline):
     ordering = ("ordine", "id")
 
 
+class _QualityControlPlanListaInline(admin.TabularInline):
+    extra = 0
+    ordering = ("ordine", "id")
+
+
+class QualityControlPlanCodeInline(_QualityControlPlanListaInline):
+    model = QualityControlPlanCode
+    fields = ("codice", "ordine")
+
+
+class QualityControlPlanSpecInline(_QualityControlPlanListaInline):
+    model = QualityControlPlanSpec
+    fields = ("spec", "ordine")
+
+
+class QualityControlPlanAgencyInline(_QualityControlPlanListaInline):
+    model = QualityControlPlanAgency
+    fields = ("nome", "ordine")
+
+
 @admin.register(QualityControlPlan)
 class QualityControlPlanAdmin(admin.ModelAdmin):
     list_display = ("id", "testata", "doc_no", "project", "owner", "data", "prepared_by")
     search_fields = ("testata__job", "doc_no", "project", "owner", "purchaser")
     readonly_fields = ("created_at", "updated_at")
     raw_id_fields = ("testata", "prepared_by_user")
-    inlines = (QualityControlPlanItemInline,)
+    inlines = (
+        QualityControlPlanItemInline,
+        QualityControlPlanCodeInline,
+        QualityControlPlanSpecInline,
+        QualityControlPlanAgencyInline,
+    )
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        # Gli enti si modificano qui, negli inline: gli step già inseriti devono
+        # avere un punto per ogni ente, e nessuno per gli enti tolti.
+        sincronizza_punti(form.instance)
+
+
+@admin.register(QualityControlPlanSignature)
+class QualityControlPlanSignatureAdmin(admin.ModelAdmin):
+    """Le firme si consultano soltanto: sono append-only.
+
+    Si registrano e si annullano dalla pagina del piano, con autore, data e
+    motivo; qui non si aggiungono, non si cambiano e non si cancellano.
+    """
+
+    list_display = ("id", "punto", "utente", "esito", "firmato_il", "annullata_il")
+    list_filter = ("esito",)
+    search_fields = ("utente__username", "utente__last_name", "note", "motivo_annullo")
+    list_select_related = ("punto", "utente")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AttivitaQCP)
+class AttivitaQCPAdmin(admin.ModelAdmin):
+    """Il catalogo si mantiene da qui, senza deploy.
+
+    Un'attività non si cancella mai: si disattiva. La cancellazione è tolta del
+    tutto (anche come azione di massa), così un piano che la usa non perde il
+    riferimento.
+    """
+
+    list_display = ("codice", "capitolo", "divisione", "tipo", "attivo")
+    list_filter = ("capitolo", "divisione", "tipo", "attivo")
+    search_fields = ("codice", "descrizione")
+    ordering = ("ordine", "id")
+    actions = ("attiva", "disattiva")
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description="Attiva le attività selezionate")
+    def attiva(self, request, queryset):
+        queryset.update(attivo=True)
+
+    @admin.action(description="Disattiva le attività selezionate")
+    def disattiva(self, request, queryset):
+        queryset.update(attivo=False)

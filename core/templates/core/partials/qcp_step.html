@@ -1,0 +1,58 @@
+{% comment %}
+Uno step del corpo del piano (pannello della sezione nella pagina del piano).
+
+Serve due volte: per gli step del piano e, vuoto, dentro il <template> da cui
+la pagina crea le righe nuove; il JS riempie id e valori. La riga ha due
+livelli sulla stessa griglia: sul primo numero, descrizione, extent e un punto
+per ente; sul secondo gli altri testi dello snapshot, ognuno con la sua sigla.
+I testi vuoti restano nel markup con la classe is-vuota, che li nasconde.
+
+Ogni cella di ente porta lo stato di firma del suo punto: il segno nell'angolo
+(da firmare, firmato, non conforme) e i dati della firma valida in data-firma-*,
+da cui il JS scrive il tooltip e il pannello delle firme.
+
+Chi può scrivere apre lo step cliccandoci sopra (o con Invio): i testi
+diventano campi, anche quelli vuoti, e sotto compaiono le firme e il pulsante
+per eliminarlo; un altro clic sullo step, fuori dai campi, lo richiude. Chi è
+in sola lettura vede gli stessi valori, e lo stato delle firme nel tooltip
+delle celle, senza controlli.
+{% endcomment %}
+<li class="ce-step" data-id="{{ step.id }}"{% if user_can_write %} tabindex="0" aria-describedby="ce-aiuto-step"{% endif %}>
+  <div class="ce-riga">
+    <span class="ce-maniglia"{% if user_can_write %} title="Drag to move the step"{% endif %} aria-hidden="true">{% if user_can_write %}<svg width="12" height="16" viewBox="0 0 12 16" fill="currentColor"><circle cx="3" cy="3" r="1.4"/><circle cx="9" cy="3" r="1.4"/><circle cx="3" cy="8" r="1.4"/><circle cx="9" cy="8" r="1.4"/><circle cx="3" cy="13" r="1.4"/><circle cx="9" cy="13" r="1.4"/></svg>{% endif %}</span>
+    <span class="ce-step-n">{{ step.numero }}</span>
+    {% with testo=step.testo_descrizione %}<span class="ce-testo ce-testo-{{ testo.nome }}" data-campo="{{ testo.nome }}" data-etichetta="{{ testo.etichetta }}" data-max="{{ testo.max_length }}"><span class="ce-sr">{{ testo.etichetta }}: </span><span class="ce-testo-val">{{ testo.valore }}</span></span>{% endwith %}
+    <span class="ce-extent">
+      {% if user_can_write %}
+        <input type="text" inputmode="decimal" class="ce-extent-input" value="{{ step.extent_percentuale }}"
+               data-salvato="{{ step.extent_percentuale }}" maxlength="5" autocomplete="off"
+               aria-label="Extent (percent)">
+      {% else %}
+        <span class="ce-sr">Extent: </span><span class="ce-extent-val">{{ step.extent_percentuale }}</span>
+      {% endif %}
+      <span class="ce-pct" aria-hidden="true">%</span>
+    </span>
+    <span class="ce-punti">
+      {% for cella in step.celle %}
+        {% if user_can_write %}<button type="button"{% else %}<span role="img"{% endif %} class="ce-punto{% if cella.punto == '-' %} is-vuoto{% endif %}"
+                data-ente="{{ cella.ente.id }}" data-ente-nome="{{ cella.ente.nome }}" data-punto="{{ cella.punto }}"
+                data-ente-pos="{{ cella.ente.posizione }}" data-punto-id="{{ cella.id }}" data-firme="{{ cella.firme_registrate }}"
+                data-firma-esito="{{ cella.firma.esito|default:'' }}"{% if cella.firma %} data-firma-id="{{ cella.firma.id }}"
+                data-firma-esito-etichetta="{{ cella.firma.esito_etichetta }}" data-firma-utente="{{ cella.firma.utente }}"
+                data-firma-quando="{{ cella.firma.firmato_il_display }}" data-firma-immagine="{{ cella.firma.immagine }}"
+                data-firma-note="{{ cella.firma.note }}"{% endif %}{% if user_can_write %} aria-haspopup="menu"{% endif %}
+                aria-label="{{ cella.ente.nome }}, intervention point: {{ cella.etichetta }}{% if cella.stato_firma %}, {{ cella.stato_firma }}{% endif %}"
+                title="{{ cella.ente.nome }}: {{ cella.etichetta }}{% if cella.stato_firma %} — {{ cella.stato_firma }}{% endif %}"><span class="ce-punto-sigla">{% if cella.punto == '-' %}–{% else %}{{ cella.punto }}{% endif %}</span><span class="ce-firma-segno" aria-hidden="true"></span>{% if user_can_write %}</button>{% else %}</span>{% endif %}
+      {% endfor %}
+    </span>
+    <div class="ce-dettagli">
+      {% for testo in step.dettagli %}<span class="ce-testo ce-coppia ce-testo-{{ testo.nome }}{% if not testo.valore %} is-vuota{% endif %}" data-campo="{{ testo.nome }}" data-etichetta="{{ testo.etichetta }}" data-max="{{ testo.max_length }}"><span class="ce-coppia-sigla" title="{{ testo.etichetta }}" aria-hidden="true">{{ testo.sigla }}</span><span class="ce-sr">{{ testo.etichetta }}: </span><span class="ce-testo-val">{{ testo.valore }}</span></span>{% endfor %}
+    </div>
+    {% if user_can_write %}
+      <div class="ce-azioni-step" role="group" aria-label="Step actions">
+        <button type="button" class="ce-btn ce-btn-elimina" data-step-azione="elimina">Delete step</button>
+      </div>
+    {% endif %}
+  </div>
+  <p class="ce-errore" role="alert" hidden></p>
+</li>

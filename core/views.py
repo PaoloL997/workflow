@@ -21,15 +21,23 @@ from .models import (
     Documento,
     IndirSped,
     Permesso,
+    QualityControlPlan,
+    QualityControlPlanInterventionPoint,
+    QualityControlPlanSection,
+    QualityControlPlanSignature,
+    QualityControlPlanStep,
     Revisione,
     Segnalazione,
     Stabilimento,
     StatoEsterno,
     Testata,
     User,
+    valida_immagine_firma,
 )
 from .permissions import api_write_required
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
+from .services.catalogo_qcp import capitoli_attivi as capitoli_attivi_qcp
+from .services.catalogo_qcp import cerca_attivita as cerca_attivita_qcp
 from .services.commesse import (
     close_commessa,
     create_commessa,
@@ -77,16 +85,42 @@ from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
+from .services.quality_control_plan import CODICI_PROPOSTI as QCP_CODICI_PROPOSTI
+from .services.quality_control_plan import ENTE_PREDEFINITO as QCP_ENTE_PREDEFINITO
+from .services.quality_control_plan import LISTE as QCP_LISTE
 from .services.quality_control_plan import VENDOR as QCP_VENDOR
 from .services.quality_control_plan import (
+    aggiorna_sezione,
+    aggiungi_step,
+    aggiungi_step_multipli,
+    annulla_firma,
+    corpo_per_pagina,
+    crea_sezione,
     create_piano,
     dati_precompilati,
+    delete_piano,
+    elimina_sezione,
+    elimina_step,
+    firma_punto,
+    firma_step,
+    get_firma,
+    get_piano,
+    get_piano_corpo,
+    get_punto,
+    get_sezione,
+    get_step,
+    imposta_punti,
     list_piani,
+    modifica_step,
     nome_stabilimento,
+    punti_con_firma,
     sedi_disponibili,
+    serialize_corpo,
     serialize_piano,
+    storico_punto,
     titolo_predefinito,
 )
+from .services.quality_control_plan import avanzamento as avanzamento_qcp
 from .services.quality_control_plan import (
     nome_utente as qcp_nome_utente,
 )
@@ -384,6 +418,37 @@ def quality_control_plan_view(request, job):
             "prepared_by": qcp_nome_utente(request.user),
             "sedi": sedi_disponibili(),
             "sede_utente": nome_stabilimento(request.user),
+            "qcp_codici_proposti": QCP_CODICI_PROPOSTI,
+            "qcp_ente_predefinito": QCP_ENTE_PREDEFINITO,
+            "qcp_liste": {lista.chiave: lista for lista in QCP_LISTE},
+        },
+    )
+
+
+@login_required
+def quality_control_plan_detail_view(request, job, pk):
+    """Anteprima della copertina di un piano: per rileggere quanto compilato.
+
+    Stessi permessi dell'elenco: basta essere autenticati. Un piano di un'altra
+    commessa risponde 404, come uno che non esiste.
+
+    La vista Step è l'editor del corpo: sezioni e step arrivano già disegnati,
+    poi la pagina li modifica con le API del corpo. Chi è in sola lettura li
+    vede senza controlli di modifica.
+    """
+    try:
+        testata = get_commessa(job)
+        piano = get_piano(job, pk)
+    except (Testata.DoesNotExist, QualityControlPlan.DoesNotExist):
+        raise Http404
+    return render(
+        request,
+        "core/quality_control_plan_detail.html",
+        {
+            "testata": testata,
+            "piano": serialize_piano(piano),
+            "corpo": corpo_per_pagina(piano),
+            "capitoli_catalogo": capitoli_attivi_qcp(),
         },
     )
 
@@ -610,6 +675,263 @@ def quality_control_plan_api(request, job):
         return JsonResponse({"error": exc.message_dict}, status=400)
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["DELETE"])
+def quality_control_plan_api_detail(request, job, pk):
+    try:
+        delete_piano(job, pk)
+        return JsonResponse({"ok": True})
+    except QualityControlPlan.DoesNotExist:
+        return JsonResponse({"error": "Quality Control Plan non trovato."}, status=404)
+    except ValueError as exc:  # piano con firme registrate
+        return JsonResponse({"error": str(exc)}, status=400)
+
+
+# ── API: Corpo del Quality Control Plan ─────────────────────────────────────
+
+_CORPO_NON_TROVATO = (
+    QualityControlPlan.DoesNotExist,
+    QualityControlPlanSection.DoesNotExist,
+    QualityControlPlanStep.DoesNotExist,
+    QualityControlPlanInterventionPoint.DoesNotExist,
+    QualityControlPlanSignature.DoesNotExist,
+)
+
+
+def _api_corpo(view_func):
+    """Errori comuni alle API del corpo del piano.
+
+    Un piano, una sezione o uno step che non esistono — o che appartengono a un
+    altro piano o a un'altra commessa — rispondono 404, mai 500; dati non validi
+    rispondono 400 col messaggio del service.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        try:
+            return view_func(request, *args, **kwargs)
+        except _CORPO_NON_TROVATO:
+            return JsonResponse({"error": "Elemento del piano non trovato."}, status=404)
+        except ValidationError as exc:
+            return JsonResponse({"error": exc.message_dict}, status=400)
+        except ValueError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+
+    return wrapper
+
+
+def _dati_corpo(request):
+    """Il JSON della richiesta, che per queste API deve essere un oggetto."""
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        raise ValueError("JSON non valido.")
+    return data
+
+
+def _risposta_corpo(piano, status=200):
+    # Ogni modifica restituisce il corpo intero: la numerazione degli step
+    # cambia quasi a ogni operazione, e leggerlo costa un numero fisso di query.
+    return JsonResponse({"ok": True, "data": serialize_corpo(piano)}, status=status)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["GET"])
+@_api_corpo
+def quality_control_plan_corpo_api(request, job, pk):
+    """Il corpo del piano: sezioni, step e punti d'intervento, numerati."""
+    return JsonResponse(serialize_corpo(get_piano_corpo(job, pk)))
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@_api_corpo
+def quality_control_plan_sezioni_api(request, job, pk):
+    """Nuova sezione: ``{"titolo": …}``, in coda o alla posizione ``ordine`` (da 0)."""
+    piano = get_piano_corpo(job, pk)
+    data = _dati_corpo(request)
+    crea_sezione(piano, data.get("titolo"), data.get("ordine"))
+    return _risposta_corpo(piano, status=201)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["PATCH", "DELETE"])
+@_api_corpo
+def quality_control_plan_sezione_api(request, job, pk, sid):
+    """Rinomina o sposta (``titolo``, ``ordine``) una sezione, oppure la elimina."""
+    sezione = get_sezione(job, pk, sid)
+    if request.method == "DELETE":
+        elimina_sezione(sezione)
+    else:
+        aggiorna_sezione(sezione, _dati_corpo(request))
+    return _risposta_corpo(sezione.piano)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@_api_corpo
+def quality_control_plan_sezione_steps_api(request, job, pk, sid):
+    """Step in coda alla sezione.
+
+    ``{"attivita_ids": [..]}`` inserisce più attività del catalogo nell'ordine
+    dato, ``{"attivita_id": n}`` una sola, ``{"dati": {...}}`` uno step scritto a
+    mano (descrizione obbligatoria).
+    """
+    sezione = get_sezione(job, pk, sid)
+    data = _dati_corpo(request)
+    if "attivita_ids" in data:
+        aggiungi_step_multipli(sezione, data["attivita_ids"])
+    elif data.get("attivita_id") is not None:
+        aggiungi_step(sezione, attivita_id=data["attivita_id"])
+    elif "dati" in data:
+        aggiungi_step(sezione, dati=data["dati"])
+    else:
+        raise ValueError("Indica le attività del catalogo o i dati dello step.")
+    return _risposta_corpo(sezione.piano, status=201)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["PATCH", "DELETE"])
+@_api_corpo
+def quality_control_plan_step_api(request, job, pk, stid):
+    """Corregge (snapshot, extent, remarks, ``ordine``) o elimina uno step."""
+    step = get_step(job, pk, stid)
+    piano = step.sezione.piano
+    if request.method == "DELETE":
+        elimina_step(step)
+    else:
+        modifica_step(step, _dati_corpo(request))
+    return _risposta_corpo(piano)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["PATCH"])
+@_api_corpo
+def quality_control_plan_step_punti_api(request, job, pk, stid):
+    """Punti d'intervento di uno step: ``{"punti": [{"agency": id, "punto": "W"}]}``."""
+    step = get_step(job, pk, stid)
+    imposta_punti(step, _dati_corpo(request).get("punti"))
+    return _risposta_corpo(step.sezione.piano)
+
+
+# ── API: Firme dei punti d'intervento e avanzamento ─────────────────────────
+
+
+def _risposta_firme(punto_ids, piano, status=200):
+    """Dopo una firma o un annullamento: i punti toccati e l'avanzamento del piano.
+
+    Non il corpo intero: la pagina aggiorna solo le celle di quei punti, e un
+    piano reale ha centinaia di step.
+    """
+    return JsonResponse(
+        {
+            "ok": True,
+            "data": {"punti": punti_con_firma(punto_ids), "avanzamento": avanzamento_qcp(piano)},
+        },
+        status=status,
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@_api_corpo
+def quality_control_plan_punto_firma_api(request, job, pk, pid):
+    """Firma un punto d'intervento: ``{"esito": "conforme", "note": "…"}``."""
+    punto = get_punto(job, pk, pid)
+    dati = _dati_corpo(request)
+    firma_punto(punto, request.user, dati.get("esito"), dati.get("note"))
+    return _risposta_firme([punto.pk], punto.step.sezione.piano, status=201)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@_api_corpo
+def quality_control_plan_step_firma_api(request, job, pk, stid):
+    """Firma insieme tutti i punti dello step diversi da "-" e non ancora firmati."""
+    step = get_step(job, pk, stid)
+    dati = _dati_corpo(request)
+    firme = firma_step(step, request.user, dati.get("esito"), dati.get("note"))
+    return _risposta_firme([firma.punto_id for firma in firme], step.sezione.piano, status=201)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@_api_corpo
+def quality_control_plan_firma_annulla_api(request, job, pk, fid):
+    """Annulla una firma valida: ``{"motivo": "…"}``, obbligatorio."""
+    firma = get_firma(job, pk, fid)
+    annulla_firma(firma, request.user, _dati_corpo(request).get("motivo"))
+    return _risposta_firme([firma.punto_id], firma.punto.step.sezione.piano)
+
+
+@api_login_required
+@require_http_methods(["GET"])
+@_api_corpo
+def quality_control_plan_punto_firme_api(request, job, pk, pid):
+    """Storico delle firme di un punto, annullate comprese. Lo legge chiunque sia autenticato."""
+    punto = get_punto(job, pk, pid)
+    return JsonResponse({"punto": punti_con_firma([punto.pk])[0], "firme": storico_punto(punto)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+@_api_corpo
+def quality_control_plan_avanzamento_api(request, job, pk):
+    """Punti firmati sui punti da firmare, in totale e per ente."""
+    return JsonResponse(avanzamento_qcp(get_piano_corpo(job, pk)))
+
+
+# ── API: Catalogo attività QCP ───────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def catalogo_qcp_api(request):
+    """Attività attive del catalogo QCP, per il selettore degli step del piano.
+
+    Filtri in querystring: ``capitolo``, ``divisione`` e ``tipo`` (valore
+    esatto) e ``q``, che cerca le parole in codice e descrizione. In ordine di
+    catalogo, fino a un massimo di risultati: ``troncato`` dice se ce n'erano
+    altri e conviene restringere la ricerca.
+
+    Con ``piano`` (l'id di un piano) ogni attività ha anche
+    ``reference_doc_risolto``: il riferimento che avrebbe come step di quel
+    piano. Il piano è leggibile da chiunque sia autenticato, come la sua pagina.
+    """
+
+    def parametro(nome):
+        return (request.GET.get(nome) or "").strip() or None
+
+    piano = None
+    piano_id = parametro("piano")
+    if piano_id is not None:
+        try:
+            piano = QualityControlPlan.objects.get(pk=int(piano_id))
+        except ValueError:
+            return JsonResponse({"error": "Piano non valido."}, status=400)
+        except QualityControlPlan.DoesNotExist:
+            return JsonResponse({"error": "Quality Control Plan non trovato."}, status=404)
+
+    return JsonResponse(
+        cerca_attivita_qcp(
+            capitolo=parametro("capitolo"),
+            divisione=parametro("divisione"),
+            tipo=parametro("tipo"),
+            q=parametro("q"),
+            piano=piano,
+        )
+    )
 
 
 # ── API: Documenti ───────────────────────────────────────────────────────────
@@ -2239,6 +2561,14 @@ def profilo_view(request):
             elif User.objects.filter(email=email).exclude(pk=user.pk).exists():
                 errors["email"] = "Email già utilizzata da un altro account."
 
+            # Immagine di firma per il Quality Control Plan: PNG o JPEG veri, fino a 1 MB.
+            firma_file = request.FILES.get("firma")
+            if firma_file:
+                try:
+                    valida_immagine_firma(firma_file)
+                except ValidationError as exc:
+                    errors["firma"] = " ".join(exc.messages)
+
             if not errors:
                 user.first_name = first_name
                 user.last_name = last_name
@@ -2252,19 +2582,50 @@ def profilo_view(request):
                         user.avatar.delete(save=False)
                     user.avatar = avatar_file
 
+                # Le firme già registrate mostrano l'immagine attuale: cambiarla o
+                # toglierla vale anche per quelle (vedi QualityControlPlanSignature).
+                if firma_file:
+                    if user.firma:
+                        user.firma.delete(save=False)
+                    user.firma = firma_file
+                elif request.POST.get("rimuovi_firma") and user.firma:
+                    user.firma.delete(save=False)
+                    user.firma = None
+
                 user.save()
                 return redirect("home")
 
     reparti = list_reparti()
     return render(
         request,
-        "core/profilo.html",
+        "core/profilo.html",  # l'immagine di firma si legge da firma_utente_view
         {
             "errors": errors,
             "success": success,
             "reparti": reparti,
         },
     )
+
+
+@login_required
+def firma_utente_view(request, pk):
+    """L'immagine di firma di un utente, per chi è autenticato.
+
+    È quella che compare sugli step firmati del Quality Control Plan. Si serve
+    da qui e non dall'URL dei file caricati, che Django serve solo in sviluppo:
+    così la firma si vede in ogni installazione. L'URL porta il nome del file
+    (vedi ``url_immagine_firma``), quindi una nuova immagine non resta in cache.
+    """
+    utente = User.objects.filter(pk=pk).first()
+    if utente is None or not utente.firma:
+        raise Http404
+    try:
+        file = utente.firma.open("rb")
+    except FileNotFoundError:
+        raise Http404 from None
+    risposta = FileResponse(file)
+    risposta["Cache-Control"] = "private, no-cache"
+    return risposta
 
 
 # ── API: Anomalie revisioni ───────────────────────────────────────────────────
