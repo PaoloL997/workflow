@@ -94,9 +94,20 @@ class BusinessCentral:
         return self.fetch(COMMESSA_ANAGRAFICA, params=(numero_commessa,))
 
     def get_commessa_commerciale(self, numero_commessa: str) -> pd.DataFrame | None:
-        """Dati commerciali della commessa: PO cliente e data consegna."""
+        """Dati commerciali della commessa: PO cliente, data consegna e codice sito."""
         logger.debug("get_commessa_commerciale(%s)", numero_commessa)
         return self.fetch(COMMESSA_COMMERCIALE, params=(numero_commessa,))
+
+    def get_commessa_codice_sito(self, numero_commessa: str) -> str | None:
+        """Codice del sito costruttivo (NBT_BRL Location Code) della commessa.
+
+        None se la commessa non è stata trovata in BC o non ha un sito assegnato.
+        """
+        logger.debug("get_commessa_codice_sito(%s)", numero_commessa)
+        df = self.get_commessa_commerciale(numero_commessa)
+        if df is None or df.empty:
+            return None
+        return df.iloc[0]["codice_sito"] or None
 
     def close(self) -> None:
         """Close the database connection."""
