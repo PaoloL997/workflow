@@ -247,6 +247,56 @@ class Testata(models.Model):
         return self.job
 
 
+class RuoloPersonaCommessa(models.TextChoices):
+    PM = "pm", "PM"
+    PE = "pe", "PE"
+    QCI = "qci", "QCI"
+    WE = "we", "WE"
+
+
+class PersonaCommessa(models.Model):
+    """Una persona assegnata a un ruolo (PM/PE/QCI/WE) di una commessa.
+
+    La persona è un utente registrato (``utente``) oppure, se non censito
+    nell'app, un nome libero (``nome_libero``): mai entrambi, mai nessuno dei
+    due. Più persone possono coprire lo stesso ruolo sulla stessa commessa.
+    """
+
+    testata = models.ForeignKey(Testata, on_delete=models.CASCADE, related_name="persone")
+    ruolo = models.CharField(max_length=10, choices=RuoloPersonaCommessa.choices)
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commesse_persona",
+    )
+    nome_libero = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "persone_commessa"
+        verbose_name = "Persona commessa"
+        verbose_name_plural = "Persone commessa"
+        ordering = ["testata", "ruolo", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(utente__isnull=False, nome_libero="")
+                    | (models.Q(utente__isnull=True) & ~models.Q(nome_libero=""))
+                ),
+                name="ck_persona_commessa_utente_xor_nome_libero",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.testata_id}: {self.ruolo} = {self.nome_visualizzato}"
+
+    @property
+    def nome_visualizzato(self):
+        return self.utente.nome_completo if self.utente_id else self.nome_libero
+
+
 class AggiornamentoBC(models.Model):
     """Traccia di un campo della testata riallineato a Business Central.
 

@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import openpyxl
 import pandas as pd
 from django.apps import apps as django_apps
 from django.contrib.auth import authenticate, get_user_model
@@ -33,11 +34,13 @@ from .models import (
     IndirSped,
     Notifica,
     Permesso,
+    PersonaCommessa,
     Reparto,
     Revisione,
     RevisioneFileLink,
     RigaTransmittalInterno,
     RuoloFirmatarioStabilimento,
+    RuoloPersonaCommessa,
     Segnalazione,
     SegnalazioneCommento,
     SegnalazioneVoto,
@@ -59,11 +62,13 @@ from .services.bc_sync import (
 )
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
+    create_commessa,
     fetch_from_bc,
     list_documenti,
     list_home_commesse,
     list_situazione,
     list_stati_esterni,
+    persone_per_ruolo,
     pin_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
@@ -76,6 +81,13 @@ from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
+from .services.organizzazione_commesse import (
+    _dividi_nomi,
+    _normalizza_job,
+    backfill_persone_commessa,
+    leggi_organizzazione_commesse,
+    persone_per_job,
+)
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -2058,6 +2070,50 @@ class RevisioneAnomalieTests(TestCase):
         self.assertEqual(audit_commessa_summary("25012")["count"], 0)
 
 
+def _costruisci_xlsm_organizzazione(percorso, righe):
+    """Un file Excel "Organizzazione Commesse" minimo, per i test.
+
+    righe: lista di dict con chiavi Job/PM/PE/WE/QCI (e opzionalmente altre
+    colonne del foglio reale, ignorate se assenti).
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Commesse"
+    ws.append(["", "", "", "PROJECT TEAM", "", "", "", "", "", "", ""])
+    ws.append(
+        [
+            "Job no.",
+            "DWG / ITEM",
+            "Client ",
+            "PM",
+            "PE",
+            "WE",
+            "QCI",
+            "Plant",
+            "Delivery",
+            "Note",
+            "Closed",
+        ]
+    )
+    for riga in righe:
+        ws.append(
+            [
+                riga.get("Job"),
+                riga.get("DWG"),
+                riga.get("Client"),
+                riga.get("PM"),
+                riga.get("PE"),
+                riga.get("WE"),
+                riga.get("QCI"),
+                riga.get("Plant"),
+                riga.get("Delivery"),
+                riga.get("Note"),
+                riga.get("Closed"),
+            ]
+        )
+    wb.save(percorso)
+
+
 class ImportOldTests(TestCase):
     def _frames(self):
         return {
@@ -2225,6 +2281,441 @@ class ImportOldTests(TestCase):
         with self.assertRaises(ValueError):
             importa_commessa_da_access("99999")
         mock_fetch.assert_not_called()
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_legge_persone_da_excel(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        xlsm_path = Path(media.name) / "organizzazione.xlsx"
+        _costruisci_xlsm_organizzazione(
+            xlsm_path,
+            [{"Job": "99999", "PM": "ROSSI", "PE": "BIANCHI/VERDI", "WE": None, "QCI": "N/A"}],
+        )
+        # Un utente con lo stesso cognome esiste già: l'import da report non
+        # deve comunque collegarlo, sempre e solo testo libero.
+        User.objects.create_user(
+            "rossi_test", "rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        with override_settings(ORGANIZZAZIONE_COMMESSE_XLSM_PATH=str(xlsm_path)):
+            with self.captureOnCommitCallbacks(execute=True):
+                importa_commessa_da_access("99999")
+
+        testata = Testata.objects.get(job="99999")
+        persone = list(testata.persone.all())
+        self.assertEqual(len(persone), 3)
+        self.assertTrue(all(p.utente_id is None for p in persone))
+        self.assertEqual(sorted(p.nome_libero for p in persone), ["BIANCHI", "ROSSI", "VERDI"])
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_file_excel_assente_non_blocca_import(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+
+        with override_settings(
+            ORGANIZZAZIONE_COMMESSE_XLSM_PATH=r"Z:\percorso\che\non\esiste.xlsm"
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                result = importa_commessa_da_access("99999")
+
+        self.assertEqual(result["documenti"], 1)
+        testata = Testata.objects.get(job="99999")
+        self.assertEqual(testata.persone.count(), 0)
+
+
+class PersonaCommessaTests(TestCase):
+    """Vincoli del modello: utente XOR nome libero, più persone per ruolo."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="88001")
+        self.utente = User.objects.create_user("pc_utente", "pc-utente@b.it", "pw")
+
+    def test_richiede_utente_o_nome_libero(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PersonaCommessa.objects.create(testata=self.testata, ruolo=RuoloPersonaCommessa.PM)
+
+    def test_rifiuta_utente_e_nome_libero_insieme(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PersonaCommessa.objects.create(
+                testata=self.testata,
+                ruolo=RuoloPersonaCommessa.PM,
+                utente=self.utente,
+                nome_libero="Mario Rossi",
+            )
+
+    def test_piu_persone_stesso_ruolo(self):
+        altro = User.objects.create_user("pc_altro", "pc-altro@b.it", "pw")
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=self.utente
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=altro
+        )
+
+        self.assertEqual(
+            PersonaCommessa.objects.filter(
+                testata=self.testata, ruolo=RuoloPersonaCommessa.PE
+            ).count(),
+            2,
+        )
+
+    def test_cascata_alla_cancellazione_testata(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, utente=self.utente
+        )
+
+        self.testata.delete()
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+
+    def test_nome_visualizzato(self):
+        con_utente = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=self.utente
+        )
+        libero = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, nome_libero="Anna Verdi"
+        )
+
+        self.assertEqual(con_utente.nome_visualizzato, self.utente.nome_completo)
+        self.assertEqual(libero.nome_visualizzato, "Anna Verdi")
+
+
+class DividiNomiTests(SimpleTestCase):
+    """_dividi_nomi: split di una cella grezza del foglio in singoli nomi."""
+
+    def test_nome_singolo_con_spazio_finale(self):
+        self.assertEqual(_dividi_nomi("CAPPELLOTTO "), ["CAPPELLOTTO"])
+
+    def test_split_su_slash(self):
+        self.assertEqual(_dividi_nomi("LUCINI / PILONI"), ["LUCINI", "PILONI"])
+
+    def test_split_su_a_capo(self):
+        self.assertEqual(_dividi_nomi("LUCINI\nPILONI"), ["LUCINI", "PILONI"])
+
+    def test_scarta_parti_vuote(self):
+        self.assertEqual(_dividi_nomi("LUCINI//PILONI"), ["LUCINI", "PILONI"])
+
+    def test_scarta_n_a_case_insensitive(self):
+        self.assertEqual(_dividi_nomi("N/A"), [])
+        self.assertEqual(_dividi_nomi("n/a"), [])
+
+    def test_valore_vuoto(self):
+        self.assertEqual(_dividi_nomi(None), [])
+        self.assertEqual(_dividi_nomi(""), [])
+
+    def test_caso_sporco_non_solleva_eccezioni(self):
+        # Limite noto: non c'è un modo affidabile di interpretare questo
+        # caso, importa che non sollevi eccezioni.
+        risultato = _dividi_nomi("BG: IMPALLOMENI \nVI: ")
+        self.assertIsInstance(risultato, list)
+
+
+class NormalizzaJobTests(SimpleTestCase):
+    """_normalizza_job: normalizza una cella 'Job no.' al formato Testata.job."""
+
+    def test_stringa(self):
+        self.assertEqual(_normalizza_job("22105"), "22105")
+
+    def test_intero(self):
+        self.assertEqual(_normalizza_job(22116), "22116")
+
+    def test_float_intero(self):
+        self.assertEqual(_normalizza_job(22116.0), "22116")
+
+    def test_prefisso_lettera(self):
+        self.assertEqual(_normalizza_job("I23004"), "I23004")
+
+    def test_none(self):
+        self.assertEqual(_normalizza_job(None), "")
+
+
+class LeggiOrganizzazioneCommesseTests(TestCase):
+    """leggi_organizzazione_commesse / persone_per_job: lettura del foglio Excel."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        self.xlsm_path = Path(media.name) / "organizzazione.xlsx"
+
+    def _leggi(self, righe):
+        _costruisci_xlsm_organizzazione(self.xlsm_path, righe)
+        return leggi_organizzazione_commesse(str(self.xlsm_path))
+
+    def test_job_stringa_e_intero(self):
+        dati = self._leggi(
+            [
+                {"Job": "22105", "PM": "CAPPELLOTTO"},
+                {"Job": 22116, "PM": "ROSSI"},
+            ]
+        )
+        self.assertEqual(dati["22105"]["pm"], ["CAPPELLOTTO"])
+        self.assertEqual(dati["22116"]["pm"], ["ROSSI"])
+
+    def test_job_con_prefisso_lettera(self):
+        dati = self._leggi([{"Job": "I23004", "PM": "N/A"}])
+        self.assertIn("I23004", dati)
+        self.assertEqual(dati["I23004"]["pm"], [])
+
+    def test_ruolo_multiplo_split_su_slash(self):
+        dati = self._leggi([{"Job": "23068", "PM": "BORELLI/QUIPPERETTI"}])
+        self.assertEqual(dati["23068"]["pm"], ["BORELLI", "QUIPPERETTI"])
+
+    def test_n_a_trattato_come_vuoto(self):
+        dati = self._leggi([{"Job": "99001", "QCI": "N/A"}])
+        self.assertEqual(dati["99001"]["qci"], [])
+
+    def test_ruolo_vuoto(self):
+        dati = self._leggi([{"Job": "99002"}])
+        self.assertEqual(dati["99002"], {"pm": [], "pe": [], "we": [], "qci": []})
+
+    def test_righe_con_lo_stesso_job_si_uniscono(self):
+        dati = self._leggi(
+            [
+                {"Job": "23068", "PM": "BORELLI/QUIPPERETTI"},
+                {"Job": "23068", "PM": "BORELLI"},
+            ]
+        )
+        # Deduplicato: BORELLI compare una sola volta anche se in entrambe le righe.
+        self.assertEqual(dati["23068"]["pm"], ["BORELLI", "QUIPPERETTI"])
+
+    def test_persone_per_job_non_trovato_restituisce_none(self):
+        self._leggi([{"Job": "99003", "PM": "ROSSI"}])
+        self.assertIsNone(persone_per_job("00000", str(self.xlsm_path)))
+
+    def test_persone_per_job_trovato(self):
+        self._leggi([{"Job": "99003", "PM": "ROSSI"}])
+        self.assertEqual(persone_per_job("99003", str(self.xlsm_path))["pm"], ["ROSSI"])
+
+    def test_file_non_trovato(self):
+        with self.assertRaises(FileNotFoundError):
+            leggi_organizzazione_commesse(r"Z:\percorso\che\non\esiste.xlsm")
+
+
+class CreateCommessaConPersoneTests(TestCase):
+    """create_commessa: creazione atomica di Testata + PersonaCommessa."""
+
+    def setUp(self):
+        self.utente = User.objects.create_user("cc_utente", "cc-utente@b.it", "pw")
+
+    def _dati(self, job, **extra):
+        return {"job": job, "client": "Cliente Test", **extra}
+
+    def test_utente_registrato(self):
+        t = create_commessa(self._dati("77001", persone={"pm": [{"utente_id": self.utente.pk}]}))
+
+        riga = PersonaCommessa.objects.get(testata=t, ruolo=RuoloPersonaCommessa.PM)
+        self.assertEqual(riga.utente_id, self.utente.pk)
+        self.assertEqual(riga.nome_libero, "")
+
+    def test_nome_libero(self):
+        t = create_commessa(self._dati("77002", persone={"pe": [{"nome": "Mario Rossi"}]}))
+
+        riga = PersonaCommessa.objects.get(testata=t, ruolo=RuoloPersonaCommessa.PE)
+        self.assertIsNone(riga.utente_id)
+        self.assertEqual(riga.nome_libero, "Mario Rossi")
+
+    def test_piu_persone_sullo_stesso_ruolo(self):
+        altro = User.objects.create_user("cc_altro", "cc-altro@b.it", "pw")
+        t = create_commessa(
+            self._dati(
+                "77003",
+                persone={
+                    "qci": [{"utente_id": self.utente.pk}, {"utente_id": altro.pk}],
+                },
+            )
+        )
+
+        self.assertEqual(
+            PersonaCommessa.objects.filter(testata=t, ruolo=RuoloPersonaCommessa.QCI).count(), 2
+        )
+
+    def test_senza_persone_non_crea_righe(self):
+        t = create_commessa(self._dati("77004"))
+
+        self.assertEqual(PersonaCommessa.objects.filter(testata=t).count(), 0)
+
+    def test_nome_libero_vuoto_ignorato(self):
+        t = create_commessa(self._dati("77005", persone={"we": [{"nome": "   "}]}))
+
+        self.assertEqual(PersonaCommessa.objects.filter(testata=t).count(), 0)
+
+    def test_utente_id_inesistente_solleva_integrity_error(self):
+        from django.db import connection
+
+        # Postgres non verifica sempre il vincolo di chiave esterna in modo
+        # sincrono dentro un savepoint annidato (quello di TestCase): un
+        # check_constraints() esplicito forza a farlo qui, invece di
+        # scoprirlo solo al rollback di fine test.
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            create_commessa(self._dati("77006", persone={"pm": [{"utente_id": 999999}]}))
+            connection.check_constraints()
+
+
+class PersonePerRuoloTests(TestCase):
+    """persone_per_ruolo: nomi PM/PE/QCI/WE, uniti per ruolo, per l'header."""
+
+    def test_unisce_piu_persone_per_ruolo(self):
+        t = Testata.objects.create(job="66001")
+        u1 = User.objects.create_user(
+            "ppr1", "ppr1@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        PersonaCommessa.objects.create(testata=t, ruolo=RuoloPersonaCommessa.PM, utente=u1)
+        PersonaCommessa.objects.create(
+            testata=t, ruolo=RuoloPersonaCommessa.PM, nome_libero="Libero Bianchi"
+        )
+
+        risultato = persone_per_ruolo(t)
+
+        self.assertEqual(risultato["pm"], "Mario Rossi, Libero Bianchi")
+        self.assertEqual(risultato["pe"], "")
+        self.assertEqual(set(risultato), {"pm", "pe", "qci", "we"})
+
+
+class BackfillPersoneCommessaTests(TestCase):
+    """backfill_persone_commessa e il comando che lo espone."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        self.xlsm_path = Path(media.name) / "organizzazione.xlsx"
+        _costruisci_xlsm_organizzazione(
+            self.xlsm_path,
+            [
+                {"Job": "55001", "PM": "ROSSI", "PE": "BIANCHI"},
+                {"Job": "55002", "PM": "VERDI"},
+            ],
+        )
+        patcher = override_settings(ORGANIZZAZIONE_COMMESSE_XLSM_PATH=str(self.xlsm_path))
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.t1 = Testata.objects.create(job="55001")
+        self.t2 = Testata.objects.create(job="55002")
+        self.t3 = Testata.objects.create(job="55003")  # non nel foglio
+
+    def test_crea_persone_per_commesse_esistenti(self):
+        report = backfill_persone_commessa()
+
+        self.assertEqual(sorted(report["aggiornate"]), ["55001", "55002"])
+        self.assertEqual(report["non_trovate"], ["55003"])
+        self.assertEqual(
+            set(self.t1.persone.values_list("ruolo", "nome_libero")),
+            {("pm", "ROSSI"), ("pe", "BIANCHI")},
+        )
+
+    def test_salta_ruolo_gia_popolato(self):
+        PersonaCommessa.objects.create(
+            testata=self.t1, ruolo=RuoloPersonaCommessa.PM, nome_libero="Già corretto"
+        )
+
+        report = backfill_persone_commessa()
+
+        # PM non toccato (era già popolato); PE viene comunque riempito.
+        pm = list(self.t1.persone.filter(ruolo="pm").values_list("nome_libero", flat=True))
+        self.assertEqual(pm, ["Già corretto"])
+        self.assertTrue(self.t1.persone.filter(ruolo="pe", nome_libero="BIANCHI").exists())
+        self.assertEqual(report["ruoli_saltati"], 1)
+
+    def test_rieseguibile_senza_duplicare(self):
+        backfill_persone_commessa()
+        prima = PersonaCommessa.objects.count()
+
+        backfill_persone_commessa()
+
+        self.assertEqual(PersonaCommessa.objects.count(), prima)
+
+    def test_dry_run_non_scrive(self):
+        report = backfill_persone_commessa(dry_run=True)
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+        self.assertEqual(sorted(report["aggiornate"]), ["55001", "55002"])
+
+    def test_jobs_limita_il_backfill(self):
+        backfill_persone_commessa(jobs=["55001"])
+
+        self.assertTrue(self.t1.persone.exists())
+        self.assertFalse(self.t2.persone.exists())
+
+    def test_comando_job_singolo(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--job=55001", stdout=out)
+
+        self.assertTrue(self.t1.persone.exists())
+        self.assertFalse(self.t2.persone.exists())
+        self.assertIn("55001", out.getvalue())
+
+    def test_comando_job_non_trovato_in_workflow(self):
+        err = io.StringIO()
+        call_command("backfill_persone_commessa", "--job=00000", stderr=err)
+
+        self.assertIn("non trovata", err.getvalue())
+
+    def test_comando_dry_run(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--dry-run", stdout=out)
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+        self.assertIn("dry-run", out.getvalue())
+
+
+class UtentiCercaApiTests(TestCase):
+    """GET /api/utenti/cerca/: autocomplete per PM/PE/QCI/WE."""
+
+    def setUp(self):
+        self.client = Client()
+        self.utente = User.objects.create_user(
+            "uca_utente",
+            "uca@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Mario",
+            last_name="Rossi",
+        )
+        self.client.force_login(self.utente)
+        User.objects.create_user(
+            "uca_bianchi",
+            "uca-bianchi@b.it",
+            "pw",
+            first_name="Anna",
+            last_name="Bianchi",
+        )
+        User.objects.create_user(
+            "uca_inattivo",
+            "uca-inattivo@b.it",
+            "pw",
+            first_name="Fuori",
+            last_name="Servizio",
+            is_active=False,
+        )
+
+    def test_richiede_login(self):
+        self.client.logout()
+        risposta = self.client.get("/api/utenti/cerca/?q=Rossi")
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_cerca_per_cognome(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=Rossi")
+        utenti = risposta.json()["utenti"]
+        self.assertEqual([u["username"] for u in utenti], ["uca_utente"])
+
+    def test_cerca_per_username(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=uca_bianchi")
+        utenti = risposta.json()["utenti"]
+        self.assertEqual([u["username"] for u in utenti], ["uca_bianchi"])
+
+    def test_meno_di_due_caratteri_restituisce_vuoto(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=R")
+        self.assertEqual(risposta.json()["utenti"], [])
+
+    def test_esclude_utenti_non_attivi(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=Servizio")
+        self.assertEqual(risposta.json()["utenti"], [])
+
+    def test_limita_a_dieci_risultati(self):
+        for i in range(15):
+            User.objects.create_user(f"uca_molti{i}", f"uca-molti{i}@b.it", "pw", last_name="Molti")
+        risposta = self.client.get("/api/utenti/cerca/?q=Molti")
+        self.assertEqual(len(risposta.json()["utenti"]), 10)
 
 
 class SituazioneApiTestCase(TestCase):

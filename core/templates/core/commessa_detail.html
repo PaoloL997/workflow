@@ -111,7 +111,7 @@
     align-items: flex-start;
     flex-wrap: wrap;
     gap: 4px 24px;
-    max-width: 640px;
+    max-width: 720px;
     margin: 0 auto 8px;
   }
 
@@ -121,7 +121,6 @@
     gap: 5px;
     font-size: 13px;
     line-height: 1.3;
-    white-space: nowrap;
     margin: 0;
   }
 
@@ -1278,6 +1277,22 @@
         <div class="commessa-meta-item">
           <dt class="commessa-meta-label">Termini consegna</dt>
           <dd class="commessa-meta-value{% if not testata.delivery_term %} empty{% endif %}">{{ testata.delivery_term|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">PM</dt>
+          <dd class="commessa-meta-value{% if not persone_ruoli.pm %} empty{% endif %}">{{ persone_ruoli.pm|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">PE</dt>
+          <dd class="commessa-meta-value{% if not persone_ruoli.pe %} empty{% endif %}">{{ persone_ruoli.pe|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">QCI</dt>
+          <dd class="commessa-meta-value{% if not persone_ruoli.qci %} empty{% endif %}">{{ persone_ruoli.qci|default:"—" }}</dd>
+        </div>
+        <div class="commessa-meta-item">
+          <dt class="commessa-meta-label">WE</dt>
+          <dd class="commessa-meta-value{% if not persone_ruoli.we %} empty{% endif %}">{{ persone_ruoli.we|default:"—" }}</dd>
         </div>
       </dl>
       {% if testata.job_detail %}
