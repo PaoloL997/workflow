@@ -10,13 +10,16 @@ import pandas as pd
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import Client, SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from PIL import Image
 
 from .models import (
+    FIRMA_MAX_BYTE,
     AggiornamentoBC,
     CommessaPin,
     Documento,
@@ -4206,3 +4209,108 @@ class ArchivioAggiornamentiBCViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nessun aggiornamento da Business Central")
+
+
+def _dai_firma(utente, nome="firme/prova.png"):
+    """L'utente con un'immagine di firma.
+
+    Basta il nome del file: non serve leggerlo. I test che caricano davvero
+    l'immagine usano ``_png`` e una cartella media temporanea.
+    """
+    utente.firma = nome
+    utente.save(update_fields=["firma"])
+    return utente
+
+
+def _png(dimensione=(160, 48), modo="RGBA", formato="PNG"):
+    """Un'immagine vera, come la carica un utente."""
+    buffer = io.BytesIO()
+    Image.new(modo, dimensione, (20, 40, 90, 0) if modo == "RGBA" else (255, 255, 255)).save(
+        buffer, format=formato
+    )
+    return buffer.getvalue()
+
+
+class FirmaUtenteTests(TestCase):
+    """Validatore dell'immagine di firma e upload/rimozione dal profilo."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.client = Client()
+        self.writer = User.objects.create_user(
+            "firma_writer",
+            "firma-writer@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Mario",
+            last_name="Rossi",
+        )
+        _dai_firma(self.writer)
+        self.client.force_login(self.writer)
+
+    def _profilo(self, **campi):
+        # Il modulo del profilo manda tutti i campi: uno che manca si svuota.
+        dati = {
+            "action": "update_profile",
+            "first_name": "Mario",
+            "last_name": "Rossi",
+            "email": self.writer.email,
+        }
+        return self.client.post("/profilo/", {**dati, **campi})
+
+    def test_upload_di_una_immagine_di_firma_valida(self):
+        risposta = self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+
+        self.assertEqual(risposta.status_code, 302)
+        self.writer.refresh_from_db()
+        self.assertTrue(self.writer.firma.name.startswith("firme/"))
+        self.assertNotEqual(self.writer.firma.name, "firme/prova.png")
+        # Il file si legge e si chiude subito: su Windows un file aperto non si
+        # cancella, e il prossimo upload sostituisce quello vecchio.
+        with self.writer.firma.open("rb") as file:
+            contenuto = file.read()
+        with Image.open(io.BytesIO(contenuto)) as immagine:
+            self.assertEqual((immagine.format, immagine.mode), ("PNG", "RGBA"))
+        # Anche un JPEG va bene.
+        risposta = self._profilo(
+            firma=SimpleUploadedFile("firma.jpg", _png(modo="RGB", formato="JPEG"), "image/jpeg")
+        )
+        self.assertEqual(risposta.status_code, 302)
+
+    def test_upload_rifiuta_un_file_che_non_e_un_immagine(self):
+        for nome, contenuto, messaggio in (
+            # L'apostrofo nell'HTML è &#x27;: si cerca il resto del messaggio.
+            ("firma.png", b"non sono un'immagine", "immagine valida: carica un PNG"),
+            ("firma.gif", _png(modo="RGB", formato="GIF"), "Formato non ammesso"),
+        ):
+            with self.subTest(nome=nome):
+                risposta = self._profilo(firma=SimpleUploadedFile(nome, contenuto, "image/png"))
+
+                self.assertEqual(risposta.status_code, 200)
+                self.assertContains(risposta, messaggio)
+                # L'immagine che c'era resta.
+                self.writer.refresh_from_db()
+                self.assertEqual(self.writer.firma.name, "firme/prova.png")
+
+    def test_upload_rifiuta_un_file_oltre_il_limite(self):
+        pesante = _png() + b"\0" * FIRMA_MAX_BYTE
+
+        risposta = self._profilo(firma=SimpleUploadedFile("firma.png", pesante, "image/png"))
+
+        self.assertContains(risposta, "al massimo 1 MB")
+
+    def test_l_immagine_di_firma_si_toglie_dal_profilo(self):
+        self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+
+        self._profilo(rimuovi_firma="1")
+
+        self.writer.refresh_from_db()
+        self.assertFalse(self.writer.firma)
+        pagina = self.client.get("/profilo/").content.decode()
+        self.assertIn("Nessuna immagine di firma caricata.", pagina)
+        self.assertNotIn("firma digitale", pagina.lower())

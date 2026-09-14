@@ -33,6 +33,7 @@ from .models import (
     StatoEsterno,
     Testata,
     User,
+    valida_immagine_firma,
 )
 from .permissions import api_write_required
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
@@ -2283,6 +2284,13 @@ def profilo_view(request):
             elif User.objects.filter(email=email).exclude(pk=user.pk).exists():
                 errors["email"] = "Email già utilizzata da un altro account."
 
+            firma_file = request.FILES.get("firma")
+            if firma_file:
+                try:
+                    valida_immagine_firma(firma_file)
+                except ValidationError as exc:
+                    errors["firma"] = " ".join(exc.messages)
+
             if not errors:
                 user.first_name = first_name
                 user.last_name = last_name
@@ -2295,6 +2303,14 @@ def profilo_view(request):
                     if user.avatar:
                         user.avatar.delete(save=False)
                     user.avatar = avatar_file
+
+                if firma_file:
+                    if user.firma:
+                        user.firma.delete(save=False)
+                    user.firma = firma_file
+                elif request.POST.get("rimuovi_firma") and user.firma:
+                    user.firma.delete(save=False)
+                    user.firma = None
 
                 user.save()
                 return redirect("home")
@@ -2309,6 +2325,27 @@ def profilo_view(request):
             "reparti": reparti,
         },
     )
+
+
+@login_required
+def firma_utente_view(request, pk):
+    """L'immagine di firma di un utente, per chi è autenticato.
+
+    Si serve da qui e non dall'URL dei file caricati, che Django serve solo in
+    sviluppo: così la firma si vede in ogni installazione. L'URL porta il nome
+    del file (vedi il template del profilo), quindi una nuova immagine non
+    resta in cache.
+    """
+    utente = User.objects.filter(pk=pk).first()
+    if utente is None or not utente.firma:
+        raise Http404
+    try:
+        file = utente.firma.open("rb")
+    except FileNotFoundError:
+        raise Http404 from None
+    risposta = FileResponse(file)
+    risposta["Cache-Control"] = "private, no-cache"
+    return risposta
 
 
 # ── API: Anomalie revisioni ───────────────────────────────────────────────────
