@@ -12,8 +12,10 @@ from ..models import (
     CommessaPin,
     Documento,
     IndirSped,
+    PersonaCommessa,
     Reparto,
     Revisione,
+    RuoloPersonaCommessa,
     StatoEsterno,
     Testata,
 )
@@ -129,11 +131,42 @@ def get_commessa(job):
     return Testata.objects.get(job=job)
 
 
+_RUOLI_PERSONA = {
+    "pm": RuoloPersonaCommessa.PM,
+    "pe": RuoloPersonaCommessa.PE,
+    "qci": RuoloPersonaCommessa.QCI,
+    "we": RuoloPersonaCommessa.WE,
+}
+
+
+@transaction.atomic
 def create_commessa(data):
     t = Testata(**_clean_testata_fields(data))
     t.full_clean()
     t.save()
+    _crea_persone_commessa(t, data.get("persone") or {})
     return t
+
+
+def _crea_persone_commessa(testata, persone):
+    """persone: {"pm": [{"utente_id": 5} | {"nome": "Mario Rossi"}], "pe": [...], ...}."""
+    for chiave, ruolo in _RUOLI_PERSONA.items():
+        for voce in persone.get(chiave) or []:
+            utente_id = voce.get("utente_id")
+            if utente_id:
+                PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, utente_id=utente_id)
+                continue
+            nome = (voce.get("nome") or "").strip()
+            if nome:
+                PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, nome_libero=nome)
+
+
+def persone_per_ruolo(testata):
+    """{'pm': 'Mario Rossi, Libero Bianchi', 'pe': '...', 'qci': '...', 'we': '...'}."""
+    out = {r: [] for r in _RUOLI_PERSONA}
+    for p in testata.persone.select_related("utente").all():
+        out[p.ruolo].append(p.nome_visualizzato)
+    return {k: ", ".join(v) for k, v in out.items()}
 
 
 def update_commessa(job, data):

@@ -10,6 +10,7 @@ from .models import (
     ModelloDocumento,
     Notifica,
     Permesso,
+    PersonaCommessa,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -167,6 +168,13 @@ class TransmittalAdmin(admin.ModelAdmin):
         return super().formfield_for_manytomany(db_field, request, **kwargs)
 
 
+class PersonaCommessaInline(admin.TabularInline):
+    model = PersonaCommessa
+    extra = 0
+    fields = ("ruolo", "utente", "nome_libero")
+    raw_id_fields = ("utente",)
+
+
 @admin.register(Testata)
 class TestataAdmin(admin.ModelAdmin):
     list_display = (
@@ -180,6 +188,21 @@ class TestataAdmin(admin.ModelAdmin):
     )
     search_fields = ("job", "client", "po_no")
     list_filter = ("delivery_date",)
+    inlines = [PersonaCommessaInline]
+
+
+@admin.register(PersonaCommessa)
+class PersonaCommessaAdmin(admin.ModelAdmin):
+    list_display = ("id", "testata", "ruolo", "utente", "nome_libero")
+    list_filter = ("ruolo",)
+    search_fields = (
+        "testata__job",
+        "nome_libero",
+        "utente__username",
+        "utente__first_name",
+        "utente__last_name",
+    )
+    raw_id_fields = ("testata", "utente")
 
 
 @admin.register(Documento)

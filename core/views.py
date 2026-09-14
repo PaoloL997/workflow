@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -63,6 +64,7 @@ from .services.commesse import (
     list_situazione,
     list_stati_esterni,
     list_stati_interni,
+    persone_per_ruolo,
     pin_commessa,
     request_delete_commessa,
     revisioni_by_doc_for_job,
@@ -296,6 +298,7 @@ def commessa_detail_view(request, job):
             "ricezione_preview": ricezione_preview,
             "ricezione_extra": ricezione_extra,
             "anomalie_count": anomalie_count,
+            "persone_ruoli": persone_per_ruolo(testata),
         },
     )
 
@@ -490,6 +493,30 @@ def erp_api(request):
     except Exception as exc:
         logger.error('ERP: errore durante il recupero della commessa "%s": %s', job, exc)
         return JsonResponse({"data": {}, "warning": str(exc)})
+
+
+# ── API: Utenti ──────────────────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def utenti_cerca_api(request):
+    q = request.GET.get("q", "").strip()
+    if len(q) < 2:
+        return JsonResponse({"utenti": []})
+    utenti = (
+        User.objects.filter(is_active=True)
+        .filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(username__icontains=q))
+        .order_by("last_name", "first_name")[:10]
+    )
+    return JsonResponse(
+        {
+            "utenti": [
+                {"id": u.pk, "nome_completo": u.nome_completo, "username": u.username}
+                for u in utenti
+            ]
+        }
+    )
 
 
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────

@@ -225,6 +225,11 @@ ACCESS_ODBC_DRIVER = os.environ.get(
     "Microsoft Access Driver (*.mdb, *.accdb)",
 )
 
+ORGANIZZAZIONE_COMMESSE_XLSM_PATH = os.environ.get(
+    "ORGANIZZAZIONE_COMMESSE_XLSM_PATH",
+    r"Z:\Organizzazione commesse\MQ 8.3-06 Rev1_Organizzazione Commesse.xlsm",
+)
+
 # Create the logs directory if it doesn't exist to prevent startup crash.
 os.makedirs(BASE_DIR / "logs", exist_ok=True)
 

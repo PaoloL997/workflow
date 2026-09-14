@@ -85,6 +85,8 @@ urlpatterns = [
         name="commessa_revisione_sblocca_api",
     ),
     path("api/erp/", views.erp_api, name="erp_api"),
+    # API — Utenti
+    path("api/utenti/cerca/", views.utenti_cerca_api, name="utenti_cerca_api"),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),

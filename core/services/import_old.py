@@ -3,8 +3,17 @@ import logging
 import pandas as pd
 from django.db import transaction
 
-from ..models import Documento, IndirSped, Reparto, Revisione, StatoEsterno, Testata
+from ..models import (
+    Documento,
+    IndirSped,
+    PersonaCommessa,
+    Reparto,
+    Revisione,
+    StatoEsterno,
+    Testata,
+)
 from .access_source import fetch_commessa_frames
+from .organizzazione_commesse import persone_per_job
 from .revisione_anomalie import audit_commessa_summary
 from .revisioni_cleanup import (
     access_codes_without_nuova_rev,
@@ -218,6 +227,26 @@ def importa_commessa_da_access(job: str) -> dict:
             logger.exception("Sync transmittal dopo import Access fallito (job=%s)", job_saved)
 
     transaction.on_commit(_sync_trasmittal)
+
+    def _importa_persone_da_excel():
+        try:
+            ruoli = persone_per_job(job_saved)
+        except FileNotFoundError:
+            logger.warning(
+                "File organizzazione commesse non trovato; salto import PM/PE/QCI/WE (job=%s)",
+                job_saved,
+            )
+            return
+        except Exception:
+            logger.exception("Lettura organizzazione commesse fallita (job=%s)", job_saved)
+            return
+        if not ruoli:
+            return
+        for ruolo, nomi in ruoli.items():
+            for nome in nomi:
+                PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, nome_libero=nome)
+
+    transaction.on_commit(_importa_persone_da_excel)
     return {
         "job": testata.job,
         "documenti": len(documenti),
