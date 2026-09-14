@@ -5,6 +5,16 @@ from django.db import models
 
 class Stabilimento(models.Model):
     nome = models.CharField(db_column="Nome", max_length=100, unique=True)
+    # Null perché non tutti gli stabilimenti sono siti costruttivi: solo quelli
+    # che lo sono hanno una sigla e un codice sito su Business Central.
+    sigla = models.CharField(db_column="Sigla", max_length=2, unique=True, null=True, blank=True)
+    codice_bc = models.PositiveSmallIntegerField(
+        db_column="CodiceBC",
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="Codice sito Business Central",
+    )
 
     class Meta:
         managed = True
@@ -124,6 +134,82 @@ class User(AbstractUser):
             self.permesso = Permesso.ADMIN
         self.is_staff = self.permesso in (Permesso.ADMIN, Permesso.WRITING)
         super().save(*args, **kwargs)
+
+
+class TipoIndirizzoStabilimento(models.TextChoices):
+    TO = "to", "A"
+    CC = "cc", "CC"
+
+
+class IndirizzoStabilimento(models.Model):
+    """Indirizzo email di uno stabilimento, per il trasmittal interno."""
+
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.CASCADE,
+        related_name="indirizzi",
+    )
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoIndirizzoStabilimento.choices)
+    attivo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = True
+        db_table = "indirizzi_stabilimento"
+        verbose_name = "Indirizzo stabilimento"
+        verbose_name_plural = "Indirizzi stabilimento"
+        ordering = ["stabilimento", "tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stabilimento", "email", "tipo"],
+                name="uniq_indirizzo_stabilimento",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.stabilimento_id}: {self.email} ({self.tipo})"
+
+
+class RuoloFirmatarioStabilimento(models.TextChoices):
+    PRODUZIONE = "produzione", "Produzione"
+    QUALITA = "qualita", "Qualità"
+
+
+class FirmatarioStabilimento(models.Model):
+    """Chi firma per uno stabilimento nel trasmittal interno, per ruolo.
+
+    L'immagine della firma è quella dell'utente (``User.firma``), non un
+    campo di questo modello. Lo stesso utente può firmare per più
+    stabilimenti: è voluto.
+    """
+
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.CASCADE,
+        related_name="firmatari",
+    )
+    ruolo = models.CharField(max_length=20, choices=RuoloFirmatarioStabilimento.choices)
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="firmatario_di",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "firmatari_stabilimento"
+        verbose_name = "Firmatario stabilimento"
+        verbose_name_plural = "Firmatari stabilimento"
+        ordering = ["stabilimento", "ruolo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stabilimento", "ruolo"],
+                name="uniq_firmatario_stabilimento_ruolo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.stabilimento_id}: {self.ruolo} = {self.utente_id}"
 
 
 class Testata(models.Model):

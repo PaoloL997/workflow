@@ -7,6 +7,8 @@ from .models import (
     CartellaModelloDocumento,
     Documento,
     EsecuzioneSchedulata,
+    FirmatarioStabilimento,
+    IndirizzoStabilimento,
     ModelloDocumento,
     Notifica,
     Permesso,
@@ -23,10 +25,17 @@ from .models import (
 )
 
 
+class IndirizzoStabilimentoInline(admin.TabularInline):
+    model = IndirizzoStabilimento
+    extra = 0
+    fields = ("email", "tipo", "attivo")
+
+
 @admin.register(Stabilimento)
 class StabilimentoAdmin(admin.ModelAdmin):
-    list_display = ("id", "nome")
-    search_fields = ("nome",)
+    list_display = ("id", "nome", "sigla", "codice_bc")
+    search_fields = ("nome", "sigla")
+    inlines = [IndirizzoStabilimentoInline]
 
 
 @admin.register(Reparto)
@@ -289,3 +298,11 @@ class AggiornamentoBCAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(FirmatarioStabilimento)
+class FirmatarioStabilimentoAdmin(admin.ModelAdmin):
+    list_display = ("id", "stabilimento", "ruolo", "utente")
+    list_filter = ("ruolo", "stabilimento")
+    search_fields = ("utente__username", "utente__first_name", "utente__last_name")
+    raw_id_fields = ("utente",)

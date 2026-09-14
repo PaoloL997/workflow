@@ -7,11 +7,13 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pandas as pd
+from django.apps import apps as django_apps
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from django.utils.encoding import force_bytes
@@ -24,12 +26,15 @@ from .models import (
     CommessaPin,
     Documento,
     EsecuzioneSchedulata,
+    FirmatarioStabilimento,
+    IndirizzoStabilimento,
     IndirSped,
     Notifica,
     Permesso,
     Reparto,
     Revisione,
     RevisioneFileLink,
+    RuoloFirmatarioStabilimento,
     Segnalazione,
     SegnalazioneCommento,
     SegnalazioneVoto,
@@ -37,6 +42,7 @@ from .models import (
     StatoEsterno,
     StatoSegnalazione,
     Testata,
+    TipoIndirizzoStabilimento,
     TipoSegnalazione,
     Transmittal,
 )
@@ -94,6 +100,7 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
+from .services.trasmittal_interno import indirizzi_per_siti
 
 User = get_user_model()
 
@@ -861,6 +868,168 @@ class UserStabilimentoTest(TestCase):
         stab = Stabilimento.objects.create(nome="Bergamo")
         user = User.objects.create_user("stab_yes", password="pw", stabilimento=stab)
         self.assertEqual(user.stabilimento.nome, "Bergamo")
+
+
+class StabilimentoSiglaCodiceBCTests(TestCase):
+    """Sigla e codice_bc: unici ma non tutti gli stabilimenti li hanno."""
+
+    def test_sigla_unica(self):
+        Stabilimento.objects.create(nome="Uno", sigla="BG")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Stabilimento.objects.create(nome="Due", sigla="BG")
+
+    def test_codice_bc_unico(self):
+        Stabilimento.objects.create(nome="Uno", codice_bc=1)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Stabilimento.objects.create(nome="Due", codice_bc=1)
+
+    def test_piu_stabilimenti_con_sigla_e_codice_null_convivono(self):
+        # Non tutti gli stabilimenti sono siti costruttivi: NULL è ammesso più volte.
+        Stabilimento.objects.create(nome="Milano")
+        Stabilimento.objects.create(nome="Roma")
+
+        self.assertEqual(
+            set(Stabilimento.objects.values_list("nome", flat=True)), {"Milano", "Roma"}
+        )
+
+
+class FirmatarioStabilimentoTests(TestCase):
+    """Un solo firmatario per stabilimento e ruolo; lo stesso utente può firmare più siti."""
+
+    def setUp(self):
+        self.stab = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.altro_stab = Stabilimento.objects.create(nome="Schio", sigla="VI", codice_bc=5)
+        self.utente = User.objects.create_user("firmatario", password="pw")
+
+    def test_un_solo_firmatario_per_ruolo_e_stabilimento(self):
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.stab,
+            ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+            utente=self.utente,
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            FirmatarioStabilimento.objects.create(
+                stabilimento=self.stab,
+                ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+                utente=self.utente,
+            )
+
+    def test_lo_stesso_utente_firma_per_piu_stabilimenti(self):
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.stab,
+            ruolo=RuoloFirmatarioStabilimento.QUALITA,
+            utente=self.utente,
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.altro_stab,
+            ruolo=RuoloFirmatarioStabilimento.QUALITA,
+            utente=self.utente,
+        )
+
+        self.assertEqual(self.utente.firmatario_di.count(), 2)
+
+
+class MigrazioneSigleCodiciBCTests(TestCase):
+    """La migrazione dati 0045 assegna sigla e codice_bc per nome."""
+
+    def _modulo(self):
+        import importlib
+
+        return importlib.import_module("core.migrations.0045_popola_sigla_codice_bc_stabilimenti")
+
+    def test_assegna_i_codici_giusti(self):
+        for nome in ("Valbrembo", "Albignasego", "Marghera", "Ricengo", "Schio", "Milano"):
+            Stabilimento.objects.create(nome=nome)
+
+        self._modulo().popola(django_apps, None)
+
+        attesi = {
+            "Valbrembo": ("BG", 1),
+            "Albignasego": ("PD", 2),
+            "Marghera": ("VE", 3),
+            "Ricengo": ("CR", 4),
+            "Schio": ("VI", 5),
+            "Milano": (None, None),
+        }
+        for nome, (sigla, codice_bc) in attesi.items():
+            stab = Stabilimento.objects.get(nome=nome)
+            self.assertEqual((stab.sigla, stab.codice_bc), (sigla, codice_bc))
+
+    def test_reverse_svuota_solo_i_nomi_noti(self):
+        Stabilimento.objects.create(nome="Ricengo", sigla="CR", codice_bc=4)
+        Stabilimento.objects.create(nome="Altro", sigla="XX", codice_bc=99)
+
+        self._modulo().svuota(django_apps, None)
+
+        self.assertEqual(
+            (
+                Stabilimento.objects.get(nome="Ricengo").sigla,
+                Stabilimento.objects.get(nome="Ricengo").codice_bc,
+            ),
+            (None, None),
+        )
+        # Uno stabilimento fuori dall'elenco della migrazione non è toccato.
+        altro = Stabilimento.objects.get(nome="Altro")
+        self.assertEqual((altro.sigla, altro.codice_bc), ("XX", 99))
+
+
+class IndirizziPerSitiTests(TestCase):
+    """indirizzi_per_siti: TO/CC per un elenco di siti, per il trasmittal interno."""
+
+    def setUp(self):
+        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", codice_bc=1)
+        self.albignasego = Stabilimento.objects.create(nome="Albignasego", codice_bc=2)
+
+    def _indirizzo(self, stabilimento, email, tipo, attivo=True):
+        return IndirizzoStabilimento.objects.create(
+            stabilimento=stabilimento, email=email, tipo=tipo, attivo=attivo
+        )
+
+    def test_input_vuoto(self):
+        self._indirizzo(self.valbrembo, "a@b.it", TipoIndirizzoStabilimento.TO)
+
+        self.assertEqual(indirizzi_per_siti([]), {"to": [], "cc": []})
+        self.assertEqual(indirizzi_per_siti(None), {"to": [], "cc": []})
+
+    def test_codici_inesistenti(self):
+        self.assertEqual(indirizzi_per_siti([999]), {"to": [], "cc": []})
+
+    def test_piu_siti_con_indirizzi_sovrapposti(self):
+        self._indirizzo(self.valbrembo, "to1@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "to2@b.it", TipoIndirizzoStabilimento.TO)
+        # Stesso indirizzo su entrambi i siti, maiuscole diverse: un solo TO.
+        self._indirizzo(self.valbrembo, "comune@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "Comune@B.it", TipoIndirizzoStabilimento.TO)
+
+        risultato = indirizzi_per_siti([1, 2])
+
+        # Deduplica case-insensitive: dei due "comune" ne resta uno solo,
+        # qualunque sia la maiuscola/minuscola sopravvissuta.
+        self.assertEqual(len(risultato["to"]), 3)
+        normalizzati = {e.lower() for e in risultato["to"]}
+        self.assertEqual(normalizzati, {"to1@b.it", "to2@b.it", "comune@b.it"})
+        self.assertEqual(risultato["cc"], [])
+
+    def test_stesso_indirizzo_in_to_e_cc_compare_solo_in_to(self):
+        self._indirizzo(self.valbrembo, "doppio@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "DOPPIO@b.it", TipoIndirizzoStabilimento.CC)
+        self._indirizzo(self.albignasego, "solo_cc@b.it", TipoIndirizzoStabilimento.CC)
+
+        risultato = indirizzi_per_siti([1, 2])
+
+        self.assertEqual(risultato["to"], ["doppio@b.it"])
+        self.assertEqual(risultato["cc"], ["solo_cc@b.it"])
+
+    def test_indirizzi_inattivi_esclusi(self):
+        self._indirizzo(self.valbrembo, "attivo@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.valbrembo, "inattivo@b.it", TipoIndirizzoStabilimento.TO, attivo=False)
+
+        risultato = indirizzi_per_siti([1])
+
+        self.assertEqual(risultato["to"], ["attivo@b.it"])
 
 
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────
