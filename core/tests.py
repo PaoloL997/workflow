@@ -107,9 +107,11 @@ from .services.stato_esterno_legenda import legenda_default, legenda_stati_ester
 from .services.trasmittal_interno import (
     componi_nome,
     crea_trasmittal_interno,
+    data_impegno,
     imposta_destinazioni,
     indirizzi_per_siti,
     prossimo_progressivo,
+    salva_pdf,
     siti_coinvolti,
     siti_del_documento,
 )
@@ -1203,6 +1205,138 @@ class TrasmittalInternoArchivioTests(TestCase):
             RigaTransmittalInterno.objects.create(
                 trasmittal=trasmittal, documento=self.doc1, revisione="2", posizione=2
             )
+
+
+class DataImpegnoTests(SimpleTestCase):
+    """data_impegno: termine per completare la distribuzione, non la data di firma."""
+
+    def test_lunedi_martedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 14)), date(2026, 9, 15))
+
+    def test_giovedi_venerdi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 17)), date(2026, 9, 18))
+
+    def test_venerdi_lunedi_tre_giorni_dopo(self):
+        self.assertEqual(data_impegno(date(2026, 9, 18)), date(2026, 9, 21))
+
+    def test_sabato_lunedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 19)), date(2026, 9, 21))
+
+    def test_domenica_lunedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 20)), date(2026, 9, 21))
+
+
+class TrasmittalInternoPdfTests(TestCase):
+    """Generazione del PDF del trasmittal interno (form MQ 7.5-04)."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+
+        self.produzione = User.objects.create_user(
+            "pdf_produzione", "pdf-produzione@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        self.produzione.firma = SimpleUploadedFile("firma.png", _png(), "image/png")
+        self.produzione.save()
+        # Lo stesso utente firma per la Qualità di entrambi i siti: nel PDF
+        # deve comparire una sola volta.
+        self.qualita = User.objects.create_user(
+            "pdf_qualita", "pdf-qualita@b.it", "pw", first_name="Anna", last_name="Bianchi"
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg,
+            ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+            utente=self.produzione,
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=self.qualita
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.pd, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=self.qualita
+        )
+
+        self.testata = Testata.objects.create(job="99020", job_detail="Prova PDF interno")
+        self.doc1 = Documento.objects.create(testata=self.testata, vendor_doc="99020-DOC1")
+        self.doc2 = Documento.objects.create(testata=self.testata, vendor_doc="99020-DOC2")
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [1])
+
+        self.trasmittal = crea_trasmittal_interno(
+            self.testata,
+            [
+                {"documento": self.doc1, "revisione": "3", "copie": 2, "tpi": "ABC", "note": "x"},
+                {"documento": self.doc2, "revisione": "B", "cliente": False},
+            ],
+            self.produzione,
+            data=date(2026, 9, 14),
+            note="Note libere della lettera.",
+        )
+
+    def test_il_pdf_si_genera_e_non_e_vuoto(self):
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        contenuto = genera_trasmittal_interno_pdf(self.trasmittal)
+
+        self.assertTrue(contenuto.startswith(b"%PDF"))
+        self.assertGreater(len(contenuto), 1000)
+
+    def test_firme_deduplicate_per_utente_condiviso_tra_stabilimenti(self):
+        from src.pdf import _firmatari_per_ruolo
+
+        firmatari_qualita = _firmatari_per_ruolo(
+            [self.bg, self.pd], RuoloFirmatarioStabilimento.QUALITA
+        )
+
+        self.assertEqual([f.utente_id for f in firmatari_qualita], [self.qualita.pk])
+
+    def test_firmatario_senza_immagine_non_solleva_eccezioni(self):
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        # self.qualita non ha un'immagine di firma caricata.
+        contenuto = genera_trasmittal_interno_pdf(self.trasmittal)
+
+        self.assertTrue(contenuto.startswith(b"%PDF"))
+
+
+class SalvaPdfTrasmittalInternoTests(TestCase):
+    """salva_pdf: scrittura sul fileserver, sempre dentro la cartella JOBS."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        jobs_patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        jobs_patcher.enable()
+        self.addCleanup(jobs_patcher.disable)
+
+        self.utente = User.objects.create_user("salva_pdf_utente", "salva-pdf@b.it", "pw")
+
+    def _trasmittal(self, job):
+        testata = Testata.objects.create(job=job)
+        return TransmittalInterno.objects.create(
+            testata=testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+
+    def test_salva_pdf_rifiuta_un_percorso_fuori_dalla_jobs_root(self):
+        trasmittal = self._trasmittal("../fuori")
+
+        with self.assertRaises(PermissionError):
+            salva_pdf(trasmittal)
 
 
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────

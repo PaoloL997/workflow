@@ -1,5 +1,7 @@
 """Anagrafiche e archivio del trasmittal interno (form MQ 7.5-04)."""
 
+from datetime import timedelta
+
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
@@ -15,6 +17,7 @@ from ..models import (
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
+from .fileserver import get_jobs_root
 
 
 def indirizzi_per_siti(codici_bc):
@@ -189,3 +192,44 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
         )
 
     return trasmittal
+
+
+def data_impegno(oggi):
+    """Termine entro cui va completata la distribuzione delle copie cartacee.
+
+    Il giorno lavorativo successivo a ``oggi``: normalmente il giorno dopo,
+    ma se questo cade di sabato o domenica si passa al lunedì (quindi il
+    venerdì il termine è tre giorni dopo). Non è la data di firma.
+    """
+    successivo = oggi + timedelta(days=1)
+    while successivo.weekday() >= 5:  # 5 = sabato, 6 = domenica
+        successivo += timedelta(days=1)
+    return successivo
+
+
+def salva_pdf(trasmittal):
+    """Genera il PDF del trasmittal interno e lo scrive sul fileserver.
+
+    Destinazione: ``{JOBS}/{job}/Progetto/UT/Transmittal/{nome}.pdf``,
+    creando le cartelle mancanti.
+
+    Returns:
+        Il ``Path`` del file scritto.
+
+    Raises:
+        PermissionError: se il percorso risultante è fuori dalla cartella JOBS.
+    """
+    job = trasmittal.testata.job
+    cartella = get_jobs_root() / job / "Progetto" / "UT" / "Transmittal"
+    destinazione = cartella / f"{trasmittal.nome}.pdf"
+    try:
+        destinazione.resolve().relative_to(get_jobs_root().resolve())
+    except ValueError:
+        raise PermissionError("Percorso non autorizzato: fuori dalla cartella JOBS.") from None
+
+    from src.pdf import genera_trasmittal_interno_pdf
+
+    pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
+    cartella.mkdir(parents=True, exist_ok=True)
+    destinazione.write_bytes(pdf_bytes)
+    return destinazione

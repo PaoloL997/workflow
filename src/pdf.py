@@ -11,6 +11,7 @@ from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
+from core.models import FirmatarioStabilimento, RuoloFirmatarioStabilimento, Stabilimento
 from core.services.revisione_label import format_revisione_label
 from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
 from core.services.stato_esterno_legenda import legenda_stati_esterni
@@ -608,6 +609,250 @@ def genera_trasmittal_pdf(
     # Enable last-page signoff just before footer is finalized on output.
     pdf._signoff_page = pdf.page_no()
     pdf._render_signoff = True
+
+    return bytes(pdf.output())
+
+
+# ── Trasmittal interno PDF (form MQ 7.5-04) ────────────────────────────────────
+
+_INT_TABLE_WIDTH_MM = 180.0
+# Column specs: (field_key, header, width_mm, align). Widths sum to the table width.
+_INT_COLS = (
+    ("vendor_doc", "DOCUMENT No.", 42, "LEFT"),
+    ("revisione", "REV.", 14, "CENTER"),
+    ("copie", "No. OF COPIES", 22, "CENTER"),
+    ("tpi", "TPI", 20, "CENTER"),
+    ("cliente", "CLIENT", 16, "CENTER"),
+    ("siti", "INVOLVED SITES", 30, "CENTER"),
+    ("note", "NOTES", 36, "LEFT"),
+)
+
+_INT_SIGNATURE_W = 32
+_INT_SIGNATURE_H = 16
+_INT_SIGNATURE_GAP = 4
+
+
+class TrasmittalInternoPDF(FPDF):
+    def __init__(self):
+        super().__init__(orientation="P", unit="mm", format="A4")
+        self._font_family = _register_unicode_font(self, "TrasIntArial")
+        self.set_margins(left=15, top=12, right=15)
+        self.set_auto_page_break(auto=True, margin=18)
+
+
+def _int_row_value(riga, key):
+    """Display value for one column of the internal-trasmittal documents table."""
+    if key == "vendor_doc":
+        return riga.documento.vendor_doc or ""
+    if key == "revisione":
+        return riga.revisione or ""
+    if key == "copie":
+        return "" if riga.copie is None else str(riga.copie)
+    if key == "tpi":
+        return riga.tpi or ""
+    if key == "cliente":
+        return "YES" if riga.cliente else "NO"
+    if key == "siti":
+        return "/".join(s.sigla for s in riga.siti.all() if s.sigla)
+    if key == "note":
+        return riga.note or ""
+    return ""
+
+
+def _build_trasmittal_interno_table(pdf, righe):
+    """Render the documents table, one row per RigaTransmittalInterno."""
+    headers = [c[1] for c in _INT_COLS]
+    widths = [c[2] for c in _INT_COLS]
+    aligns = [c[3] for c in _INT_COLS]
+    keys = [c[0] for c in _INT_COLS]
+
+    pdf.set_font(pdf._font_family, "", 8)
+    headings_style = FontFace(emphasis="BOLD", fill_color=(255, 255, 255), size_pt=8)
+    with pdf.table(
+        col_widths=tuple(widths),
+        first_row_as_headings=True,
+        headings_style=headings_style,
+        borders_layout=TableBordersLayout.ALL,
+        text_align=tuple(aligns),
+        line_height=int(pdf.font_size * 2.6),
+        padding=(1.2, _TABLE_PAD_H),
+        wrapmode="CHAR",
+    ) as table:
+        header_row = table.row()
+        for header, w in zip(headers, widths):
+            label, style = _fit_table_cell(
+                pdf, header, w, preferred=8.0, bold=True, fill_color=(255, 255, 255)
+            )
+            header_row.cell(label, style=style)
+
+        for riga in righe:
+            row = table.row()
+            for key, w in zip(keys, widths):
+                value = _int_row_value(riga, key)
+                text, style = _fit_table_cell(pdf, value, w)
+                row.cell(text, style=style)
+
+
+def _siti_snapshot_lettera(trasmittal):
+    """Siti coinvolti nella lettera: unione degli snapshot delle sue righe."""
+    return list(
+        Stabilimento.objects.filter(righe_trasmittal_interno__trasmittal=trasmittal)
+        .distinct()
+        .order_by("codice_bc")
+    )
+
+
+def _build_legenda_sigle(pdf, siti):
+    """'Legenda siti' section: sigla - nome for each site used in the letter."""
+    if not siti:
+        return
+    pdf.ln(3)
+    pdf.set_font(pdf._font_family, "B", 9)
+    pdf.cell(0, 5, "Legenda siti", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(pdf._font_family, "", 8)
+    for stabilimento in siti:
+        pdf.cell(
+            0,
+            4.5,
+            f"{stabilimento.sigla or '—'} - {stabilimento.nome}",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+
+
+def _build_note_libere(pdf, note):
+    """'Note' section: the letter's free-text notes."""
+    pdf.ln(3)
+    pdf.set_font(pdf._font_family, "B", 9)
+    pdf.cell(0, 5, "Note", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(pdf._font_family, "", 8)
+    pdf.multi_cell(0, 4.5, note or "-")
+
+
+def _leggi_firma_bytes(utente):
+    """Signature image bytes for ``utente``, or None if absent/unreadable."""
+    if not utente.firma:
+        return None
+    try:
+        with utente.firma.open("rb") as file:
+            return file.read()
+    except (FileNotFoundError, OSError):
+        return None
+
+
+def _firmatari_per_ruolo(siti, ruolo):
+    """FirmatarioStabilimento di un ruolo sui siti dati, deduplicati per utente.
+
+    Lo stesso utente può firmare per più stabilimenti (siti diversi possono
+    condividere i firmatari): deve comparire una volta sola.
+    """
+    firmatari = (
+        FirmatarioStabilimento.objects.filter(stabilimento__in=siti, ruolo=ruolo)
+        .select_related("utente")
+        .order_by("utente_id")
+    )
+    visti = set()
+    dedup = []
+    for firmatario in firmatari:
+        if firmatario.utente_id in visti:
+            continue
+        visti.add(firmatario.utente_id)
+        dedup.append(firmatario)
+    return dedup
+
+
+def _draw_signature_slot(pdf, x, y, utente):
+    """One signature box: the user's firma image, or an empty box to sign by hand."""
+    immagine = _leggi_firma_bytes(utente)
+    if immagine:
+        pdf.image(immagine, x=x, y=y, w=_INT_SIGNATURE_W, h=_INT_SIGNATURE_H)
+    else:
+        pdf.rect(x, y, _INT_SIGNATURE_W, _INT_SIGNATURE_H)
+    pdf.set_xy(x, y + _INT_SIGNATURE_H + 0.5)
+    pdf.set_font(pdf._font_family, "", 7)
+    nome = _truncate_to_width(pdf, utente.nome_completo, _INT_SIGNATURE_W)
+    pdf.cell(_INT_SIGNATURE_W, 3.5, nome, align="C")
+
+
+def _build_signature_row(pdf, label, firmatari):
+    """One row of the distribution box: role label plus its signature slots, side by side."""
+    pdf.set_font(pdf._font_family, "B", 9)
+    pdf.cell(0, 5, label, new_x="LMARGIN", new_y="NEXT")
+    if not firmatari:
+        pdf.set_font(pdf._font_family, "I", 8)
+        pdf.cell(
+            0,
+            5,
+            "Nessun firmatario configurato per i siti coinvolti.",
+            new_x="LMARGIN",
+            new_y="NEXT",
+        )
+        pdf.ln(2)
+        return
+    x0 = pdf.l_margin
+    y0 = pdf.get_y()
+    x = x0
+    for firmatario in firmatari:
+        _draw_signature_slot(pdf, x, y0, firmatario.utente)
+        x += _INT_SIGNATURE_W + _INT_SIGNATURE_GAP
+    pdf.set_xy(x0, y0 + _INT_SIGNATURE_H + 5)
+
+
+def genera_trasmittal_interno_pdf(trasmittal):
+    """Generate the internal transmittal PDF (form MQ 7.5-04 Rev.0) and return the bytes.
+
+    Args:
+        trasmittal: a ``TransmittalInterno`` instance with its righe already
+            created (see ``core.services.trasmittal_interno.crea_trasmittal_interno``).
+
+    Returns:
+        bytes — the PDF content.
+    """
+    from core.services.trasmittal_interno import data_impegno
+
+    testata = trasmittal.testata
+    righe = list(
+        trasmittal.righe.select_related("documento").prefetch_related("siti").order_by("posizione")
+    )
+    siti = _siti_snapshot_lettera(trasmittal)
+
+    pdf = TrasmittalInternoPDF()
+    pdf.add_page()
+    family = pdf._font_family
+
+    pdf.set_font(family, "B", 13)
+    intestazione = f"Commessa {testata.job}"
+    if testata.job_detail:
+        intestazione += f" — {testata.job_detail}"
+    pdf.cell(0, 7, intestazione, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(family, "B", 11)
+    pdf.cell(0, 6, trasmittal.nome, new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(family, "", 9)
+    pdf.cell(0, 5, "Form MQ 7.5-04 Rev.0", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+
+    _build_trasmittal_interno_table(pdf, righe)
+    _build_legenda_sigle(pdf, siti)
+    _build_note_libere(pdf, trasmittal.note)
+
+    pdf.ln(6)
+    pdf.set_font(family, "B", 10)
+    pdf.cell(0, 6, "Distribuzione copie cartacee", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(family, "", 8)
+    termine = format_display_date(data_impegno(trasmittal.data).isoformat())
+    pdf.cell(0, 4.5, f"Da completare entro il {termine}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    _build_signature_row(
+        pdf,
+        RuoloFirmatarioStabilimento.PRODUZIONE.label,
+        _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.PRODUZIONE),
+    )
+    _build_signature_row(
+        pdf,
+        RuoloFirmatarioStabilimento.QUALITA.label,
+        _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.QUALITA),
+    )
 
     return bytes(pdf.output())
 
