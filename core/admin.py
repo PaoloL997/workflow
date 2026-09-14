@@ -5,6 +5,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     AggiornamentoBC,
     CartellaModelloDocumento,
+    DestinazioneDocumento,
     Documento,
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
@@ -191,6 +192,12 @@ class TestataAdmin(admin.ModelAdmin):
     list_filter = ("delivery_date",)
 
 
+class DestinazioneDocumentoInline(admin.TabularInline):
+    model = DestinazioneDocumento
+    extra = 0
+    fields = ("stabilimento",)
+
+
 @admin.register(Documento)
 class DocumentoAdmin(admin.ModelAdmin):
     list_display = (
@@ -211,6 +218,7 @@ class DocumentoAdmin(admin.ModelAdmin):
     )
     list_filter = ("reparto",)
     raw_id_fields = ("testata",)
+    inlines = [DestinazioneDocumentoInline]
 
 
 @admin.register(Revisione)

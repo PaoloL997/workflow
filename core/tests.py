@@ -11,6 +11,7 @@ from django.apps import apps as django_apps
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
@@ -24,6 +25,7 @@ from .models import (
     FIRMA_MAX_BYTE,
     AggiornamentoBC,
     CommessaPin,
+    DestinazioneDocumento,
     Documento,
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
@@ -100,7 +102,12 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
-from .services.trasmittal_interno import indirizzi_per_siti
+from .services.trasmittal_interno import (
+    imposta_destinazioni,
+    indirizzi_per_siti,
+    siti_coinvolti,
+    siti_del_documento,
+)
 
 User = get_user_model()
 
@@ -1030,6 +1037,60 @@ class IndirizziPerSitiTests(TestCase):
         risultato = indirizzi_per_siti([1])
 
         self.assertEqual(risultato["to"], ["attivo@b.it"])
+
+
+class DestinazioneDocumentoTests(TestCase):
+    """Stabilimenti destinatari della copia cartacea di un documento."""
+
+    def setUp(self):
+        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.albignasego = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.marghera = Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+        self.milano = Stabilimento.objects.create(nome="Milano")  # senza codice_bc
+
+        testata = Testata.objects.create(job="99001")
+        self.doc1 = Documento.objects.create(testata=testata, vendor_doc="99001-DOC1")
+        self.doc2 = Documento.objects.create(testata=testata, vendor_doc="99001-DOC2")
+
+    def test_unicita_documento_stabilimento(self):
+        DestinazioneDocumento.objects.create(documento=self.doc1, stabilimento=self.valbrembo)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            DestinazioneDocumento.objects.create(documento=self.doc1, stabilimento=self.valbrembo)
+
+    def test_clean_rifiuta_uno_stabilimento_senza_codice_bc(self):
+        destinazione = DestinazioneDocumento(documento=self.doc1, stabilimento=self.milano)
+
+        with self.assertRaises(ValidationError):
+            destinazione.full_clean()
+
+    def test_imposta_destinazioni_sostituisce_e_non_accumula(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [1, 2])
+
+        imposta_destinazioni(self.doc1, [3])
+
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [3])
+
+    def test_imposta_destinazioni_lista_vuota_azzera(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+
+        imposta_destinazioni(self.doc1, [])
+
+        self.assertEqual(siti_del_documento(self.doc1), [])
+
+    def test_siti_del_documento_ordinati_per_codice_bc(self):
+        imposta_destinazioni(self.doc1, [3, 1, 2])
+
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [1, 2, 3])
+
+    def test_siti_coinvolti_deduplica_su_documenti_con_siti_sovrapposti(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [2, 3])
+
+        risultato = siti_coinvolti([self.doc1, self.doc2])
+
+        self.assertEqual([s.codice_bc for s in risultato], [1, 2, 3])
 
 
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────

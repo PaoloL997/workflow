@@ -497,6 +497,55 @@ class Documento(models.Model):
         return f"{self.testata_id} — {self.doc_title or self.pk}"
 
 
+class DestinazioneDocumento(models.Model):
+    """Stabilimenti che devono ricevere copia cartacea di un documento.
+
+    Sostituisce il bitmask a 5 cifre del vecchio ``<job>-RecipientsData.txt``
+    (strumento Excel): il dato è persistente e indipendente dalla singola
+    lettera del trasmittal interno, si imposta una volta per documento e vale
+    per tutte le trasmissioni successive.
+    """
+
+    documento = models.ForeignKey(
+        Documento,
+        on_delete=models.CASCADE,
+        related_name="destinazioni",
+    )
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.PROTECT,
+        related_name="documenti_destinati",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "destinazioni_documento"
+        verbose_name = "Destinazione documento"
+        verbose_name_plural = "Destinazioni documento"
+        ordering = ["documento", "stabilimento"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["documento", "stabilimento"],
+                name="uniq_destinazione_documento",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.stabilimento_id and self.stabilimento.codice_bc is None:
+            raise ValidationError(
+                {
+                    "stabilimento": (
+                        "Lo stabilimento non ha un codice sito: non può essere una "
+                        "destinazione documento."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return f"{self.documento_id}: {self.stabilimento_id}"
+
+
 class Revisione(models.Model):
     documento = models.ForeignKey(
         Documento,
