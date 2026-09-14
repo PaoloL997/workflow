@@ -1,6 +1,8 @@
 """Anagrafiche e archivio del trasmittal interno (form MQ 7.5-04)."""
 
+import shutil
 from datetime import timedelta
+from pathlib import Path
 
 from django.db import transaction
 from django.db.models import Max
@@ -11,13 +13,14 @@ from ..models import (
     DestinazioneDocumento,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
+    Reparto,
     RigaTransmittalInterno,
     Stabilimento,
     TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
-from .fileserver import get_jobs_root
+from .fileserver import get_base_path, get_jobs_root, trova_file
 
 
 def indirizzi_per_siti(codici_bc):
@@ -233,3 +236,79 @@ def salva_pdf(trasmittal):
     cartella.mkdir(parents=True, exist_ok=True)
     destinazione.write_bytes(pdf_bytes)
     return destinazione
+
+
+def prepara_per_dcc(trasmittal):
+    """Copia per il DCC i PDF dei documenti trasmessi al cliente in questa lettera.
+
+    Cartella di destinazione: ``{JOBS}/{job}/PROGETTO/DCC/DA SPEDIRE/{nome}``.
+    È lo stesso ramo "DA SPEDIRE" già letto da
+    ``core.services.trasmittal_archivio`` come fallback per il transmittal
+    cliente, ma un livello diverso: quel modulo guarda solo dentro
+    "DA SPEDIRE/TRANSMITTAL" (una sottocartella fissa), mai le cartelle
+    sorelle, quindi la cartella creata qui — che si chiama come la lettera,
+    mai "TRANSMITTAL" — non viene scambiata per un transmittal cliente.
+
+    Solo le righe con ``cliente=True`` sono considerate. Se non ce n'è
+    nessuna, non viene creato nulla (a differenza del vecchio strumento
+    Excel, che creava la cartella e poi la rimuoveva se vuota).
+
+    Il PDF di ogni documento si cerca con la stessa logica di
+    ``core.services.commesse.risolvi_file_revisione``, semplificata: nella
+    cartella base del reparto (``get_base_path``), per nome (``trova_file``).
+    Un documento non trovato — zero o più corrispondenze — non annulla la
+    copia degli altri: compare nell'esito, così la UI potrà segnalarlo.
+
+    Args:
+        trasmittal: Il ``TransmittalInterno`` da preparare per il DCC.
+
+    Returns:
+        Dict con:
+            - ``cartella``: percorso della cartella di destinazione, o
+              ``None`` se non ci sono righe con ``cliente=True``.
+            - ``copiati``: lista di dict ``{"documento_id", "vendor_doc", "file"}``.
+            - ``mancanti``: lista di dict ``{"documento_id", "vendor_doc"}``.
+
+    Idempotente: rieseguirla su un trasmittal già preparato sovrascrive gli
+    stessi file (stesso nome), senza duplicarli né sollevare eccezioni.
+
+    Raises:
+        PermissionError: se il percorso risultante è fuori dalla cartella JOBS.
+    """
+    righe = list(
+        trasmittal.righe.filter(cliente=True).select_related("documento").order_by("posizione")
+    )
+    if not righe:
+        return {"cartella": None, "copiati": [], "mancanti": []}
+
+    job = trasmittal.testata.job
+    cartella = get_base_path(job, "DCC") / "DA SPEDIRE" / trasmittal.nome
+    try:
+        cartella.resolve().relative_to(get_jobs_root().resolve())
+    except ValueError:
+        raise PermissionError("Percorso non autorizzato: fuori dalla cartella JOBS.") from None
+    cartella.mkdir(parents=True, exist_ok=True)
+
+    copiati, mancanti = [], []
+    for riga in righe:
+        documento = riga.documento
+        reparto = Reparto.objects.filter(nome=documento.reparto).first()
+        trovati = (
+            trova_file(get_base_path(job, reparto.acronimo), documento.vendor_doc)
+            if reparto and reparto.acronimo
+            else []
+        )
+        if len(trovati) != 1:
+            mancanti.append({"documento_id": documento.pk, "vendor_doc": documento.vendor_doc})
+            continue
+        sorgente = Path(trovati[0]["percorso"])
+        shutil.copyfile(sorgente, cartella / sorgente.name)
+        copiati.append(
+            {
+                "documento_id": documento.pk,
+                "vendor_doc": documento.vendor_doc,
+                "file": sorgente.name,
+            }
+        )
+
+    return {"cartella": str(cartella), "copiati": copiati, "mancanti": mancanti}

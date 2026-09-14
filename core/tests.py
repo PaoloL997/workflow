@@ -110,6 +110,7 @@ from .services.trasmittal_interno import (
     data_impegno,
     imposta_destinazioni,
     indirizzi_per_siti,
+    prepara_per_dcc,
     prossimo_progressivo,
     salva_pdf,
     siti_coinvolti,
@@ -1337,6 +1338,129 @@ class SalvaPdfTrasmittalInternoTests(TestCase):
 
         with self.assertRaises(PermissionError):
             salva_pdf(trasmittal)
+
+
+class PreparaPerDccTests(TestCase):
+    """prepara_per_dcc: copia i PDF dei documenti cliente in una cartella dedicata."""
+
+    def setUp(self):
+        from .services.fileserver import get_base_path
+
+        self.get_base_path = get_base_path
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.reparto = Reparto.objects.create(nome="Qualità e Controllo", acronimo="QMD")
+        self.testata = Testata.objects.create(job="99030")
+        self.utente = User.objects.create_user("dcc_utente", "dcc@b.it", "pw")
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-QMDBI", reparto=self.reparto.nome
+        )
+        self.doc_non_cliente = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-QCPA", reparto=self.reparto.nome
+        )
+        self.doc_missing = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-DWG01", reparto=self.reparto.nome
+        )
+
+        base = get_base_path("99030", "QMD")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-doc-ok")
+        (base / f"{self.doc_non_cliente.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-doc-non-cliente")
+        # doc_missing: nessun file sul finto fileserver.
+
+    def _trasmittal(self, righe, testata=None):
+        return crea_trasmittal_interno(
+            testata or self.testata, righe, self.utente, data=date(2026, 9, 14)
+        )
+
+    def test_copia_solo_i_documenti_con_cliente_true(self):
+        trasmittal = self._trasmittal(
+            [
+                {"documento": self.doc_ok, "revisione": "1", "cliente": True},
+                {"documento": self.doc_non_cliente, "revisione": "1", "cliente": False},
+            ]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual([c["vendor_doc"] for c in esito["copiati"]], [self.doc_ok.vendor_doc])
+        self.assertEqual(esito["mancanti"], [])
+        cartella = Path(esito["cartella"])
+        self.assertEqual(
+            [p.name for p in cartella.iterdir()], [f"{self.doc_ok.vendor_doc} Rev A.pdf"]
+        )
+
+    def test_nessuna_riga_cliente_nessuna_cartella_creata(self):
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_non_cliente, "revisione": "1", "cliente": False}]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual(esito, {"cartella": None, "copiati": [], "mancanti": []})
+        cartella_attesa = self.get_base_path("99030", "DCC") / "DA SPEDIRE" / trasmittal.nome
+        self.assertFalse(cartella_attesa.exists())
+
+    def test_documento_mancante_gli_altri_vengono_copiati(self):
+        trasmittal = self._trasmittal(
+            [
+                {"documento": self.doc_ok, "revisione": "1", "cliente": True},
+                {"documento": self.doc_missing, "revisione": "1", "cliente": True},
+            ]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual([c["vendor_doc"] for c in esito["copiati"]], [self.doc_ok.vendor_doc])
+        self.assertEqual(
+            [m["vendor_doc"] for m in esito["mancanti"]], [self.doc_missing.vendor_doc]
+        )
+
+    def test_seconda_esecuzione_idempotente(self):
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_ok, "revisione": "1", "cliente": True}]
+        )
+
+        esito1 = prepara_per_dcc(trasmittal)
+        esito2 = prepara_per_dcc(trasmittal)
+
+        self.assertEqual(esito1, esito2)
+        cartella = Path(esito1["cartella"])
+        self.assertEqual(len(list(cartella.iterdir())), 1)
+
+    def test_percorso_fuori_dalla_jobs_root_rifiutato(self):
+        testata_fuori = Testata.objects.create(job="../fuori")
+        doc = Documento.objects.create(
+            testata=testata_fuori, vendor_doc="X", reparto=self.reparto.nome
+        )
+        trasmittal = self._trasmittal(
+            [{"documento": doc, "revisione": "1", "cliente": True}], testata=testata_fuori
+        )
+
+        with self.assertRaises(PermissionError):
+            prepara_per_dcc(trasmittal)
+
+    def test_non_interferisce_con_trasmittal_archivio(self):
+        # La cartella "DA SPEDIRE/<nome lettera>" è sorella di "DA SPEDIRE/TRANSMITTAL",
+        # non ci finisce dentro: trasmittal_archivio non deve accorgersene.
+        from .services.trasmittal_archivio import cartella_trasmittal, lista_trasmittal
+
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_ok, "revisione": "1", "cliente": True}]
+        )
+
+        prepara_per_dcc(trasmittal)
+
+        self.assertEqual(lista_trasmittal("99030"), [])
+        self.assertEqual(
+            cartella_trasmittal("99030"), self.get_base_path("99030", "DCC") / "TRANSMITTAL"
+        )
 
 
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────
