@@ -38,7 +38,7 @@ class RepartoAdmin(admin.ModelAdmin):
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
-        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento")}),
+        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento", "firma")}),
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Profilo", {"fields": ("email", "ruolo", "reparto", "stabilimento")}),
