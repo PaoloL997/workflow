@@ -546,6 +546,143 @@ class DestinazioneDocumento(models.Model):
         return f"{self.documento_id}: {self.stabilimento_id}"
 
 
+class TransmittalInterno(models.Model):
+    """Lettera di trasmittal interno (form MQ 7.5-04), archiviata dopo l'emissione.
+
+    Il progressivo riparte da 1 ogni giorno, per commessa (vedi
+    ``core.services.trasmittal_interno.prossimo_progressivo``); ``nome`` è il
+    nome leggibile che ne deriva (``<job>_<yyyy-mm-dd>_E<n>``).
+    """
+
+    testata = models.ForeignKey(
+        Testata,
+        on_delete=models.PROTECT,
+        related_name="trasmittal_interni",
+    )
+    data = models.DateField()
+    progressivo = models.PositiveSmallIntegerField()
+    nome = models.CharField(max_length=100, unique=True)
+    creato_da = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="trasmittal_interni_creati",
+    )
+    creato_il = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "trasmittal_interni"
+        verbose_name = "Trasmittal interno"
+        verbose_name_plural = "Trasmittal interni"
+        ordering = ["-data", "-progressivo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["testata", "data", "progressivo"],
+                name="uniq_trasmittal_interno_progressivo",
+            ),
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class RigaTransmittalInterno(models.Model):
+    """Un documento incluso in un trasmittal interno, con la sua riga stampata.
+
+    ``siti`` è uno SNAPSHOT dei siti coinvolti al momento dell'emissione: non
+    una lettura live di ``DestinazioneDocumento``, che nel frattempo può
+    cambiare senza toccare le lettere già emesse.
+    """
+
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
+        on_delete=models.CASCADE,
+        related_name="righe",
+    )
+    documento = models.ForeignKey(
+        Documento,
+        on_delete=models.PROTECT,
+        related_name="righe_trasmittal_interno",
+    )
+    revisione = models.CharField(max_length=10)
+    copie = models.PositiveSmallIntegerField(null=True, blank=True)
+    tpi = models.CharField(max_length=50, blank=True)
+    note = models.CharField(max_length=300, blank=True)
+    cliente = models.BooleanField(default=True)
+    siti = models.ManyToManyField(
+        Stabilimento,
+        blank=True,
+        related_name="righe_trasmittal_interno",
+        db_table="riga_trasmittal_interno_siti",
+    )
+    posizione = models.PositiveSmallIntegerField(help_text="Ordine di stampa nella lettera.")
+
+    class Meta:
+        managed = True
+        db_table = "righe_trasmittal_interno"
+        verbose_name = "Riga trasmittal interno"
+        verbose_name_plural = "Righe trasmittal interno"
+        ordering = ["trasmittal", "posizione"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "documento"],
+                name="uniq_riga_trasmittal_interno_documento",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.documento_id}"
+
+
+class TipoDestinatarioTransmittalInterno(models.TextChoices):
+    TO = "to", "A"
+    CC = "cc", "CC"
+
+
+class OrigineDestinatarioTransmittalInterno(models.TextChoices):
+    STABILIMENTO = "stabilimento", "Stabilimento"
+    PM = "pm", "PM"
+    PE = "pe", "PE"
+    QCI = "qci", "QCI"
+    EXPORT = "export", "Export"
+
+
+class DestinatarioTransmittalInterno(models.Model):
+    """Un destinatario email di un trasmittal interno, con la sua origine.
+
+    ``origine`` spiega perché quell'indirizzo è finito in lista: oggi solo
+    ``STABILIMENTO`` è popolata (da ``indirizzi_per_siti``); PM, PE, QCI ed
+    EXPORT sono punti di innesto per quando la loro sorgente dati sarà
+    definita (vedi ``core.services.trasmittal_interno.crea_trasmittal_interno``).
+    """
+
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
+        on_delete=models.CASCADE,
+        related_name="destinatari",
+    )
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
+    origine = models.CharField(max_length=20, choices=OrigineDestinatarioTransmittalInterno.choices)
+
+    class Meta:
+        managed = True
+        db_table = "destinatari_trasmittal_interno"
+        verbose_name = "Destinatario trasmittal interno"
+        verbose_name_plural = "Destinatari trasmittal interno"
+        ordering = ["trasmittal", "tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "email"],
+                name="uniq_destinatario_trasmittal_interno",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.email} ({self.tipo})"
+
+
 class Revisione(models.Model):
     documento = models.ForeignKey(
         Documento,

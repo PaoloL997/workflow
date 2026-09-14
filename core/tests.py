@@ -36,6 +36,7 @@ from .models import (
     Reparto,
     Revisione,
     RevisioneFileLink,
+    RigaTransmittalInterno,
     RuoloFirmatarioStabilimento,
     Segnalazione,
     SegnalazioneCommento,
@@ -47,6 +48,7 @@ from .models import (
     TipoIndirizzoStabilimento,
     TipoSegnalazione,
     Transmittal,
+    TransmittalInterno,
 )
 from .services import scheduler
 from .services.bc_sync import (
@@ -103,8 +105,11 @@ from .services.stato_esterno_colori import (
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
 from .services.trasmittal_interno import (
+    componi_nome,
+    crea_trasmittal_interno,
     imposta_destinazioni,
     indirizzi_per_siti,
+    prossimo_progressivo,
     siti_coinvolti,
     siti_del_documento,
 )
@@ -1091,6 +1096,113 @@ class DestinazioneDocumentoTests(TestCase):
         risultato = siti_coinvolti([self.doc1, self.doc2])
 
         self.assertEqual([s.codice_bc for s in risultato], [1, 2, 3])
+
+
+class TrasmittalInternoArchivioTests(TestCase):
+    """Archivio del trasmittal interno: progressivo, nome, snapshot dei siti, destinatari."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.ve = Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.pd, email="pd@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        # Stesso indirizzo di BG, ma CC su un altro sito: nei destinatari deve
+        # restare solo in TO, senza comparire due volte.
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.ve, email="bg@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        self.testata = Testata.objects.create(job="99010")
+        self.altra_testata = Testata.objects.create(job="99011")
+        self.doc1 = Documento.objects.create(testata=self.testata, vendor_doc="99010-DOC1")
+        self.doc2 = Documento.objects.create(testata=self.testata, vendor_doc="99010-DOC2")
+
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [3])
+
+        self.utente = User.objects.create_user("trasmittal_utente", password="pw")
+
+    def _righe(self, *documenti):
+        return [{"documento": doc, "revisione": "1"} for doc in documenti]
+
+    # -- prossimo_progressivo --
+
+    def test_prossimo_progressivo_riparte_da_1_il_giorno_dopo(self):
+        crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+
+        self.assertEqual(prossimo_progressivo(self.testata, date(2026, 9, 14)), 2)
+        self.assertEqual(prossimo_progressivo(self.testata, date(2026, 9, 15)), 1)
+
+    def test_prossimo_progressivo_non_collide_fra_commesse(self):
+        crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+
+        self.assertEqual(prossimo_progressivo(self.altra_testata, date(2026, 9, 14)), 1)
+
+    # -- componi_nome --
+
+    def test_componi_nome_formato_atteso(self):
+        self.assertEqual(componi_nome(self.testata, date(2026, 9, 14), 3), "99010_2026-09-14_E3")
+
+    # -- snapshot dei siti --
+
+    def test_i_siti_della_riga_sono_uno_snapshot(self):
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+        riga = trasmittal.righe.get(documento=self.doc1)
+        self.assertEqual(sorted(s.codice_bc for s in riga.siti.all()), [1, 2])
+
+        imposta_destinazioni(self.doc1, [3])
+
+        self.assertEqual(sorted(s.codice_bc for s in riga.siti.all()), [1, 2])
+
+    # -- destinatari di stabilimento --
+
+    def test_destinatari_di_stabilimento_dedotti_dall_unione_dei_siti_senza_duplicati(self):
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1, self.doc2), self.utente, data=date(2026, 9, 14)
+        )
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+
+        self.assertEqual(
+            sorted(destinatari),
+            sorted(
+                [
+                    ("bg@b.it", "to", "stabilimento"),
+                    ("pd@b.it", "to", "stabilimento"),
+                ]
+            ),
+        )
+
+    # -- unicità documento nella lettera --
+
+    def test_un_documento_non_puo_comparire_due_volte_nella_stessa_lettera(self):
+        trasmittal = TransmittalInterno.objects.create(
+            testata=self.testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(self.testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+        RigaTransmittalInterno.objects.create(
+            trasmittal=trasmittal, documento=self.doc1, revisione="1", posizione=1
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            RigaTransmittalInterno.objects.create(
+                trasmittal=trasmittal, documento=self.doc1, revisione="2", posizione=2
+            )
 
 
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────

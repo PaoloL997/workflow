@@ -5,6 +5,7 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     AggiornamentoBC,
     CartellaModelloDocumento,
+    DestinatarioTransmittalInterno,
     DestinazioneDocumento,
     Documento,
     EsecuzioneSchedulata,
@@ -16,12 +17,14 @@ from .models import (
     Reparto,
     Revisione,
     RevisioneFileLink,
+    RigaTransmittalInterno,
     Segnalazione,
     SegnalazioneCommento,
     Stabilimento,
     StatoEsterno,
     Testata,
     Transmittal,
+    TransmittalInterno,
     User,
 )
 
@@ -314,3 +317,49 @@ class FirmatarioStabilimentoAdmin(admin.ModelAdmin):
     list_filter = ("ruolo", "stabilimento")
     search_fields = ("utente__username", "utente__first_name", "utente__last_name")
     raw_id_fields = ("utente",)
+
+
+class _SolaLetturaInline:
+    """Un inline che si consulta soltanto: niente aggiunte, modifiche o cancellazioni."""
+
+    extra = 0
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class RigaTransmittalInternoInline(_SolaLetturaInline, admin.TabularInline):
+    model = RigaTransmittalInterno
+    fields = ("posizione", "documento", "revisione", "copie", "tpi", "cliente", "siti", "note")
+    filter_horizontal = ("siti",)
+
+
+class DestinatarioTransmittalInternoInline(_SolaLetturaInline, admin.TabularInline):
+    model = DestinatarioTransmittalInterno
+    fields = ("email", "tipo", "origine")
+
+
+@admin.register(TransmittalInterno)
+class TransmittalInternoAdmin(admin.ModelAdmin):
+    """Sola lettura: l'archivio si scrive da ``crea_trasmittal_interno``, non da qui."""
+
+    list_display = ("nome", "testata", "data", "progressivo", "creato_da", "creato_il")
+    list_filter = ("data",)
+    search_fields = ("nome", "testata__job")
+    readonly_fields = ("testata", "data", "progressivo", "nome", "creato_da", "creato_il", "note")
+    inlines = [RigaTransmittalInternoInline, DestinatarioTransmittalInternoInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -1,12 +1,19 @@
-"""Anagrafiche per il trasmittal interno (form MQ 7.5-04)."""
+"""Anagrafiche e archivio del trasmittal interno (form MQ 7.5-04)."""
 
 from django.db import transaction
+from django.db.models import Max
+from django.utils import timezone
 
 from ..models import (
+    DestinatarioTransmittalInterno,
     DestinazioneDocumento,
     IndirizzoStabilimento,
+    OrigineDestinatarioTransmittalInterno,
+    RigaTransmittalInterno,
     Stabilimento,
+    TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
+    TransmittalInterno,
 )
 
 
@@ -78,3 +85,107 @@ def siti_coinvolti(documenti):
         .distinct()
         .order_by("codice_bc")
     )
+
+
+def prossimo_progressivo(testata, data):
+    """Primo progressivo libero per una commessa in un giorno di emissione.
+
+    Riparte da 1 ogni giorno, per commessa: non collide fra giorni o
+    commesse diverse.
+    """
+    ultimo = TransmittalInterno.objects.filter(testata=testata, data=data).aggregate(
+        Max("progressivo")
+    )["progressivo__max"]
+    return (ultimo or 0) + 1
+
+
+def componi_nome(testata, data, progressivo):
+    """Nome leggibile della lettera: ``<job>_<yyyy-mm-dd>_E<n>``."""
+    return f"{testata.job}_{data.isoformat()}_E{progressivo}"
+
+
+def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
+    """Crea un trasmittal interno, con le sue righe e i destinatari di stabilimento.
+
+    Args:
+        testata: Commessa a cui appartiene la lettera.
+        righe: Iterable non vuoto di dict, uno per documento incluso, con le
+            chiavi ``"documento"`` (istanza ``Documento``, obbligatoria),
+            ``"revisione"`` (obbligatoria) e le opzionali ``"copie"``,
+            ``"tpi"``, ``"note"``, ``"cliente"`` (default ``True``).
+            L'ordine nell'iterable è l'ordine di stampa (``posizione``).
+        utente: Chi emette la lettera (``TransmittalInterno.creato_da``).
+        data: Giorno di emissione; oggi se omesso.
+        note: Note libere del modulo.
+
+    Returns:
+        Il ``TransmittalInterno`` creato.
+
+    Per ogni riga, i siti coinvolti sono copiati da ``DestinazioneDocumento``
+    come SNAPSHOT (``RigaTransmittalInterno.siti``): la lettera già emessa non
+    cambia se le destinazioni del documento cambiano in seguito. I
+    destinatari di tipo STABILIMENTO sono dedotti da ``indirizzi_per_siti``
+    sull'unione dei siti di tutte le righe.
+
+    Non tocca nessuno stato dei documenti. La risoluzione dei destinatari
+    PM/PE/QCI e la regola "export@" per i documenti SHn non sono ancora
+    implementate: la sorgente dati non è definita, quindi non vengono
+    inventate qui.
+    """
+    righe = list(righe)
+    if not righe:
+        raise ValueError("Un trasmittal interno deve avere almeno una riga.")
+    data = data or timezone.localdate()
+
+    with transaction.atomic():
+        progressivo = prossimo_progressivo(testata, data)
+        trasmittal = TransmittalInterno.objects.create(
+            testata=testata,
+            data=data,
+            progressivo=progressivo,
+            nome=componi_nome(testata, data, progressivo),
+            creato_da=utente,
+            note=note,
+        )
+
+        documenti = []
+        for posizione, riga in enumerate(righe, start=1):
+            documento = riga["documento"]
+            documenti.append(documento)
+            riga_creata = RigaTransmittalInterno.objects.create(
+                trasmittal=trasmittal,
+                documento=documento,
+                revisione=riga["revisione"],
+                copie=riga.get("copie"),
+                tpi=riga.get("tpi", ""),
+                note=riga.get("note", ""),
+                cliente=riga.get("cliente", True),
+                posizione=posizione,
+            )
+            riga_creata.siti.set(siti_del_documento(documento))
+
+        # PM, PE, QCI ed export@ (documenti SHn): punti di innesto, non
+        # ancora implementati — vedi il docstring.
+        indirizzi = indirizzi_per_siti([s.codice_bc for s in siti_coinvolti(documenti)])
+        DestinatarioTransmittalInterno.objects.bulk_create(
+            [
+                DestinatarioTransmittalInterno(
+                    trasmittal=trasmittal,
+                    email=email,
+                    tipo=TipoDestinatarioTransmittalInterno.TO,
+                    origine=OrigineDestinatarioTransmittalInterno.STABILIMENTO,
+                )
+                for email in indirizzi["to"]
+            ]
+            + [
+                DestinatarioTransmittalInterno(
+                    trasmittal=trasmittal,
+                    email=email,
+                    tipo=TipoDestinatarioTransmittalInterno.CC,
+                    origine=OrigineDestinatarioTransmittalInterno.STABILIMENTO,
+                )
+                for email in indirizzi["cc"]
+            ]
+        )
+
+    return trasmittal
