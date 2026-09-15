@@ -157,6 +157,61 @@
     margin: 0 auto;
   }
 
+  /* ── Persona non abbinata a un utente (PM/PE/QCI/WE) ── */
+  .persona-non-abbinata {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: var(--color-danger, #e53e3e);
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+  }
+  .persona-non-abbinata:hover { opacity: 0.75; }
+
+  .persona-popover {
+    position: fixed;
+    z-index: 200;
+    width: 240px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm, 10px);
+    box-shadow: 0 8px 24px hsla(0, 0%, 0%, 0.18);
+    padding: 8px;
+  }
+  .persona-popover-input {
+    width: 100%;
+    padding: 7px 9px;
+    border-radius: 8px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    font-size: 13px;
+  }
+  .persona-popover-suggestions {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .persona-popover-suggestion {
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+  }
+  .persona-popover-suggestion:hover { background: var(--color-border); }
+  .persona-popover-hint {
+    padding: 6px 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+  }
+
   /* ── Header actions (chiudi / elimina) ── */
   .commessa-header-actions {
     display: flex;
@@ -1278,22 +1333,10 @@
           <dt class="commessa-meta-label">Termini consegna</dt>
           <dd class="commessa-meta-value{% if not testata.delivery_term %} empty{% endif %}">{{ testata.delivery_term|default:"—" }}</dd>
         </div>
-        <div class="commessa-meta-item">
-          <dt class="commessa-meta-label">PM</dt>
-          <dd class="commessa-meta-value{% if not persone_ruoli.pm %} empty{% endif %}">{{ persone_ruoli.pm|default:"—" }}</dd>
-        </div>
-        <div class="commessa-meta-item">
-          <dt class="commessa-meta-label">PE</dt>
-          <dd class="commessa-meta-value{% if not persone_ruoli.pe %} empty{% endif %}">{{ persone_ruoli.pe|default:"—" }}</dd>
-        </div>
-        <div class="commessa-meta-item">
-          <dt class="commessa-meta-label">QCI</dt>
-          <dd class="commessa-meta-value{% if not persone_ruoli.qci %} empty{% endif %}">{{ persone_ruoli.qci|default:"—" }}</dd>
-        </div>
-        <div class="commessa-meta-item">
-          <dt class="commessa-meta-label">WE</dt>
-          <dd class="commessa-meta-value{% if not persone_ruoli.we %} empty{% endif %}">{{ persone_ruoli.we|default:"—" }}</dd>
-        </div>
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PM" persone=persone_ruoli.pm %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PE" persone=persone_ruoli.pe %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="QCI" persone=persone_ruoli.qci %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="WE" persone=persone_ruoli.we %}
       </dl>
       {% if testata.job_detail %}
       <p class="commessa-desc">{{ testata.job_detail }}</p>
@@ -1902,6 +1945,138 @@
   }
 
   window.closeCommessa = closeCommessa;
+})();
+</script>
+
+<script>
+/* ── Risolvi persona (PM/PE/QCI/WE) non abbinata a un utente ── */
+(function () {
+  'use strict';
+
+  var CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  var popover = null;
+  var debounce = null;
+
+  function chiudiPopover() {
+    if (popover) {
+      popover.remove();
+      popover = null;
+    }
+    document.removeEventListener('keydown', onEscape);
+    document.removeEventListener('mousedown', onOutsideClick);
+  }
+
+  function onEscape(e) {
+    if (e.key === 'Escape') chiudiPopover();
+  }
+
+  function onOutsideClick(e) {
+    if (popover && !popover.contains(e.target) && !e.target.closest('.persona-non-abbinata')) {
+      chiudiPopover();
+    }
+  }
+
+  function posiziona(pop, ancora) {
+    var rect = ancora.getBoundingClientRect();
+    pop.style.left = rect.left + 'px';
+    pop.style.top = (rect.bottom + 4) + 'px';
+  }
+
+  function renderSuggerimenti(lista, utenti, onScegli) {
+    lista.replaceChildren();
+    if (!utenti.length) {
+      var hint = document.createElement('li');
+      hint.className = 'persona-popover-hint';
+      hint.textContent = 'Nessun utente trovato con questo nome.';
+      lista.appendChild(hint);
+      return;
+    }
+    utenti.forEach(function (u) {
+      var li = document.createElement('li');
+      li.className = 'persona-popover-suggestion';
+      li.textContent = u.nome_completo + ' (' + u.username + ')';
+      li.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        onScegli(u);
+      });
+      lista.appendChild(li);
+    });
+  }
+
+  async function risolvi(personaId, utente, bottone) {
+    try {
+      var res = await fetch('/api/persone-commessa/' + personaId + '/risolvi/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ utente_id: utente.id }),
+      });
+      var data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        if (isPermissionDeniedResponse(res, data)) return;
+        alert(data.error || 'Errore durante l\'abbinamento.');
+        return;
+      }
+      var span = document.createElement('span');
+      span.textContent = data.nome;
+      bottone.replaceWith(span);
+    } catch (e) {
+      alert('Errore di rete. Riprova.');
+    }
+  }
+
+  function apriPopover(bottone) {
+    if (!requireWrite()) return;
+    chiudiPopover();
+
+    var personaId = bottone.dataset.personaId;
+    popover = document.createElement('div');
+    popover.className = 'persona-popover';
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'persona-popover-input';
+    input.placeholder = 'Cerca utente…';
+    input.autocomplete = 'off';
+
+    var lista = document.createElement('ul');
+    lista.className = 'persona-popover-suggestions';
+
+    popover.appendChild(input);
+    popover.appendChild(lista);
+    document.body.appendChild(popover);
+    posiziona(popover, bottone);
+    input.focus();
+
+    input.addEventListener('input', function () {
+      clearTimeout(debounce);
+      var q = input.value.trim();
+      if (q.length < 2) {
+        lista.replaceChildren();
+        return;
+      }
+      debounce = setTimeout(async function () {
+        try {
+          var res = await fetch('/api/utenti/cerca/?q=' + encodeURIComponent(q));
+          var data = await res.json();
+          renderSuggerimenti(lista, data.utenti || [], function (u) {
+            risolvi(personaId, u, bottone);
+            chiudiPopover();
+          });
+        } catch (e) {
+          lista.replaceChildren();
+        }
+      }, 250);
+    });
+
+    document.addEventListener('keydown', onEscape);
+    document.addEventListener('mousedown', onOutsideClick);
+  }
+
+  document.addEventListener('click', function (e) {
+    var bottone = e.target.closest('.persona-non-abbinata');
+    if (bottone) apriPopover(bottone);
+  });
 })();
 </script>
 {% endblock %}

@@ -18,6 +18,7 @@ from ..models import (
     RuoloPersonaCommessa,
     StatoEsterno,
     Testata,
+    User,
 )
 from .revisione_label import format_revisione_label
 from .stato_esterno_colori import cell_colors
@@ -162,11 +163,33 @@ def _crea_persone_commessa(testata, persone):
 
 
 def persone_per_ruolo(testata):
-    """{'pm': 'Mario Rossi, Libero Bianchi', 'pe': '...', 'qci': '...', 'we': '...'}."""
+    """Persone per ruolo, per l'header della commessa.
+
+    ``{'pm': [{"id", "nome", "abbinato"}, ...], 'pe': [...], 'qci': [...], 'we': [...]}``.
+    ``abbinato`` è False per un nome libero (nessun utente registrato
+    corrispondente): l'header lo mostra cliccabile per risolverlo a mano.
+    """
     out = {r: [] for r in _RUOLI_PERSONA}
     for p in testata.persone.select_related("utente").all():
-        out[p.ruolo].append(p.nome_visualizzato)
-    return {k: ", ".join(v) for k, v in out.items()}
+        out[p.ruolo].append(
+            {"id": p.pk, "nome": p.nome_visualizzato, "abbinato": p.utente_id is not None}
+        )
+    return out
+
+
+def risolvi_persona_commessa(persona_id, utente_id):
+    """Collega manualmente una PersonaCommessa a testo libero a un utente registrato.
+
+    Raises:
+        PersonaCommessa.DoesNotExist: se la voce non esiste.
+        User.DoesNotExist: se l'utente non esiste.
+    """
+    persona = PersonaCommessa.objects.get(pk=persona_id)
+    utente = User.objects.get(pk=utente_id)
+    persona.utente = utente
+    persona.nome_libero = ""
+    persona.save(update_fields=["utente", "nome_libero"])
+    return persona
 
 
 def update_commessa(job, data):

@@ -28,6 +28,7 @@ from .models import (
     Documento,
     IndirSped,
     Permesso,
+    PersonaCommessa,
     Revisione,
     Segnalazione,
     Stabilimento,
@@ -69,6 +70,7 @@ from .services.commesse import (
     request_delete_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
+    risolvi_persona_commessa,
     salva_file_link,
     serialize_cartella_modello,
     serialize_documento,
@@ -517,6 +519,26 @@ def utenti_cerca_api(request):
             ]
         }
     )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def persona_commessa_risolvi_api(request, pk):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    utente_id = data.get("utente_id")
+    if not utente_id:
+        return JsonResponse({"error": "Parametro utente_id mancante."}, status=400)
+    try:
+        persona = risolvi_persona_commessa(pk, utente_id)
+    except PersonaCommessa.DoesNotExist:
+        return JsonResponse({"error": "Voce non trovata."}, status=404)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Utente non trovato."}, status=404)
+    return JsonResponse({"ok": True, "nome": persona.nome_visualizzato})
 
 
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────

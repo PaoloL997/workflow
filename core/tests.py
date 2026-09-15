@@ -72,6 +72,7 @@ from .services.commesse import (
     pin_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
+    risolvi_persona_commessa,
     salva_file_link,
     serialize_revisione,
 )
@@ -2557,23 +2558,56 @@ class CreateCommessaConPersoneTests(TestCase):
 
 
 class PersonePerRuoloTests(TestCase):
-    """persone_per_ruolo: nomi PM/PE/QCI/WE, uniti per ruolo, per l'header."""
+    """persone_per_ruolo: persone per ruolo, con lo stato di abbinamento, per l'header."""
 
-    def test_unisce_piu_persone_per_ruolo(self):
+    def test_elenca_le_persone_per_ruolo_con_lo_stato_di_abbinamento(self):
         t = Testata.objects.create(job="66001")
         u1 = User.objects.create_user(
             "ppr1", "ppr1@b.it", "pw", first_name="Mario", last_name="Rossi"
         )
-        PersonaCommessa.objects.create(testata=t, ruolo=RuoloPersonaCommessa.PM, utente=u1)
-        PersonaCommessa.objects.create(
+        abbinata = PersonaCommessa.objects.create(
+            testata=t, ruolo=RuoloPersonaCommessa.PM, utente=u1
+        )
+        libera = PersonaCommessa.objects.create(
             testata=t, ruolo=RuoloPersonaCommessa.PM, nome_libero="Libero Bianchi"
         )
 
         risultato = persone_per_ruolo(t)
 
-        self.assertEqual(risultato["pm"], "Mario Rossi, Libero Bianchi")
-        self.assertEqual(risultato["pe"], "")
+        self.assertEqual(
+            risultato["pm"],
+            [
+                {"id": abbinata.pk, "nome": "Mario Rossi", "abbinato": True},
+                {"id": libera.pk, "nome": "Libero Bianchi", "abbinato": False},
+            ],
+        )
+        self.assertEqual(risultato["pe"], [])
         self.assertEqual(set(risultato), {"pm", "pe", "qci", "we"})
+
+
+class RisolviPersonaCommessaTests(TestCase):
+    """risolvi_persona_commessa: collega manualmente una voce a testo libero a un utente."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="66010")
+        self.persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, nome_libero="Baldelli"
+        )
+        self.utente = User.objects.create_user("rpc1", "rpc1@b.it", "pw", last_name="Baldelli")
+
+    def test_collega_l_utente_e_svuota_il_nome_libero(self):
+        persona = risolvi_persona_commessa(self.persona.pk, self.utente.pk)
+
+        self.assertEqual(persona.utente_id, self.utente.pk)
+        self.assertEqual(persona.nome_libero, "")
+
+    def test_persona_inesistente(self):
+        with self.assertRaises(PersonaCommessa.DoesNotExist):
+            risolvi_persona_commessa(999999, self.utente.pk)
+
+    def test_utente_inesistente(self):
+        with self.assertRaises(User.DoesNotExist):
+            risolvi_persona_commessa(self.persona.pk, 999999)
 
 
 class BackfillPersoneCommessaTests(TestCase):
@@ -2849,6 +2883,82 @@ class UtentiCercaApiTests(TestCase):
             User.objects.create_user(f"uca_molti{i}", f"uca-molti{i}@b.it", "pw", last_name="Molti")
         risposta = self.client.get("/api/utenti/cerca/?q=Molti")
         self.assertEqual(len(risposta.json()["utenti"]), 10)
+
+
+class PersonaCommessaRisolviApiTests(TestCase):
+    """POST /api/persone-commessa/<pk>/risolvi/: collega a mano un nome libero a un utente."""
+
+    def setUp(self):
+        self.client = Client()
+        self.utente_scrittura = User.objects.create_user(
+            "pcr_scrittura", "pcr-scrittura@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.utente_lettura = User.objects.create_user(
+            "pcr_lettura", "pcr-lettura@b.it", "pw", permesso=Permesso.READING
+        )
+        self.candidato = User.objects.create_user(
+            "pcr_candidato", "pcr-candidato@b.it", "pw", last_name="Baldelli"
+        )
+        self.testata = Testata.objects.create(job="66020")
+        self.persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, nome_libero="Baldelli"
+        )
+
+    def _risolvi(self, persona_id, utente_id):
+        return self.client.post(
+            f"/api/persone-commessa/{persona_id}/risolvi/",
+            data=json.dumps({"utente_id": utente_id}),
+            content_type="application/json",
+        )
+
+    def test_richiede_login(self):
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.utente_lettura)
+
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 403)
+        self.persona.refresh_from_db()
+        self.assertIsNone(self.persona.utente_id)
+
+    def test_collega_l_utente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta.json()["nome"], self.candidato.nome_completo)
+        self.persona.refresh_from_db()
+        self.assertEqual(self.persona.utente_id, self.candidato.pk)
+        self.assertEqual(self.persona.nome_libero, "")
+
+    def test_persona_inesistente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(999999, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_utente_inesistente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(self.persona.pk, 999999)
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_utente_id_mancante(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self.client.post(
+            f"/api/persone-commessa/{self.persona.pk}/risolvi/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
 
 
 class SituazioneApiTestCase(TestCase):
