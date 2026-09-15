@@ -7,6 +7,7 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
+from django.db.models import Prefetch
 from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
@@ -614,22 +615,57 @@ def genera_trasmittal_pdf(
 
 
 # ── Trasmittal interno PDF (form MQ 7.5-04) ────────────────────────────────────
+#
+# Layout modellato sul modulo cartaceo "DOCUMENT TRANSMITTAL SHEET" originale:
+# riquadro d'intestazione (logo, titolo, numero commessa), tabella documenti,
+# legenda fissa, note libere numerate, distribuzione copie con firme, riga di
+# riferimenti del modulo. Vedi lo screenshot di riferimento allegato al task.
 
 _INT_TABLE_WIDTH_MM = 180.0
 # Column specs: (field_key, header, width_mm, align). Widths sum to the table width.
 _INT_COLS = (
-    ("vendor_doc", "DOCUMENT No.", 42, "LEFT"),
+    ("vendor_doc", "B&R DOC. No.", 46, "LEFT"),
     ("revisione", "REV.", 14, "CENTER"),
+    ("siti", "INVOLVED SITES (a)", 30, "CENTER"),
     ("copie", "No. OF COPIES", 22, "CENTER"),
-    ("tpi", "TPI", 20, "CENTER"),
-    ("cliente", "CLIENT", 16, "CENTER"),
-    ("siti", "INVOLVED SITES", 30, "CENTER"),
-    ("note", "NOTES", 36, "LEFT"),
+    ("cliente", "CLIENT (b)", 22, "CENTER"),
+    ("tpi", "TPI (b)(c)", 20, "CENTER"),
+    ("note", "NOTES", 26, "LEFT"),
 )
 
-_INT_SIGNATURE_W = 32
-_INT_SIGNATURE_H = 16
+_INT_HEADER_FILL = (225, 225, 225)
+
+# Riquadro d'intestazione: logo | titolo (2 righe) | numero commessa (2 righe).
+_INT_HEADER_LOGO_W = 58.0
+_INT_HEADER_TITLE_W = 88.0
+_INT_HEADER_JOB_W = 34.0
+_INT_HEADER_ROW1_H = 13.0
+_INT_HEADER_ROW2_H = 11.0
+_INT_LOGO_ASPECT = 544 / 1920  # altezza/larghezza del file trasmittal_logo.JPG
+
+# Ordine fisso di presentazione della legenda siti nel modulo: non deriva né
+# dal codice sito né dall'ordine alfabetico, replica il vecchio modulo Excel.
+_INT_LEGENDA_ORDINE_SIGLE = ("BG", "CR", "PD", "VI", "VE")
+
+_INT_SIGNATURE_W = 34
+_INT_SIGNATURE_H = 15
 _INT_SIGNATURE_GAP = 4
+
+# Distribuzione copie cartacee: etichetta ruolo | firme | data.
+_INT_DIST_LABEL_W = 50.0
+_INT_DIST_SIGN_W = 95.0
+_INT_DIST_DATE_W = 35.0
+_INT_DIST_ROW_H = max(_INT_SIGNATURE_H + 8.0, 20.0)
+
+# Riga finale di riferimenti del modulo: testo fisso, descrive il modulo
+# stesso (form/revisione), non la singola lettera.
+_INT_FOOTER_COLS = (
+    ("B&R Form: MQ 7.5-04", 42.0),
+    ("Rif.: PQHSE 7.5-01", 40.0),
+    ("Date First Issue: 06/05/2024", 44.0),
+    ("Date Actual Issue: 06/05/2024", 44.0),
+    ("Rev.0", 10.0),
+)
 
 
 class TrasmittalInternoPDF(FPDF):
@@ -653,10 +689,46 @@ def _int_row_value(riga, key):
     if key == "cliente":
         return "YES" if riga.cliente else "NO"
     if key == "siti":
-        return "/".join(s.sigla for s in riga.siti.all() if s.sigla)
+        return "-".join(s.sigla for s in riga.siti.all() if s.sigla)
     if key == "note":
         return riga.note or ""
     return ""
+
+
+def _build_header_block(pdf, trasmittal, testata):
+    """Riquadro d'intestazione: logo, titolo del modulo + nome lettera, numero commessa."""
+    family = pdf._font_family
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    w_logo, w_title, w_job = _INT_HEADER_LOGO_W, _INT_HEADER_TITLE_W, _INT_HEADER_JOB_W
+    h1, h2 = _INT_HEADER_ROW1_H, _INT_HEADER_ROW2_H
+    h_tot = h1 + h2
+    w_tot = w_logo + w_title + w_job
+
+    pdf.rect(x0, y0, w_tot, h_tot)
+    pdf.line(x0 + w_logo, y0, x0 + w_logo, y0 + h_tot)
+    pdf.line(x0 + w_logo + w_title, y0, x0 + w_logo + w_title, y0 + h_tot)
+    pdf.line(x0 + w_logo, y0 + h1, x0 + w_tot, y0 + h1)
+
+    if LOGO_PATH.exists():
+        img_w = w_logo - 8
+        img_h = img_w * _INT_LOGO_ASPECT
+        pdf.image(str(LOGO_PATH), x=x0 + (w_logo - img_w) / 2, y=y0 + (h_tot - img_h) / 2, w=img_w)
+
+    pdf.set_xy(x0 + w_logo, y0)
+    pdf.set_font(family, "B", 13)
+    pdf.cell(w_title, h1, "DOCUMENT TRANSMITTAL SHEET", align="C")
+    pdf.set_xy(x0 + w_logo, y0 + h1)
+    pdf.set_font(family, "", 10)
+    pdf.cell(w_title, h2, trasmittal.nome, align="C")
+
+    pdf.set_xy(x0 + w_logo + w_title, y0)
+    pdf.set_font(family, "", 8)
+    pdf.cell(w_job, h1, "JOB No.", align="C")
+    pdf.set_xy(x0 + w_logo + w_title, y0 + h1)
+    pdf.set_font(family, "B", 13)
+    pdf.cell(w_job, h2, testata.job, align="C")
+
+    pdf.set_xy(x0, y0 + h_tot)
 
 
 def _build_trasmittal_interno_table(pdf, righe):
@@ -667,7 +739,7 @@ def _build_trasmittal_interno_table(pdf, righe):
     keys = [c[0] for c in _INT_COLS]
 
     pdf.set_font(pdf._font_family, "", 8)
-    headings_style = FontFace(emphasis="BOLD", fill_color=(255, 255, 255), size_pt=8)
+    headings_style = FontFace(emphasis="BOLD", fill_color=_INT_HEADER_FILL, size_pt=8)
     with pdf.table(
         col_widths=tuple(widths),
         first_row_as_headings=True,
@@ -681,7 +753,7 @@ def _build_trasmittal_interno_table(pdf, righe):
         header_row = table.row()
         for header, w in zip(headers, widths):
             label, style = _fit_table_cell(
-                pdf, header, w, preferred=8.0, bold=True, fill_color=(255, 255, 255)
+                pdf, header, w, preferred=8.0, bold=True, fill_color=_INT_HEADER_FILL
             )
             header_row.cell(label, style=style)
 
@@ -689,7 +761,7 @@ def _build_trasmittal_interno_table(pdf, righe):
             row = table.row()
             for key, w in zip(keys, widths):
                 value = _int_row_value(riga, key)
-                text, style = _fit_table_cell(pdf, value, w)
+                text, style = _fit_table_cell(pdf, value, w, bold=(key == "vendor_doc"))
                 row.cell(text, style=style)
 
 
@@ -702,31 +774,66 @@ def _siti_snapshot_lettera(trasmittal):
     )
 
 
-def _build_legenda_sigle(pdf, siti):
-    """'Legenda siti' section: sigla - nome for each site used in the letter."""
-    if not siti:
-        return
-    pdf.ln(3)
+def _build_grey_bar(pdf, testo):
+    """Barra grigia a tutta larghezza con il titolo di una sezione del modulo."""
+    pdf.set_fill_color(*_INT_HEADER_FILL)
     pdf.set_font(pdf._font_family, "B", 9)
-    pdf.cell(0, 5, "Legenda siti", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(pdf._font_family, "", 8)
-    for stabilimento in siti:
-        pdf.cell(
-            0,
-            4.5,
-            f"{stabilimento.sigla or '—'} - {stabilimento.nome}",
-            new_x="LMARGIN",
-            new_y="NEXT",
+    pdf.set_x(pdf.l_margin)
+    pdf.cell(
+        _INT_TABLE_WIDTH_MM,
+        6,
+        "  " + testo,
+        border=1,
+        fill=True,
+        align="L",
+        new_x="LMARGIN",
+        new_y="NEXT",
+    )
+
+
+def _legenda_siti_testo():
+    """Riga (a) della legenda: sigla e nome di ogni sito costruttivo, ordine fisso."""
+    nomi = dict(
+        Stabilimento.objects.filter(sigla__in=_INT_LEGENDA_ORDINE_SIGLE).values_list(
+            "sigla", "nome"
         )
+    )
+    parti = [f"{sigla} ({nomi[sigla]})" for sigla in _INT_LEGENDA_ORDINE_SIGLE if sigla in nomi]
+    return "(a) - SITE: " + " / ".join(parti)
+
+
+def _build_remarks_legenda(pdf):
+    """'REMARKS LEGENDA' section: barra grigia + le tre note fisse del modulo."""
+    _build_grey_bar(pdf, "REMARKS LEGENDA")
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    righe_testo = [
+        _legenda_siti_testo(),
+        "(b) - CLIENT | TPI: YES/NO",
+        "(c) - TPI: specify No.Bo., AI, Other recipients…",
+    ]
+    h_riga = 4.5
+    h_box = h_riga * len(righe_testo) + 3
+    pdf.rect(x0, y0, _INT_TABLE_WIDTH_MM, h_box)
+    pdf.set_font(pdf._font_family, "", 8)
+    for i, riga in enumerate(righe_testo):
+        pdf.set_xy(x0 + 2, y0 + 1.5 + i * h_riga)
+        pdf.cell(_INT_TABLE_WIDTH_MM - 4, h_riga, riga)
+    pdf.set_xy(x0, y0 + h_box)
 
 
 def _build_note_libere(pdf, note):
-    """'Note' section: the letter's free-text notes."""
-    pdf.ln(3)
-    pdf.set_font(pdf._font_family, "B", 9)
-    pdf.cell(0, 5, "Note", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(pdf._font_family, "", 8)
-    pdf.multi_cell(0, 4.5, note or "-")
+    """'NOTES' section: barra grigia + le tre righe libere della lettera, numerate."""
+    _build_grey_bar(pdf, "NOTES")
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    righe = ((note or "").split("\n") + ["", "", ""])[:3]
+    h_riga = 6.0
+    h_box = h_riga * len(righe) + 3
+    pdf.rect(x0, y0, _INT_TABLE_WIDTH_MM, h_box)
+    pdf.set_font(pdf._font_family, "", 9)
+    for i, testo in enumerate(righe):
+        pdf.set_xy(x0 + 2, y0 + 1.5 + i * h_riga)
+        pdf.cell(_INT_TABLE_WIDTH_MM - 4, h_riga, f"{i + 1}) {testo}".rstrip())
+    pdf.set_xy(x0, y0 + h_box)
 
 
 def _leggi_firma_bytes(utente):
@@ -774,32 +881,61 @@ def _draw_signature_slot(pdf, x, y, utente):
     pdf.cell(_INT_SIGNATURE_W, 3.5, nome, align="C")
 
 
-def _build_signature_row(pdf, label, firmatari):
-    """One row of the distribution box: role label plus its signature slots, side by side."""
-    pdf.set_font(pdf._font_family, "B", 9)
-    pdf.cell(0, 5, label, new_x="LMARGIN", new_y="NEXT")
-    if not firmatari:
-        pdf.set_font(pdf._font_family, "I", 8)
-        pdf.cell(
-            0,
-            5,
-            "Nessun firmatario configurato per i siti coinvolti.",
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
-        pdf.ln(2)
-        return
-    x0 = pdf.l_margin
-    y0 = pdf.get_y()
-    x = x0
-    for firmatario in firmatari:
-        _draw_signature_slot(pdf, x, y0, firmatario.utente)
-        x += _INT_SIGNATURE_W + _INT_SIGNATURE_GAP
-    pdf.set_xy(x0, y0 + _INT_SIGNATURE_H + 5)
+def _build_distribuzione_copie(pdf, siti, data_lettera):
+    """'PAPER COPIES DISTRIBUTION' section: etichetta ruolo | firme | data, per riga."""
+    family = pdf._font_family
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    w_lbl, w_sign, w_date = _INT_DIST_LABEL_W, _INT_DIST_SIGN_W, _INT_DIST_DATE_W
+
+    pdf.set_fill_color(*_INT_HEADER_FILL)
+    pdf.set_font(family, "B", 8)
+    pdf.set_xy(x0, y0)
+    pdf.cell(w_lbl, 6, "PAPER COPIES DISTRIBUTION", border=1, fill=True, align="C")
+    pdf.cell(w_sign, 6, "SIGNATURE", border=1, fill=True, align="C")
+    pdf.cell(w_date, 6, "DATE", border=1, fill=True, align="C")
+    y = y0 + 6
+
+    data_str = data_lettera.strftime("%d/%m/%Y") if data_lettera else ""
+
+    for label, ruolo in (
+        ("PRODUCTION:", RuoloFirmatarioStabilimento.PRODUZIONE),
+        ("QUALITY:", RuoloFirmatarioStabilimento.QUALITA),
+    ):
+        firmatari = _firmatari_per_ruolo(siti, ruolo)
+        h_row = _INT_DIST_ROW_H
+
+        pdf.rect(x0, y, w_lbl, h_row)
+        pdf.set_xy(x0 + 2, y + h_row / 2 - 3)
+        pdf.set_font(family, "B", 9)
+        pdf.cell(w_lbl - 4, 6, label)
+
+        pdf.rect(x0 + w_lbl, y, w_sign, h_row)
+        x_sign = x0 + w_lbl + 3
+        y_sign = y + (h_row - _INT_SIGNATURE_H - 4) / 2
+        for firmatario in firmatari:
+            _draw_signature_slot(pdf, x_sign, y_sign, firmatario.utente)
+            x_sign += _INT_SIGNATURE_W + _INT_SIGNATURE_GAP
+
+        pdf.rect(x0 + w_lbl + w_sign, y, w_date, h_row)
+        pdf.set_xy(x0 + w_lbl + w_sign, y + h_row / 2 - 3)
+        pdf.set_font(family, "", 9)
+        pdf.cell(w_date, 6, data_str, align="C")
+
+        y += h_row
+
+    pdf.set_xy(x0, y)
+
+
+def _build_footer_riferimenti(pdf):
+    """Riga finale con i riferimenti fissi del modulo (form, riferimento, date, revisione)."""
+    pdf.set_font(pdf._font_family, "", 7)
+    pdf.set_x(pdf.l_margin)
+    for testo, w in _INT_FOOTER_COLS:
+        pdf.cell(w, 6, testo, border=1, align="C")
 
 
 def genera_trasmittal_interno_pdf(trasmittal):
-    """Generate the internal transmittal PDF (form MQ 7.5-04 Rev.0) and return the bytes.
+    """Generate the internal transmittal PDF (form MQ 7.5-04) and return the bytes.
 
     Args:
         trasmittal: a ``TransmittalInterno`` instance with its righe already
@@ -808,51 +944,28 @@ def genera_trasmittal_interno_pdf(trasmittal):
     Returns:
         bytes — the PDF content.
     """
-    from core.services.trasmittal_interno import data_impegno
-
     testata = trasmittal.testata
     righe = list(
-        trasmittal.righe.select_related("documento").prefetch_related("siti").order_by("posizione")
+        trasmittal.righe.select_related("documento")
+        .prefetch_related(Prefetch("siti", queryset=Stabilimento.objects.order_by("codice_bc")))
+        .order_by("posizione")
     )
     siti = _siti_snapshot_lettera(trasmittal)
 
     pdf = TrasmittalInternoPDF()
     pdf.add_page()
-    family = pdf._font_family
 
-    pdf.set_font(family, "B", 13)
-    intestazione = f"Commessa {testata.job}"
-    if testata.job_detail:
-        intestazione += f" — {testata.job_detail}"
-    pdf.cell(0, 7, intestazione, new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(family, "B", 11)
-    pdf.cell(0, 6, trasmittal.nome, new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(family, "", 9)
-    pdf.cell(0, 5, "Form MQ 7.5-04 Rev.0", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
-
+    _build_header_block(pdf, trasmittal, testata)
+    pdf.ln(3)
     _build_trasmittal_interno_table(pdf, righe)
-    _build_legenda_sigle(pdf, siti)
+    pdf.ln(3)
+    _build_remarks_legenda(pdf)
+    pdf.ln(3)
     _build_note_libere(pdf, trasmittal.note)
-
-    pdf.ln(6)
-    pdf.set_font(family, "B", 10)
-    pdf.cell(0, 6, "Distribuzione copie cartacee", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font(family, "", 8)
-    termine = format_display_date(data_impegno(trasmittal.data).isoformat())
-    pdf.cell(0, 4.5, f"Da completare entro il {termine}", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(2)
-
-    _build_signature_row(
-        pdf,
-        RuoloFirmatarioStabilimento.PRODUZIONE.label,
-        _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.PRODUZIONE),
-    )
-    _build_signature_row(
-        pdf,
-        RuoloFirmatarioStabilimento.QUALITA.label,
-        _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.QUALITA),
-    )
+    pdf.ln(3)
+    _build_distribuzione_copie(pdf, siti, trasmittal.data)
+    pdf.ln(3)
+    _build_footer_riferimenti(pdf)
 
     return bytes(pdf.output())
 
