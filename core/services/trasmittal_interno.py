@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 EMAIL_EXPORT = "export@brembanarolle.com"
 
+
+class TrasmittalInternoAnnullaError(Exception):
+    """Annullamento non consentito (non è l'ultimo trasmittal del giorno)."""
+
+
 # Documenti SHn: nel vecchio strumento Excel riconosciuti dal pattern DOS
 # "?????-??-ESH*" sul nome file. `Documento` non ha un campo di tipo/categoria
 # dedicato (verificato: solo item_no, vendor_doc, client_doc_no,
@@ -916,16 +921,124 @@ def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None
 
 
 def elenco_trasmittal_interni(testata):
-    """Lettere di trasmittal interno già emesse per la commessa, più recenti prima."""
-    return [
-        {
-            "id": t.pk,
-            "nome": t.nome,
-            "data": t.data.isoformat(),
-            "n_documenti": t.righe.count(),
-            "creato_da": t.creato_da.nome_completo,
-        }
-        for t in testata.trasmittal_interni.select_related("creato_da").order_by(
-            "-data", "-progressivo"
+    """Lettere di trasmittal interno già emesse per la commessa, più recenti prima.
+
+    ``annullabile`` segue esattamente la regola imposta da
+    ``annulla_trasmittal_interno``: solo l'ultimo progressivo di ciascun
+    giorno lo è (il progressivo riparte ogni giorno, quindi più di una
+    lettera può essere "l'ultima del suo giorno" se la commessa ha lettere
+    emesse in giorni diversi).
+    """
+    lettere = list(
+        testata.trasmittal_interni.select_related("creato_da").order_by("-data", "-progressivo")
+    )
+    giorni_visti = set()
+    risultato = []
+    for t in lettere:
+        annullabile = t.data not in giorni_visti
+        giorni_visti.add(t.data)
+        risultato.append(
+            {
+                "id": t.pk,
+                "nome": t.nome,
+                "data": t.data.isoformat(),
+                "n_documenti": t.righe.count(),
+                "creato_da": t.creato_da.nome_completo,
+                "annullabile": annullabile,
+            }
         )
-    ]
+    return risultato
+
+
+def annulla_trasmittal_interno(trasmittal, utente):
+    """Annulla l'ultimo trasmittal interno emesso per la commessa in quel giorno.
+
+    Il progressivo riparte ogni giorno per commessa (vedi
+    ``prossimo_progressivo``), quindi "ultimo" è ristretto a
+    ``(testata, data)`` di ``trasmittal`` — non all'intera commessa — così
+    il progressivo resta coerente: annullare libera davvero il numero più
+    alto di quel giorno, non un numero intermedio.
+
+    Elimina il record e le righe (CASCADE), rimuove il PDF dal fileserver e
+    i file che questo trasmittal aveva copiato nella cartella preparata per
+    il DCC. La cartella stessa viene rimossa solo se resta vuota dopo aver
+    tolto quei file: se contiene altro — mai scritto da questo trasmittal,
+    dato che il nome della cartella è unico per trasmittal — non viene
+    toccata.
+
+    Solo l'eliminazione del record (righe comprese) è transazionale: se la
+    rimozione dei file sul fileserver fallisce a metà, il record non sparisce
+    comunque a metà — o l'intera cancellazione DB riesce, o nessuna.
+    L'eventuale file orfano rimasto sul fileserver è segnalato nel log, non
+    bloccante (stessa scelta già fatta per ``trasmittal_archivio.annulla_trasmittal``).
+
+    L'email eventualmente già inviata non può essere ritirata: l'esito lo
+    dice sempre esplicitamente, per un avviso chiaro in UI.
+
+    Args:
+        trasmittal: Il ``TransmittalInterno`` da annullare.
+        utente: Chi esegue l'annullamento (solo per il log).
+
+    Returns:
+        Dict con ``pdf_rimosso`` (bool), ``cartella_dcc_rimossa`` (bool) ed
+        ``email_avviso`` (stringa fissa, sempre presente).
+
+    Raises:
+        TrasmittalInternoAnnullaError: se non è l'ultimo trasmittal interno
+            emesso quel giorno per quella commessa.
+    """
+    with transaction.atomic():
+        trasmittal = TransmittalInterno.objects.select_for_update().get(pk=trasmittal.pk)
+        testata = trasmittal.testata
+        ultimo = (
+            TransmittalInterno.objects.filter(testata=testata, data=trasmittal.data)
+            .aggregate(m=Max("progressivo"))
+            .get("m")
+        )
+        if trasmittal.progressivo != ultimo:
+            raise TrasmittalInternoAnnullaError(
+                "Si può annullare solo l'ultimo trasmittal interno emesso in quel giorno."
+            )
+        nome = trasmittal.nome
+        righe_cliente = list(trasmittal.righe.filter(cliente=True).select_related("documento"))
+        pdf_path = percorso_pdf(trasmittal)
+        cartella_dcc = get_base_path(testata.job, "DCC") / "DA SPEDIRE" / nome
+        trasmittal.delete()
+
+    logger.info('Trasmittal interno "%s" annullato da %s.', nome, utente.get_username())
+
+    pdf_rimosso = False
+    try:
+        if pdf_path.is_file():
+            pdf_path.unlink()
+            pdf_rimosso = True
+    except OSError as exc:
+        logger.warning('Impossibile rimuovere il PDF del trasmittal interno "%s": %s', nome, exc)
+
+    cartella_dcc_rimossa = False
+    if cartella_dcc.is_dir():
+        for riga in righe_cliente:
+            for trovato in trova_file(cartella_dcc, riga.documento.vendor_doc):
+                try:
+                    Path(trovato["percorso"]).unlink()
+                except OSError as exc:
+                    logger.warning(
+                        'Impossibile rimuovere "%s" dalla cartella DCC di "%s": %s',
+                        trovato["percorso"],
+                        nome,
+                        exc,
+                    )
+        try:
+            cartella_dcc.rmdir()
+            cartella_dcc_rimossa = True
+        except OSError:
+            pass  # non vuota: contiene altro, non è di questo trasmittal — non la tocchiamo
+
+    return {
+        "pdf_rimosso": pdf_rimosso,
+        "cartella_dcc_rimossa": cartella_dcc_rimossa,
+        "email_avviso": (
+            "Se la lettera era già stata inviata via email, quell'invio resta valido: "
+            "l'annullamento non può richiamarlo."
+        ),
+    }

@@ -220,6 +220,11 @@ urlpatterns = [
         views.trasmittal_interno_lettera_file_serve,
         name="trasmittal_interno_lettera_file_serve",
     ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/annulla/",
+        views.trasmittal_interno_annulla_api,
+        name="trasmittal_interno_annulla_api",
+    ),
     # API — Emissione
     path("api/emissione/", views.emissione_api, name="emissione_api"),
     path("api/trasmittal/pdf/", views.trasmittal_pdf_api, name="trasmittal_pdf_api"),

@@ -110,6 +110,8 @@ from .services.segnalazioni import (
 )
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 from .services.trasmittal_interno import (
+    TrasmittalInternoAnnullaError,
+    annulla_trasmittal_interno,
     anteprima_pdf_bytes,
     anteprima_trasmittal,
     elenco_destinazioni_ut,
@@ -1087,6 +1089,24 @@ def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
         as_attachment=False,
         filename=file_path.name,
     )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_annulla_api(request, job, trasmittal_id):
+    """Annulla l'ultimo trasmittal interno emesso per la commessa in quel giorno."""
+    try:
+        trasmittal = TransmittalInterno.objects.select_related("testata").get(
+            pk=trasmittal_id, testata__job=job
+        )
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    try:
+        esito = annulla_trasmittal_interno(trasmittal, request.user)
+    except TrasmittalInternoAnnullaError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+    return JsonResponse({"ok": True, **esito})
 
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────

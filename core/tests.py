@@ -2126,6 +2126,163 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
 
 
+class AnnullaTrasmittalInternoTests(TestCase):
+    """Annullamento di una lettera emessa per errore."""
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99080", sito_costruttivo=self.bg)
+
+        from core.services.fileserver import get_base_path
+
+        self.get_base_path = get_base_path
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+
+        self.doc1 = Documento.objects.create(
+            testata=self.testata, vendor_doc="99080-ALFA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc1, rev_no=0)
+        imposta_destinazioni(self.doc1, [self.bg.codice_bc])
+        (base / f"{self.doc1.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-1")
+
+        self.doc2 = Documento.objects.create(
+            testata=self.testata, vendor_doc="99080-BETA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc2, rev_no=0)
+        imposta_destinazioni(self.doc2, [self.bg.codice_bc])
+        (base / f"{self.doc2.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-2")
+
+        self.writer = User.objects.create_user(
+            "ann_writer", "ann-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "ann_reader", "ann-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _emetti(self, documento):
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [{"documento_id": documento.pk, "revisione": "A", "cliente": True}]}
+            ),
+            content_type="application/json",
+        )
+        return risposta.json()
+
+    def test_annullamento_dell_ultimo_riesce_e_rimuove_record_pdf_e_cartella_dcc(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        pdf_path = Path(emesso["pdf"]["percorso"])
+        cartella_dcc = Path(emesso["dcc"]["cartella"])
+        self.assertTrue(pdf_path.is_file())
+        self.assertTrue(cartella_dcc.is_dir())
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertTrue(corpo["pdf_rimosso"])
+        self.assertTrue(corpo["cartella_dcc_rimossa"])
+        self.assertIn("email", corpo["email_avviso"].lower())
+        self.assertFalse(TransmittalInterno.objects.filter(pk=emesso["trasmittal_id"]).exists())
+        self.assertFalse(pdf_path.exists())
+        self.assertFalse(cartella_dcc.exists())
+
+    def test_annullamento_di_uno_non_ultimo_rifiutato(self):
+        self.client.force_login(self.writer)
+        primo = self._emetti(self.doc1)
+        self._emetti(self.doc2)  # secondo, ora è lui l'ultimo
+
+        risposta = self.client.post(self._url(f"lettere/{primo['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 409)
+        self.assertIn("ultimo", risposta.json()["error"].lower())
+        self.assertTrue(TransmittalInterno.objects.filter(pk=primo["trasmittal_id"]).exists())
+        self.assertTrue(Path(primo["pdf"]["percorso"]).is_file())
+
+    def test_progressivo_successivo_riparte_dal_numero_liberato(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        self.assertTrue(emesso["nome"].endswith("_E1"))
+        self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        rifatto = self._emetti(self.doc2)
+
+        self.assertTrue(rifatto["nome"].endswith("_E1"))
+
+    def test_cartella_dcc_con_contenuto_estraneo_non_viene_rimossa(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        cartella_dcc = Path(emesso["dcc"]["cartella"])
+        estraneo = cartella_dcc / "documento_non_nostro.pdf"
+        estraneo.write_bytes(b"%PDF-estraneo")
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertFalse(corpo["cartella_dcc_rimossa"])
+        # Il file di questo trasmittal è stato rimosso, quello estraneo no.
+        self.assertTrue(cartella_dcc.is_dir())
+        self.assertEqual([p.name for p in cartella_dcc.iterdir()], ["documento_non_nostro.pdf"])
+        self.assertTrue(estraneo.exists())
+
+    def test_annullamento_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        self.client.logout()
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertTrue(TransmittalInterno.objects.filter(pk=emesso["trasmittal_id"]).exists())
+
+    def test_annullamento_richiede_login(self):
+        emesso_writer = Client()
+        emesso_writer.force_login(self.writer)
+        emesso = emesso_writer.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [{"documento_id": self.doc1.pk, "revisione": "A", "cliente": True}]}
+            ),
+            content_type="application/json",
+        ).json()
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_annullabile_solo_sull_ultimo_nella_lista_lettere(self):
+        self.client.force_login(self.writer)
+        primo = self._emetti(self.doc1)
+        secondo = self._emetti(self.doc2)
+
+        lettere = {
+            voce["id"]: voce for voce in self.client.get(self._url("lettere/")).json()["lettere"]
+        }
+
+        self.assertFalse(lettere[primo["trasmittal_id"]]["annullabile"])
+        self.assertTrue(lettere[secondo["trasmittal_id"]]["annullabile"])
+
+
 class FileserverIntegrationTest(TestCase):
     """Integration tests against the real fileserver at Z:\\JOBS.
 

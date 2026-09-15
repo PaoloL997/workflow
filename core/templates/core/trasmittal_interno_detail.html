@@ -582,10 +582,11 @@
               <th>Documenti</th>
               <th>Emesso da</th>
               <th>PDF</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="lettere-tbody">
-            <tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+            <tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
           </tbody>
         </table>
       </div>
@@ -1198,29 +1199,60 @@
     try {
       const r = await fetch(baseUrl() + 'lettere/');
       if (!r.ok) {
-        tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore nel caricamento.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore nel caricamento.</td></tr>';
         return;
       }
       const d = await r.json();
       const lettere = d.lettere || [];
       document.getElementById('lettere-counter').innerHTML = '<strong>' + lettere.length + '</strong> lettere';
       if (!lettere.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessuna lettera emessa per questa commessa.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessuna lettera emessa per questa commessa.</td></tr>';
         return;
       }
       tbody.innerHTML = lettere.map(function (l) {
+        var annullaBtn = (l.annullabile && window.USER_CAN_WRITE)
+          ? '<button type="button" class="ti-link-btn" style="color:var(--color-danger);" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>'
+          : '';
         return '<tr>'
           + '<td><div class="doc-code">' + escHtml(l.nome) + '</div></td>'
           + '<td>' + escHtml(l.data) + '</td>'
           + '<td>' + l.n_documenti + '</td>'
           + '<td>' + escHtml(l.creato_da) + '</td>'
           + '<td><a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="ti-link-btn">Apri PDF</a></td>'
+          + '<td>' + annullaBtn + '</td>'
           + '</tr>';
       }).join('');
     } catch {
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore di rete.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore di rete.</td></tr>';
     }
   }
+
+  window.annullaLettera = async function (id, nome) {
+    if (!requireWrite()) return;
+    if (!confirm(
+      'Annullare la lettera ' + nome + '?\n\n'
+      + 'Il PDF e la cartella preparata per il DCC verranno rimossi. '
+      + 'Se era già stata inviata via email, quell\'invio resta valido: '
+      + 'l\'annullamento non può richiamarlo.'
+    )) {
+      return;
+    }
+    try {
+      const r = await fetch(baseUrl() + 'lettere/' + id + '/annulla/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF },
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) return;
+      if (!r.ok) {
+        alert(body.error || 'Impossibile annullare la lettera.');
+        return;
+      }
+      await caricaLettere();
+    } catch {
+      alert('Errore di rete.');
+    }
+  };
 
   /* ── init ── */
   switchTab('destinazioni');
