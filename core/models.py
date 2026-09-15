@@ -710,10 +710,11 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
 class DestinatarioTransmittalInterno(models.Model):
     """Un destinatario email di un trasmittal interno, con la sua origine.
 
-    ``origine`` spiega perché quell'indirizzo è finito in lista: oggi solo
-    ``STABILIMENTO`` è popolata (da ``indirizzi_per_siti``); PM, PE, QCI ed
-    EXPORT sono punti di innesto per quando la loro sorgente dati sarà
-    definita (vedi ``core.services.trasmittal_interno.crea_trasmittal_interno``).
+    ``origine`` spiega perché quell'indirizzo è finito in lista: vedi
+    ``core.services.trasmittal_interno.crea_trasmittal_interno`` per le
+    regole di indirizzamento (stabilimento, PM, PE, QCI, export@ per i
+    documenti SHn). WE non ha un'origine dedicata: la sua lista di
+    distribuzione non è ancora definita.
     """
 
     trasmittal = models.ForeignKey(

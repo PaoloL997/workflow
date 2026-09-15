@@ -1223,6 +1223,105 @@ class TrasmittalInternoArchivioTests(TestCase):
             )
 
 
+class DestinatariTrasmittalInternoRuoliTests(TestCase):
+    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per documenti SHn."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+
+        self.testata = Testata.objects.create(job="99012")
+        self.doc = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-QCPA")
+        imposta_destinazioni(self.doc, [1])
+
+        self.utente = User.objects.create_user("destinatari_utente", password="pw")
+        self.pm = User.objects.create_user("destinatari_pm", "pm@b.it", "pw")
+        self.pe = User.objects.create_user("destinatari_pe", "pe@b.it", "pw")
+        self.qci = User.objects.create_user("destinatari_qci", "qci@b.it", "pw")
+
+    def _righe(self, *documenti):
+        return [{"documento": doc, "revisione": "1"} for doc in documenti]
+
+    def test_pm_in_to_pe_e_qci_in_cc(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=self.pe
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=self.qci
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+        self.assertEqual(
+            destinatari,
+            {
+                ("bg@b.it", "to", "stabilimento"),
+                ("pm@b.it", "to", "pm"),
+                ("pe@b.it", "cc", "pe"),
+                ("qci@b.it", "cc", "qci"),
+            },
+        )
+
+    def test_ruolo_non_valorizzato_non_e_un_errore(self):
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        self.assertEqual(
+            set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
+            {("bg@b.it", "to", "stabilimento")},
+        )
+
+    def test_documento_shn_aggiunge_export_in_cc(self):
+        doc_shn = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
+        imposta_destinazioni(doc_shn, [1])
+
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc, doc_shn), self.utente
+        )
+
+        self.assertIn(
+            ("export@brembanarolle.com", "cc", "export"),
+            set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
+        )
+
+    def test_documento_non_shn_non_aggiunge_export(self):
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        self.assertNotIn(
+            "export@brembanarolle.com", trasmittal.destinatari.values_list("email", flat=True)
+        )
+
+    def test_pm_gia_indirizzo_di_stabilimento_una_sola_occorrenza_in_to(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="pm@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo"))
+        self.assertEqual(destinatari.count(("pm@b.it", "to")), 1)
+        self.assertNotIn(("pm@b.it", "cc"), destinatari)
+
+    def test_stesso_indirizzo_in_to_e_cc_resta_in_to(self):
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo"))
+        self.assertEqual(destinatari.count(("bg@b.it", "to")), 1)
+        self.assertNotIn(("bg@b.it", "cc"), destinatari)
+
+
 class DataImpegnoTests(SimpleTestCase):
     """data_impegno: termine per completare la distribuzione, non la data di firma."""
 

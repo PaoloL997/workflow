@@ -1,5 +1,6 @@
 """Anagrafiche e archivio del trasmittal interno (form MQ 7.5-04)."""
 
+import re
 import shutil
 from datetime import timedelta
 from pathlib import Path
@@ -13,14 +14,31 @@ from ..models import (
     DestinazioneDocumento,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
+    PersonaCommessa,
     Reparto,
     RigaTransmittalInterno,
+    RuoloPersonaCommessa,
     Stabilimento,
     TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
 from .fileserver import get_base_path, get_jobs_root, trova_file
+
+EMAIL_EXPORT = "export@brembanarolle.com"
+
+# Documenti SHn: nel vecchio strumento Excel riconosciuti dal pattern DOS
+# "?????-??-ESH*" sul nome file. `Documento` non ha un campo di tipo/categoria
+# dedicato (verificato: solo item_no, vendor_doc, client_doc_no,
+# contractor_doc_no, client_doc_class, doc_title, reparto, remarks), quindi il
+# pattern si applica a `vendor_doc`, l'unico campo che porta quell'identificativo
+# (es. "25056-01-ESH1"). "?" = un carattere qualsiasi, "*" = zero o più.
+_PATTERN_DOCUMENTO_SHN = re.compile(r"^.{5}-.{2}-ESH.*$", re.IGNORECASE)
+
+
+def _e_documento_shn(documento):
+    """True se ``documento.vendor_doc`` corrisponde al pattern dei documenti SHn."""
+    return bool(_PATTERN_DOCUMENTO_SHN.match(documento.vendor_doc or ""))
 
 
 def indirizzi_per_siti(codici_bc):
@@ -93,6 +111,99 @@ def siti_coinvolti(documenti):
     )
 
 
+def _email_persone(testata, ruolo):
+    """Email, in ordine di inserimento, delle persone risolte (utente registrato) per un ruolo."""
+    return list(
+        PersonaCommessa.objects.filter(testata=testata, ruolo=ruolo, utente__isnull=False)
+        .exclude(utente__email="")
+        .order_by("id")
+        .values_list("utente__email", flat=True)
+    )
+
+
+def _destinatari_trasmittal(trasmittal, testata, documenti, siti):
+    """Costruisce i ``DestinatarioTransmittalInterno`` (non salvati) secondo le regole.
+
+    Ordine di applicazione (rilevante per la deduplica finale):
+    1. indirizzi di stabilimento dei siti coinvolti (TO/CC da anagrafica);
+    2. PM della commessa → TO;
+    3. PE e QCI della commessa → CC;
+    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC.
+
+    Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
+    commessa non è un errore: contribuisce semplicemente zero indirizzi.
+
+    Deduplica finale, case-insensitive sull'email normalizzata: un indirizzo
+    presente sia tra i TO che tra i CC resta solo tra i TO, mantenendo
+    l'origine della sua prima occorrenza (nell'ordine sopra).
+
+    WE non è incluso: non è definito da quale campo della commessa dedurre la
+    sua lista di distribuzione (nessun ``OrigineDestinatarioTransmittalInterno.WE``
+    esiste per questo motivo) — va aggiunto quando quella sorgente sarà chiara,
+    non inventato qui.
+    """
+    indirizzi = indirizzi_per_siti([s.codice_bc for s in siti])
+
+    voci = [
+        (
+            email,
+            TipoDestinatarioTransmittalInterno.TO,
+            OrigineDestinatarioTransmittalInterno.STABILIMENTO,
+        )
+        for email in indirizzi["to"]
+    ]
+    voci += [
+        (
+            email,
+            TipoDestinatarioTransmittalInterno.CC,
+            OrigineDestinatarioTransmittalInterno.STABILIMENTO,
+        )
+        for email in indirizzi["cc"]
+    ]
+    voci += [
+        (email, TipoDestinatarioTransmittalInterno.TO, OrigineDestinatarioTransmittalInterno.PM)
+        for email in _email_persone(testata, RuoloPersonaCommessa.PM)
+    ]
+    voci += [
+        (email, TipoDestinatarioTransmittalInterno.CC, OrigineDestinatarioTransmittalInterno.PE)
+        for email in _email_persone(testata, RuoloPersonaCommessa.PE)
+    ]
+    voci += [
+        (email, TipoDestinatarioTransmittalInterno.CC, OrigineDestinatarioTransmittalInterno.QCI)
+        for email in _email_persone(testata, RuoloPersonaCommessa.QCI)
+    ]
+    if any(_e_documento_shn(documento) for documento in documenti):
+        voci.append(
+            (
+                EMAIL_EXPORT,
+                TipoDestinatarioTransmittalInterno.CC,
+                OrigineDestinatarioTransmittalInterno.EXPORT,
+            )
+        )
+
+    ordine, email_per_chiave, origine_per_chiave, to_per_chiave = [], {}, {}, {}
+    for email, tipo, origine in voci:
+        chiave = email.strip().lower()
+        if chiave not in origine_per_chiave:
+            origine_per_chiave[chiave] = origine
+            email_per_chiave[chiave] = email
+            ordine.append(chiave)
+        if tipo == TipoDestinatarioTransmittalInterno.TO:
+            to_per_chiave[chiave] = True
+
+    return [
+        DestinatarioTransmittalInterno(
+            trasmittal=trasmittal,
+            email=email_per_chiave[chiave],
+            tipo=TipoDestinatarioTransmittalInterno.TO
+            if to_per_chiave.get(chiave)
+            else TipoDestinatarioTransmittalInterno.CC,
+            origine=origine_per_chiave[chiave],
+        )
+        for chiave in ordine
+    ]
+
+
 def prossimo_progressivo(testata, data):
     """Primo progressivo libero per una commessa in un giorno di emissione.
 
@@ -133,10 +244,11 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
     destinatari di tipo STABILIMENTO sono dedotti da ``indirizzi_per_siti``
     sull'unione dei siti di tutte le righe.
 
-    Non tocca nessuno stato dei documenti. La risoluzione dei destinatari
-    PM/PE/QCI e la regola "export@" per i documenti SHn non sono ancora
-    implementate: la sorgente dati non è definita, quindi non vengono
-    inventate qui.
+    Non tocca nessuno stato dei documenti. Oltre agli indirizzi di
+    stabilimento, i destinatari includono il PM della commessa (TO), PE e
+    QCI (CC) e, se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` (CC) —
+    vedi ``_destinatari_trasmittal``. WE resta escluso: la sua lista di
+    distribuzione non è ancora definita.
     """
     righe = list(righe)
     if not righe:
@@ -170,28 +282,8 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
             )
             riga_creata.siti.set(siti_del_documento(documento))
 
-        # PM, PE, QCI ed export@ (documenti SHn): punti di innesto, non
-        # ancora implementati — vedi il docstring.
-        indirizzi = indirizzi_per_siti([s.codice_bc for s in siti_coinvolti(documenti)])
         DestinatarioTransmittalInterno.objects.bulk_create(
-            [
-                DestinatarioTransmittalInterno(
-                    trasmittal=trasmittal,
-                    email=email,
-                    tipo=TipoDestinatarioTransmittalInterno.TO,
-                    origine=OrigineDestinatarioTransmittalInterno.STABILIMENTO,
-                )
-                for email in indirizzi["to"]
-            ]
-            + [
-                DestinatarioTransmittalInterno(
-                    trasmittal=trasmittal,
-                    email=email,
-                    tipo=TipoDestinatarioTransmittalInterno.CC,
-                    origine=OrigineDestinatarioTransmittalInterno.STABILIMENTO,
-                )
-                for email in indirizzi["cc"]
-            ]
+            _destinatari_trasmittal(trasmittal, testata, documenti, siti_coinvolti(documenti))
         )
 
     return trasmittal
