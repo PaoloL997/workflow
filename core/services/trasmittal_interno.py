@@ -1,10 +1,15 @@
 """Anagrafiche e archivio del trasmittal interno (form MQ 7.5-04)."""
 
+import logging
 import re
 import shutil
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.mail import EmailMessage
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
@@ -25,6 +30,9 @@ from ..models import (
     TransmittalInterno,
 )
 from .fileserver import get_base_path, get_jobs_root, trova_file
+from .revisione_label import format_revisione_label
+
+logger = logging.getLogger(__name__)
 
 EMAIL_EXPORT = "export@brembanarolle.com"
 
@@ -212,10 +220,46 @@ def _email_persone(testata, ruolo):
     )
 
 
-def _destinatari_trasmittal(trasmittal, testata, documenti, siti):
-    """Costruisce i ``DestinatarioTransmittalInterno`` (non salvati) secondo le regole.
+def _deduplica_destinatari(voci):
+    """Deduplica case-insensitive una lista di (email, tipo, origine).
 
-    Ordine di applicazione (rilevante per la deduplica finale):
+    Un indirizzo presente sia tra i TO che tra i CC resta solo tra i TO,
+    mantenendo l'origine della sua prima occorrenza nell'ordine dato.
+
+    Returns:
+        Lista di dict ``{"email", "tipo", "origine"}``.
+    """
+    ordine, email_per_chiave, origine_per_chiave, to_per_chiave = [], {}, {}, {}
+    for email, tipo, origine in voci:
+        chiave = email.strip().lower()
+        if chiave not in origine_per_chiave:
+            origine_per_chiave[chiave] = origine
+            email_per_chiave[chiave] = email
+            ordine.append(chiave)
+        if tipo == TipoDestinatarioTransmittalInterno.TO:
+            to_per_chiave[chiave] = True
+
+    return [
+        {
+            "email": email_per_chiave[chiave],
+            "tipo": TipoDestinatarioTransmittalInterno.TO
+            if to_per_chiave.get(chiave)
+            else TipoDestinatarioTransmittalInterno.CC,
+            "origine": origine_per_chiave[chiave],
+        }
+        for chiave in ordine
+    ]
+
+
+def _costruisci_destinatari(testata, documenti, siti):
+    """Destinatari che risulterebbero per una lettera con questi documenti.
+
+    Non persiste nulla: usata sia da ``_destinatari_trasmittal`` (che li
+    trasforma in righe da salvare) sia dall'anteprima (che li mostra così
+    come sono, modificabili prima della conferma).
+
+    Ordine di applicazione (rilevante per la deduplica finale, vedi
+    ``_deduplica_destinatari``):
     1. indirizzi di stabilimento dei siti coinvolti (TO/CC da anagrafica);
     2. PM della commessa → TO;
     3. PE e QCI della commessa → CC;
@@ -224,14 +268,13 @@ def _destinatari_trasmittal(trasmittal, testata, documenti, siti):
     Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
     commessa non è un errore: contribuisce semplicemente zero indirizzi.
 
-    Deduplica finale, case-insensitive sull'email normalizzata: un indirizzo
-    presente sia tra i TO che tra i CC resta solo tra i TO, mantenendo
-    l'origine della sua prima occorrenza (nell'ordine sopra).
-
     WE non è incluso: non è definito da quale campo della commessa dedurre la
     sua lista di distribuzione (nessun ``OrigineDestinatarioTransmittalInterno.WE``
     esiste per questo motivo) — va aggiunto quando quella sorgente sarà chiara,
     non inventato qui.
+
+    Returns:
+        Lista di dict ``{"email", "tipo", "origine"}``.
     """
     indirizzi = indirizzi_per_siti([s.codice_bc for s in siti])
 
@@ -272,26 +315,14 @@ def _destinatari_trasmittal(trasmittal, testata, documenti, siti):
             )
         )
 
-    ordine, email_per_chiave, origine_per_chiave, to_per_chiave = [], {}, {}, {}
-    for email, tipo, origine in voci:
-        chiave = email.strip().lower()
-        if chiave not in origine_per_chiave:
-            origine_per_chiave[chiave] = origine
-            email_per_chiave[chiave] = email
-            ordine.append(chiave)
-        if tipo == TipoDestinatarioTransmittalInterno.TO:
-            to_per_chiave[chiave] = True
+    return _deduplica_destinatari(voci)
 
+
+def _destinatari_trasmittal(trasmittal, testata, documenti, siti):
+    """``_costruisci_destinatari``, come righe ``DestinatarioTransmittalInterno`` da salvare."""
     return [
-        DestinatarioTransmittalInterno(
-            trasmittal=trasmittal,
-            email=email_per_chiave[chiave],
-            tipo=TipoDestinatarioTransmittalInterno.TO
-            if to_per_chiave.get(chiave)
-            else TipoDestinatarioTransmittalInterno.CC,
-            origine=origine_per_chiave[chiave],
-        )
-        for chiave in ordine
+        DestinatarioTransmittalInterno(trasmittal=trasmittal, **voce)
+        for voce in _costruisci_destinatari(testata, documenti, siti)
     ]
 
 
@@ -393,6 +424,37 @@ def data_impegno(oggi):
     return successivo
 
 
+def percorso_pdf(trasmittal):
+    """Percorso del PDF di una lettera: ``{JOBS}/{job}/Progetto/UT/Transmittal/{nome}.pdf``."""
+    return (
+        get_jobs_root()
+        / trasmittal.testata.job
+        / "Progetto"
+        / "UT"
+        / "Transmittal"
+        / f"{trasmittal.nome}.pdf"
+    )
+
+
+def percorso_pdf_lettera(job, trasmittal_id):
+    """Percorso del PDF di una lettera già emessa, verificata per commessa e percorso.
+
+    Raises:
+        TransmittalInterno.DoesNotExist: nessuna lettera con questo id per questa commessa.
+        PermissionError: percorso risultante fuori dalla cartella JOBS (difesa in
+            profondità: il nome è generato da noi, non dovrebbe mai accadere).
+    """
+    trasmittal = TransmittalInterno.objects.select_related("testata").get(
+        pk=trasmittal_id, testata__job=job
+    )
+    destinazione = percorso_pdf(trasmittal)
+    try:
+        destinazione.resolve().relative_to(get_jobs_root().resolve())
+    except ValueError:
+        raise PermissionError("Percorso non autorizzato: fuori dalla cartella JOBS.") from None
+    return destinazione
+
+
 def salva_pdf(trasmittal):
     """Genera il PDF del trasmittal interno e lo scrive sul fileserver.
 
@@ -405,9 +467,7 @@ def salva_pdf(trasmittal):
     Raises:
         PermissionError: se il percorso risultante è fuori dalla cartella JOBS.
     """
-    job = trasmittal.testata.job
-    cartella = get_jobs_root() / job / "Progetto" / "UT" / "Transmittal"
-    destinazione = cartella / f"{trasmittal.nome}.pdf"
+    destinazione = percorso_pdf(trasmittal)
     try:
         destinazione.resolve().relative_to(get_jobs_root().resolve())
     except ValueError:
@@ -416,7 +476,7 @@ def salva_pdf(trasmittal):
     from src.pdf import genera_trasmittal_interno_pdf
 
     pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
-    cartella.mkdir(parents=True, exist_ok=True)
+    destinazione.parent.mkdir(parents=True, exist_ok=True)
     destinazione.write_bytes(pdf_bytes)
     return destinazione
 
@@ -495,3 +555,377 @@ def prepara_per_dcc(trasmittal):
         )
 
     return {"cartella": str(cartella), "copiati": copiati, "mancanti": mancanti}
+
+
+# ── Creazione lettera: selezione, anteprima, conferma, elenco ──────────────────
+
+_RUOLI_AVVISO_ANTEPRIMA = {
+    RuoloPersonaCommessa.PM: "PM",
+    RuoloPersonaCommessa.PE: "PE",
+    RuoloPersonaCommessa.QCI: "QCI",
+}
+
+
+def _serializza_sito(stabilimento):
+    return {
+        "sigla": stabilimento.sigla,
+        "nome": stabilimento.nome,
+        "codice_bc": stabilimento.codice_bc,
+    }
+
+
+def ruoli_persona_mancanti(testata):
+    """Ruoli PM/PE/QCI senza alcuna email risolta per la commessa.
+
+    Non distingue "ruolo mai impostato" da "impostato ma nessun nome è
+    risolto a un utente registrato": in entrambi i casi quel ruolo non porta
+    nessun destinatario nella lettera, che è ciò che conta per l'avviso in
+    anteprima.
+    """
+    return [
+        etichetta
+        for ruolo, etichetta in _RUOLI_AVVISO_ANTEPRIMA.items()
+        if not _email_persone(testata, ruolo)
+    ]
+
+
+def stato_file_documento_ut(documento):
+    """Se il file corrente del documento UT è risolvibile sul fileserver.
+
+    Stessa logica semplificata di ``prepara_per_dcc``: nella cartella base
+    del reparto, per nome (``trova_file``). Zero o più corrispondenze non è
+    risolvibile — stessa regola, stesso esito di quando la lettera arriverà
+    davvero alla preparazione DCC, senza sorprese a quel punto.
+
+    Returns:
+        Dict ``{"trovato": bool, "modificato_il": datetime | None}``.
+    """
+    reparto = Reparto.objects.filter(nome=documento.reparto).first()
+    if not reparto or not reparto.acronimo:
+        return {"trovato": False, "modificato_il": None}
+    trovati = trova_file(
+        get_base_path(documento.testata.job, reparto.acronimo), documento.vendor_doc
+    )
+    if len(trovati) != 1:
+        return {"trovato": False, "modificato_il": None}
+    try:
+        mtime = Path(trovati[0]["percorso"]).stat().st_mtime
+    except OSError:
+        return {"trovato": True, "modificato_il": None}
+    return {
+        "trovato": True,
+        "modificato_il": datetime.fromtimestamp(mtime, tz=timezone.get_current_timezone()),
+    }
+
+
+def elenco_selezione_ut(testata):
+    """Documenti UT della commessa per la selezione della lettera trasmittal interno.
+
+    A differenza della griglia destinazioni, ogni documento porta anche la
+    sua validità per la lettera: un documento senza revisione registrata o
+    senza file risolvibile sul fileserver è segnalato SUBITO qui
+    (``selezionabile`` False, ``motivo`` spiegato) — non al momento della
+    creazione come faceva il vecchio strumento Excel, che bloccava l'intera
+    lettera.
+
+    Returns:
+        Lista di dict ordinata per ``vendor_doc``, uno per documento, con:
+        - ``id``, ``vendor_doc``, ``doc_title``
+        - ``revisione_corrente``: etichetta della revisione più recente
+          ("" se nessuna)
+        - ``file_modificato_il``: ISO datetime del file risolto, o ``None``
+        - ``siti``: destinazioni cartacee salvate (INVOLVED SITES), lista di
+          dict ``{"sigla", "nome", "codice_bc"}``
+        - ``selezionabile``: bool
+        - ``motivo``: perché non è selezionabile, altrimenti ``""``
+    """
+    risultato = []
+    for documento in documenti_ut(testata).order_by("vendor_doc"):
+        voce = {
+            "id": documento.pk,
+            "vendor_doc": documento.vendor_doc,
+            "doc_title": documento.doc_title,
+            "revisione_corrente": "",
+            "file_modificato_il": None,
+            "siti": [_serializza_sito(s) for s in siti_del_documento(documento)],
+            "selezionabile": False,
+            "motivo": "",
+        }
+        latest_rev = documento.revisioni.order_by("-rev_no", "-pk").first()
+        if latest_rev is None:
+            voce["motivo"] = "Nessuna revisione registrata."
+            risultato.append(voce)
+            continue
+        voce["revisione_corrente"] = format_revisione_label(
+            latest_rev.rev_no, latest_rev.rev_let, testata.rev_let_flag
+        )
+        stato_file = stato_file_documento_ut(documento)
+        if not stato_file["trovato"]:
+            voce["motivo"] = "Nessun file trovato sul fileserver."
+            risultato.append(voce)
+            continue
+        voce["file_modificato_il"] = (
+            stato_file["modificato_il"].isoformat() if stato_file["modificato_il"] else None
+        )
+        voce["selezionabile"] = True
+        risultato.append(voce)
+    return risultato
+
+
+def _prepara_righe(testata, righe_payload):
+    """Valida e converte il payload delle righe (dict JSON) per ``crea_trasmittal_interno``.
+
+    Ogni voce richiede ``documento_id`` (un documento UT selezionabile di
+    questa commessa) e ``revisione``; ``copie``, ``tpi``, ``note``,
+    ``cliente`` sono opzionali. Il primo problema trovato interrompe con un
+    ``ValueError`` esplicito — niente lettera creata a metà da un payload
+    malformato o da una selezione che nel frattempo è diventata non valida.
+    """
+    if not righe_payload:
+        raise ValueError("Selezionare almeno un documento.")
+    stati = {voce["id"]: voce for voce in elenco_selezione_ut(testata)}
+    documenti_map = {d.pk: d for d in documenti_ut(testata)}
+    righe = []
+    for voce in righe_payload:
+        documento_id = voce.get("documento_id")
+        stato = stati.get(documento_id)
+        if stato is None:
+            raise ValueError(f"Documento {documento_id} non valido per questa commessa.")
+        if not stato["selezionabile"]:
+            raise ValueError(f"{stato['vendor_doc']}: {stato['motivo']}")
+        revisione = str(voce.get("revisione") or "").strip()
+        if not revisione:
+            raise ValueError(f"{stato['vendor_doc']}: revisione mancante.")
+        righe.append(
+            {
+                "documento": documenti_map[documento_id],
+                "revisione": revisione,
+                "copie": voce.get("copie") or None,
+                "tpi": str(voce.get("tpi") or "").strip(),
+                "note": str(voce.get("note") or "").strip(),
+                "cliente": bool(voce.get("cliente", True)),
+            }
+        )
+    return righe
+
+
+def anteprima_destinatari(testata, documenti):
+    """Destinatari che risulterebbero per una lettera con questi documenti, senza persistere nulla."""
+    return _costruisci_destinatari(testata, documenti, siti_coinvolti(documenti))
+
+
+def anteprima_trasmittal(testata, righe_payload):
+    """Anteprima di una lettera: riepilogo righe, destinatari risolti, ruoli mancanti.
+
+    Non persiste nulla. Solleva ``ValueError`` se il payload non è valido
+    (vedi ``_prepara_righe``): stesso controllo che varrà alla creazione
+    vera, così l'anteprima non promette una lettera che poi la conferma
+    rifiuterebbe.
+    """
+    righe = _prepara_righe(testata, righe_payload)
+    documenti = [riga["documento"] for riga in righe]
+    return {
+        "righe": [
+            {
+                "documento_id": riga["documento"].pk,
+                "vendor_doc": riga["documento"].vendor_doc,
+                "doc_title": riga["documento"].doc_title,
+                "revisione": riga["revisione"],
+                "copie": riga["copie"],
+                "tpi": riga["tpi"],
+                "note": riga["note"],
+                "cliente": riga["cliente"],
+                "siti": [_serializza_sito(s) for s in siti_del_documento(riga["documento"])],
+            }
+            for riga in righe
+        ],
+        "destinatari": anteprima_destinatari(testata, documenti),
+        "ruoli_mancanti": ruoli_persona_mancanti(testata),
+    }
+
+
+def anteprima_pdf_bytes(testata, righe_payload, utente, note="", data=None):
+    """PDF che risulterebbe dalla lettera descritta, senza persistere nulla.
+
+    Crea davvero il trasmittal (con le sue righe e i suoi destinatari)
+    dentro una transazione sempre annullata: è l'unico modo per riusare la
+    generazione PDF reale (che legge le righe dal database) senza duplicarne
+    la logica in una seconda versione "in memoria".
+    """
+    righe = _prepara_righe(testata, righe_payload)
+    with transaction.atomic():
+        trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
+
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
+        transaction.set_rollback(True)
+    return pdf_bytes
+
+
+def sostituisci_destinatari(trasmittal, destinatari_payload):
+    """Sostituisce i destinatari di un trasmittal con quelli confermati in anteprima.
+
+    È il controllo che nel vecchio strumento avveniva sulla bozza Outlook
+    prima dell'invio: l'utente può correggere/aggiungere/rimuovere indirizzi
+    proposti automaticamente prima della conferma definitiva.
+
+    Args:
+        destinatari_payload: iterable di dict ``{"email", "tipo", "origine"}``.
+
+    Raises:
+        ValueError: un'email non valida, un ``tipo``/``origine`` non
+            riconosciuto, o nessun destinatario in TO dopo la deduplica.
+    """
+    voci = []
+    for voce in destinatari_payload or []:
+        email = str(voce.get("email") or "").strip()
+        if not email:
+            continue
+        try:
+            validate_email(email)
+        except ValidationError:
+            raise ValueError(f'Indirizzo email non valido: "{email}".') from None
+        tipo = voce.get("tipo")
+        if tipo not in TipoDestinatarioTransmittalInterno.values:
+            raise ValueError(f'Tipo destinatario non valido: "{tipo}".')
+        origine = voce.get("origine")
+        if origine not in OrigineDestinatarioTransmittalInterno.values:
+            raise ValueError(f'Origine destinatario non valida: "{origine}".')
+        voci.append((email, tipo, origine))
+
+    destinatari = _deduplica_destinatari(voci)
+    if not any(d["tipo"] == TipoDestinatarioTransmittalInterno.TO for d in destinatari):
+        raise ValueError("Serve almeno un destinatario in TO.")
+
+    with transaction.atomic():
+        trasmittal.destinatari.all().delete()
+        DestinatarioTransmittalInterno.objects.bulk_create(
+            DestinatarioTransmittalInterno(trasmittal=trasmittal, **d) for d in destinatari
+        )
+
+
+def invia_email_trasmittal(trasmittal, pdf_bytes=None):
+    """Invia via email il trasmittal interno ai destinatari TO/CC registrati.
+
+    Args:
+        pdf_bytes: bytes del PDF da allegare; se omesso, generato al volo
+            (un passo in più — preferire passare quello già generato da
+            ``salva_pdf`` quando disponibile).
+
+    Returns:
+        Dict ``{"to": [...], "cc": [...]}`` con gli indirizzi usati.
+
+    Raises:
+        ValueError: nessun destinatario in TO.
+    """
+    to = list(
+        trasmittal.destinatari.filter(tipo=TipoDestinatarioTransmittalInterno.TO)
+        .order_by("email")
+        .values_list("email", flat=True)
+    )
+    cc = list(
+        trasmittal.destinatari.filter(tipo=TipoDestinatarioTransmittalInterno.CC)
+        .order_by("email")
+        .values_list("email", flat=True)
+    )
+    if not to:
+        raise ValueError("Nessun destinatario in TO: impossibile inviare l'email.")
+
+    if pdf_bytes is None:
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
+
+    email = EmailMessage(
+        subject=f"Trasmittal interno {trasmittal.nome}",
+        body=(
+            f"In allegato il trasmittal interno {trasmittal.nome} "
+            f"della commessa {trasmittal.testata.job}."
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=to,
+        cc=cc,
+    )
+    email.attach(f"{trasmittal.nome}.pdf", pdf_bytes, "application/pdf")
+    email.send(fail_silently=False)
+    return {"to": to, "cc": cc}
+
+
+def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None, destinatari=None):
+    """Crea, archivia e distribuisce una lettera di trasmittal interno.
+
+    Un'unica operazione: crea il trasmittal (con i destinatari auto-risolti,
+    sostituiti da ``destinatari`` se dato — la conferma dell'anteprima,
+    eventualmente modificata dall'utente), salva il PDF sul fileserver,
+    prepara la cartella DCC, invia l'email.
+
+    Solo la creazione (righe + destinatari) è atomica e può far fallire tutta
+    l'operazione: senza una lettera valida non c'è nulla da archiviare o
+    spedire. Ogni passo successivo — PDF, DCC, email — è indipendente e
+    best-effort: un suo fallimento non annulla la lettera già creata né gli
+    altri passi, ed è riportato nel risultato. Mai fallire in silenzio, mai
+    lasciare la lettera "a metà" senza dirlo.
+
+    Raises:
+        ValueError: selezione non valida (vedi ``_prepara_righe``) o
+            destinatari non validi (vedi ``sostituisci_destinatari``) — in
+            questi casi non viene creata nessuna lettera.
+
+    Returns:
+        Dict con ``trasmittal_id``, ``nome`` e, per ciascuno di
+        ``pdf``/``dcc``/``email``, ``{"ok": bool, "errore": str | None, ...}``.
+    """
+    righe = _prepara_righe(testata, righe_payload)
+    trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
+    if destinatari is not None:
+        sostituisci_destinatari(trasmittal, destinatari)
+
+    risultato = {"trasmittal_id": trasmittal.pk, "nome": trasmittal.nome}
+
+    pdf_bytes = None
+    try:
+        percorso = salva_pdf(trasmittal)
+        pdf_bytes = percorso.read_bytes()
+        risultato["pdf"] = {"ok": True, "errore": None, "percorso": str(percorso)}
+    except Exception as exc:
+        logger.exception('Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome)
+        risultato["pdf"] = {"ok": False, "errore": str(exc), "percorso": None}
+
+    try:
+        esito_dcc = prepara_per_dcc(trasmittal)
+        risultato["dcc"] = {"ok": True, "errore": None, **esito_dcc}
+    except Exception as exc:
+        logger.exception('Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome)
+        risultato["dcc"] = {
+            "ok": False,
+            "errore": str(exc),
+            "cartella": None,
+            "copiati": [],
+            "mancanti": [],
+        }
+
+    try:
+        esito_email = invia_email_trasmittal(trasmittal, pdf_bytes=pdf_bytes)
+        risultato["email"] = {"ok": True, "errore": None, **esito_email}
+    except Exception as exc:
+        logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
+        risultato["email"] = {"ok": False, "errore": str(exc), "to": [], "cc": []}
+
+    return risultato
+
+
+def elenco_trasmittal_interni(testata):
+    """Lettere di trasmittal interno già emesse per la commessa, più recenti prima."""
+    return [
+        {
+            "id": t.pk,
+            "nome": t.nome,
+            "data": t.data.isoformat(),
+            "n_documenti": t.righe.count(),
+            "creato_da": t.creato_da.nome_completo,
+        }
+        for t in testata.trasmittal_interni.select_related("creato_da").order_by(
+            "-data", "-progressivo"
+        )
+    ]

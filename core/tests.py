@@ -1893,6 +1893,239 @@ def _make_integration_fixtures():
     }
 
 
+class TrasmittalInternoLetteraTests(TestCase):
+    """Creazione della lettera: selezione, anteprima, conferma, elenco emesse."""
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99070", sito_costruttivo=self.bg)
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99070-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        Revisione.objects.create(documento=self.doc_ok, rev_no=0)
+        imposta_destinazioni(self.doc_ok, [self.bg.codice_bc])
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+
+        self.doc_senza_revisione = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-BETA", reparto=self.reparto_ut.nome
+        )
+        self.doc_senza_file = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-GAMMA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc_senza_file, rev_no=0)
+
+        self.pm_utente = User.objects.create_user(
+            "til_pm", "til-pm@b.it", "pw", first_name="Mario", last_name="PM"
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm_utente
+        )
+
+        self.writer = User.objects.create_user(
+            "til_writer", "til-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "til_reader", "til-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _riga(self, documento, **overrides):
+        base = {
+            "documento_id": documento.pk,
+            "revisione": "A",
+            "copie": 2,
+            "tpi": "ABC",
+            "note": "",
+            "cliente": True,
+        }
+        base.update(overrides)
+        return base
+
+    # -- selezione --
+
+    def test_documento_senza_revisione_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(
+            d for d in risposta.json()["documenti"] if d["id"] == self.doc_senza_revisione.pk
+        )
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Nessuna revisione registrata.")
+
+    def test_documento_senza_file_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_senza_file.pk)
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Nessun file trovato sul fileserver.")
+
+    def test_documento_valido_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
+        self.assertTrue(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "")
+
+    # -- anteprima --
+
+    def test_anteprima_mostra_destinatari_risolti_con_origine(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        destinatari = risposta.json()["destinatari"]
+        self.assertIn({"email": "bg@b.it", "tipo": "to", "origine": "stabilimento"}, destinatari)
+        self.assertIn({"email": "til-pm@b.it", "tipo": "to", "origine": "pm"}, destinatari)
+        self.assertEqual(sorted(risposta.json()["ruoli_mancanti"]), ["PE", "QCI"])
+
+    def test_anteprima_rifiuta_documento_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_senza_revisione)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("revisione", risposta.json()["error"].lower())
+
+    # -- conferma --
+
+    def test_conferma_crea_trasmittal_salva_pdf_popola_dcc_e_invia_email(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)], "note": "riga 1\nriga 2"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertTrue(corpo["pdf"]["ok"])
+        self.assertTrue(Path(corpo["pdf"]["percorso"]).is_file())
+        self.assertTrue(corpo["dcc"]["ok"])
+        self.assertEqual(len(corpo["dcc"]["copiati"]), 1)
+        self.assertTrue(corpo["email"]["ok"])
+
+        self.assertEqual(TransmittalInterno.objects.filter(testata=self.testata).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["bg@b.it", "til-pm@b.it"])
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
+
+    def test_destinatari_modificati_in_anteprima_sono_quelli_usati_e_registrati(self):
+        self.client.force_login(self.writer)
+        destinatari_modificati = [
+            {"email": "extra@b.it", "tipo": "to", "origine": "manuale"},
+        ]
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [self._riga(self.doc_ok)], "destinatari": destinatari_modificati}
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        trasmittal = TransmittalInterno.objects.get(pk=risposta.json()["trasmittal_id"])
+        registrati = list(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+        self.assertEqual(registrati, [("extra@b.it", "to", "manuale")])
+        self.assertEqual(mail.outbox[0].to, ["extra@b.it"])
+        # I destinatari auto-risolti (stabilimento, PM) non compaiono più:
+        # quelli confermati in anteprima sono gli unici usati.
+        self.assertNotIn("bg@b.it", mail.outbox[0].to)
+
+    def test_conferma_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(TransmittalInterno.objects.count(), 0)
+
+    def test_invio_email_fallito_la_lettera_resta_in_archivio_e_l_errore_e_visibile(self):
+        self.client.force_login(self.writer)
+
+        with patch(
+            "django.core.mail.EmailMessage.send", side_effect=Exception("SMTP non raggiungibile")
+        ):
+            risposta = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertFalse(corpo["email"]["ok"])
+        self.assertIn("SMTP non raggiungibile", corpo["email"]["errore"])
+        # La lettera resta in archivio nonostante l'invio email fallito.
+        self.assertTrue(TransmittalInterno.objects.filter(pk=corpo["trasmittal_id"]).exists())
+        self.assertTrue(corpo["pdf"]["ok"])
+        self.assertEqual(len(mail.outbox), 0)
+
+    # -- elenco lettere emesse --
+
+    def test_elenco_lettere_emesse_in_ordine(self):
+        self.client.force_login(self.writer)
+        for _ in range(2):
+            self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        risposta = self.client.get(self._url("lettere/"))
+
+        lettere = risposta.json()["lettere"]
+        self.assertEqual(len(lettere), 2)
+        self.assertEqual(lettere[0]["nome"], "99070_" + timezone.localdate().isoformat() + "_E2")
+        self.assertEqual(lettere[1]["nome"], "99070_" + timezone.localdate().isoformat() + "_E1")
+        self.assertEqual(lettere[0]["n_documenti"], 1)
+        self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
+
+
 class FileserverIntegrationTest(TestCase):
     """Integration tests against the real fileserver at Z:\\JOBS.
 

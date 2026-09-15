@@ -34,6 +34,7 @@ from .models import (
     Stabilimento,
     StatoEsterno,
     Testata,
+    TransmittalInterno,
     User,
     valida_immagine_firma,
 )
@@ -109,9 +110,15 @@ from .services.segnalazioni import (
 )
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 from .services.trasmittal_interno import (
+    anteprima_pdf_bytes,
+    anteprima_trasmittal,
     elenco_destinazioni_ut,
+    elenco_selezione_ut,
+    elenco_trasmittal_interni,
+    emetti_trasmittal_interno,
     imposta_destinazione_stabilimento_bulk,
     imposta_destinazioni_ut,
+    percorso_pdf_lettera,
     stabilimenti_costruttivi,
 )
 
@@ -971,6 +978,115 @@ def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
         )
     documenti = imposta_destinazione_stabilimento_bulk(testata, codice_bc, documento_ids, attiva)
     return JsonResponse({"ok": True, "documenti_aggiornati": [d.pk for d in documenti]})
+
+
+# ── API: Trasmittal interno — creazione lettera ─────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_selezione_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse({"documenti": elenco_selezione_ut(testata)})
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def trasmittal_interno_anteprima_api(request, job):
+    """Anteprima di una lettera: pura computazione, nessuna scrittura — accessibile in sola lettura."""
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        anteprima = anteprima_trasmittal(testata, data.get("righe") or [])
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse(anteprima)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_anteprima_pdf_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        pdf_bytes = anteprima_pdf_bytes(
+            testata, data.get("righe") or [], request.user, note=data.get("note", "")
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="anteprima_trasmittal_interno.pdf"'
+    return response
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_emetti_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        risultato = emetti_trasmittal_interno(
+            testata,
+            data.get("righe") or [],
+            request.user,
+            note=data.get("note", ""),
+            destinatari=data.get("destinatari"),
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({"ok": True, **risultato})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettere_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse({"lettere": elenco_trasmittal_interni(testata)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
+    try:
+        file_path = percorso_pdf_lettera(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404
+    except PermissionError:
+        return HttpResponseForbidden("Percorso non autorizzato.")
+    if not file_path.is_file():
+        raise Http404
+    return FileResponse(
+        open(file_path, "rb"),
+        content_type="application/pdf",
+        as_attachment=False,
+        filename=file_path.name,
+    )
 
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────

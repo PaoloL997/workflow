@@ -189,6 +189,37 @@ urlpatterns = [
         views.stabilimento_destinazioni_bulk_api,
         name="stabilimento_destinazioni_bulk_api",
     ),
+    # API — Trasmittal interno: creazione lettera
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/selezione/",
+        views.trasmittal_interno_selezione_api,
+        name="trasmittal_interno_selezione_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/anteprima/",
+        views.trasmittal_interno_anteprima_api,
+        name="trasmittal_interno_anteprima_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/anteprima/pdf/",
+        views.trasmittal_interno_anteprima_pdf_api,
+        name="trasmittal_interno_anteprima_pdf_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/emetti/",
+        views.trasmittal_interno_emetti_api,
+        name="trasmittal_interno_emetti_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/",
+        views.trasmittal_interno_lettere_api,
+        name="trasmittal_interno_lettere_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/file/",
+        views.trasmittal_interno_lettera_file_serve,
+        name="trasmittal_interno_lettera_file_serve",
+    ),
     # API — Emissione
     path("api/emissione/", views.emissione_api, name="emissione_api"),
     path("api/trasmittal/pdf/", views.trasmittal_pdf_api, name="trasmittal_pdf_api"),

@@ -12,8 +12,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: 100vh;
-    overflow: hidden;
+    min-height: 100vh;
     padding: 0 32px 32px;
     position: relative;
   }
@@ -57,7 +56,7 @@
   }
 
   .page-header {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
     flex-shrink: 0;
     text-align: center;
   }
@@ -65,6 +64,36 @@
     font-size: 28px; font-weight: 800;
     letter-spacing: -0.04em; color: var(--color-text-primary);
   }
+
+  /* ─────────────────────────────────────────────
+     TABS
+  ───────────────────────────────────────────── */
+  .ti-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+  }
+  .ti-tab {
+    padding: 8px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .ti-tab:hover { color: var(--color-text-primary); }
+  .ti-tab.active {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: #fff;
+  }
+  .ti-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .ti-view[hidden] { display: none; }
 
   /* ─────────────────────────────────────────────
      CONTROLS BAR
@@ -78,17 +107,17 @@
     flex-shrink: 0;
   }
   .ctrl-lbl { font-size: 14px; color: var(--color-text-secondary); flex-shrink: 0; }
-  .ctrl-input {
+  .ctrl-input, .ctrl-select {
     padding: 7px 12px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
     background: var(--color-elevated);
     color: var(--color-text-primary);
     font-size: 14px;
-    min-width: 220px;
     transition: border-color .15s;
   }
-  .ctrl-input:focus {
+  .ctrl-input { min-width: 220px; }
+  .ctrl-input:focus, .ctrl-select:focus {
     outline: none;
     border-color: var(--color-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
@@ -98,6 +127,7 @@
     color: var(--color-success);
     min-width: 160px;
   }
+  .status-msg.error { color: var(--color-danger); }
   .readonly-note {
     font-size: 13px;
     color: var(--color-text-secondary);
@@ -152,7 +182,7 @@
   }
   .ti-tbl thead tr { border-bottom: 1px solid var(--color-border); }
   .ti-tbl th {
-    padding: 10px 12px;
+    padding: 10px 10px;
     text-align: left;
     font-size: 11px;
     font-weight: 600;
@@ -162,17 +192,26 @@
     white-space: nowrap;
   }
   .ti-tbl th.col-doc { width: auto; }
-  .ti-tbl th.col-chk { width: 64px; text-align: center; }
+  .ti-tbl th.col-chk { width: 40px; text-align: center; }
   .ti-tbl tbody tr {
     border-bottom: 1px solid var(--color-border);
     transition: background 0.12s;
   }
   .ti-tbl tbody tr:hover { background: var(--color-surface); }
   .ti-tbl tbody tr:last-child { border-bottom: none; }
-  .ti-tbl tbody td { padding: 12px; vertical-align: middle; }
+  .ti-tbl tbody tr.invalida { opacity: 0.55; }
+  .ti-tbl tbody td { padding: 10px; vertical-align: middle; }
 
   .doc-code { font-weight: 700; font-size: 13px; color: var(--color-accent); letter-spacing: -0.01em; }
   .cell-title { font-size: 12px; color: var(--color-text-secondary); }
+  .cell-motivo {
+    font-size: 11px;
+    color: var(--color-danger);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
 
   .th-chk-wrap, .td-chk-wrap {
     display: flex;
@@ -215,6 +254,62 @@
   }
   .rchk:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .ti-field {
+    width: 100%;
+    padding: 5px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 12.5px;
+    box-sizing: border-box;
+  }
+  .ti-field:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 15%, transparent);
+  }
+  .ti-field:disabled { opacity: 0.4; cursor: not-allowed; }
+  .ti-col-rev, .ti-col-copie, .ti-col-tpi { width: 76px; }
+  .ti-col-note { width: 140px; }
+
+  /* Involved sites chips (read-only) */
+  .ti-sites { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .ti-site-chip {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    color: var(--color-accent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+  .ti-sites-empty {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    font-style: italic;
+  }
+  .ti-link-btn {
+    background: none; border: none; padding: 0;
+    color: var(--color-accent); font-size: 11.5px;
+    cursor: pointer; text-decoration: underline;
+  }
+
+  /* Free notes */
+  .ti-notes-wrap {
+    flex-shrink: 0;
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ti-notes-wrap label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+
   /* ── Theme toggle ── */
   .theme-toggle {
     position: fixed;
@@ -243,6 +338,118 @@
     :root:not([data-theme="light"]) .theme-toggle .icon-sun  { display: block; }
     :root:not([data-theme="light"]) .theme-toggle .icon-moon { display: none; }
   }
+
+  /* ─────────────────────────────────────────────
+     MODAL (anteprima / conferma)
+  ───────────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: hsla(0,0%,0%,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    width: 100%;
+    max-width: 860px;
+    max-height: 88vh;
+    background: var(--color-surface);
+    border-radius: 16px;
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .modal-title { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); }
+  .modal-body { overflow-y: auto; flex: 1; min-height: 0; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+  .btn-cancel {
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 14px; font-weight: 500; border: 1px solid var(--color-border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-cancel:hover { background: var(--color-border); }
+  .btn-secondary {
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 14px; font-weight: 500; border: 1px solid var(--color-border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-border); }
+  .btn-confirm {
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-accent); color: #fff;
+    font-size: 14px; font-weight: 600; border: none;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-confirm:hover:not(:disabled) { background: var(--color-accent-hover); }
+  .btn-confirm:disabled, .btn-secondary:disabled { opacity: .4; cursor: not-allowed; }
+
+  .ti-anteprima-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 4px; }
+  .ti-anteprima-tbl th {
+    text-align: left; font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--color-text-secondary); padding: 6px 8px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .ti-anteprima-tbl td { padding: 6px 8px; border-bottom: 1px solid var(--color-border); }
+
+  .ti-warning {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 10px 12px; border-radius: 10px;
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+    color: var(--color-danger); font-size: 12.5px; line-height: 1.5;
+  }
+
+  .ti-dest-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ti-dest-col-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-secondary); margin-bottom: 6px; }
+  .ti-dest-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 28px; }
+  .chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 10px 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 12px; font-weight: 500; white-space: nowrap;
+  }
+  .chip .chip-origine { opacity: .6; font-weight: 400; }
+  .chip-x {
+    background: none; border: none;
+    color: var(--color-text-secondary); cursor: pointer;
+    width: 16px; height: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; font-size: 15px; line-height: 1;
+    transition: color .12s; padding: 0;
+  }
+  .chip-x:hover { color: var(--color-text-primary); }
+  .ti-dest-add { display: flex; gap: 6px; }
+  .ti-dest-add input { flex: 1; }
+  .ti-dest-add button { flex-shrink: 0; }
+
+  .ti-esito-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 0; border-bottom: 1px solid var(--color-border);
+  }
+  .ti-esito-row:last-child { border-bottom: none; }
+  .ti-esito-badge {
+    flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+  }
+  .ti-esito-badge.ok { background: var(--color-success); }
+  .ti-esito-badge.ko { background: var(--color-danger); }
+  .ti-esito-body strong { display: block; font-size: 13px; color: var(--color-text-primary); }
+  .ti-esito-body span { font-size: 12px; color: var(--color-text-secondary); }
+  .ti-esito-body .ti-esito-err { color: var(--color-danger); }
 </style>
 {% endblock %}
 
@@ -272,35 +479,133 @@
       <h1 class="page-title">Trasmittal interno</h1>
     </header>
 
-    <!-- ── Controls bar ── -->
-    <div class="ti-ctrl">
-      <span class="ctrl-lbl">Documento:</span>
-      <input type="text" id="ti-filter" class="ctrl-input" placeholder="Filtra per nome…">
-      <span class="status-msg" id="ti-status"></span>
-      {% if not user.can_write %}
-        <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
-      {% endif %}
+    <!-- ── Tabs ── -->
+    <div class="ti-tabs" role="tablist">
+      <button type="button" class="ti-tab active" data-tab="destinazioni" onclick="switchTab('destinazioni')">Destinazioni cartacee</button>
+      <button type="button" class="ti-tab" data-tab="nuova" onclick="switchTab('nuova')">Nuova lettera</button>
+      <button type="button" class="ti-tab" data-tab="lettere" onclick="switchTab('lettere')">Lettere emesse</button>
     </div>
 
-    <!-- ── Page toolbar ── -->
-    <div class="page-toolbar">
-      <span class="toolbar-counter" id="ti-counter"><strong>0</strong> documenti</span>
+    <!-- ══════════════════════════════════════════════════
+         VIEW: Destinazioni cartacee
+    ══════════════════════════════════════════════════ -->
+    <div class="ti-view" id="view-destinazioni">
+      <div class="ti-ctrl">
+        <span class="ctrl-lbl">Documento:</span>
+        <input type="text" id="ti-filter" class="ctrl-input" placeholder="Filtra per nome…">
+        <span class="status-msg" id="ti-status"></span>
+        {% if not user.can_write %}
+          <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
+        {% endif %}
+      </div>
+
+      <div class="page-toolbar">
+        <span class="toolbar-counter" id="ti-counter"><strong>0</strong> documenti</span>
+      </div>
+
+      <div class="doc-card">
+        <table class="ti-tbl">
+          <thead id="ti-thead">
+            <tr><th class="col-doc">Documento</th></tr>
+          </thead>
+          <tbody id="ti-tbody">
+            <tr><td style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <!-- ── Document card ── -->
-    <div class="doc-card">
-      <table class="ti-tbl">
-        <thead id="ti-thead">
-          <tr><th class="col-doc">Documento</th></tr>
-        </thead>
-        <tbody id="ti-tbody">
-          <tr><td style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
-        </tbody>
-      </table>
+    <!-- ══════════════════════════════════════════════════
+         VIEW: Nuova lettera
+    ══════════════════════════════════════════════════ -->
+    <div class="ti-view" id="view-nuova" hidden>
+      <div class="ti-ctrl">
+        <span class="ctrl-lbl">Documento:</span>
+        <input type="text" id="sel-filter" class="ctrl-input" placeholder="Filtra per nome…">
+        <span class="ctrl-lbl">Ordina per:</span>
+        <select id="sel-sort" class="ctrl-select">
+          <option value="nome">Nome</option>
+          <option value="file">Data modifica file</option>
+        </select>
+        <span class="status-msg" id="sel-status"></span>
+        {% if not user.can_write %}
+          <span class="readonly-note">Sola lettura: non hai i permessi per creare lettere.</span>
+        {% endif %}
+      </div>
+
+      <div class="page-toolbar">
+        <span class="toolbar-counter" id="sel-counter"><strong>0</strong> selezionati</span>
+        <button type="button" class="btn-confirm" id="sel-anteprima-btn" disabled onclick="apriAnteprima()">Anteprima…</button>
+      </div>
+
+      <div class="doc-card">
+        <table class="ti-tbl">
+          <thead id="sel-thead">
+            <tr>
+              <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
+              <th class="col-doc">Documento</th>
+              <th>Involved sites</th>
+              <th class="ti-col-rev">Rev.</th>
+              <th class="ti-col-copie">Copie</th>
+              <th class="ti-col-tpi">TPI</th>
+              <th>Cliente</th>
+              <th class="ti-col-note">Note</th>
+            </tr>
+          </thead>
+          <tbody id="sel-tbody">
+            <tr><td colspan="8" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="ti-notes-wrap">
+        <label for="nota-1">Note libere della lettera</label>
+        <input type="text" id="nota-1" class="ctrl-input" style="width:100%;min-width:0;" placeholder="Riga 1…">
+        <input type="text" id="nota-2" class="ctrl-input" style="width:100%;min-width:0;" placeholder="Riga 2…">
+        <input type="text" id="nota-3" class="ctrl-input" style="width:100%;min-width:0;" placeholder="Riga 3…">
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════
+         VIEW: Lettere emesse
+    ══════════════════════════════════════════════════ -->
+    <div class="ti-view" id="view-lettere" hidden>
+      <div class="page-toolbar">
+        <span class="toolbar-counter" id="lettere-counter"><strong>0</strong> lettere</span>
+      </div>
+      <div class="doc-card">
+        <table class="ti-tbl">
+          <thead>
+            <tr>
+              <th class="col-doc">Nome</th>
+              <th>Data</th>
+              <th>Documenti</th>
+              <th>Emesso da</th>
+              <th>PDF</th>
+            </tr>
+          </thead>
+          <tbody id="lettere-tbody">
+            <tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
   </div><!-- /content -->
 </div><!-- /page -->
+
+<!-- ── Anteprima / conferma modal ── -->
+<div class="modal-overlay" id="anteprima-modal" role="dialog" aria-modal="true" aria-labelledby="anteprima-title">
+  <div class="modal-box">
+    <div class="modal-title" id="anteprima-title">Anteprima lettera</div>
+    <div class="modal-body" id="anteprima-body">
+      <p style="color:var(--color-text-secondary);font-size:13px;font-style:italic;">Caricamento&hellip;</p>
+    </div>
+    <div class="modal-actions" id="anteprima-actions">
+      <button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Chiudi</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
@@ -319,8 +624,7 @@
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
 
-  let _stabilimenti = [];
-  let _docs = [];
+  function baseUrl() { return '/api/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/'; }
 
   /* ── Theme toggle ── */
   (function () {
@@ -336,22 +640,48 @@
     });
   })();
 
+  /* ══════════════════════════════════════════════════
+     TABS
+  ══════════════════════════════════════════════════ */
+  var _loaded = { destinazioni: false, nuova: false, lettere: false };
+
+  window.switchTab = function (name) {
+    ['destinazioni', 'nuova', 'lettere'].forEach(function (n) {
+      document.getElementById('view-' + n).hidden = n !== name;
+      var tab = document.querySelector('.ti-tab[data-tab="' + n + '"]');
+      if (tab) tab.classList.toggle('active', n === name);
+    });
+    if (!_loaded[name]) {
+      _loaded[name] = true;
+      if (name === 'destinazioni') initDestinazioni();
+      if (name === 'nuova') initSelezione();
+      if (name === 'lettere') caricaLettere();
+    }
+  };
+
+  /* ══════════════════════════════════════════════════
+     VIEW: Destinazioni cartacee (già esistente)
+  ══════════════════════════════════════════════════ */
+  let _stabilimenti = [];
+  let _docsDest = [];
+
   function nomeDoc(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
+  function setStatus(m, isErr) {
+    var el = document.getElementById('ti-status');
+    el.textContent = m;
+    el.classList.toggle('error', !!isErr);
+  }
 
-  function setStatus(m) { document.getElementById('ti-status').textContent = m; }
-
-  function baseUrl() { return '/api/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/'; }
-
-  function filtrati() {
+  function filtratiDest() {
     var q = document.getElementById('ti-filter').value.trim().toLowerCase();
-    var list = _docs.slice().sort(function (a, b) {
+    var list = _docsDest.slice().sort(function (a, b) {
       return nomeDoc(a).localeCompare(nomeDoc(b), 'it', { sensitivity: 'base' });
     });
     if (!q) return list;
     return list.filter(function (d) { return nomeDoc(d).toLowerCase().indexOf(q) !== -1; });
   }
 
-  function renderThead() {
+  function renderTheadDest() {
     var head = '<tr><th class="col-doc">Documento</th>';
     _stabilimenti.forEach(function (s) {
       head += '<th class="col-chk"><div class="th-chk-wrap">'
@@ -364,7 +694,7 @@
     document.getElementById('ti-thead').innerHTML = head;
   }
 
-  function aggiornaTestate(visibili) {
+  function aggiornaTestateDest(visibili) {
     _stabilimenti.forEach(function (s) {
       var chk = document.getElementById('hdr-chk-' + s.codice_bc);
       if (!chk) return;
@@ -374,15 +704,15 @@
     });
   }
 
-  function emptyTbl(msg) {
+  function emptyTblDest(msg) {
     var cols = 1 + _stabilimenti.length;
     document.getElementById('ti-tbody').innerHTML =
       '<tr><td colspan="' + cols + '" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
   }
 
-  function renderTbl(docs) {
-    if (!_docs.length) { emptyTbl('Nessun documento UT per questa commessa.'); return; }
-    if (!docs.length) { emptyTbl('Nessun documento corrisponde al filtro.'); return; }
+  function renderTblDest(docs) {
+    if (!_docsDest.length) { emptyTblDest('Nessun documento UT per questa commessa.'); return; }
+    if (!docs.length) { emptyTblDest('Nessun documento corrisponde al filtro.'); return; }
     document.getElementById('ti-tbody').innerHTML = docs.map(function (d) {
       var celle = _stabilimenti.map(function (s) {
         var checked = d.codici_bc.indexOf(s.codice_bc) !== -1;
@@ -398,15 +728,15 @@
     }).join('');
   }
 
-  function updCounter(n) {
+  function updCounterDest(n) {
     document.getElementById('ti-counter').innerHTML = '<strong>' + n + '</strong> document' + (n === 1 ? 'o' : 'i');
   }
 
-  function applyAndRender() {
-    var visibili = filtrati();
-    renderTbl(visibili);
-    aggiornaTestate(visibili);
-    updCounter(_docs.length);
+  function applyAndRenderDest() {
+    var visibili = filtratiDest();
+    renderTblDest(visibili);
+    aggiornaTestateDest(visibili);
+    updCounterDest(_docsDest.length);
   }
 
   async function salvaDestinazione(docId, codiciBc) {
@@ -418,17 +748,17 @@
       });
       const body = await r.json().catch(function () { return {}; });
       if (isPermissionDeniedResponse(r, body)) return false;
-      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.'); return false; }
+      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.', true); return false; }
       return true;
     } catch {
-      setStatus('Errore di rete.');
+      setStatus('Errore di rete.', true);
       return false;
     }
   }
 
   window.toggleCella = async function (docId, codiceBc, checked) {
-    if (!requireWrite()) { applyAndRender(); return; }
-    const doc = _docs.find(function (d) { return d.id === docId; });
+    if (!requireWrite()) { applyAndRenderDest(); return; }
+    const doc = _docsDest.find(function (d) { return d.id === docId; });
     if (!doc) return;
     const set = new Set(doc.codici_bc);
     if (checked) set.add(codiceBc); else set.delete(codiceBc);
@@ -440,9 +770,9 @@
       setStatus('✓ Salvato');
       setTimeout(function () { setStatus(''); }, 1500);
     } else {
-      applyAndRender();
+      applyAndRenderDest();
     }
-    aggiornaTestate(filtrati());
+    aggiornaTestateDest(filtratiDest());
   };
 
   async function salvaBulk(codiceBc, ids, attiva) {
@@ -454,17 +784,17 @@
       });
       const body = await r.json().catch(function () { return {}; });
       if (isPermissionDeniedResponse(r, body)) return false;
-      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.'); return false; }
+      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.', true); return false; }
       return true;
     } catch {
-      setStatus('Errore di rete.');
+      setStatus('Errore di rete.', true);
       return false;
     }
   }
 
   window.toggleColonna = async function (codiceBc, checked) {
-    if (!requireWrite()) { applyAndRender(); return; }
-    const visibili = filtrati();
+    if (!requireWrite()) { applyAndRenderDest(); return; }
+    const visibili = filtratiDest();
     const ids = visibili.map(function (d) { return d.id; });
     setStatus('Salvataggio…');
     const ok = await salvaBulk(codiceBc, ids, checked);
@@ -476,26 +806,424 @@
       });
       setStatus('');
     }
-    applyAndRender();
+    applyAndRenderDest();
   };
 
-  document.getElementById('ti-filter').addEventListener('input', applyAndRender);
+  document.getElementById('ti-filter').addEventListener('input', applyAndRenderDest);
 
-  async function init() {
+  async function initDestinazioni() {
     try {
       const r = await fetch(baseUrl() + 'destinazioni/');
-      if (!r.ok) { emptyTbl('Errore nel caricamento.'); return; }
+      if (!r.ok) { emptyTblDest('Errore nel caricamento.'); return; }
       const d = await r.json();
       _stabilimenti = d.stabilimenti || [];
-      _docs = d.documenti || [];
-      renderThead();
-      applyAndRender();
+      _docsDest = d.documenti || [];
+      renderTheadDest();
+      applyAndRenderDest();
     } catch {
-      emptyTbl('Errore di rete.');
+      emptyTblDest('Errore di rete.');
     }
   }
 
-  init();
+  /* ══════════════════════════════════════════════════
+     VIEW: Nuova lettera — selezione documenti
+  ══════════════════════════════════════════════════ */
+  let _docsSel = [];
+  /* stato per documento selezionato: { revisione, copie, tpi, note, cliente } */
+  let _campiRiga = {};
+  let _selezionati = new Set();
+
+  function setSelStatus(m, isErr) {
+    var el = document.getElementById('sel-status');
+    el.textContent = m;
+    el.classList.toggle('error', !!isErr);
+  }
+
+  function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
+
+  function filtratiSel() {
+    var q = document.getElementById('sel-filter').value.trim().toLowerCase();
+    var ordina = document.getElementById('sel-sort').value;
+    var list = _docsSel.slice();
+    if (ordina === 'file') {
+      list.sort(function (a, b) {
+        var ta = a.file_modificato_il ? new Date(a.file_modificato_il).getTime() : -Infinity;
+        var tb = b.file_modificato_il ? new Date(b.file_modificato_il).getTime() : -Infinity;
+        return tb - ta;
+      });
+    } else {
+      list.sort(function (a, b) { return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' }); });
+    }
+    if (!q) return list;
+    return list.filter(function (d) { return nomeDocSel(d).toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function campiDi(d) {
+    if (!_campiRiga[d.id]) {
+      _campiRiga[d.id] = { revisione: d.revisione_corrente || '', copie: '', tpi: '', note: '', cliente: true };
+    }
+    return _campiRiga[d.id];
+  }
+
+  function renderSitiReadOnly(d) {
+    if (d.siti && d.siti.length) {
+      return '<div class="ti-sites">' + d.siti.map(function (s) {
+        return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>';
+      }).join('') + '</div>';
+    }
+    return '<div class="ti-sites"><span class="ti-sites-empty">Nessuna</span> '
+      + '<button type="button" class="ti-link-btn" onclick="switchTab(\'destinazioni\')">Imposta destinazioni</button></div>';
+  }
+
+  function emptySelTbl(msg) {
+    document.getElementById('sel-tbody').innerHTML =
+      '<tr><td colspan="8" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+  }
+
+  function renderSelTbl(docs) {
+    if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
+    var canWrite = window.USER_CAN_WRITE;
+    document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
+      var campi = campiDi(d);
+      var checked = _selezionati.has(d.id);
+      var disabledAttr = (!d.selezionabile || !canWrite) ? ' disabled' : '';
+      var fieldDisabled = (!checked || !d.selezionabile || !canWrite) ? ' disabled' : '';
+      var motivo = !d.selezionabile
+        ? '<div class="cell-motivo">&#9888; ' + escHtml(d.motivo) + '</div>' : '';
+      return '<tr class="' + (d.selezionabile ? '' : 'invalida') + '" data-id="' + d.id + '">'
+        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk sel-chk"' + (checked ? ' checked' : '') + disabledAttr
+        + ' onchange="toggleSelezioneRiga(' + d.id + ', this.checked)"></div></td>'
+        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
+        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
+        + motivo + '</td>'
+        + '<td>' + renderSitiReadOnly(d) + '</td>'
+        + '<td><input type="text" class="ti-field" value="' + escHtml(campi.revisione) + '"' + fieldDisabled
+        + ' onchange="aggiornaCampo(' + d.id + ',\'revisione\',this.value)"></td>'
+        + '<td><input type="number" min="0" class="ti-field" value="' + escHtml(campi.copie) + '"' + fieldDisabled
+        + ' onchange="aggiornaCampo(' + d.id + ',\'copie\',this.value)"></td>'
+        + '<td><input type="text" class="ti-field" value="' + escHtml(campi.tpi) + '"' + fieldDisabled
+        + ' onchange="aggiornaCampo(' + d.id + ',\'tpi\',this.value)"></td>'
+        + '<td><input type="checkbox" class="rchk"' + (campi.cliente ? ' checked' : '') + fieldDisabled
+        + ' onchange="aggiornaCampo(' + d.id + ',\'cliente\',this.checked)"></td>'
+        + '<td><input type="text" class="ti-field" value="' + escHtml(campi.note) + '"' + fieldDisabled
+        + ' onchange="aggiornaCampo(' + d.id + ',\'note\',this.value)"></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function aggiornaSelAll(visibili) {
+    var selezionabili = visibili.filter(function (d) { return d.selezionabile; });
+    var n = selezionabili.filter(function (d) { return _selezionati.has(d.id); }).length;
+    var all = document.getElementById('sel-all');
+    all.checked = selezionabili.length > 0 && n === selezionabili.length;
+    all.indeterminate = n > 0 && n < selezionabili.length;
+  }
+
+  function updSelCounter() {
+    document.getElementById('sel-counter').innerHTML = '<strong>' + _selezionati.size + '</strong> selezionat' + (_selezionati.size === 1 ? 'o' : 'i');
+    document.getElementById('sel-anteprima-btn').disabled = _selezionati.size === 0;
+  }
+
+  function applyAndRenderSel() {
+    var visibili = filtratiSel();
+    renderSelTbl(visibili);
+    aggiornaSelAll(visibili);
+    updSelCounter();
+  }
+
+  window.toggleSelezioneRiga = function (id, checked) {
+    if (checked) _selezionati.add(id); else _selezionati.delete(id);
+    updSelCounter();
+    applyAndRenderSel();
+  };
+
+  window.toggleTuttiSelezione = function (checked) {
+    filtratiSel().forEach(function (d) {
+      if (!d.selezionabile) return;
+      if (checked) _selezionati.add(d.id); else _selezionati.delete(d.id);
+    });
+    applyAndRenderSel();
+  };
+
+  window.aggiornaCampo = function (id, campo, valore) {
+    var campi = _campiRiga[id];
+    if (!campi) return;
+    campi[campo] = valore;
+  };
+
+  document.getElementById('sel-filter').addEventListener('input', applyAndRenderSel);
+  document.getElementById('sel-sort').addEventListener('change', applyAndRenderSel);
+
+  async function initSelezione() {
+    try {
+      const r = await fetch(baseUrl() + 'selezione/');
+      if (!r.ok) { emptySelTbl('Errore nel caricamento.'); return; }
+      const d = await r.json();
+      _docsSel = d.documenti || [];
+      applyAndRenderSel();
+    } catch {
+      emptySelTbl('Errore di rete.');
+    }
+  }
+
+  function righePayload() {
+    return Array.from(_selezionati).map(function (id) {
+      var campi = _campiRiga[id] || {};
+      return {
+        documento_id: id,
+        revisione: campi.revisione || '',
+        copie: campi.copie ? parseInt(campi.copie, 10) : null,
+        tpi: campi.tpi || '',
+        note: campi.note || '',
+        cliente: campi.cliente !== false,
+      };
+    });
+  }
+
+  function noteLettera() {
+    return [
+      document.getElementById('nota-1').value,
+      document.getElementById('nota-2').value,
+      document.getElementById('nota-3').value,
+    ].filter(function (r) { return r.trim() !== ''; }).join('\n');
+  }
+
+  /* ══════════════════════════════════════════════════
+     Anteprima / conferma modal
+  ══════════════════════════════════════════════════ */
+  var _destinatariCorrenti = [];
+
+  window.apriAnteprima = async function () {
+    if (!requireWrite()) return;
+    document.getElementById('anteprima-modal').classList.add('open');
+    document.getElementById('anteprima-title').textContent = 'Anteprima lettera';
+    document.getElementById('anteprima-body').innerHTML = '<p style="color:var(--color-text-secondary);font-size:13px;font-style:italic;">Caricamento…</p>';
+    document.getElementById('anteprima-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Chiudi</button>';
+
+    const righe = righePayload();
+    try {
+      const r = await fetch(baseUrl() + 'anteprima/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ righe: righe }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (!r.ok) {
+        document.getElementById('anteprima-body').innerHTML = '<p class="ti-warning">' + escHtml(body.error || 'Errore nel calcolo dell’anteprima.') + '</p>';
+        return;
+      }
+      renderAnteprima(body);
+    } catch {
+      document.getElementById('anteprima-body').innerHTML = '<p class="ti-warning">Errore di rete.</p>';
+    }
+  };
+
+  window.chiudiAnteprima = function () {
+    document.getElementById('anteprima-modal').classList.remove('open');
+  };
+  document.getElementById('anteprima-modal').addEventListener('click', function (e) {
+    if (e.target === this) chiudiAnteprima();
+  });
+
+  var ORIGINE_LABELS = {
+    stabilimento: 'Stabilimento', pm: 'PM', pe: 'PE', qci: 'QCI', export: 'Export', manuale: 'Manuale',
+  };
+
+  function chipDestinatario(d, index) {
+    return '<span class="chip">' + escHtml(d.email)
+      + ' <span class="chip-origine">(' + escHtml(ORIGINE_LABELS[d.origine] || d.origine) + ')</span>'
+      + '<button type="button" class="chip-x" onclick="rimuoviDestinatario(' + index + ')" aria-label="Rimuovi">×</button></span>';
+  }
+
+  function renderDestinatari() {
+    var to = [], cc = [];
+    _destinatariCorrenti.forEach(function (d, i) {
+      (d.tipo === 'to' ? to : cc).push(chipDestinatario(d, i));
+    });
+    document.getElementById('dest-to-list').innerHTML = to.join('') || '<span class="ti-sites-empty">Nessuno</span>';
+    document.getElementById('dest-cc-list').innerHTML = cc.join('') || '<span class="ti-sites-empty">Nessuno</span>';
+  }
+
+  window.rimuoviDestinatario = function (index) {
+    _destinatariCorrenti.splice(index, 1);
+    renderDestinatari();
+  };
+
+  window.aggiungiDestinatario = function (tipo) {
+    var inputId = tipo === 'to' ? 'dest-to-input' : 'dest-cc-input';
+    var input = document.getElementById(inputId);
+    var email = input.value.trim();
+    if (!email) return;
+    _destinatariCorrenti.push({ email: email, tipo: tipo, origine: 'manuale' });
+    input.value = '';
+    renderDestinatari();
+  };
+
+  function renderAnteprima(anteprima) {
+    _destinatariCorrenti = (anteprima.destinatari || []).slice();
+
+    var righeHtml = '<table class="ti-anteprima-tbl"><thead><tr>'
+      + '<th>Documento</th><th>Rev.</th><th>Copie</th><th>TPI</th><th>Cliente</th><th>Note</th>'
+      + '</tr></thead><tbody>'
+      + anteprima.righe.map(function (r) {
+        return '<tr><td><div class="doc-code">' + escHtml(r.vendor_doc) + '</div>'
+          + (r.doc_title ? '<div class="cell-title">' + escHtml(r.doc_title) + '</div>' : '') + '</td>'
+          + '<td>' + escHtml(r.revisione) + '</td>'
+          + '<td>' + (r.copie != null ? r.copie : '—') + '</td>'
+          + '<td>' + escHtml(r.tpi || '—') + '</td>'
+          + '<td>' + (r.cliente ? 'Sì' : 'No') + '</td>'
+          + '<td>' + escHtml(r.note || '—') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+
+    var avviso = '';
+    if (anteprima.ruoli_mancanti && anteprima.ruoli_mancanti.length) {
+      avviso = '<div class="ti-warning">&#9888; Ruoli non valorizzati sulla commessa: <strong>'
+        + escHtml(anteprima.ruoli_mancanti.join(', ')) + '</strong> — nessun destinatario verrà aggiunto per '
+        + (anteprima.ruoli_mancanti.length === 1 ? 'questo ruolo' : 'questi ruoli') + '.</div>';
+    }
+
+    document.getElementById('anteprima-body').innerHTML =
+      '<div style="margin-bottom:14px;">' + righeHtml + '</div>'
+      + avviso
+      + '<div class="ti-dest-cols" style="margin-top:14px;">'
+      + '<div><div class="ti-dest-col-title">A (TO)</div>'
+      + '<div class="ti-dest-list" id="dest-to-list"></div>'
+      + '<div class="ti-dest-add"><input type="email" id="dest-to-input" class="ctrl-input" placeholder="Aggiungi email…">'
+      + '<button type="button" class="btn-secondary" onclick="aggiungiDestinatario(\'to\')">+</button></div></div>'
+      + '<div><div class="ti-dest-col-title">CC</div>'
+      + '<div class="ti-dest-list" id="dest-cc-list"></div>'
+      + '<div class="ti-dest-add"><input type="email" id="dest-cc-input" class="ctrl-input" placeholder="Aggiungi email…">'
+      + '<button type="button" class="btn-secondary" onclick="aggiungiDestinatario(\'cc\')">+</button></div></div>'
+      + '</div>';
+    renderDestinatari();
+
+    document.getElementById('anteprima-actions').innerHTML =
+      '<button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Annulla</button>'
+      + '<button type="button" class="btn-secondary" id="pdf-anteprima-btn" onclick="scaricaAnteprimaPdf()">Scarica PDF anteprima</button>'
+      + '<button type="button" class="btn-confirm" id="conferma-btn" onclick="confermaEmissione()">Conferma ed emetti</button>';
+  }
+
+  window.scaricaAnteprimaPdf = async function () {
+    var btn = document.getElementById('pdf-anteprima-btn');
+    btn.disabled = true;
+    try {
+      const r = await fetch(baseUrl() + 'anteprima/pdf/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ righe: righePayload(), note: noteLettera() }),
+      });
+      const body = r.headers.get('Content-Type') === 'application/json' ? await r.json() : null;
+      if (isPermissionDeniedResponse(r, body || {})) return;
+      if (!r.ok) {
+        alert((body && body.error) || 'Errore nella generazione del PDF.');
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+    } catch {
+      alert('Errore di rete.');
+    } finally {
+      btn.disabled = false;
+    }
+  };
+
+  window.confermaEmissione = async function () {
+    if (!requireWrite()) return;
+    var btn = document.getElementById('conferma-btn');
+    btn.disabled = true;
+    btn.textContent = 'Emissione in corso…';
+    try {
+      const r = await fetch(baseUrl() + 'emetti/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          righe: righePayload(),
+          note: noteLettera(),
+          destinatari: _destinatariCorrenti,
+        }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) { btn.disabled = false; btn.textContent = 'Conferma ed emetti'; return; }
+      if (!r.ok) {
+        document.getElementById('anteprima-body').innerHTML = '<p class="ti-warning">' + escHtml(body.error || 'Impossibile creare la lettera.') + '</p>';
+        document.getElementById('anteprima-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Chiudi</button>';
+        return;
+      }
+      renderRisultato(body);
+      _selezionati.clear();
+      _campiRiga = {};
+      _loaded.lettere = false;
+    } catch {
+      document.getElementById('anteprima-body').innerHTML = '<p class="ti-warning">Errore di rete.</p>';
+      document.getElementById('anteprima-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Chiudi</button>';
+    }
+  };
+
+  function esitoRiga(titolo, esito, dettaglio) {
+    return '<div class="ti-esito-row">'
+      + '<div class="ti-esito-badge ' + (esito.ok ? 'ok' : 'ko') + '">' + (esito.ok ? '✓' : '✗') + '</div>'
+      + '<div class="ti-esito-body"><strong>' + escHtml(titolo) + '</strong>'
+      + (esito.ok ? '<span>' + (dettaglio || 'Completato.') + '</span>' : '<span class="ti-esito-err">' + escHtml(esito.errore || 'Errore sconosciuto.') + '</span>')
+      + '</div></div>';
+  }
+
+  function renderRisultato(esito) {
+    document.getElementById('anteprima-title').textContent = 'Lettera ' + esito.nome;
+    var dccDettaglio = esito.dcc && esito.dcc.ok
+      ? (esito.dcc.cartella
+        ? (esito.dcc.copiati.length + ' file copiati' + (esito.dcc.mancanti.length ? ', ' + esito.dcc.mancanti.length + ' mancanti' : '') + '.')
+        : 'Nessun documento per il cliente in questa lettera.')
+      : '';
+    var emailDettaglio = esito.email && esito.email.ok
+      ? ('A: ' + esito.email.to.join(', ') + (esito.email.cc.length ? ' — CC: ' + esito.email.cc.join(', ') : ''))
+      : '';
+    document.getElementById('anteprima-body').innerHTML =
+      esitoRiga('Trasmittal creato e archiviato', { ok: true })
+      + esitoRiga('PDF salvato sul fileserver', esito.pdf)
+      + esitoRiga('Cartella DCC preparata', esito.dcc, dccDettaglio)
+      + esitoRiga('Email inviata', esito.email, emailDettaglio);
+    document.getElementById('anteprima-actions').innerHTML =
+      '<button type="button" class="btn-cancel" onclick="chiudiAnteprima()">Chiudi</button>'
+      + '<button type="button" class="btn-confirm" onclick="chiudiAnteprima(); switchTab(\'lettere\');">Vai alle lettere emesse</button>';
+  }
+
+  /* ══════════════════════════════════════════════════
+     VIEW: Lettere emesse
+  ══════════════════════════════════════════════════ */
+  async function caricaLettere() {
+    var tbody = document.getElementById('lettere-tbody');
+    try {
+      const r = await fetch(baseUrl() + 'lettere/');
+      if (!r.ok) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore nel caricamento.</td></tr>';
+        return;
+      }
+      const d = await r.json();
+      const lettere = d.lettere || [];
+      document.getElementById('lettere-counter').innerHTML = '<strong>' + lettere.length + '</strong> lettere';
+      if (!lettere.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessuna lettera emessa per questa commessa.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = lettere.map(function (l) {
+        return '<tr>'
+          + '<td><div class="doc-code">' + escHtml(l.nome) + '</div></td>'
+          + '<td>' + escHtml(l.data) + '</td>'
+          + '<td>' + l.n_documenti + '</td>'
+          + '<td>' + escHtml(l.creato_da) + '</td>'
+          + '<td><a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="ti-link-btn">Apri PDF</a></td>'
+          + '</tr>';
+      }).join('');
+    } catch {
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore di rete.</td></tr>';
+    }
+  }
+
+  /* ── init ── */
+  switchTab('destinazioni');
 })();
 </script>
 {% endblock %}

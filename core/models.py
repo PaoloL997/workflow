@@ -729,6 +729,7 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
     PE = "pe", "PE"
     QCI = "qci", "QCI"
     EXPORT = "export", "Export"
+    MANUALE = "manuale", "Manuale"
 
 
 class DestinatarioTransmittalInterno(models.Model):
@@ -737,8 +738,10 @@ class DestinatarioTransmittalInterno(models.Model):
     ``origine`` spiega perché quell'indirizzo è finito in lista: vedi
     ``core.services.trasmittal_interno.crea_trasmittal_interno`` per le
     regole di indirizzamento (stabilimento, PM, PE, QCI, export@ per i
-    documenti SHn). WE non ha un'origine dedicata: la sua lista di
-    distribuzione non è ancora definita.
+    documenti SHn); ``MANUALE`` per un indirizzo aggiunto a mano in
+    anteprima (vedi ``core.services.trasmittal_interno.sostituisci_destinatari``).
+    WE non ha un'origine dedicata: la sua lista di distribuzione non è
+    ancora definita.
     """
 
     trasmittal = models.ForeignKey(
