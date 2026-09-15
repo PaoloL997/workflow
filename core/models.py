@@ -294,7 +294,16 @@ class PersonaCommessa(models.Model):
 
     @property
     def nome_visualizzato(self):
-        return self.utente.nome_completo if self.utente_id else self.nome_libero
+        """Nome e cognome se collegata a un utente, altrimenti il testo libero.
+
+        Mostra sempre "Nome Cognome" (non lo username): cade sullo username
+        solo nel raro caso in cui l'utente non abbia né nome né cognome
+        compilati.
+        """
+        if not self.utente_id:
+            return self.nome_libero
+        nome_cognome = f"{self.utente.first_name} {self.utente.last_name}".strip()
+        return nome_cognome or self.utente.nome_completo
 
 
 class AggiornamentoBC(models.Model):

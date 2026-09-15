@@ -2385,6 +2385,16 @@ class PersonaCommessaTests(TestCase):
         self.assertEqual(con_utente.nome_visualizzato, self.utente.nome_completo)
         self.assertEqual(libero.nome_visualizzato, "Anna Verdi")
 
+    def test_nome_visualizzato_mostra_nome_e_cognome_non_lo_username(self):
+        utente = User.objects.create_user(
+            "pc_nome_cognome", "pc-nc@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=utente
+        )
+
+        self.assertEqual(persona.nome_visualizzato, "Mario Rossi")
+
 
 class DividiNomiTests(SimpleTestCase):
     """_dividi_nomi: split di una cella grezza del foglio in singoli nomi."""
