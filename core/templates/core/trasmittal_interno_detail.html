@@ -374,6 +374,27 @@
     margin: 0;
   }
 
+  /* ── Caricamento (spinner ben visibile) ── */
+  .ti-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 56px 20px;
+    color: var(--color-text-secondary);
+  }
+  .ti-loading p { margin: 0; font-size: 13.5px; }
+  .ti-spinner {
+    width: 28px; height: 28px;
+    border: 3px solid var(--color-border);
+    border-top-color: var(--color-accent);
+    border-radius: 50%;
+    animation: ti-spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes ti-spin { to { transform: rotate(360deg); } }
+
   /* ── Theme toggle ── */
   .theme-toggle {
     position: fixed;
@@ -454,7 +475,7 @@
 
     <div class="doc-card">
       <div id="storico-list">
-        <p class="storico-empty">Caricamento&hellip;</p>
+        <div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento&hellip;</p></div>
       </div>
     </div>
 
@@ -487,7 +508,7 @@
           </tr>
         </thead>
         <tbody id="sel-tbody">
-          <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+          <tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -621,6 +642,11 @@
   function emptySelTbl(msg) {
     document.getElementById('sel-tbody').innerHTML =
       '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+  }
+
+  function loadingSelTbl(msg) {
+    document.getElementById('sel-tbody').innerHTML =
+      '<tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
   }
 
   function renderSelTbl(docs) {
@@ -771,7 +797,7 @@
   /* ── Apertura/chiusura modale ── */
   window.apriNuovaLettera = async function () {
     document.getElementById('nuova-modal').classList.add('open');
-    emptySelTbl('Caricamento…');
+    loadingSelTbl('Caricamento documenti… la verifica dei file sul fileserver può richiedere qualche secondo.');
     try {
       const [rSel, rDest] = await Promise.all([
         fetch(baseUrl() + 'selezione/'),
