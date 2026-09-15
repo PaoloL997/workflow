@@ -881,8 +881,15 @@ def _draw_signature_slot(pdf, x, y, utente):
     pdf.cell(_INT_SIGNATURE_W, 3.5, nome, align="C")
 
 
-def _build_distribuzione_copie(pdf, siti, data_lettera):
-    """'PAPER COPIES DISTRIBUTION' section: etichetta ruolo | firme | data, per riga."""
+def _build_distribuzione_copie(pdf, siti, data_distribuzione):
+    """'PAPER COPIES DISTRIBUTION' section: etichetta ruolo | firme | data, per riga.
+
+    ``data_distribuzione`` è il termine entro cui la distribuzione delle
+    copie cartacee va completata (vedi
+    ``core.services.trasmittal_interno.data_impegno``: il giorno lavorativo
+    successivo all'emissione, lunedì se si emette di venerdì) — non la data
+    di emissione della lettera, né quella in cui viene firmata.
+    """
     family = pdf._font_family
     x0, y0 = pdf.l_margin, pdf.get_y()
     w_lbl, w_sign, w_date = _INT_DIST_LABEL_W, _INT_DIST_SIGN_W, _INT_DIST_DATE_W
@@ -895,7 +902,7 @@ def _build_distribuzione_copie(pdf, siti, data_lettera):
     pdf.cell(w_date, 6, "DATE", border=1, fill=True, align="C")
     y = y0 + 6
 
-    data_str = data_lettera.strftime("%d/%m/%Y") if data_lettera else ""
+    data_str = data_distribuzione.strftime("%d/%m/%Y") if data_distribuzione else ""
 
     for label, ruolo in (
         ("PRODUCTION:", RuoloFirmatarioStabilimento.PRODUZIONE),
@@ -944,6 +951,8 @@ def genera_trasmittal_interno_pdf(trasmittal):
     Returns:
         bytes — the PDF content.
     """
+    from core.services.trasmittal_interno import data_impegno
+
     testata = trasmittal.testata
     righe = list(
         trasmittal.righe.select_related("documento")
@@ -963,7 +972,7 @@ def genera_trasmittal_interno_pdf(trasmittal):
     pdf.ln(3)
     _build_note_libere(pdf, trasmittal.note)
     pdf.ln(3)
-    _build_distribuzione_copie(pdf, siti, trasmittal.data)
+    _build_distribuzione_copie(pdf, siti, data_impegno(trasmittal.data))
     pdf.ln(3)
     _build_footer_riferimenti(pdf)
 

@@ -2,7 +2,6 @@ import io
 import json
 import sys
 import tempfile
-import unittest
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -2702,15 +2701,11 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertTrue(terza["nome"].endswith("_E1"))
 
     # ── Punto 12: data di distribuzione (venerdì → lunedì, altrimenti dopo) ──
-    # ATTESO per specifica: la data di distribuzione mostrata all'utente
-    # dovrebbe riflettere data_impegno() (giorno lavorativo successivo,
-    # lunedì se venerdì), non la data di emissione. Verifico direttamente
-    # che generare il PDF invochi data_impegno: non lo fa mai (né altrove
-    # nel percorso che raggiunge l'utente — vedi il report), quindi il
-    # test FALLISCE per specifica finché resta così.
+    # La data di distribuzione mostrata all'utente riflette data_impegno()
+    # (giorno lavorativo successivo, lunedì se venerdì), non la data di
+    # emissione: verifico che generare il PDF invochi davvero data_impegno.
 
-    @unittest.expectedFailure  # divergenza confermata — vedi il report, punto 12
-    def test_15_data_impegno_non_e_mai_invocata_generando_il_pdf(self):
+    def test_15_data_impegno_e_invocata_generando_il_pdf(self):
         from core.services.trasmittal_interno import data_impegno
         from src.pdf import genera_trasmittal_interno_pdf
 
@@ -2729,28 +2724,30 @@ class TrasmittalInternoEndToEndTests(TestCase):
 
         self.assertTrue(
             mock_impegno.called,
-            "data_impegno() non è mai invocata generando il PDF: la colonna DATE "
-            "di 'PAPER COPIES DISTRIBUTION' mostra sempre la data di emissione, "
-            "mai il giorno lavorativo successivo (lunedì se venerdì).",
+            "data_impegno() non è invocata generando il PDF: la colonna DATE di "
+            "'PAPER COPIES DISTRIBUTION' mostrerebbe la data di emissione invece "
+            "del giorno lavorativo successivo (lunedì se venerdì).",
         )
 
-    # ── Punti 15-16: oggetto e corpo dell'email (ATTESI per specifica) ──────
+    # ── Punti 15-16: oggetto e corpo dell'email ──────────────────────────────
 
-    @unittest.expectedFailure  # divergenza confermata — vedi il report, punto 15
     def test_16_oggetto_email_formato_atteso(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox), 1)
         atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {esito['nome']}"
         self.assertEqual(mail.outbox[0].subject, atteso)
 
-    @unittest.expectedFailure  # divergenza confermata — vedi il report, punto 16
-    def test_17_corpo_email_contiene_le_righe_e_il_percorso(self):
+    def test_17_corpo_email_contiene_le_righe_il_percorso_e_il_promemoria_firma(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox), 1)
         corpo = mail.outbox[0].body
         for doc in (self.doc_a, self.doc_b, self.doc_c):
             self.assertIn(doc.vendor_doc, corpo)
+        # Non solo i documenti: anche gli altri valori di riga, come nel PDF.
+        self.assertIn("YES", corpo)  # CLIENT di doc_a/doc_c
+        self.assertIn("NO", corpo)  # CLIENT di doc_b
         self.assertIn(esito["pdf"]["percorso"], corpo)
+        self.assertIn("firmat", corpo.lower())
 
     # ── Punto 17: destinatari modificati in anteprima → usati e registrati ──
 

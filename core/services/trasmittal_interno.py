@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import EmailMessage
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Prefetch
 from django.utils import timezone
 
 from ..models import (
@@ -810,8 +810,63 @@ def sostituisci_destinatari(trasmittal, destinatari_payload):
         )
 
 
+def _tabella_testo_righe(trasmittal):
+    """Tabella testuale delle righe della lettera, stesse colonne del PDF.
+
+    Riusa ``_INT_COLS``/``_int_row_value`` di ``src.pdf`` come unica fonte di
+    verità per colonne e valori: l'email non deve poter divergere dal PDF su
+    cosa mostra per ogni riga.
+    """
+    from src.pdf import _INT_COLS, _int_row_value
+
+    righe = list(
+        trasmittal.righe.select_related("documento")
+        .prefetch_related(Prefetch("siti", queryset=Stabilimento.objects.order_by("codice_bc")))
+        .order_by("posizione")
+    )
+    intestazioni = [colonna[1] for colonna in _INT_COLS]
+    chiavi = [colonna[0] for colonna in _INT_COLS]
+    valori = [[_int_row_value(riga, chiave) or "-" for chiave in chiavi] for riga in righe]
+
+    larghezze = [
+        max([len(intestazioni[i])] + [len(riga[i]) for riga in valori])
+        for i in range(len(intestazioni))
+    ]
+
+    def _formatta(celle):
+        return "  ".join(cella.ljust(larghezze[i]) for i, cella in enumerate(celle))
+
+    return "\n".join(
+        [_formatta(intestazioni), "  ".join("-" * w for w in larghezze)]
+        + [_formatta(riga) for riga in valori]
+    )
+
+
+def _corpo_email_trasmittal(trasmittal, percorso):
+    """Corpo dell'email: è la lettera per chi la riceve, non solo un avviso.
+
+    Include la tabella delle righe (stesse colonne del PDF, così il
+    destinatario sa cosa gli è stato trasmesso senza dover aprire
+    l'allegato), il percorso completo dove il PDF è salvato sul fileserver
+    e il promemoria che il modulo va firmato a distribuzione avvenuta.
+    """
+    return (
+        f"Trasmittal interno {trasmittal.nome} — commessa {trasmittal.testata.job}.\n\n"
+        f"{_tabella_testo_righe(trasmittal)}\n\n"
+        f"Salvato in: {percorso}\n\n"
+        "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
+        "cartacee avvenuta."
+    )
+
+
 def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     """Invia via email il trasmittal interno ai destinatari TO/CC registrati.
+
+    Oggetto e corpo replicano il vecchio strumento: l'oggetto porta il
+    riferimento al modulo del sistema qualità (non è decorativo, identifica
+    il documento), il corpo è la lettera stessa per chi la riceve — righe,
+    percorso di salvataggio, promemoria di firma — non un avviso generico
+    che rimanda all'allegato.
 
     Args:
         pdf_bytes: bytes del PDF da allegare; se omesso, generato al volo
@@ -843,11 +898,8 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
         pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
 
     email = EmailMessage(
-        subject=f"Trasmittal interno {trasmittal.nome}",
-        body=(
-            f"In allegato il trasmittal interno {trasmittal.nome} "
-            f"della commessa {trasmittal.testata.job}."
-        ),
+        subject=f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}",
+        body=_corpo_email_trasmittal(trasmittal, percorso_pdf(trasmittal)),
         from_email=settings.DEFAULT_FROM_EMAIL,
         to=to,
         cc=cc,
