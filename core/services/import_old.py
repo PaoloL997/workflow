@@ -13,7 +13,7 @@ from ..models import (
     Testata,
 )
 from .access_source import fetch_commessa_frames
-from .organizzazione_commesse import persone_per_job
+from .organizzazione_commesse import persone_per_job, trova_utente_per_cognome
 from .revisione_anomalie import audit_commessa_summary
 from .revisioni_cleanup import (
     access_codes_without_nuova_rev,
@@ -242,9 +242,22 @@ def importa_commessa_da_access(job: str) -> dict:
             return
         if not ruoli:
             return
+        non_abbinati = []
         for ruolo, nomi in ruoli.items():
             for nome in nomi:
-                PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, nome_libero=nome)
+                utente = trova_utente_per_cognome(nome)
+                if utente:
+                    PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, utente=utente)
+                else:
+                    PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, nome_libero=nome)
+                    non_abbinati.append(f"{ruolo.upper()}={nome}")
+        if non_abbinati:
+            logger.warning(
+                "Import da report (job=%s): nomi non abbinati a un utente registrato, "
+                "da controllare — %s",
+                job_saved,
+                ", ".join(non_abbinati),
+            )
 
     transaction.on_commit(_importa_persone_da_excel)
     return {

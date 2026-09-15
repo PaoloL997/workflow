@@ -207,7 +207,8 @@ class TestataAdmin(admin.ModelAdmin):
 @admin.register(PersonaCommessa)
 class PersonaCommessaAdmin(admin.ModelAdmin):
     list_display = ("id", "testata", "ruolo", "utente", "nome_libero")
-    list_filter = ("ruolo",)
+    # "Utente" vuoto = cognome del foglio non abbinato: da controllare a mano.
+    list_filter = ("ruolo", ("utente", admin.EmptyFieldListFilter))
     search_fields = (
         "testata__job",
         "nome_libero",

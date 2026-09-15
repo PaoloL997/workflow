@@ -5,9 +5,10 @@ solo cognome ciascuna, non sempre valorizzate. Best-effort per costruzione:
 il file vive su una share di rete mantenuta a mano, la sua struttura non è
 sotto il nostro controllo.
 
-Il foglio "Nomi" (cognome → prefisso username, per ruolo) non è letto qui:
-potrebbe in futuro servire per collegare automaticamente questi nomi a utenti
-registrati, ma per ora l'import da report li tratta sempre come testo libero.
+Il foglio "Nomi" (cognome → prefisso username, per ruolo) non è letto qui.
+Per abbinare i cognomi a un utente registrato si usa invece
+``User.last_name``: più affidabile, perché è il dato che l'app già mantiene
+(il foglio "Nomi" può disallinearsi senza che nessuno se ne accorga).
 """
 
 import logging
@@ -107,13 +108,51 @@ def persone_per_job(job: str, path=None) -> dict[str, list[str]] | None:
     return leggi_organizzazione_commesse(path).get((job or "").strip())
 
 
+def trova_utente_per_cognome(cognome: str):
+    """Utente registrato con questo cognome (``User.last_name``, case-insensitive).
+
+    ``None`` se non c'è nessuna corrispondenza o ce n'è più di una: in
+    entrambi i casi è troppo ambiguo per decidere da soli — il cognome sul
+    foglio può essere scritto male, o la persona può non essere registrata
+    in workflow. Va risolto a mano (via admin).
+    """
+    from ..models import User
+
+    corrispondenze = list(User.objects.filter(last_name__iexact=(cognome or "").strip()))
+    return corrispondenze[0] if len(corrispondenze) == 1 else None
+
+
+def _crea_persona(testata, ruolo, cognome):
+    """Crea una PersonaCommessa da un cognome del foglio.
+
+    Prova prima ad abbinarlo a un utente registrato; se non c'è
+    corrispondenza univoca, la crea come testo libero (nessun errore: va
+    solo segnalata come "da risolvere" a chi chiama).
+
+    Returns:
+        (persona, abbinato: bool)
+    """
+    from ..models import PersonaCommessa
+
+    utente = trova_utente_per_cognome(cognome)
+    if utente:
+        return PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, utente=utente), True
+    return (
+        PersonaCommessa.objects.create(testata=testata, ruolo=ruolo, nome_libero=cognome),
+        False,
+    )
+
+
 def backfill_persone_commessa(jobs=None, dry_run=False) -> dict:
     """Popola PM/PE/QCI/WE per le commesse già esistenti, dal foglio Excel.
 
     Idempotente a livello di ruolo: una commessa che ha già almeno una
     ``PersonaCommessa`` per un ruolo non viene toccata per quel ruolo (non
     duplica, non sovrascrive correzioni fatte a mano via admin); un ruolo
-    ancora vuoto viene popolato se il foglio ha dei nomi.
+    ancora vuoto viene popolato se il foglio ha dei nomi. Ogni cognome viene
+    abbinato a un utente registrato quando possibile (vedi
+    ``trova_utente_per_cognome``); altrimenti resta testo libero e compare
+    in ``da_risolvere``.
 
     Args:
         jobs: Iterable di job su cui limitare il backfill; tutte le
@@ -122,8 +161,9 @@ def backfill_persone_commessa(jobs=None, dry_run=False) -> dict:
 
     Returns:
         Dict con ``aggiornate`` (job con almeno un ruolo popolato),
-        ``non_trovate`` (job assenti nel foglio) e ``ruoli_saltati``
-        (già popolati, non toccati).
+        ``non_trovate`` (job assenti nel foglio), ``ruoli_saltati`` (già
+        popolati, non toccati) e ``da_risolvere`` (lista di
+        ``{"job", "ruolo", "nome"}`` per i cognomi non abbinati a un utente).
     """
     from ..models import PersonaCommessa, Testata
 
@@ -134,6 +174,7 @@ def backfill_persone_commessa(jobs=None, dry_run=False) -> dict:
     aggiornate = []
     non_trovate = []
     ruoli_saltati = 0
+    da_risolvere = []
     for testata in testate:
         ruoli = dati.get(testata.job)
         if ruoli is None:
@@ -147,11 +188,13 @@ def backfill_persone_commessa(jobs=None, dry_run=False) -> dict:
                 if PersonaCommessa.objects.filter(testata=testata, ruolo=ruolo).exists():
                     ruoli_saltati += 1
                     continue
-                if not dry_run:
-                    for nome in nomi:
-                        PersonaCommessa.objects.create(
-                            testata=testata, ruolo=ruolo, nome_libero=nome
-                        )
+                for nome in nomi:
+                    if dry_run:
+                        abbinato = trova_utente_per_cognome(nome) is not None
+                    else:
+                        _, abbinato = _crea_persona(testata, ruolo, nome)
+                    if not abbinato:
+                        da_risolvere.append({"job": testata.job, "ruolo": ruolo, "nome": nome})
                 nomi_creati += len(nomi)
         if nomi_creati:
             aggiornate.append(testata.job)
@@ -160,5 +203,45 @@ def backfill_persone_commessa(jobs=None, dry_run=False) -> dict:
         "aggiornate": aggiornate,
         "non_trovate": non_trovate,
         "ruoli_saltati": ruoli_saltati,
+        "da_risolvere": da_risolvere,
         "dry_run": dry_run,
     }
+
+
+def risolvi_persone_libere(jobs=None, dry_run=False) -> dict:
+    """Riprova ad abbinare a un utente registrato le PersonaCommessa già a testo libero.
+
+    Utile dopo aver corretto un nome sul foglio, o dopo che una persona si è
+    registrata in workflow: non serve rileggere il foglio, il cognome è già
+    salvato in ``nome_libero``.
+
+    Args:
+        jobs: Iterable di job su cui limitare la ricerca; tutte le commesse
+            se omesso.
+        dry_run: Se True, calcola cosa verrebbe risolto senza scrivere nulla.
+
+    Returns:
+        Dict con ``risolte`` (lista di ``{"job", "ruolo", "nome"}`` abbinate)
+        e ``non_risolte`` (stesso formato, ancora senza corrispondenza).
+    """
+    from ..models import PersonaCommessa
+
+    qs = PersonaCommessa.objects.filter(utente__isnull=True).exclude(nome_libero="")
+    if jobs:
+        qs = qs.filter(testata__job__in=list(jobs))
+
+    risolte = []
+    non_risolte = []
+    for persona in qs.select_related("testata").order_by("testata__job", "ruolo"):
+        voce = {"job": persona.testata.job, "ruolo": persona.ruolo, "nome": persona.nome_libero}
+        utente = trova_utente_per_cognome(persona.nome_libero)
+        if not utente:
+            non_risolte.append(voce)
+            continue
+        risolte.append(voce)
+        if not dry_run:
+            persona.utente = utente
+            persona.nome_libero = ""
+            persona.save(update_fields=["utente", "nome_libero"])
+
+    return {"risolte": risolte, "non_risolte": non_risolte, "dry_run": dry_run}

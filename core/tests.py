@@ -87,6 +87,8 @@ from .services.organizzazione_commesse import (
     backfill_persone_commessa,
     leggi_organizzazione_commesse,
     persone_per_job,
+    risolvi_persone_libere,
+    trova_utente_per_cognome,
 )
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -2292,9 +2294,9 @@ class ImportOldTests(TestCase):
             xlsm_path,
             [{"Job": "99999", "PM": "ROSSI", "PE": "BIANCHI/VERDI", "WE": None, "QCI": "N/A"}],
         )
-        # Un utente con lo stesso cognome esiste già: l'import da report non
-        # deve comunque collegarlo, sempre e solo testo libero.
-        User.objects.create_user(
+        # ROSSI ha un utente registrato con quel cognome: va abbinato. BIANCHI
+        # e VERDI no: restano testo libero, da risolvere a mano.
+        rossi = User.objects.create_user(
             "rossi_test", "rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
         )
 
@@ -2303,10 +2305,13 @@ class ImportOldTests(TestCase):
                 importa_commessa_da_access("99999")
 
         testata = Testata.objects.get(job="99999")
-        persone = list(testata.persone.all())
-        self.assertEqual(len(persone), 3)
-        self.assertTrue(all(p.utente_id is None for p in persone))
-        self.assertEqual(sorted(p.nome_libero for p in persone), ["BIANCHI", "ROSSI", "VERDI"])
+        pm = testata.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertEqual(pm.nome_libero, "")
+
+        liberi = testata.persone.filter(ruolo="pe")
+        self.assertEqual(sorted(liberi.values_list("nome_libero", flat=True)), ["BIANCHI", "VERDI"])
+        self.assertTrue(all(p.utente_id is None for p in liberi))
 
     @patch("core.services.import_old.fetch_commessa_frames")
     def test_importa_commessa_da_access_file_excel_assente_non_blocca_import(self, mock_fetch):
@@ -2656,6 +2661,134 @@ class BackfillPersoneCommessaTests(TestCase):
 
         self.assertEqual(PersonaCommessa.objects.count(), 0)
         self.assertIn("dry-run", out.getvalue())
+
+    def test_abbina_un_cognome_a_un_utente_registrato(self):
+        rossi = User.objects.create_user(
+            "bpc_rossi", "bpc-rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        backfill_persone_commessa()
+
+        pm = self.t1.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertEqual(pm.nome_libero, "")
+        # BIANCHI non ha un utente corrispondente: resta testo libero.
+        pe = self.t1.persone.get(ruolo="pe")
+        self.assertIsNone(pe.utente_id)
+        self.assertEqual(pe.nome_libero, "BIANCHI")
+
+    def test_da_risolvere_elenca_i_cognomi_non_abbinati(self):
+        report = backfill_persone_commessa()
+
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["da_risolvere"]},
+            {("55001", "pm", "ROSSI"), ("55001", "pe", "BIANCHI"), ("55002", "pm", "VERDI")},
+        )
+
+    def test_comando_segnala_da_risolvere(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", stdout=out)
+
+        self.assertIn("Da risolvere", out.getvalue())
+        self.assertIn("ROSSI", out.getvalue())
+
+    def test_comando_risolvi_esistenti(self):
+        backfill_persone_commessa()  # crea le righe a testo libero
+        rossi = User.objects.create_user(
+            "bpc_rossi2", "bpc-rossi2@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--risolvi-esistenti", stdout=out)
+
+        pm = self.t1.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertIn("ROSSI", out.getvalue())
+
+
+class TrovaUtentePerCognomeTests(TestCase):
+    """trova_utente_per_cognome: abbinamento cognome -> utente registrato."""
+
+    def test_una_sola_corrispondenza(self):
+        u = User.objects.create_user("tup1", "tup1@b.it", "pw", last_name="Rossi")
+
+        self.assertEqual(trova_utente_per_cognome("Rossi"), u)
+
+    def test_case_insensitive(self):
+        u = User.objects.create_user("tup2", "tup2@b.it", "pw", last_name="Rossi")
+
+        self.assertEqual(trova_utente_per_cognome("ROSSI"), u)
+
+    def test_nessuna_corrispondenza(self):
+        self.assertIsNone(trova_utente_per_cognome("Sconosciuto"))
+
+    def test_piu_corrispondenze_troppo_ambiguo(self):
+        User.objects.create_user("tup3", "tup3@b.it", "pw", last_name="Rossi")
+        User.objects.create_user("tup4", "tup4@b.it", "pw", last_name="Rossi")
+
+        self.assertIsNone(trova_utente_per_cognome("Rossi"))
+
+
+class RisolviPersoneLibereTests(TestCase):
+    """risolvi_persone_libere: ri-abbina le PersonaCommessa già a testo libero."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="55010")
+        self.non_abbinata = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, nome_libero="Rossi"
+        )
+        self.senza_utente = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, nome_libero="Sconosciuto"
+        )
+
+    def test_risolve_quando_un_utente_ora_esiste(self):
+        rossi = User.objects.create_user("rpl1", "rpl1@b.it", "pw", last_name="Rossi")
+
+        report = risolvi_persone_libere()
+
+        self.non_abbinata.refresh_from_db()
+        self.assertEqual(self.non_abbinata.utente_id, rossi.pk)
+        self.assertEqual(self.non_abbinata.nome_libero, "")
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["risolte"]},
+            {("55010", "pm", "Rossi")},
+        )
+
+    def test_lascia_intatte_quelle_ancora_senza_corrispondenza(self):
+        User.objects.create_user("rpl2", "rpl2@b.it", "pw", last_name="Rossi")
+
+        report = risolvi_persone_libere()
+
+        self.senza_utente.refresh_from_db()
+        self.assertIsNone(self.senza_utente.utente_id)
+        self.assertEqual(self.senza_utente.nome_libero, "Sconosciuto")
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["non_risolte"]},
+            {("55010", "pe", "Sconosciuto")},
+        )
+
+    def test_dry_run_non_scrive(self):
+        User.objects.create_user("rpl3", "rpl3@b.it", "pw", last_name="Rossi")
+
+        risolvi_persone_libere(dry_run=True)
+
+        self.non_abbinata.refresh_from_db()
+        self.assertIsNone(self.non_abbinata.utente_id)
+        self.assertEqual(self.non_abbinata.nome_libero, "Rossi")
+
+    def test_jobs_limita_la_ricerca(self):
+        User.objects.create_user("rpl4", "rpl4@b.it", "pw", last_name="Rossi")
+        altra_testata = Testata.objects.create(job="55011")
+        PersonaCommessa.objects.create(
+            testata=altra_testata, ruolo=RuoloPersonaCommessa.PM, nome_libero="Rossi"
+        )
+
+        risolvi_persone_libere(jobs=["55011"])
+
+        self.non_abbinata.refresh_from_db()
+        self.assertIsNone(self.non_abbinata.utente_id)
+        altra = PersonaCommessa.objects.get(testata=altra_testata)
+        self.assertIsNotNone(altra.utente_id)
 
 
 class UtentiCercaApiTests(TestCase):
