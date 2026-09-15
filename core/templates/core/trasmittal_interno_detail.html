@@ -287,6 +287,126 @@
   .btn-confirm:hover:not(:disabled) { background: var(--color-accent-hover); }
   .btn-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
+  /* ── Toolbar button (stesso stile di "Storico Trasmittal" in emissione) ── */
+  .toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-elevated);
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .toolbar-btn:hover { color: var(--color-text-primary); background: hsla(0,0%,50%,0.08); }
+
+  /* ─────────────────────────────────────────────
+     MODAL
+  ───────────────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: hsla(0,0%,0%,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    width: 100%;
+    max-width: 480px;
+    background: var(--color-surface);
+    border-radius: 16px;
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-elevated);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .modal-title { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); }
+  .modal-body { max-height: 55vh; overflow-y: auto; }
+
+  /* ── Lettere emesse: stesso principio/stile di "Storico trasmittal" ── */
+  .storico-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 4px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .storico-row:last-child { border-bottom: none; }
+  .storico-nome {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
+  }
+  .storico-date-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: hsla(211, 100%, 55%, 0.15);
+    color: var(--color-accent);
+    border: 1px solid hsla(211, 100%, 55%, 0.35);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.1s, color 0.1s, border-color 0.1s;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  .storico-date-chip:hover {
+    background: hsla(211, 100%, 55%, 0.25);
+    border-color: var(--color-accent);
+  }
+  [data-theme="light"] .storico-date-chip {
+    background: hsl(211, 100%, 92%);
+    color: hsl(211, 80%, 38%);
+    border-color: hsl(211, 80%, 72%);
+  }
+  [data-theme="light"] .storico-date-chip:hover {
+    background: hsl(211, 100%, 88%);
+    border-color: var(--color-accent);
+  }
+  .storico-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .storico-annulla {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-danger);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.1s, border-color 0.1s;
+    white-space: nowrap;
+  }
+  .storico-annulla:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); border-color: var(--color-danger); }
+  .storico-empty {
+    padding: 8px;
+    text-align: center;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 0;
+  }
+
   /* ── Theme toggle ── */
   .theme-toggle {
     position: fixed;
@@ -359,15 +479,14 @@
 
     <!-- ── Tabs ── -->
     <div class="ti-tabs" role="tablist">
-      <button type="button" class="ti-tab active" data-tab="lettere" onclick="switchTab('lettere')">Lettere emesse</button>
-      <button type="button" class="ti-tab" data-tab="nuova" onclick="switchTab('nuova')">Nuova lettera</button>
+      <button type="button" class="ti-tab active" data-tab="nuova" onclick="switchTab('nuova')">Nuova lettera</button>
       <button type="button" class="ti-tab" data-tab="destinazioni" onclick="switchTab('destinazioni')">Destinazioni cartacee</button>
     </div>
 
     <!-- ══════════════════════════════════════════════════
          VIEW: Nuova lettera — selezione documenti
     ══════════════════════════════════════════════════ -->
-    <div class="ti-view" id="view-nuova" hidden>
+    <div class="ti-view" id="view-nuova">
       <div class="ti-ctrl">
         <span class="ctrl-lbl">Documento:</span>
         <input type="text" id="sel-filter" class="ctrl-input" placeholder="Filtra per nome…">
@@ -376,6 +495,7 @@
           <option value="nome">Nome</option>
           <option value="file">Data modifica file</option>
         </select>
+        <button type="button" class="toolbar-btn" onclick="apriLettereEmesse()" aria-label="Lettere emesse">Lettere emesse</button>
         {% if not user.can_write %}
           <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
         {% endif %}
@@ -431,35 +551,18 @@
       </div>
     </div>
 
-    <!-- ══════════════════════════════════════════════════
-         VIEW: Lettere emesse
-    ══════════════════════════════════════════════════ -->
-    <div class="ti-view" id="view-lettere">
-      <div class="page-toolbar">
-        <span class="toolbar-counter" id="lettere-counter"><strong>0</strong> lettere</span>
-        <button type="button" class="btn-confirm" onclick="switchTab('nuova')">Nuova lettera</button>
-      </div>
-      <div class="doc-card">
-        <table class="ti-tbl">
-          <thead>
-            <tr>
-              <th class="col-doc">Nome</th>
-              <th>Data</th>
-              <th>Documenti</th>
-              <th>Emesso da</th>
-              <th>PDF</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="lettere-tbody">
-            <tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
   </div><!-- /content -->
 </div><!-- /page -->
+
+<!-- ── Lettere emesse (stesso principio/stile di "Storico trasmittal") ── -->
+<div class="modal-overlay" id="lettere-modal" role="dialog" aria-modal="true" aria-labelledby="lettere-title">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-title" id="lettere-title">Lettere emesse</div>
+    <div class="modal-body" id="lettere-body">
+      <p class="storico-empty">Caricamento&hellip;</p>
+    </div>
+  </div>
+</div>
 
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
@@ -497,10 +600,10 @@
   /* ══════════════════════════════════════════════════
      TABS
   ══════════════════════════════════════════════════ */
-  var _loaded = { destinazioni: false, lettere: false, nuova: false };
+  var _loaded = { destinazioni: false, nuova: false };
 
   window.switchTab = function (name) {
-    ['destinazioni', 'lettere', 'nuova'].forEach(function (n) {
+    ['destinazioni', 'nuova'].forEach(function (n) {
       document.getElementById('view-' + n).hidden = n !== name;
       var tab = document.querySelector('.ti-tab[data-tab="' + n + '"]');
       if (tab) tab.classList.toggle('active', n === name);
@@ -508,7 +611,6 @@
     if (!_loaded[name]) {
       _loaded[name] = true;
       if (name === 'destinazioni') initDestinazioni();
-      if (name === 'lettere') caricaLettere();
       if (name === 'nuova') initSelezione();
     }
   };
@@ -794,40 +896,49 @@
   };
 
   /* ══════════════════════════════════════════════════
-     VIEW: Lettere emesse
+     Lettere emesse — modale, stesso principio/stile di "Storico trasmittal"
+     nella pagina di emissione: consultazione secondaria, non un tab.
   ══════════════════════════════════════════════════ */
-  async function caricaLettere() {
-    var tbody = document.getElementById('lettere-tbody');
+  window.apriLettereEmesse = async function () {
+    const modal = document.getElementById('lettere-modal');
+    const body = document.getElementById('lettere-body');
+    modal.classList.add('open');
+    body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
     try {
       const r = await fetch(baseUrl() + 'lettere/');
+      const data = await r.json().catch(function () { return {}; });
       if (!r.ok) {
-        tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore nel caricamento.</td></tr>';
+        body.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare le lettere emesse.') + '</p>';
         return;
       }
-      const d = await r.json();
-      const lettere = d.lettere || [];
-      document.getElementById('lettere-counter').innerHTML = '<strong>' + lettere.length + '</strong> lettere';
+      const lettere = data.lettere || [];
       if (!lettere.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Nessuna lettera emessa per questa commessa.</td></tr>';
+        body.innerHTML = '<p class="storico-empty">Nessuna lettera emessa per questa commessa.</p>';
         return;
       }
-      tbody.innerHTML = lettere.map(function (l) {
-        var annullaBtn = (l.annullabile && window.USER_CAN_WRITE)
-          ? '<button type="button" class="ti-link-btn" style="color:var(--color-danger);" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>'
-          : '';
-        return '<tr>'
-          + '<td><div class="doc-code">' + escHtml(l.nome) + '</div></td>'
-          + '<td>' + escHtml(l.data) + '</td>'
-          + '<td>' + l.n_documenti + '</td>'
-          + '<td>' + escHtml(l.creato_da) + '</td>'
-          + '<td><a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="ti-link-btn">Apri PDF</a></td>'
-          + '<td>' + annullaBtn + '</td>'
-          + '</tr>';
+      body.innerHTML = lettere.map(function (l) {
+        var actions = '<div class="storico-row-actions">'
+          + '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>';
+        if (l.annullabile && window.USER_CAN_WRITE) {
+          actions += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>';
+        }
+        actions += '</div>';
+        return '<div class="storico-row">'
+          + '<span class="storico-nome">' + escHtml(l.nome) + '</span>'
+          + actions
+          + '</div>';
       }).join('');
     } catch {
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Errore di rete.</td></tr>';
+      body.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
     }
-  }
+  };
+
+  window.chiudiLettereEmesse = function () {
+    document.getElementById('lettere-modal').classList.remove('open');
+  };
+  document.getElementById('lettere-modal').addEventListener('click', function (e) {
+    if (e.target === this) chiudiLettereEmesse();
+  });
 
   window.annullaLettera = async function (id, nome) {
     if (!requireWrite()) return;
@@ -850,7 +961,7 @@
         alert(body.error || 'Impossibile annullare la lettera.');
         return;
       }
-      await caricaLettere();
+      await apriLettereEmesse();
     } catch {
       alert('Errore di rete.');
     }
@@ -858,7 +969,7 @@
 
   /* ── init ── */
   var tabIniziale = new URLSearchParams(window.location.search).get('tab');
-  switchTab(['destinazioni', 'nuova'].indexOf(tabIniziale) !== -1 ? tabIniziale : 'lettere');
+  switchTab(tabIniziale === 'destinazioni' ? 'destinazioni' : 'nuova');
 })();
 </script>
 {% endblock %}
