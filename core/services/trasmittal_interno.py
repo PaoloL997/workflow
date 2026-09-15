@@ -12,6 +12,7 @@ from django.utils import timezone
 from ..models import (
     DestinatarioTransmittalInterno,
     DestinazioneDocumento,
+    Documento,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
@@ -109,6 +110,96 @@ def siti_coinvolti(documenti):
         .distinct()
         .order_by("codice_bc")
     )
+
+
+# ── Griglia destinazioni cartacee (pagina trasmittal interno) ──────────────────
+
+
+def stabilimenti_costruttivi():
+    """Stabilimenti con un codice sito Business Central, in ordine di codice.
+
+    Sono le colonne della griglia destinazioni: solo i siti costruttivi (gli
+    unici verso cui una copia cartacea ha senso) possono comparire, mai gli
+    stabilimenti senza codice_bc.
+    """
+    return list(Stabilimento.objects.filter(codice_bc__isnull=False).order_by("codice_bc"))
+
+
+def documenti_ut(testata):
+    """Documenti UT della commessa: le righe della griglia destinazioni.
+
+    Reparto.acronimo "UT" identifica il reparto; Documento.reparto ne porta
+    il nome (vedi core.services.commesse.prepara_per_dcc per lo stesso
+    accoppiamento). Nessun reparto con quell'acronimo → nessun documento.
+    """
+    reparto_ut = Reparto.objects.filter(acronimo="UT").first()
+    if reparto_ut is None:
+        return Documento.objects.none()
+    return Documento.objects.filter(testata=testata, reparto=reparto_ut.nome)
+
+
+def elenco_destinazioni_ut(testata):
+    """Documenti UT della commessa con le destinazioni cartacee correnti.
+
+    Returns:
+        Lista di dict ``{"id", "vendor_doc", "doc_title", "codici_bc"}``,
+        ordinata per ``vendor_doc``. ``codici_bc`` è la lista dei
+        ``Stabilimento.codice_bc`` attualmente destinatari del documento.
+    """
+    documenti = (
+        documenti_ut(testata).prefetch_related("destinazioni__stabilimento").order_by("vendor_doc")
+    )
+    return [
+        {
+            "id": documento.pk,
+            "vendor_doc": documento.vendor_doc,
+            "doc_title": documento.doc_title,
+            "codici_bc": [
+                destinazione.stabilimento.codice_bc for destinazione in documento.destinazioni.all()
+            ],
+        }
+        for documento in documenti
+    ]
+
+
+def imposta_destinazioni_ut(testata, documento_id, codici_bc):
+    """``imposta_destinazioni``, ristretto ai documenti UT della commessa data.
+
+    Raises:
+        Documento.DoesNotExist: se ``documento_id`` non è un documento UT di
+            ``testata`` (commessa sbagliata, o non è UT).
+    """
+    documento = documenti_ut(testata).get(pk=documento_id)
+    imposta_destinazioni(documento, codici_bc)
+    return documento
+
+
+def imposta_destinazione_stabilimento_bulk(testata, codice_bc, documento_ids, attiva):
+    """Attiva o disattiva un singolo stabilimento sulle destinazioni di più documenti UT.
+
+    Usata per la selezione in blocco della griglia destinazioni: il chiamante
+    passa esplicitamente gli id dei documenti su cui agire (tipicamente quelli
+    attualmente visibili dopo un filtro), così l'azione tocca solo quelli.
+    Eventuali id che non sono documenti UT di ``testata`` — perché di
+    un'altra commessa, o non UT — vengono ignorati silenziosamente: non è un
+    errore, sono semplicemente fuori dal set su cui questa griglia può agire.
+
+    Returns:
+        I documenti effettivamente aggiornati.
+    """
+    documenti = list(
+        documenti_ut(testata)
+        .filter(pk__in=list(documento_ids or []))
+        .prefetch_related("destinazioni__stabilimento")
+    )
+    for documento in documenti:
+        codici = {d.stabilimento.codice_bc for d in documento.destinazioni.all()}
+        if attiva:
+            codici.add(codice_bc)
+        else:
+            codici.discard(codice_bc)
+        imposta_destinazioni(documento, codici)
+    return documenti
 
 
 def _email_persone(testata, ruolo):

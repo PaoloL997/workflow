@@ -1577,6 +1577,247 @@ class PreparaPerDccTests(TestCase):
         )
 
 
+class TrasmittalInternoDestinazioniViewTests(TestCase):
+    """Pagina e API della griglia destinazioni cartacee del trasmittal interno."""
+
+    def setUp(self):
+        self.client = Client()
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        Stabilimento.objects.create(nome="Milano")  # non è un sito costruttivo
+
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.reparto_qc = Reparto.objects.create(nome="Qualità e Controllo", acronimo="QMD")
+
+        self.testata = Testata.objects.create(job="99040", sito_costruttivo=self.bg)
+        self.doc_alfa = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        self.doc_beta = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-BETA",
+            doc_title="Documento Beta",
+            reparto=self.reparto_ut.nome,
+        )
+        self.doc_non_ut = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-QC",
+            reparto=self.reparto_qc.nome,
+        )
+
+        self.writer = User.objects.create_user(
+            "tidv_writer", "tidv-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "tidv_reader", "tidv-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _pagina_url(self, job=None):
+        return f"/commesse/{job or self.testata.job}/trasmittal-interno/"
+
+    def _api_destinazioni_url(self, job=None):
+        return f"/api/commesse/{job or self.testata.job}/trasmittal-interno/destinazioni/"
+
+    def _api_documento_url(self, documento_id, job=None):
+        return (
+            f"/api/commesse/{job or self.testata.job}/trasmittal-interno/"
+            f"documenti/{documento_id}/destinazioni/"
+        )
+
+    def _api_bulk_url(self, codice_bc, job=None):
+        return (
+            f"/api/commesse/{job or self.testata.job}/trasmittal-interno/"
+            f"stabilimenti/{codice_bc}/destinazioni/"
+        )
+
+    # -- pagina --
+
+    def test_pagina_richiede_login(self):
+        risposta = self.client.get(self._pagina_url())
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_pagina_risponde_e_mostra_i_documenti_della_commessa(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._pagina_url())
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "Trasmittal interno")
+
+    # -- prerequisito: sito costruttivo --
+
+    def test_commessa_senza_sito_costruttivo_accesso_diretto_rifiutato(self):
+        Testata.objects.create(job="99041")  # niente sito_costruttivo
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._pagina_url(job="99041"))
+
+        self.assertEqual(risposta.status_code, 403)
+
+    def test_card_bloccata_in_pagina_commessa_senza_sito_costruttivo(self):
+        Testata.objects.create(job="99042")
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get("/commesse/99042/")
+
+        # Il nome della classe compare anche nel <style> (regole CSS), quindi
+        # va cercato sull'attributo class della card, non come sottostringa
+        # libera nell'intera risposta.
+        self.assertContains(risposta, 'class="section-card section-card-locked"')
+        self.assertContains(risposta, "Completa prima il sito costruttivo della commessa")
+
+    def test_card_non_bloccata_in_pagina_commessa_con_sito_costruttivo(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(f"/commesse/{self.testata.job}/")
+
+        self.assertNotContains(risposta, 'class="section-card section-card-locked"')
+
+    # -- API: lettura griglia --
+
+    def test_api_destinazioni_richiede_login(self):
+        risposta = self.client.get(self._api_destinazioni_url())
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_api_destinazioni_elenca_solo_i_documenti_ut(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._api_destinazioni_url())
+
+        self.assertEqual(risposta.status_code, 200)
+        dati = risposta.json()
+        self.assertEqual(
+            {d["vendor_doc"] for d in dati["documenti"]},
+            {self.doc_alfa.vendor_doc, self.doc_beta.vendor_doc},
+        )
+        self.assertEqual(
+            [s["sigla"] for s in dati["stabilimenti"]], ["BG", "PD"]
+        )  # niente Milano (senza codice_bc)
+
+    # -- API: salvataggio per documento --
+
+    def test_salvataggio_persiste_e_la_rilettura_mostra_le_destinazioni_spuntate(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_alfa.pk),
+            data=json.dumps({"codici_bc": [1, 2]}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 200)
+
+        rilettura = self.client.get(self._api_destinazioni_url()).json()
+        alfa = next(d for d in rilettura["documenti"] if d["id"] == self.doc_alfa.pk)
+        self.assertEqual(sorted(alfa["codici_bc"]), [1, 2])
+        beta = next(d for d in rilettura["documenti"] if d["id"] == self.doc_beta.pk)
+        self.assertEqual(beta["codici_bc"], [])
+
+    def test_salvataggio_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_alfa.pk),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc_alfa.destinazioni.all()), [])
+
+    def test_salvataggio_su_documento_non_ut_rifiutato(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_non_ut.pk),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 404)
+
+    # -- API: selezione in blocco --
+
+    def test_selezione_in_blocco_agisce_solo_sui_documenti_filtrati(self):
+        self.client.force_login(self.writer)
+        imposta_destinazioni(self.doc_beta, [2])  # beta è già su PD, fuori dal filtro
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(
+            sorted(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [1],
+        )
+        # doc_beta non era nel filtro (documento_ids): resta invariato.
+        self.assertEqual(
+            list(self.doc_beta.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [2],
+        )
+
+    def test_selezione_in_blocco_puo_disattivare(self):
+        self.client.force_login(self.writer)
+        imposta_destinazioni(self.doc_alfa, [1, 2])
+        imposta_destinazioni(self.doc_beta, [1])
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps(
+                {"documento_ids": [self.doc_alfa.pk, self.doc_beta.pk], "attiva": False}
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(
+            sorted(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [2],
+        )
+        self.assertEqual(
+            list(self.doc_beta.destinazioni.values_list("stabilimento__codice_bc", flat=True)), []
+        )
+
+    def test_selezione_in_blocco_ignora_id_estranei_a_questa_commessa(self):
+        altra_testata = Testata.objects.create(job="99043", sito_costruttivo=self.bg)
+        doc_altra = Documento.objects.create(
+            testata=altra_testata,
+            vendor_doc="99043-ALFA",
+            reparto=self.reparto_ut.nome,
+        )
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk, doc_altra.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(list(doc_altra.destinazioni.all()), [])
+        self.assertEqual(
+            list(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [1],
+        )
+
+    def test_selezione_in_blocco_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc_alfa.destinazioni.all()), [])
+
+
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────
 
 

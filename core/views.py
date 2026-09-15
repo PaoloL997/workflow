@@ -108,6 +108,12 @@ from .services.segnalazioni import (
     set_voto,
 )
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
+from .services.trasmittal_interno import (
+    elenco_destinazioni_ut,
+    imposta_destinazione_stabilimento_bulk,
+    imposta_destinazioni_ut,
+    stabilimenti_costruttivi,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +307,7 @@ def commessa_detail_view(request, job):
             "ricezione_extra": ricezione_extra,
             "anomalie_count": anomalie_count,
             "persone_ruoli": persone_per_ruolo(testata),
+            "trasmittal_interno_disponibile": testata.sito_costruttivo_id is not None,
         },
     )
 
@@ -376,6 +383,17 @@ def situazione_detail_view(request, job):
         "core/situazione_detail.html",
         {"testata": testata, "commessa_folder": commessa_folder},
     )
+
+
+@login_required
+def trasmittal_interno_detail_view(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    if testata.sito_costruttivo_id is None:
+        return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
+    return render(request, "core/trasmittal_interno_detail.html", {"testata": testata})
 
 
 @login_required
@@ -888,6 +906,71 @@ def emissione_api(request):
 def stabilimenti_api(request):
     items = list(Stabilimento.objects.values("id", "nome"))
     return JsonResponse({"stabilimenti": items})
+
+
+# ── API: Trasmittal interno — destinazioni cartacee ────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_destinazioni_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse(
+        {
+            "stabilimenti": [
+                {"codice_bc": s.codice_bc, "sigla": s.sigla, "nome": s.nome}
+                for s in stabilimenti_costruttivi()
+            ],
+            "documenti": elenco_destinazioni_ut(testata),
+        }
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def documento_destinazioni_api(request, job, pk):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    codici_bc = data.get("codici_bc")
+    if not isinstance(codici_bc, list) or not all(isinstance(c, int) for c in codici_bc):
+        return JsonResponse({"error": "codici_bc deve essere una lista di interi."}, status=400)
+    try:
+        imposta_destinazioni_ut(testata, pk, codici_bc)
+    except Documento.DoesNotExist:
+        return JsonResponse({"error": "Documento non trovato."}, status=404)
+    return JsonResponse({"ok": True})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    documento_ids = data.get("documento_ids")
+    attiva = data.get("attiva")
+    if not isinstance(documento_ids, list) or not isinstance(attiva, bool):
+        return JsonResponse(
+            {"error": "documento_ids deve essere una lista e attiva un booleano."}, status=400
+        )
+    documenti = imposta_destinazione_stabilimento_bulk(testata, codice_bc, documento_ids, attiva)
+    return JsonResponse({"ok": True, "documenti_aggiornati": [d.pk for d in documenti]})
 
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────

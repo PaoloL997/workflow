@@ -198,9 +198,10 @@ class TestataAdmin(admin.ModelAdmin):
         "actual_delivery_date",
         "time_cli_doc_rev",
         "time_ven_doc_rev",
+        "sito_costruttivo",
     )
     search_fields = ("job", "client", "po_no")
-    list_filter = ("delivery_date",)
+    list_filter = ("delivery_date", "sito_costruttivo")
     inlines = [PersonaCommessaInline]
 
 

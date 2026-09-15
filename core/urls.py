@@ -53,6 +53,11 @@ urlpatterns = [
     path("commesse/<str:job>/emissione/", views.emissione_detail_view, name="emissione_detail"),
     path("commesse/<str:job>/ricezione/", views.ricezione_detail_view, name="ricezione_detail"),
     path("commesse/<str:job>/situazione/", views.situazione_detail_view, name="situazione_detail"),
+    path(
+        "commesse/<str:job>/trasmittal-interno/",
+        views.trasmittal_interno_detail_view,
+        name="trasmittal_interno_detail",
+    ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
@@ -168,6 +173,22 @@ urlpatterns = [
     ),
     # API — Stabilimenti
     path("api/stabilimenti/", views.stabilimenti_api, name="stabilimenti_api"),
+    # API — Trasmittal interno: destinazioni cartacee
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/destinazioni/",
+        views.trasmittal_interno_destinazioni_api,
+        name="trasmittal_interno_destinazioni_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/documenti/<int:pk>/destinazioni/",
+        views.documento_destinazioni_api,
+        name="documento_destinazioni_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/stabilimenti/<int:codice_bc>/destinazioni/",
+        views.stabilimento_destinazioni_bulk_api,
+        name="stabilimento_destinazioni_bulk_api",
+    ),
     # API — Emissione
     path("api/emissione/", views.emissione_api, name="emissione_api"),
     path("api/trasmittal/pdf/", views.trasmittal_pdf_api, name="trasmittal_pdf_api"),

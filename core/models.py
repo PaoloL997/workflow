@@ -236,12 +236,36 @@ class Testata(models.Model):
         help_text="Giorni a nostra disposizione per emettere/revisionare un documento.",
     )
     rev_let_flag = models.BooleanField(db_column="RevLetFlag", default=False)
+    # Non sincronizzato automaticamente da Business Central (NBT_BRL Location
+    # Code, vedi src.erp.business_central.get_commessa_codice_sito): impostato
+    # a mano finché non esiste una sync dedicata. Prerequisito per il
+    # trasmittal interno, che deve sapere dove viene costruita la commessa.
+    sito_costruttivo = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commesse_costruttive",
+        verbose_name="Sito costruttivo",
+    )
 
     class Meta:
         managed = True
         db_table = "testate"
         verbose_name = "Archivio commessa"
         verbose_name_plural = "Archivi commessa"
+
+    def clean(self):
+        super().clean()
+        if self.sito_costruttivo_id and self.sito_costruttivo.codice_bc is None:
+            raise ValidationError(
+                {
+                    "sito_costruttivo": (
+                        "Lo stabilimento selezionato non ha un codice sito: non può "
+                        "essere il sito costruttivo di una commessa."
+                    )
+                }
+            )
 
     def __str__(self):
         return self.job
