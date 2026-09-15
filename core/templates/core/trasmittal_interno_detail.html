@@ -66,36 +66,6 @@
   }
 
   /* ─────────────────────────────────────────────
-     TABS
-  ───────────────────────────────────────────── */
-  .ti-tabs {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
-    margin-bottom: 20px;
-    flex-shrink: 0;
-  }
-  .ti-tab {
-    padding: 8px 18px;
-    border-radius: 999px;
-    border: 1px solid var(--color-border);
-    background: var(--color-elevated);
-    color: var(--color-text-secondary);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background .15s, color .15s, border-color .15s;
-  }
-  .ti-tab:hover { color: var(--color-text-primary); }
-  .ti-tab.active {
-    background: var(--color-accent);
-    border-color: var(--color-accent);
-    color: #fff;
-  }
-  .ti-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .ti-view[hidden] { display: none; }
-
-  /* ─────────────────────────────────────────────
      CONTROLS BAR
   ───────────────────────────────────────────── */
   .ti-ctrl {
@@ -107,7 +77,7 @@
     flex-shrink: 0;
   }
   .ctrl-lbl { font-size: 14px; color: var(--color-text-secondary); flex-shrink: 0; }
-  .ctrl-input, .ctrl-select {
+  .ctrl-select {
     padding: 7px 12px;
     border-radius: 10px;
     border: 1px solid var(--color-border);
@@ -116,8 +86,7 @@
     font-size: 14px;
     transition: border-color .15s;
   }
-  .ctrl-input { min-width: 220px; }
-  .ctrl-input:focus, .ctrl-select:focus {
+  .ctrl-select:focus {
     outline: none;
     border-color: var(--color-accent);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
@@ -125,7 +94,7 @@
   .status-msg {
     font-size: 13px;
     color: var(--color-success);
-    min-width: 160px;
+    min-width: 90px;
   }
   .status-msg.error { color: var(--color-danger); }
   .readonly-note {
@@ -155,7 +124,7 @@
   .toolbar-counter strong { color: var(--color-text-primary); font-weight: 700; }
 
   /* ─────────────────────────────────────────────
-     TABLE
+     CARD / TABLE
   ───────────────────────────────────────────── */
   .doc-card {
     flex: 1;
@@ -213,7 +182,7 @@
   }
   .ti-tbl tbody tr.invalida { opacity: 0.55; }
 
-  /* Involved sites chips (sola lettura, tab Nuova lettera) */
+  /* Siti coinvolti */
   .ti-sites { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
   .ti-site-chip {
     font-size: 10.5px;
@@ -230,6 +199,9 @@
     opacity: 0.7;
     font-style: italic;
   }
+  .ti-site-edit { display: flex; flex-direction: column; gap: 6px; padding: 4px 0; }
+  .ti-site-edit-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-text-primary); }
+  .ti-site-edit-actions { display: flex; gap: 8px; margin-top: 4px; }
 
   .th-chk-wrap, .td-chk-wrap {
     display: flex;
@@ -237,12 +209,6 @@
     align-items: center;
     justify-content: center;
     gap: 4px;
-  }
-  .ti-th-sigla {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: var(--color-text-secondary);
   }
 
   .rchk {
@@ -287,24 +253,21 @@
   .btn-confirm:hover:not(:disabled) { background: var(--color-accent-hover); }
   .btn-confirm:disabled { opacity: .4; cursor: not-allowed; }
 
-  /* ── Toolbar button (stesso stile di "Storico Trasmittal" in emissione) ── */
-  .toolbar-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px;
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    background: var(--color-elevated);
-    color: var(--color-text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    transition: color 0.15s, background 0.15s, border-color 0.15s;
-    white-space: nowrap;
+  .btn-cancel {
+    padding: 9px 20px; border-radius: 9px;
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 14px; font-weight: 500; border: 1px solid var(--color-border);
+    cursor: pointer; transition: background 0.15s;
   }
-  .toolbar-btn:hover { color: var(--color-text-primary); background: hsla(0,0%,50%,0.08); }
+  .btn-cancel:hover { background: var(--color-border); }
+  .btn-secondary {
+    padding: 6px 12px; border-radius: 8px;
+    background: var(--color-elevated); color: var(--color-text-primary);
+    font-size: 13px; font-weight: 500; border: 1px solid var(--color-border);
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-border); }
+  .btn-secondary:disabled { opacity: .4; cursor: not-allowed; }
 
   /* ─────────────────────────────────────────────
      MODAL
@@ -324,6 +287,7 @@
   .modal-box {
     width: 100%;
     max-width: 480px;
+    max-height: 88vh;
     background: var(--color-surface);
     border-radius: 16px;
     border: 1px solid var(--color-border);
@@ -331,18 +295,19 @@
     padding: 28px;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
   }
-  .modal-title { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); }
-  .modal-body { max-height: 55vh; overflow-y: auto; }
+  .modal-title { font-size: 18px; font-weight: 700; letter-spacing: -0.03em; color: var(--color-text-primary); flex-shrink: 0; }
+  .modal-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
 
-  /* ── Lettere emesse: stesso principio/stile di "Storico trasmittal" ── */
+  /* ── Storico lettere emesse (schermata principale) ── */
   .storico-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 10px 4px;
+    padding: 12px 20px;
     border-bottom: 1px solid var(--color-border);
   }
   .storico-row:last-child { border-bottom: none; }
@@ -399,10 +364,12 @@
   }
   .storico-annulla:hover { background: color-mix(in srgb, var(--color-danger) 12%, transparent); border-color: var(--color-danger); }
   .storico-empty {
-    padding: 8px;
+    padding: 48px 20px;
     text-align: center;
     color: var(--color-text-secondary);
+    opacity: .7;
     font-size: 14px;
+    font-style: italic;
     line-height: 1.55;
     margin: 0;
   }
@@ -477,89 +444,58 @@
       <h1 class="page-title">Trasmittal interno</h1>
     </header>
 
-    <!-- ── Tabs ── -->
-    <div class="ti-tabs" role="tablist">
-      <button type="button" class="ti-tab active" data-tab="nuova" onclick="switchTab('nuova')">Nuova lettera</button>
-      <button type="button" class="ti-tab" data-tab="destinazioni" onclick="switchTab('destinazioni')">Destinazioni cartacee</button>
+    <!-- ══════════════════════════════════════════════════
+         Storico delle lettere emesse — schermata principale
+    ══════════════════════════════════════════════════ -->
+    <div class="page-toolbar">
+      <span class="toolbar-counter" id="storico-counter"><strong>0</strong> lettere</span>
+      <button type="button" class="btn-confirm" onclick="apriNuovaLettera()">Nuova Lettera</button>
     </div>
 
-    <!-- ══════════════════════════════════════════════════
-         VIEW: Nuova lettera — selezione documenti
-    ══════════════════════════════════════════════════ -->
-    <div class="ti-view" id="view-nuova">
-      <div class="ti-ctrl">
-        <span class="ctrl-lbl">Documento:</span>
-        <input type="text" id="sel-filter" class="ctrl-input" placeholder="Filtra per nome…">
-        <span class="ctrl-lbl">Ordina per:</span>
-        <select id="sel-sort" class="ctrl-select">
-          <option value="nome">Nome</option>
-          <option value="file">Data modifica file</option>
-        </select>
-        <button type="button" class="toolbar-btn" onclick="apriLettereEmesse()" aria-label="Lettere emesse">Lettere emesse</button>
-        {% if not user.can_write %}
-          <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
-        {% endif %}
-      </div>
-
-      <div class="page-toolbar">
-        <span class="toolbar-counter" id="sel-counter"><strong>0</strong> selezionati</span>
-        <button type="button" class="btn-confirm" id="sel-emetti-btn" disabled onclick="vaiAllaCompilazione()">Emetti trasmittal interno</button>
-      </div>
-
-      <div class="doc-card">
-        <table class="ti-tbl">
-          <thead>
-            <tr>
-              <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
-              <th class="col-doc">Documento</th>
-              <th>Siti coinvolti</th>
-            </tr>
-          </thead>
-          <tbody id="sel-tbody">
-            <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════
-         VIEW: Destinazioni cartacee
-    ══════════════════════════════════════════════════ -->
-    <div class="ti-view" id="view-destinazioni" hidden>
-      <div class="ti-ctrl">
-        <span class="ctrl-lbl">Documento:</span>
-        <input type="text" id="ti-filter" class="ctrl-input" placeholder="Filtra per nome…">
-        <span class="status-msg" id="ti-status"></span>
-        {% if not user.can_write %}
-          <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
-        {% endif %}
-      </div>
-
-      <div class="page-toolbar">
-        <span class="toolbar-counter" id="ti-counter"><strong>0</strong> documenti</span>
-      </div>
-
-      <div class="doc-card">
-        <table class="ti-tbl">
-          <thead id="ti-thead">
-            <tr><th class="col-doc">Documento</th></tr>
-          </thead>
-          <tbody id="ti-tbody">
-            <tr><td style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
-          </tbody>
-        </table>
+    <div class="doc-card">
+      <div id="storico-list">
+        <p class="storico-empty">Caricamento&hellip;</p>
       </div>
     </div>
 
   </div><!-- /content -->
 </div><!-- /page -->
 
-<!-- ── Lettere emesse (stesso principio/stile di "Storico trasmittal") ── -->
-<div class="modal-overlay" id="lettere-modal" role="dialog" aria-modal="true" aria-labelledby="lettere-title">
-  <div class="modal-box" style="max-width:640px;">
-    <div class="modal-title" id="lettere-title">Lettere emesse</div>
-    <div class="modal-body" id="lettere-body">
-      <p class="storico-empty">Caricamento&hellip;</p>
+<!-- ── Nuova lettera: selezione documenti + gestione siti coinvolti ── -->
+<div class="modal-overlay" id="nuova-modal" role="dialog" aria-modal="true" aria-labelledby="nuova-title">
+  <div class="modal-box" style="max-width:900px;">
+    <div class="modal-title" id="nuova-title">Nuova lettera</div>
+
+    <div class="ti-ctrl" style="margin-bottom:0;">
+      <span class="ctrl-lbl">Assegna sito ai documenti selezionati:</span>
+      <select id="bulk-sito" class="ctrl-select"></select>
+      <button type="button" class="btn-secondary" onclick="bulkAssegnaSiti(true)">Aggiungi</button>
+      <button type="button" class="btn-secondary" onclick="bulkAssegnaSiti(false)">Rimuovi</button>
+      <span class="status-msg" id="bulk-status"></span>
+      {% if not user.can_write %}
+        <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
+      {% endif %}
+    </div>
+
+    <div class="modal-body">
+      <table class="ti-tbl">
+        <thead>
+          <tr>
+            <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
+            <th class="col-doc">Documento</th>
+            <th>Siti coinvolti</th>
+          </tr>
+        </thead>
+        <tbody id="sel-tbody">
+          <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions">
+      <span class="toolbar-counter" id="sel-counter" style="margin-right:auto;"><strong>0</strong> selezionati</span>
+      <button type="button" class="btn-cancel" onclick="chiudiNuovaLettera()">Chiudi</button>
+      <button type="button" class="btn-confirm" id="sel-emetti-btn" disabled onclick="vaiAllaCompilazione()">Emetti trasmittal interno</button>
     </div>
   </div>
 </div>
@@ -598,325 +534,24 @@
   })();
 
   /* ══════════════════════════════════════════════════
-     TABS
+     Storico lettere emesse — schermata principale
   ══════════════════════════════════════════════════ */
-  var _loaded = { destinazioni: false, nuova: false };
-
-  window.switchTab = function (name) {
-    ['destinazioni', 'nuova'].forEach(function (n) {
-      document.getElementById('view-' + n).hidden = n !== name;
-      var tab = document.querySelector('.ti-tab[data-tab="' + n + '"]');
-      if (tab) tab.classList.toggle('active', n === name);
-    });
-    if (!_loaded[name]) {
-      _loaded[name] = true;
-      if (name === 'destinazioni') initDestinazioni();
-      if (name === 'nuova') initSelezione();
-    }
-  };
-
-  /* ══════════════════════════════════════════════════
-     VIEW: Destinazioni cartacee (già esistente)
-  ══════════════════════════════════════════════════ */
-  let _stabilimenti = [];
-  let _docsDest = [];
-
-  function nomeDoc(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
-  function setStatus(m, isErr) {
-    var el = document.getElementById('ti-status');
-    el.textContent = m;
-    el.classList.toggle('error', !!isErr);
-  }
-
-  function filtratiDest() {
-    var q = document.getElementById('ti-filter').value.trim().toLowerCase();
-    var list = _docsDest.slice().sort(function (a, b) {
-      return nomeDoc(a).localeCompare(nomeDoc(b), 'it', { sensitivity: 'base' });
-    });
-    if (!q) return list;
-    return list.filter(function (d) { return nomeDoc(d).toLowerCase().indexOf(q) !== -1; });
-  }
-
-  function renderTheadDest() {
-    var head = '<tr><th class="col-doc">Documento</th>';
-    _stabilimenti.forEach(function (s) {
-      head += '<th class="col-chk"><div class="th-chk-wrap">'
-        + '<span class="ti-th-sigla">' + escHtml(s.sigla || '') + '</span>'
-        + '<input type="checkbox" class="rchk" id="hdr-chk-' + s.codice_bc + '"'
-        + (window.USER_CAN_WRITE ? '' : ' disabled')
-        + ' onchange="toggleColonna(' + s.codice_bc + ', this.checked)"></div></th>';
-    });
-    head += '</tr>';
-    document.getElementById('ti-thead').innerHTML = head;
-  }
-
-  function aggiornaTestateDest(visibili) {
-    _stabilimenti.forEach(function (s) {
-      var chk = document.getElementById('hdr-chk-' + s.codice_bc);
-      if (!chk) return;
-      var n = visibili.filter(function (d) { return d.codici_bc.indexOf(s.codice_bc) !== -1; }).length;
-      chk.checked = visibili.length > 0 && n === visibili.length;
-      chk.indeterminate = n > 0 && n < visibili.length;
-    });
-  }
-
-  function emptyTblDest(msg) {
-    var cols = 1 + _stabilimenti.length;
-    document.getElementById('ti-tbody').innerHTML =
-      '<tr><td colspan="' + cols + '" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
-  }
-
-  function renderTblDest(docs) {
-    if (!_docsDest.length) { emptyTblDest('Nessun documento UT per questa commessa.'); return; }
-    if (!docs.length) { emptyTblDest('Nessun documento corrisponde al filtro.'); return; }
-    document.getElementById('ti-tbody').innerHTML = docs.map(function (d) {
-      var celle = _stabilimenti.map(function (s) {
-        var checked = d.codici_bc.indexOf(s.codice_bc) !== -1;
-        return '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk"'
-          + (checked ? ' checked' : '')
-          + (window.USER_CAN_WRITE ? '' : ' disabled')
-          + ' onchange="toggleCella(' + d.id + ',' + s.codice_bc + ',this.checked)"></div></td>';
-      }).join('');
-      return '<tr>'
-        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
-        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
-        + '</td>' + celle + '</tr>';
-    }).join('');
-  }
-
-  function updCounterDest(n) {
-    document.getElementById('ti-counter').innerHTML = '<strong>' + n + '</strong> document' + (n === 1 ? 'o' : 'i');
-  }
-
-  function applyAndRenderDest() {
-    var visibili = filtratiDest();
-    renderTblDest(visibili);
-    aggiornaTestateDest(visibili);
-    updCounterDest(_docsDest.length);
-  }
-
-  async function salvaDestinazione(docId, codiciBc) {
-    try {
-      const r = await fetch(baseUrl() + 'documenti/' + docId + '/destinazioni/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ codici_bc: codiciBc }),
-      });
-      const body = await r.json().catch(function () { return {}; });
-      if (isPermissionDeniedResponse(r, body)) return false;
-      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.', true); return false; }
-      return true;
-    } catch {
-      setStatus('Errore di rete.', true);
-      return false;
-    }
-  }
-
-  window.toggleCella = async function (docId, codiceBc, checked) {
-    if (!requireWrite()) { applyAndRenderDest(); return; }
-    const doc = _docsDest.find(function (d) { return d.id === docId; });
-    if (!doc) return;
-    const set = new Set(doc.codici_bc);
-    if (checked) set.add(codiceBc); else set.delete(codiceBc);
-    const codici = Array.from(set);
-    setStatus('Salvataggio…');
-    const ok = await salvaDestinazione(docId, codici);
-    if (ok) {
-      doc.codici_bc = codici;
-      setStatus('✓ Salvato');
-      setTimeout(function () { setStatus(''); }, 1500);
-    } else {
-      applyAndRenderDest();
-    }
-    aggiornaTestateDest(filtratiDest());
-  };
-
-  async function salvaBulk(codiceBc, ids, attiva) {
-    try {
-      const r = await fetch(baseUrl() + 'stabilimenti/' + codiceBc + '/destinazioni/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ documento_ids: ids, attiva: attiva }),
-      });
-      const body = await r.json().catch(function () { return {}; });
-      if (isPermissionDeniedResponse(r, body)) return false;
-      if (!r.ok) { setStatus(body.error || 'Errore durante il salvataggio.', true); return false; }
-      return true;
-    } catch {
-      setStatus('Errore di rete.', true);
-      return false;
-    }
-  }
-
-  window.toggleColonna = async function (codiceBc, checked) {
-    if (!requireWrite()) { applyAndRenderDest(); return; }
-    const visibili = filtratiDest();
-    const ids = visibili.map(function (d) { return d.id; });
-    setStatus('Salvataggio…');
-    const ok = await salvaBulk(codiceBc, ids, checked);
-    if (ok) {
-      visibili.forEach(function (doc) {
-        const set = new Set(doc.codici_bc);
-        if (checked) set.add(codiceBc); else set.delete(codiceBc);
-        doc.codici_bc = Array.from(set);
-      });
-      setStatus('');
-    }
-    applyAndRenderDest();
-  };
-
-  document.getElementById('ti-filter').addEventListener('input', applyAndRenderDest);
-
-  async function initDestinazioni() {
-    try {
-      const r = await fetch(baseUrl() + 'destinazioni/');
-      if (!r.ok) { emptyTblDest('Errore nel caricamento.'); return; }
-      const d = await r.json();
-      _stabilimenti = d.stabilimenti || [];
-      _docsDest = d.documenti || [];
-      renderTheadDest();
-      applyAndRenderDest();
-    } catch {
-      emptyTblDest('Errore di rete.');
-    }
-  }
-
-  /* ══════════════════════════════════════════════════
-     VIEW: Nuova lettera — selezione documenti
-  ══════════════════════════════════════════════════ */
-  let _docsSel = [];
-  let _selezionati = new Set();
-
-  function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
-
-  function filtratiSel() {
-    var q = document.getElementById('sel-filter').value.trim().toLowerCase();
-    var ordina = document.getElementById('sel-sort').value;
-    var list = _docsSel.slice();
-    if (ordina === 'file') {
-      list.sort(function (a, b) {
-        var ta = a.file_modificato_il ? new Date(a.file_modificato_il).getTime() : -Infinity;
-        var tb = b.file_modificato_il ? new Date(b.file_modificato_il).getTime() : -Infinity;
-        return tb - ta;
-      });
-    } else {
-      list.sort(function (a, b) { return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' }); });
-    }
-    if (!q) return list;
-    return list.filter(function (d) { return nomeDocSel(d).toLowerCase().indexOf(q) !== -1; });
-  }
-
-  function renderSitiSel(d) {
-    if (d.siti && d.siti.length) {
-      return '<div class="ti-sites">' + d.siti.map(function (s) {
-        return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>';
-      }).join('') + '</div>';
-    }
-    return '<span class="ti-sites-empty">Nessuna</span>';
-  }
-
-  function emptySelTbl(msg) {
-    document.getElementById('sel-tbody').innerHTML =
-      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
-  }
-
-  function renderSelTbl(docs) {
-    if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
-    if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
-    var canWrite = window.USER_CAN_WRITE;
-    document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
-      var checked = _selezionati.has(d.id);
-      var disabledAttr = (!d.selezionabile || !canWrite) ? ' disabled' : '';
-      var motivo = !d.selezionabile
-        ? '<div class="cell-motivo">&#9888; ' + escHtml(d.motivo) + '</div>' : '';
-      return '<tr class="' + (d.selezionabile ? '' : 'invalida') + '" data-id="' + d.id + '">'
-        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk sel-chk"' + (checked ? ' checked' : '') + disabledAttr
-        + ' onchange="toggleSelezioneRiga(' + d.id + ', this.checked)"></div></td>'
-        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
-        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
-        + motivo + '</td>'
-        + '<td>' + renderSitiSel(d) + '</td>'
-        + '</tr>';
-    }).join('');
-  }
-
-  function aggiornaSelAll(visibili) {
-    var selezionabili = visibili.filter(function (d) { return d.selezionabile; });
-    var n = selezionabili.filter(function (d) { return _selezionati.has(d.id); }).length;
-    var all = document.getElementById('sel-all');
-    all.checked = selezionabili.length > 0 && n === selezionabili.length;
-    all.indeterminate = n > 0 && n < selezionabili.length;
-  }
-
-  function updSelCounter() {
-    document.getElementById('sel-counter').innerHTML = '<strong>' + _selezionati.size + '</strong> selezionat' + (_selezionati.size === 1 ? 'o' : 'i');
-    document.getElementById('sel-emetti-btn').disabled = _selezionati.size === 0;
-  }
-
-  function applyAndRenderSel() {
-    var visibili = filtratiSel();
-    renderSelTbl(visibili);
-    aggiornaSelAll(visibili);
-    updSelCounter();
-  }
-
-  window.toggleSelezioneRiga = function (id, checked) {
-    if (checked) _selezionati.add(id); else _selezionati.delete(id);
-    updSelCounter();
-  };
-
-  window.toggleTuttiSelezione = function (checked) {
-    filtratiSel().forEach(function (d) {
-      if (!d.selezionabile) return;
-      if (checked) _selezionati.add(d.id); else _selezionati.delete(d.id);
-    });
-    applyAndRenderSel();
-  };
-
-  document.getElementById('sel-filter').addEventListener('input', applyAndRenderSel);
-  document.getElementById('sel-sort').addEventListener('change', applyAndRenderSel);
-
-  async function initSelezione() {
-    try {
-      const r = await fetch(baseUrl() + 'selezione/');
-      if (!r.ok) { emptySelTbl('Errore nel caricamento.'); return; }
-      const d = await r.json();
-      _docsSel = d.documenti || [];
-      applyAndRenderSel();
-    } catch {
-      emptySelTbl('Errore di rete.');
-    }
-  }
-
-  window.vaiAllaCompilazione = function () {
-    if (!requireWrite()) return;
-    if (!_selezionati.size) return;
-    var ids = Array.from(_selezionati).join(',');
-    window.location.href = '/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/nuovo/?documenti=' + ids;
-  };
-
-  /* ══════════════════════════════════════════════════
-     Lettere emesse — modale, stesso principio/stile di "Storico trasmittal"
-     nella pagina di emissione: consultazione secondaria, non un tab.
-  ══════════════════════════════════════════════════ */
-  window.apriLettereEmesse = async function () {
-    const modal = document.getElementById('lettere-modal');
-    const body = document.getElementById('lettere-body');
-    modal.classList.add('open');
-    body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
+  async function caricaStorico() {
+    var list = document.getElementById('storico-list');
     try {
       const r = await fetch(baseUrl() + 'lettere/');
       const data = await r.json().catch(function () { return {}; });
       if (!r.ok) {
-        body.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare le lettere emesse.') + '</p>';
+        list.innerHTML = '<p class="storico-empty">' + escHtml(data.error || 'Impossibile caricare le lettere emesse.') + '</p>';
         return;
       }
       const lettere = data.lettere || [];
+      document.getElementById('storico-counter').innerHTML = '<strong>' + lettere.length + '</strong> lettere';
       if (!lettere.length) {
-        body.innerHTML = '<p class="storico-empty">Nessuna lettera emessa per questa commessa.</p>';
+        list.innerHTML = '<p class="storico-empty">Nessuna lettera emessa per questa commessa.</p>';
         return;
       }
-      body.innerHTML = lettere.map(function (l) {
+      list.innerHTML = lettere.map(function (l) {
         var actions = '<div class="storico-row-actions">'
           + '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>';
         if (l.annullabile && window.USER_CAN_WRITE) {
@@ -929,16 +564,9 @@
           + '</div>';
       }).join('');
     } catch {
-      body.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
+      list.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
     }
-  };
-
-  window.chiudiLettereEmesse = function () {
-    document.getElementById('lettere-modal').classList.remove('open');
-  };
-  document.getElementById('lettere-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiLettereEmesse();
-  });
+  }
 
   window.annullaLettera = async function (id, nome) {
     if (!requireWrite()) return;
@@ -961,15 +589,227 @@
         alert(body.error || 'Impossibile annullare la lettera.');
         return;
       }
-      await apriLettereEmesse();
+      await caricaStorico();
     } catch {
       alert('Errore di rete.');
     }
   };
 
+  /* ══════════════════════════════════════════════════
+     Nuova lettera — selezione documenti + siti coinvolti
+  ══════════════════════════════════════════════════ */
+  let _docsSel = [];
+  let _selezionati = new Set();
+  let _stabilimenti = [];
+
+  function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
+
+  function ordinatiSel() {
+    return _docsSel.slice().sort(function (a, b) {
+      return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' });
+    });
+  }
+
+  function sitiCellHtml(d) {
+    var chips = (d.siti && d.siti.length)
+      ? d.siti.map(function (s) { return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>'; }).join('')
+      : '<span class="ti-sites-empty">Nessuno</span>';
+    return '<div class="ti-sites">' + chips
+      + ' <button type="button" class="ti-link-btn" onclick="toggleSitiEdit(' + d.id + ')">Modifica</button></div>';
+  }
+
+  function emptySelTbl(msg) {
+    document.getElementById('sel-tbody').innerHTML =
+      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+  }
+
+  function renderSelTbl(docs) {
+    if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
+    var canWrite = window.USER_CAN_WRITE;
+    document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
+      var checked = _selezionati.has(d.id);
+      var disabledAttr = (!d.selezionabile || !canWrite) ? ' disabled' : '';
+      var motivo = !d.selezionabile
+        ? '<div class="cell-motivo">&#9888; ' + escHtml(d.motivo) + '</div>' : '';
+      return '<tr class="' + (d.selezionabile ? '' : 'invalida') + '" data-id="' + d.id + '">'
+        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk sel-chk"' + (checked ? ' checked' : '') + disabledAttr
+        + ' onchange="toggleSelezioneRiga(' + d.id + ', this.checked)"></div></td>'
+        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
+        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
+        + motivo + '</td>'
+        + '<td id="siti-cell-' + d.id + '">' + sitiCellHtml(d) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function aggiornaSelAll(lista) {
+    var selezionabili = lista.filter(function (d) { return d.selezionabile; });
+    var n = selezionabili.filter(function (d) { return _selezionati.has(d.id); }).length;
+    var all = document.getElementById('sel-all');
+    all.checked = selezionabili.length > 0 && n === selezionabili.length;
+    all.indeterminate = n > 0 && n < selezionabili.length;
+  }
+
+  function updSelCounter() {
+    document.getElementById('sel-counter').innerHTML = '<strong>' + _selezionati.size + '</strong> selezionat' + (_selezionati.size === 1 ? 'o' : 'i');
+    document.getElementById('sel-emetti-btn').disabled = _selezionati.size === 0;
+  }
+
+  function applyAndRenderSel() {
+    var lista = ordinatiSel();
+    renderSelTbl(lista);
+    aggiornaSelAll(lista);
+    updSelCounter();
+  }
+
+  window.toggleSelezioneRiga = function (id, checked) {
+    if (checked) _selezionati.add(id); else _selezionati.delete(id);
+    updSelCounter();
+  };
+
+  window.toggleTuttiSelezione = function (checked) {
+    _docsSel.forEach(function (d) {
+      if (!d.selezionabile) return;
+      if (checked) _selezionati.add(d.id); else _selezionati.delete(d.id);
+    });
+    applyAndRenderSel();
+  };
+
+  /* ── Siti coinvolti: modifica per singolo documento ── */
+  window.toggleSitiEdit = function (id) {
+    if (!requireWrite()) return;
+    var cell = document.getElementById('siti-cell-' + id);
+    var doc = _docsSel.find(function (d) { return d.id === id; });
+    if (!cell || !doc) return;
+    var correnti = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
+    cell.innerHTML = '<div class="ti-site-edit">'
+      + _stabilimenti.map(function (s) {
+          var chk = correnti.has(s.codice_bc) ? ' checked' : '';
+          return '<label class="ti-site-edit-opt"><input type="checkbox" class="rchk" value="' + s.codice_bc + '"' + chk + '>' + escHtml(s.sigla || '') + '</label>';
+        }).join('')
+      + '<div class="ti-site-edit-actions">'
+      + '<button type="button" class="btn-secondary" onclick="annullaSitiEdit(' + id + ')">Annulla</button>'
+      + '<button type="button" class="btn-secondary" onclick="salvaSitiEdit(' + id + ')">Salva</button>'
+      + '</div></div>';
+  };
+
+  window.annullaSitiEdit = function (id) {
+    var cell = document.getElementById('siti-cell-' + id);
+    var doc = _docsSel.find(function (d) { return d.id === id; });
+    if (cell && doc) cell.innerHTML = sitiCellHtml(doc);
+  };
+
+  window.salvaSitiEdit = async function (id) {
+    var cell = document.getElementById('siti-cell-' + id);
+    if (!cell) return;
+    var checked = Array.from(cell.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (el) { return parseInt(el.value, 10); });
+    try {
+      const r = await fetch(baseUrl() + 'documenti/' + id + '/destinazioni/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ codici_bc: checked }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) return;
+      if (!r.ok) { alert(body.error || 'Errore nel salvataggio dei siti.'); return; }
+    } catch {
+      alert('Errore di rete.');
+      return;
+    }
+    var doc = _docsSel.find(function (d) { return d.id === id; });
+    if (doc) doc.siti = _stabilimenti.filter(function (s) { return checked.indexOf(s.codice_bc) !== -1; });
+    if (doc) cell.innerHTML = sitiCellHtml(doc);
+  };
+
+  /* ── Siti coinvolti: assegnazione in blocco ai documenti selezionati ── */
+  function setBulkStatus(m, isErr) {
+    var el = document.getElementById('bulk-status');
+    el.textContent = m;
+    el.classList.toggle('error', !!isErr);
+  }
+
+  function popolaBulkSelect() {
+    document.getElementById('bulk-sito').innerHTML = _stabilimenti.map(function (s) {
+      return '<option value="' + s.codice_bc + '">' + escHtml(s.sigla || '') + ' — ' + escHtml(s.nome || '') + '</option>';
+    }).join('');
+  }
+
+  window.bulkAssegnaSiti = async function (attiva) {
+    if (!requireWrite()) return;
+    if (!_selezionati.size) { setBulkStatus('Seleziona almeno un documento.', true); return; }
+    var sel = document.getElementById('bulk-sito');
+    var codiceBc = parseInt(sel.value, 10);
+    if (!codiceBc) return;
+    var ids = Array.from(_selezionati);
+    setBulkStatus('Salvataggio…');
+    try {
+      const r = await fetch(baseUrl() + 'stabilimenti/' + codiceBc + '/destinazioni/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ documento_ids: ids, attiva: attiva }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) { setBulkStatus(''); return; }
+      if (!r.ok) { setBulkStatus(body.error || 'Errore durante il salvataggio.', true); return; }
+    } catch {
+      setBulkStatus('Errore di rete.', true);
+      return;
+    }
+    ids.forEach(function (id) {
+      var doc = _docsSel.find(function (d) { return d.id === id; });
+      if (!doc) return;
+      var set = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
+      if (attiva) set.add(codiceBc); else set.delete(codiceBc);
+      doc.siti = _stabilimenti.filter(function (s) { return set.has(s.codice_bc); });
+    });
+    applyAndRenderSel();
+    setBulkStatus('✓ Salvato');
+    setTimeout(function () { setBulkStatus(''); }, 1500);
+  };
+
+  /* ── Apertura/chiusura modale ── */
+  window.apriNuovaLettera = async function () {
+    document.getElementById('nuova-modal').classList.add('open');
+    emptySelTbl('Caricamento…');
+    try {
+      const [rSel, rDest] = await Promise.all([
+        fetch(baseUrl() + 'selezione/'),
+        fetch(baseUrl() + 'destinazioni/'),
+      ]);
+      if (!rSel.ok) { emptySelTbl('Errore nel caricamento.'); return; }
+      const dSel = await rSel.json();
+      _docsSel = dSel.documenti || [];
+      if (rDest.ok) {
+        const dDest = await rDest.json();
+        _stabilimenti = dDest.stabilimenti || [];
+        popolaBulkSelect();
+      }
+      applyAndRenderSel();
+    } catch {
+      emptySelTbl('Errore di rete.');
+    }
+  };
+
+  window.chiudiNuovaLettera = function () {
+    document.getElementById('nuova-modal').classList.remove('open');
+  };
+  document.getElementById('nuova-modal').addEventListener('click', function (e) {
+    if (e.target === this) chiudiNuovaLettera();
+  });
+
+  window.vaiAllaCompilazione = function () {
+    if (!requireWrite()) return;
+    if (!_selezionati.size) return;
+    var ids = Array.from(_selezionati).join(',');
+    window.location.href = '/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/nuovo/?documenti=' + ids;
+  };
+
   /* ── init ── */
-  var tabIniziale = new URLSearchParams(window.location.search).get('tab');
-  switchTab(tabIniziale === 'destinazioni' ? 'destinazioni' : 'nuova');
+  caricaStorico();
+  if (new URLSearchParams(window.location.search).get('apri') === 'nuova') {
+    apriNuovaLettera();
+  }
 })();
 </script>
 {% endblock %}

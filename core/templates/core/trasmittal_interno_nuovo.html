@@ -446,7 +446,7 @@
         <div class="ti-nuovo-nome">{{ nome_lettera_preview }}</div>
         <div class="ti-nuovo-siti" id="ti-nuovo-siti"></div>
       </div>
-      <a href="{% url 'trasmittal_interno_detail' testata.job %}?tab=destinazioni" class="ti-link-btn">Gestisci destinazioni</a>
+      <a href="{% url 'trasmittal_interno_detail' testata.job %}?apri=nuova" class="ti-link-btn">Gestisci destinazioni</a>
     </div>
 
     {% if not ha_documenti %}
