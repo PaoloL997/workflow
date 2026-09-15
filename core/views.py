@@ -11,6 +11,7 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -114,13 +115,19 @@ from .services.trasmittal_interno import (
     annulla_trasmittal_interno,
     anteprima_pdf_bytes,
     anteprima_trasmittal,
+    componi_nome,
     elenco_destinazioni_ut,
     elenco_selezione_ut,
     elenco_trasmittal_interni,
     emetti_trasmittal_interno,
     imposta_destinazione_stabilimento_bulk,
     imposta_destinazioni_ut,
+    indirizzi_per_siti,
+    invia_email_trasmittal,
     percorso_pdf_lettera,
+    prepara_per_dcc,
+    prossimo_progressivo,
+    salva_pdf,
     stabilimenti_costruttivi,
 )
 
@@ -403,6 +410,50 @@ def trasmittal_interno_detail_view(request, job):
     if testata.sito_costruttivo_id is None:
         return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
     return render(request, "core/trasmittal_interno_detail.html", {"testata": testata})
+
+
+@login_required
+def trasmittal_interno_nuovo_view(request, job):
+    """Pagina di compilazione della lettera, con i documenti già selezionati in elenco documenti."""
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    if testata.sito_costruttivo_id is None:
+        return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
+
+    ids_richiesti = []
+    for pezzo in request.GET.get("documenti", "").split(","):
+        pezzo = pezzo.strip()
+        if pezzo.isdigit():
+            ids_richiesti.append(int(pezzo))
+
+    # Difesa server-side: solo documenti UT davvero selezionabili in questo
+    # momento, qualunque cosa sia arrivata nell'URL (il client ha già
+    # impedito la selezione degli altri).
+    selezionabili = {v["id"]: v for v in elenco_selezione_ut(testata) if v["selezionabile"]}
+    preselezionati = [selezionabili[i] for i in ids_richiesti if i in selezionabili]
+
+    siti_per_codice = {}
+    for riga in preselezionati:
+        for sito in riga["siti"]:
+            siti_per_codice[sito["codice_bc"]] = sito
+    siti_coinvolti_preview = sorted(siti_per_codice.values(), key=lambda s: s["codice_bc"])
+
+    oggi = timezone.localdate()
+    nome_lettera_preview = componi_nome(testata, oggi, prossimo_progressivo(testata, oggi))
+
+    return render(
+        request,
+        "core/trasmittal_interno_nuovo.html",
+        {
+            "testata": testata,
+            "ha_documenti": bool(preselezionati),
+            "preselected_docs": preselezionati,
+            "nome_lettera_preview": nome_lettera_preview,
+            "siti_coinvolti_preview": siti_coinvolti_preview,
+        },
+    )
 
 
 @login_required
@@ -985,6 +1036,32 @@ def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
 # ── API: Trasmittal interno — creazione lettera ─────────────────────────────────
 
 
+def _sigle_stabilimento_per_email(righe):
+    """Email -> sigle degli stabilimenti che la includono, solo per il pannello di conferma.
+
+    ``anteprima_trasmittal`` risolve i destinatari di origine stabilimento
+    sull'unione di tutti i siti coinvolti (una sola chiamata a
+    ``indirizzi_per_siti``), senza tracciare quale sito abbia contribuito
+    quale indirizzo. Qui, solo per la visualizzazione, si richiama la stessa
+    funzione di servizio una volta per sito per ricostruire l'associazione —
+    nessuna modifica al servizio, nessuna scrittura.
+    """
+    sigla_per_codice = {}
+    for riga in righe:
+        for sito in riga["siti"]:
+            sigla_per_codice[sito["codice_bc"]] = sito["sigla"]
+
+    sigle = {}
+    for codice, sigla in sigla_per_codice.items():
+        indirizzi = indirizzi_per_siti([codice])
+        for email in indirizzi["to"] + indirizzi["cc"]:
+            chiave = email.strip().lower()
+            lista = sigle.setdefault(chiave, [])
+            if sigla not in lista:
+                lista.append(sigla)
+    return sigle
+
+
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_interno_selezione_api(request, job):
@@ -1011,6 +1088,7 @@ def trasmittal_interno_anteprima_api(request, job):
         anteprima = anteprima_trasmittal(testata, data.get("righe") or [])
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+    anteprima["sigle_stabilimento"] = _sigle_stabilimento_per_email(anteprima["righe"])
     return JsonResponse(anteprima)
 
 
@@ -1107,6 +1185,66 @@ def trasmittal_interno_annulla_api(request, job, trasmittal_id):
     except TrasmittalInternoAnnullaError as exc:
         return JsonResponse({"error": str(exc)}, status=409)
     return JsonResponse({"ok": True, **esito})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
+    """Riprova un solo passo (pdf/dcc/email) di una lettera già creata.
+
+    Stessa logica di orchestrazione per-passo già usata dentro
+    ``emetti_trasmittal_interno`` — qui applicata a un singolo passo, sulle
+    stesse funzioni di servizio pubbliche, nessuna logica nuova nei servizi.
+    """
+    try:
+        trasmittal = TransmittalInterno.objects.select_related("testata").get(
+            pk=trasmittal_id, testata__job=job
+        )
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+
+    step = data.get("step")
+    if step not in ("pdf", "dcc", "email"):
+        return JsonResponse({"error": 'step deve essere "pdf", "dcc" o "email".'}, status=400)
+
+    if step == "pdf":
+        try:
+            percorso = salva_pdf(trasmittal)
+            esito = {"ok": True, "errore": None, "percorso": str(percorso)}
+        except Exception as exc:
+            logger.exception(
+                'Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome
+            )
+            esito = {"ok": False, "errore": str(exc), "percorso": None}
+    elif step == "dcc":
+        try:
+            esito_dcc = prepara_per_dcc(trasmittal)
+            esito = {"ok": True, "errore": None, **esito_dcc}
+        except Exception as exc:
+            logger.exception(
+                'Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome
+            )
+            esito = {
+                "ok": False,
+                "errore": str(exc),
+                "cartella": None,
+                "copiati": [],
+                "mancanti": [],
+            }
+    else:
+        try:
+            esito_email = invia_email_trasmittal(trasmittal)
+            esito = {"ok": True, "errore": None, **esito_email}
+        except Exception as exc:
+            logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
+            esito = {"ok": False, "errore": str(exc), "to": [], "cc": []}
+
+    return JsonResponse({"ok": True, "step": step, "esito": esito})
 
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────

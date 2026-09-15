@@ -58,6 +58,11 @@ urlpatterns = [
         views.trasmittal_interno_detail_view,
         name="trasmittal_interno_detail",
     ),
+    path(
+        "commesse/<str:job>/trasmittal-interno/nuovo/",
+        views.trasmittal_interno_nuovo_view,
+        name="trasmittal_interno_nuovo",
+    ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
@@ -224,6 +229,11 @@ urlpatterns = [
         "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/annulla/",
         views.trasmittal_interno_annulla_api,
         name="trasmittal_interno_annulla_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/retry/",
+        views.trasmittal_interno_lettera_retry_api,
+        name="trasmittal_interno_lettera_retry_api",
     ),
     # API — Emissione
     path("api/emissione/", views.emissione_api, name="emissione_api"),

@@ -2100,9 +2100,11 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertTrue(corpo["ok"])
         self.assertFalse(corpo["email"]["ok"])
         self.assertIn("SMTP non raggiungibile", corpo["email"]["errore"])
-        # La lettera resta in archivio nonostante l'invio email fallito.
+        # La lettera resta in archivio nonostante l'invio email fallito, e gli
+        # altri passi indipendenti (pdf, dcc) restano chiaramente riusciti.
         self.assertTrue(TransmittalInterno.objects.filter(pk=corpo["trasmittal_id"]).exists())
         self.assertTrue(corpo["pdf"]["ok"])
+        self.assertTrue(corpo["dcc"]["ok"])
         self.assertEqual(len(mail.outbox), 0)
 
     # -- elenco lettere emesse --
@@ -2124,6 +2126,237 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(lettere[1]["nome"], "99070_" + timezone.localdate().isoformat() + "_E1")
         self.assertEqual(lettere[0]["n_documenti"], 1)
         self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
+
+
+class TrasmittalInternoNuovaPaginaTests(TestCase):
+    """Pagina di compilazione (``trasmittal-interno/nuovo/``) e retry per-passo dell'esito.
+
+    Nota: ``self.client`` non esegue JavaScript. L'evidenziazione dello
+    stepper, la sequenza "Emetti non invia finché il pannello non è
+    confermato" (oltre alla garanzia di non-scrittura testata qui) e
+    "l'assegnazione siti inline non perde lo stato delle altre righe" restano
+    verifiche manuali/di browser, fuori dalla portata di questa suite — le
+    garanzie server-side sottostanti sono invece testate qui e in
+    ``TrasmittalInternoDestinazioniViewTests``.
+    """
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99075", sito_costruttivo=self.bg)
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99075-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        Revisione.objects.create(documento=self.doc_ok, rev_no=0)
+        imposta_destinazioni(self.doc_ok, [self.bg.codice_bc])
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+
+        self.doc_senza_revisione = Documento.objects.create(
+            testata=self.testata, vendor_doc="99075-BETA", reparto=self.reparto_ut.nome
+        )
+
+        self.writer = User.objects.create_user(
+            "tinp_writer", "tinp-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "tinp_reader", "tinp-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url_nuovo(self, documenti_ids):
+        ids = ",".join(str(i) for i in documenti_ids)
+        return f"/commesse/{self.testata.job}/trasmittal-interno/nuovo/?documenti={ids}"
+
+    def _api_url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _riga(self, documento, **overrides):
+        base = {
+            "documento_id": documento.pk,
+            "revisione": "A",
+            "copie": 1,
+            "tpi": "",
+            "note": "",
+            "cliente": True,
+        }
+        base.update(overrides)
+        return base
+
+    # -- ingresso dall'elenco documenti --
+
+    def test_selezione_dall_elenco_arriva_precompilata(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk]))
+
+        self.assertEqual(risposta.status_code, 200)
+        contenuto = risposta.content.decode()
+        self.assertIn(f'"id": {self.doc_ok.pk}', contenuto)
+        self.assertIn(self.doc_ok.vendor_doc, contenuto)
+
+    def test_documento_non_selezionabile_scartato_dalla_precompilazione(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk, self.doc_senza_revisione.pk]))
+
+        contenuto = risposta.content.decode()
+        self.assertIn(f'"id": {self.doc_ok.pk}', contenuto)
+        self.assertNotIn(f'"id": {self.doc_senza_revisione.pk}', contenuto)
+
+    def test_nessun_documento_selezionato_mostra_messaggio_vuoto(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url_nuovo([]))
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "Nessun documento selezionato.")
+
+    def test_pagina_nuovo_richiede_sito_costruttivo(self):
+        self.testata.sito_costruttivo = None
+        self.testata.save(update_fields=["sito_costruttivo"])
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk]))
+
+        self.assertEqual(risposta.status_code, 403)
+
+    # -- revisione modificata --
+
+    def test_revisione_modificata_viene_usata_nella_lettera(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, revisione="C")]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        trasmittal_id = risposta.json()["trasmittal_id"]
+        riga = RigaTransmittalInterno.objects.get(
+            trasmittal_id=trasmittal_id, documento=self.doc_ok
+        )
+        self.assertEqual(riga.revisione, "C")
+
+    # -- "Emetti" non invia finché il pannello non è confermato --
+
+    def test_anteprima_non_scrive_nulla(self):
+        self.client.force_login(self.reader)
+
+        self.client.post(
+            self._api_url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(TransmittalInterno.objects.count(), 0)
+
+    def test_anteprima_include_sigle_stabilimento(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        sigle = risposta.json()["sigle_stabilimento"]
+        self.assertEqual(sigle.get("bg@b.it"), ["BG"])
+
+    # -- esito con un passo fallito: retry per-passo --
+
+    def _emetti_con_email_fallita(self):
+        with patch(
+            "django.core.mail.EmailMessage.send", side_effect=Exception("SMTP non raggiungibile")
+        ):
+            risposta = self.client.post(
+                self._api_url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+        return risposta.json()
+
+    def test_retry_email_riesce_dopo_un_fallimento(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+        self.assertFalse(corpo["email"]["ok"])
+        self.assertEqual(len(mail.outbox), 0)
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo_retry = risposta.json()
+        self.assertTrue(corpo_retry["ok"])
+        self.assertTrue(corpo_retry["esito"]["ok"])
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_retry_richiede_login(self):
+        risposta = self.client.post(
+            self._api_url("lettere/1/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 401)
+
+    def test_retry_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+
+    def test_retry_lettera_di_un_altra_commessa_404(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+
+        altra = Testata.objects.create(job="99076", sito_costruttivo=self.bg)
+        risposta = self.client.post(
+            f"/api/commesse/{altra.job}/trasmittal-interno/lettere/{corpo['trasmittal_id']}/retry/",
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_retry_step_non_valido_400(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "qualcosa"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
 
 
 class AnnullaTrasmittalInternoTests(TestCase):
