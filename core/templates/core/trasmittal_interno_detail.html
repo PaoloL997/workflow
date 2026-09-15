@@ -203,6 +203,33 @@
 
   .doc-code { font-weight: 700; font-size: 13px; color: var(--color-accent); letter-spacing: -0.01em; }
   .cell-title { font-size: 12px; color: var(--color-text-secondary); }
+  .cell-motivo {
+    font-size: 11px;
+    color: var(--color-danger);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .ti-tbl tbody tr.invalida { opacity: 0.55; }
+
+  /* Involved sites chips (sola lettura, tab Nuova lettera) */
+  .ti-sites { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .ti-site-chip {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    color: var(--color-accent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+  .ti-sites-empty {
+    font-size: 11.5px;
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+    font-style: italic;
+  }
 
   .th-chk-wrap, .td-chk-wrap {
     display: flex;
@@ -333,7 +360,46 @@
     <!-- ── Tabs ── -->
     <div class="ti-tabs" role="tablist">
       <button type="button" class="ti-tab active" data-tab="lettere" onclick="switchTab('lettere')">Lettere emesse</button>
+      <button type="button" class="ti-tab" data-tab="nuova" onclick="switchTab('nuova')">Nuova lettera</button>
       <button type="button" class="ti-tab" data-tab="destinazioni" onclick="switchTab('destinazioni')">Destinazioni cartacee</button>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════
+         VIEW: Nuova lettera — selezione documenti
+    ══════════════════════════════════════════════════ -->
+    <div class="ti-view" id="view-nuova" hidden>
+      <div class="ti-ctrl">
+        <span class="ctrl-lbl">Documento:</span>
+        <input type="text" id="sel-filter" class="ctrl-input" placeholder="Filtra per nome…">
+        <span class="ctrl-lbl">Ordina per:</span>
+        <select id="sel-sort" class="ctrl-select">
+          <option value="nome">Nome</option>
+          <option value="file">Data modifica file</option>
+        </select>
+        {% if not user.can_write %}
+          <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
+        {% endif %}
+      </div>
+
+      <div class="page-toolbar">
+        <span class="toolbar-counter" id="sel-counter"><strong>0</strong> selezionati</span>
+        <button type="button" class="btn-confirm" id="sel-emetti-btn" disabled onclick="vaiAllaCompilazione()">Emetti trasmittal interno</button>
+      </div>
+
+      <div class="doc-card">
+        <table class="ti-tbl">
+          <thead>
+            <tr>
+              <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
+              <th class="col-doc">Documento</th>
+              <th>Siti coinvolti</th>
+            </tr>
+          </thead>
+          <tbody id="sel-tbody">
+            <tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">Caricamento&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ══════════════════════════════════════════════════
@@ -371,7 +437,7 @@
     <div class="ti-view" id="view-lettere">
       <div class="page-toolbar">
         <span class="toolbar-counter" id="lettere-counter"><strong>0</strong> lettere</span>
-        <a href="{% url 'documenti_list' testata.job %}" class="btn-confirm" style="text-decoration:none;">Nuova lettera</a>
+        <button type="button" class="btn-confirm" onclick="switchTab('nuova')">Nuova lettera</button>
       </div>
       <div class="doc-card">
         <table class="ti-tbl">
@@ -431,10 +497,10 @@
   /* ══════════════════════════════════════════════════
      TABS
   ══════════════════════════════════════════════════ */
-  var _loaded = { destinazioni: false, lettere: false };
+  var _loaded = { destinazioni: false, lettere: false, nuova: false };
 
   window.switchTab = function (name) {
-    ['destinazioni', 'lettere'].forEach(function (n) {
+    ['destinazioni', 'lettere', 'nuova'].forEach(function (n) {
       document.getElementById('view-' + n).hidden = n !== name;
       var tab = document.querySelector('.ti-tab[data-tab="' + n + '"]');
       if (tab) tab.classList.toggle('active', n === name);
@@ -443,6 +509,7 @@
       _loaded[name] = true;
       if (name === 'destinazioni') initDestinazioni();
       if (name === 'lettere') caricaLettere();
+      if (name === 'nuova') initSelezione();
     }
   };
 
@@ -613,6 +680,120 @@
   }
 
   /* ══════════════════════════════════════════════════
+     VIEW: Nuova lettera — selezione documenti
+  ══════════════════════════════════════════════════ */
+  let _docsSel = [];
+  let _selezionati = new Set();
+
+  function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
+
+  function filtratiSel() {
+    var q = document.getElementById('sel-filter').value.trim().toLowerCase();
+    var ordina = document.getElementById('sel-sort').value;
+    var list = _docsSel.slice();
+    if (ordina === 'file') {
+      list.sort(function (a, b) {
+        var ta = a.file_modificato_il ? new Date(a.file_modificato_il).getTime() : -Infinity;
+        var tb = b.file_modificato_il ? new Date(b.file_modificato_il).getTime() : -Infinity;
+        return tb - ta;
+      });
+    } else {
+      list.sort(function (a, b) { return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' }); });
+    }
+    if (!q) return list;
+    return list.filter(function (d) { return nomeDocSel(d).toLowerCase().indexOf(q) !== -1; });
+  }
+
+  function renderSitiSel(d) {
+    if (d.siti && d.siti.length) {
+      return '<div class="ti-sites">' + d.siti.map(function (s) {
+        return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>';
+      }).join('') + '</div>';
+    }
+    return '<span class="ti-sites-empty">Nessuna</span>';
+  }
+
+  function emptySelTbl(msg) {
+    document.getElementById('sel-tbody').innerHTML =
+      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+  }
+
+  function renderSelTbl(docs) {
+    if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
+    var canWrite = window.USER_CAN_WRITE;
+    document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
+      var checked = _selezionati.has(d.id);
+      var disabledAttr = (!d.selezionabile || !canWrite) ? ' disabled' : '';
+      var motivo = !d.selezionabile
+        ? '<div class="cell-motivo">&#9888; ' + escHtml(d.motivo) + '</div>' : '';
+      return '<tr class="' + (d.selezionabile ? '' : 'invalida') + '" data-id="' + d.id + '">'
+        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk sel-chk"' + (checked ? ' checked' : '') + disabledAttr
+        + ' onchange="toggleSelezioneRiga(' + d.id + ', this.checked)"></div></td>'
+        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
+        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
+        + motivo + '</td>'
+        + '<td>' + renderSitiSel(d) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function aggiornaSelAll(visibili) {
+    var selezionabili = visibili.filter(function (d) { return d.selezionabile; });
+    var n = selezionabili.filter(function (d) { return _selezionati.has(d.id); }).length;
+    var all = document.getElementById('sel-all');
+    all.checked = selezionabili.length > 0 && n === selezionabili.length;
+    all.indeterminate = n > 0 && n < selezionabili.length;
+  }
+
+  function updSelCounter() {
+    document.getElementById('sel-counter').innerHTML = '<strong>' + _selezionati.size + '</strong> selezionat' + (_selezionati.size === 1 ? 'o' : 'i');
+    document.getElementById('sel-emetti-btn').disabled = _selezionati.size === 0;
+  }
+
+  function applyAndRenderSel() {
+    var visibili = filtratiSel();
+    renderSelTbl(visibili);
+    aggiornaSelAll(visibili);
+    updSelCounter();
+  }
+
+  window.toggleSelezioneRiga = function (id, checked) {
+    if (checked) _selezionati.add(id); else _selezionati.delete(id);
+    updSelCounter();
+  };
+
+  window.toggleTuttiSelezione = function (checked) {
+    filtratiSel().forEach(function (d) {
+      if (!d.selezionabile) return;
+      if (checked) _selezionati.add(d.id); else _selezionati.delete(d.id);
+    });
+    applyAndRenderSel();
+  };
+
+  document.getElementById('sel-filter').addEventListener('input', applyAndRenderSel);
+  document.getElementById('sel-sort').addEventListener('change', applyAndRenderSel);
+
+  async function initSelezione() {
+    try {
+      const r = await fetch(baseUrl() + 'selezione/');
+      if (!r.ok) { emptySelTbl('Errore nel caricamento.'); return; }
+      const d = await r.json();
+      _docsSel = d.documenti || [];
+      applyAndRenderSel();
+    } catch {
+      emptySelTbl('Errore di rete.');
+    }
+  }
+
+  window.vaiAllaCompilazione = function () {
+    if (!requireWrite()) return;
+    if (!_selezionati.size) return;
+    var ids = Array.from(_selezionati).join(',');
+    window.location.href = '/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/nuovo/?documenti=' + ids;
+  };
+
+  /* ══════════════════════════════════════════════════
      VIEW: Lettere emesse
   ══════════════════════════════════════════════════ */
   async function caricaLettere() {
@@ -677,7 +858,7 @@
 
   /* ── init ── */
   var tabIniziale = new URLSearchParams(window.location.search).get('tab');
-  switchTab(tabIniziale === 'destinazioni' ? 'destinazioni' : 'lettere');
+  switchTab(['destinazioni', 'nuova'].indexOf(tabIniziale) !== -1 ? tabIniziale : 'lettere');
 })();
 </script>
 {% endblock %}
