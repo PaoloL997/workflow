@@ -425,6 +425,7 @@
   }
 
 </style>
+{% include "core/partials/doc_list_filter_styles.html" %}
 {% endblock %}
 
 {% block content %}
@@ -470,7 +471,10 @@
     ══════════════════════════════════════════════════ -->
     <div class="page-toolbar">
       <span class="toolbar-counter" id="storico-counter"><strong>0</strong> lettere</span>
-      <button type="button" class="btn-confirm" onclick="apriNuovaLettera()">Nuova Lettera</button>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button type="button" class="toolbar-btn" onclick="apriDestinazioni()">Destinazioni</button>
+        <button type="button" class="btn-confirm" onclick="apriNuovaLettera()">Nuova Lettera</button>
+      </div>
     </div>
 
     <div class="doc-card">
@@ -488,11 +492,7 @@
     <div class="modal-title" id="nuova-title">Nuova lettera</div>
 
     <div class="ti-ctrl" style="margin-bottom:0;">
-      <span class="ctrl-lbl">Assegna sito ai documenti selezionati:</span>
-      <select id="bulk-sito" class="ctrl-select"></select>
-      <button type="button" class="btn-secondary" onclick="bulkAssegnaSiti(true)">Aggiungi</button>
-      <button type="button" class="btn-secondary" onclick="bulkAssegnaSiti(false)">Rimuovi</button>
-      <span class="status-msg" id="bulk-status"></span>
+      <div class="list-filter-summary" id="sel-filter-summary"></div>
       {% if not user.can_write %}
         <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
       {% endif %}
@@ -500,7 +500,7 @@
 
     <div class="modal-body">
       <table class="ti-tbl">
-        <thead>
+        <thead id="sel-thead">
           <tr>
             <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
             <th class="col-doc">Documento</th>
@@ -521,6 +521,46 @@
   </div>
 </div>
 
+<!-- ── Destinazioni: siti coinvolti per tutti i documenti UT ── -->
+<div class="modal-overlay" id="destinazioni-modal" role="dialog" aria-modal="true" aria-labelledby="destinazioni-title">
+  <div class="modal-box" style="max-width:900px;">
+    <div class="modal-title" id="destinazioni-title">Destinazioni</div>
+
+    <div class="ti-ctrl" style="margin-bottom:0;">
+      <span class="ctrl-lbl">Assegna sito ai documenti selezionati:</span>
+      <select id="dest-bulk-sito" class="ctrl-select"></select>
+      <button type="button" class="btn-secondary" onclick="destBulkAssegnaSiti(true)">Aggiungi</button>
+      <button type="button" class="btn-secondary" onclick="destBulkAssegnaSiti(false)">Rimuovi</button>
+      <span class="status-msg" id="dest-bulk-status"></span>
+      {% if not user.can_write %}
+        <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
+      {% endif %}
+    </div>
+
+    <div class="modal-body">
+      <table class="ti-tbl">
+        <thead>
+          <tr>
+            <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="dest-all" onchange="toggleTuttiDest(this.checked)"></div></th>
+            <th class="col-doc">Documento</th>
+            <th>Siti coinvolti</th>
+          </tr>
+        </thead>
+        <tbody id="dest-tbody">
+          <tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions">
+      <span class="toolbar-counter" id="dest-counter" style="margin-right:auto;"><strong>0</strong> selezionati</span>
+      <button type="button" class="btn-cancel" onclick="chiudiDestinazioni()">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+{% include "core/partials/doc_list_filter_popover.html" %}
+
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle-btn" aria-label="Cambia tema">
   <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -531,6 +571,7 @@
   </svg>
 </button>
 
+{% include "core/partials/doc_list_filters_js.html" %}
 <script>
 (function () {
   'use strict';
@@ -620,23 +661,18 @@
      Nuova lettera — selezione documenti + siti coinvolti
   ══════════════════════════════════════════════════ */
   let _docsSel = [];
+  let _visibiliSel = [];
   let _selezionati = new Set();
   let _stabilimenti = [];
 
   function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
 
-  function ordinatiSel() {
-    return _docsSel.slice().sort(function (a, b) {
-      return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' });
-    });
-  }
-
-  function sitiCellHtml(d) {
+  function sitiCellHtmlSel(d) {
     var chips = (d.siti && d.siti.length)
       ? d.siti.map(function (s) { return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>'; }).join('')
       : '<span class="ti-sites-empty">Nessuno</span>';
     return '<div class="ti-sites">' + chips
-      + ' <button type="button" class="ti-link-btn" onclick="toggleSitiEdit(' + d.id + ')">Modifica</button></div>';
+      + ' <button type="button" class="ti-link-btn" onclick="toggleSitiEditSel(' + d.id + ')">Modifica</button></div>';
   }
 
   function emptySelTbl(msg) {
@@ -649,8 +685,19 @@
       '<tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
   }
 
+  function renderSelThead() {
+    var th = DocListFilters.thHeader;
+    document.getElementById('sel-thead').innerHTML =
+      '<tr>'
+      + '<th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>'
+      + th('Documento', 'documento', true, { className: 'col-doc' })
+      + '<th>Siti coinvolti</th>'
+      + '</tr>';
+  }
+
   function renderSelTbl(docs) {
     if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
     var canWrite = window.USER_CAN_WRITE;
     document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
       var checked = _selezionati.has(d.id);
@@ -663,7 +710,7 @@
         + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
         + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
         + motivo + '</td>'
-        + '<td id="siti-cell-' + d.id + '">' + sitiCellHtml(d) + '</td>'
+        + '<td id="sel-siti-cell-' + d.id + '">' + sitiCellHtmlSel(d) + '</td>'
         + '</tr>';
     }).join('');
   }
@@ -672,6 +719,7 @@
     var selezionabili = lista.filter(function (d) { return d.selezionabile; });
     var n = selezionabili.filter(function (d) { return _selezionati.has(d.id); }).length;
     var all = document.getElementById('sel-all');
+    if (!all) return;
     all.checked = selezionabili.length > 0 && n === selezionabili.length;
     all.indeterminate = n > 0 && n < selezionabili.length;
   }
@@ -682,9 +730,10 @@
   }
 
   function applyAndRenderSel() {
-    var lista = ordinatiSel();
-    renderSelTbl(lista);
-    aggiornaSelAll(lista);
+    renderSelThead();
+    _visibiliSel = DocListFilters.applyPipeline(_docsSel);
+    renderSelTbl(_visibiliSel);
+    aggiornaSelAll(_visibiliSel);
     updSelCounter();
   }
 
@@ -694,7 +743,7 @@
   };
 
   window.toggleTuttiSelezione = function (checked) {
-    _docsSel.forEach(function (d) {
+    _visibiliSel.forEach(function (d) {
       if (!d.selezionabile) return;
       if (checked) _selezionati.add(d.id); else _selezionati.delete(d.id);
     });
@@ -702,9 +751,9 @@
   };
 
   /* ── Siti coinvolti: modifica per singolo documento ── */
-  window.toggleSitiEdit = function (id) {
+  window.toggleSitiEditSel = function (id) {
     if (!requireWrite()) return;
-    var cell = document.getElementById('siti-cell-' + id);
+    var cell = document.getElementById('sel-siti-cell-' + id);
     var doc = _docsSel.find(function (d) { return d.id === id; });
     if (!cell || !doc) return;
     var correnti = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
@@ -714,19 +763,19 @@
           return '<label class="ti-site-edit-opt"><input type="checkbox" class="rchk" value="' + s.codice_bc + '"' + chk + '>' + escHtml(s.sigla || '') + '</label>';
         }).join('')
       + '<div class="ti-site-edit-actions">'
-      + '<button type="button" class="btn-secondary" onclick="annullaSitiEdit(' + id + ')">Annulla</button>'
-      + '<button type="button" class="btn-secondary" onclick="salvaSitiEdit(' + id + ')">Salva</button>'
+      + '<button type="button" class="btn-secondary" onclick="annullaSitiEditSel(' + id + ')">Annulla</button>'
+      + '<button type="button" class="btn-secondary" onclick="salvaSitiEditSel(' + id + ')">Salva</button>'
       + '</div></div>';
   };
 
-  window.annullaSitiEdit = function (id) {
-    var cell = document.getElementById('siti-cell-' + id);
+  window.annullaSitiEditSel = function (id) {
+    var cell = document.getElementById('sel-siti-cell-' + id);
     var doc = _docsSel.find(function (d) { return d.id === id; });
-    if (cell && doc) cell.innerHTML = sitiCellHtml(doc);
+    if (cell && doc) cell.innerHTML = sitiCellHtmlSel(doc);
   };
 
-  window.salvaSitiEdit = async function (id) {
-    var cell = document.getElementById('siti-cell-' + id);
+  window.salvaSitiEditSel = async function (id) {
+    var cell = document.getElementById('sel-siti-cell-' + id);
     if (!cell) return;
     var checked = Array.from(cell.querySelectorAll('input[type="checkbox"]:checked'))
       .map(function (el) { return parseInt(el.value, 10); });
@@ -745,54 +794,22 @@
     }
     var doc = _docsSel.find(function (d) { return d.id === id; });
     if (doc) doc.siti = _stabilimenti.filter(function (s) { return checked.indexOf(s.codice_bc) !== -1; });
-    if (doc) cell.innerHTML = sitiCellHtml(doc);
+    if (doc) cell.innerHTML = sitiCellHtmlSel(doc);
   };
 
-  /* ── Siti coinvolti: assegnazione in blocco ai documenti selezionati ── */
-  function setBulkStatus(m, isErr) {
-    var el = document.getElementById('bulk-status');
-    el.textContent = m;
-    el.classList.toggle('error', !!isErr);
-  }
-
-  function popolaBulkSelect() {
-    document.getElementById('bulk-sito').innerHTML = _stabilimenti.map(function (s) {
-      return '<option value="' + s.codice_bc + '">' + escHtml(s.sigla || '') + ' — ' + escHtml(s.nome || '') + '</option>';
-    }).join('');
-  }
-
-  window.bulkAssegnaSiti = async function (attiva) {
-    if (!requireWrite()) return;
-    if (!_selezionati.size) { setBulkStatus('Seleziona almeno un documento.', true); return; }
-    var sel = document.getElementById('bulk-sito');
-    var codiceBc = parseInt(sel.value, 10);
-    if (!codiceBc) return;
-    var ids = Array.from(_selezionati);
-    setBulkStatus('Salvataggio…');
-    try {
-      const r = await fetch(baseUrl() + 'stabilimenti/' + codiceBc + '/destinazioni/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ documento_ids: ids, attiva: attiva }),
-      });
-      const body = await r.json().catch(function () { return {}; });
-      if (isPermissionDeniedResponse(r, body)) { setBulkStatus(''); return; }
-      if (!r.ok) { setBulkStatus(body.error || 'Errore durante il salvataggio.', true); return; }
-    } catch {
-      setBulkStatus('Errore di rete.', true);
-      return;
-    }
-    ids.forEach(function (id) {
-      var doc = _docsSel.find(function (d) { return d.id === id; });
-      if (!doc) return;
-      var set = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
-      if (attiva) set.add(codiceBc); else set.delete(codiceBc);
-      doc.siti = _stabilimenti.filter(function (s) { return set.has(s.codice_bc); });
-    });
-    applyAndRenderSel();
-    setBulkStatus('✓ Salvato');
-    setTimeout(function () { setBulkStatus(''); }, 1500);
-  };
+  DocListFilters.init({
+    filterLabels: { documento: 'Documento' },
+    getDocs: function () { return _docsSel; },
+    getCellValue: function (d, key) {
+      if (key === 'documento') return ((d.vendor_doc || '') + ' ' + (d.doc_title || '')).trim();
+      return d[key] || '';
+    },
+    defaultSort: function (docs) {
+      return docs.sort(function (a, b) { return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' }); });
+    },
+    onApply: function () { applyAndRenderSel(); },
+    summaryId: 'sel-filter-summary',
+  });
 
   /* ── Apertura/chiusura modale ── */
   window.apriNuovaLettera = async function () {
@@ -809,7 +826,6 @@
       if (rDest.ok) {
         const dDest = await rDest.json();
         _stabilimenti = dDest.stabilimenti || [];
-        popolaBulkSelect();
       }
       applyAndRenderSel();
     } catch {
@@ -830,6 +846,195 @@
     var ids = Array.from(_selezionati).join(',');
     window.location.href = '/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/nuovo/?documenti=' + ids;
   };
+
+  /* ══════════════════════════════════════════════════
+     Destinazioni — siti coinvolti per tutti i documenti UT
+  ══════════════════════════════════════════════════ */
+  let _docsDest = [];
+  let _selezionatiDest = new Set();
+
+  function sitiCellHtmlDest(d) {
+    var chips = (d.siti && d.siti.length)
+      ? d.siti.map(function (s) { return '<span class="ti-site-chip">' + escHtml(s.sigla || '') + '</span>'; }).join('')
+      : '<span class="ti-sites-empty">Nessuno</span>';
+    return '<div class="ti-sites">' + chips
+      + ' <button type="button" class="ti-link-btn" onclick="toggleSitiEditDest(' + d.id + ')">Modifica</button></div>';
+  }
+
+  function emptyDestTbl(msg) {
+    document.getElementById('dest-tbody').innerHTML =
+      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+  }
+
+  function loadingDestTbl(msg) {
+    document.getElementById('dest-tbody').innerHTML =
+      '<tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
+  }
+
+  function renderDestTbl(docs) {
+    if (!docs.length) { emptyDestTbl('Nessun documento UT per questa commessa.'); return; }
+    document.getElementById('dest-tbody').innerHTML = docs.slice().sort(function (a, b) {
+      return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' });
+    }).map(function (d) {
+      var checked = _selezionatiDest.has(d.id);
+      return '<tr data-id="' + d.id + '">'
+        + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk"' + (checked ? ' checked' : '')
+        + ' onchange="toggleSelezioneRigaDest(' + d.id + ', this.checked)"></div></td>'
+        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
+        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '') + '</td>'
+        + '<td id="dest-siti-cell-' + d.id + '">' + sitiCellHtmlDest(d) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function aggiornaDestAll() {
+    var n = _docsDest.filter(function (d) { return _selezionatiDest.has(d.id); }).length;
+    var all = document.getElementById('dest-all');
+    if (!all) return;
+    all.checked = _docsDest.length > 0 && n === _docsDest.length;
+    all.indeterminate = n > 0 && n < _docsDest.length;
+  }
+
+  function updDestCounter() {
+    document.getElementById('dest-counter').innerHTML = '<strong>' + _selezionatiDest.size + '</strong> selezionat' + (_selezionatiDest.size === 1 ? 'o' : 'i');
+  }
+
+  function applyAndRenderDest() {
+    renderDestTbl(_docsDest);
+    aggiornaDestAll();
+    updDestCounter();
+  }
+
+  window.toggleSelezioneRigaDest = function (id, checked) {
+    if (checked) _selezionatiDest.add(id); else _selezionatiDest.delete(id);
+    updDestCounter();
+  };
+
+  window.toggleTuttiDest = function (checked) {
+    _docsDest.forEach(function (d) {
+      if (checked) _selezionatiDest.add(d.id); else _selezionatiDest.delete(d.id);
+    });
+    applyAndRenderDest();
+  };
+
+  window.toggleSitiEditDest = function (id) {
+    if (!requireWrite()) return;
+    var cell = document.getElementById('dest-siti-cell-' + id);
+    var doc = _docsDest.find(function (d) { return d.id === id; });
+    if (!cell || !doc) return;
+    var correnti = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
+    cell.innerHTML = '<div class="ti-site-edit">'
+      + _stabilimenti.map(function (s) {
+          var chk = correnti.has(s.codice_bc) ? ' checked' : '';
+          return '<label class="ti-site-edit-opt"><input type="checkbox" class="rchk" value="' + s.codice_bc + '"' + chk + '>' + escHtml(s.sigla || '') + '</label>';
+        }).join('')
+      + '<div class="ti-site-edit-actions">'
+      + '<button type="button" class="btn-secondary" onclick="annullaSitiEditDest(' + id + ')">Annulla</button>'
+      + '<button type="button" class="btn-secondary" onclick="salvaSitiEditDest(' + id + ')">Salva</button>'
+      + '</div></div>';
+  };
+
+  window.annullaSitiEditDest = function (id) {
+    var cell = document.getElementById('dest-siti-cell-' + id);
+    var doc = _docsDest.find(function (d) { return d.id === id; });
+    if (cell && doc) cell.innerHTML = sitiCellHtmlDest(doc);
+  };
+
+  window.salvaSitiEditDest = async function (id) {
+    var cell = document.getElementById('dest-siti-cell-' + id);
+    if (!cell) return;
+    var checked = Array.from(cell.querySelectorAll('input[type="checkbox"]:checked'))
+      .map(function (el) { return parseInt(el.value, 10); });
+    try {
+      const r = await fetch(baseUrl() + 'documenti/' + id + '/destinazioni/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ codici_bc: checked }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) return;
+      if (!r.ok) { alert(body.error || 'Errore nel salvataggio dei siti.'); return; }
+    } catch {
+      alert('Errore di rete.');
+      return;
+    }
+    var doc = _docsDest.find(function (d) { return d.id === id; });
+    if (doc) doc.siti = _stabilimenti.filter(function (s) { return checked.indexOf(s.codice_bc) !== -1; });
+    if (doc) cell.innerHTML = sitiCellHtmlDest(doc);
+  };
+
+  function setBulkStatusDest(m, isErr) {
+    var el = document.getElementById('dest-bulk-status');
+    el.textContent = m;
+    el.classList.toggle('error', !!isErr);
+  }
+
+  function popolaBulkSelectDest() {
+    document.getElementById('dest-bulk-sito').innerHTML = _stabilimenti.map(function (s) {
+      return '<option value="' + s.codice_bc + '">' + escHtml(s.sigla || '') + ' — ' + escHtml(s.nome || '') + '</option>';
+    }).join('');
+  }
+
+  window.destBulkAssegnaSiti = async function (attiva) {
+    if (!requireWrite()) return;
+    if (!_selezionatiDest.size) { setBulkStatusDest('Seleziona almeno un documento.', true); return; }
+    var sel = document.getElementById('dest-bulk-sito');
+    var codiceBc = parseInt(sel.value, 10);
+    if (!codiceBc) return;
+    var ids = Array.from(_selezionatiDest);
+    setBulkStatusDest('Salvataggio…');
+    try {
+      const r = await fetch(baseUrl() + 'stabilimenti/' + codiceBc + '/destinazioni/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ documento_ids: ids, attiva: attiva }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) { setBulkStatusDest(''); return; }
+      if (!r.ok) { setBulkStatusDest(body.error || 'Errore durante il salvataggio.', true); return; }
+    } catch {
+      setBulkStatusDest('Errore di rete.', true);
+      return;
+    }
+    ids.forEach(function (id) {
+      var doc = _docsDest.find(function (d) { return d.id === id; });
+      if (!doc) return;
+      var set = new Set((doc.siti || []).map(function (s) { return s.codice_bc; }));
+      if (attiva) set.add(codiceBc); else set.delete(codiceBc);
+      doc.siti = _stabilimenti.filter(function (s) { return set.has(s.codice_bc); });
+    });
+    applyAndRenderDest();
+    setBulkStatusDest('✓ Salvato');
+    setTimeout(function () { setBulkStatusDest(''); }, 1500);
+  };
+
+  window.apriDestinazioni = async function () {
+    document.getElementById('destinazioni-modal').classList.add('open');
+    loadingDestTbl('Caricamento documenti…');
+    try {
+      const r = await fetch(baseUrl() + 'destinazioni/');
+      if (!r.ok) { emptyDestTbl('Errore nel caricamento.'); return; }
+      const d = await r.json();
+      _stabilimenti = d.stabilimenti || [];
+      var siglaPerCodice = {};
+      _stabilimenti.forEach(function (s) { siglaPerCodice[s.codice_bc] = s; });
+      _docsDest = (d.documenti || []).map(function (doc) {
+        doc.siti = (doc.codici_bc || []).map(function (c) { return siglaPerCodice[c]; }).filter(Boolean);
+        return doc;
+      });
+      popolaBulkSelectDest();
+      applyAndRenderDest();
+    } catch {
+      emptyDestTbl('Errore di rete.');
+    }
+  };
+
+  window.chiudiDestinazioni = function () {
+    document.getElementById('destinazioni-modal').classList.remove('open');
+  };
+  document.getElementById('destinazioni-modal').addEventListener('click', function (e) {
+    if (e.target === this) chiudiDestinazioni();
+  });
 
   /* ── init ── */
   caricaStorico();
