@@ -59,6 +59,7 @@ from .services.bc_sync import (
     confronta_commessa,
     list_aggiornamenti,
     sincronizza_commesse,
+    sincronizza_sito_costruttivo,
 )
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
@@ -5680,6 +5681,129 @@ class SincronizzazioneBusinessCentralTests(TestCase):
         bc.close.assert_not_called()
 
 
+class _FakeBusinessCentralSito:
+    """Connettore finto per get_commessa_codice_sito, per commessa.
+
+    Un valore ``Exception`` fra i dati viene sollevato al posto della
+    risposta, per simulare una query fallita su una singola commessa.
+    """
+
+    def __init__(self, codici_per_job, conn=True):
+        self.codici_per_job = codici_per_job
+        self.conn = "connessione-finta" if conn else None
+        self.chiusa = False
+
+    def get_commessa_codice_sito(self, job):
+        codice = self.codici_per_job.get(job)
+        if isinstance(codice, Exception):
+            raise codice
+        return codice
+
+    def close(self):
+        self.chiusa = True
+
+
+class SincronizzazioneSitoCostruttivoTests(TestCase):
+    """Backfill di Testata.sito_costruttivo dal codice sito Business Central."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.senza_sito = Testata.objects.create(job="99050")
+
+    def _attiva_bc(self, codici_per_job, conn=True):
+        fake = _FakeBusinessCentralSito(codici_per_job, conn=conn)
+        patcher = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+    def test_imposta_il_sito_dal_codice_bc(self):
+        self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.senza_sito.refresh_from_db()
+        self.assertEqual(self.senza_sito.sito_costruttivo_id, self.bg.pk)
+        self.assertEqual(report["aggiornate"], 1)
+        self.assertEqual(report["aggiornamenti"], [{"job": "99050", "stabilimento": "Valbrembo"}])
+
+    def test_registra_l_aggiornamento_per_il_pannello_archivio(self):
+        self._attiva_bc({"99050": "2"})
+
+        sincronizza_sito_costruttivo()
+
+        voci = {v["campo"]: v for v in list_aggiornamenti("99050")}
+        self.assertEqual(voci["sito_costruttivo"]["etichetta"], "Sito costruttivo")
+        self.assertEqual(voci["sito_costruttivo"]["nuovo"], "Albignasego")
+
+    def test_non_sovrascrive_un_sito_gia_impostato(self):
+        self.senza_sito.sito_costruttivo = self.pd
+        self.senza_sito.save(update_fields=["sito_costruttivo"])
+        fake = self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.senza_sito.refresh_from_db()
+        self.assertEqual(self.senza_sito.sito_costruttivo_id, self.pd.pk)
+        self.assertEqual(report["controllate"], 0)
+        self.assertEqual(fake.chiusa, False)  # mai aperta: nessuna commessa da controllare
+
+    def test_commessa_non_trovata_o_senza_sito_in_bc(self):
+        self._attiva_bc({"99050": None})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(report["non_trovate"], ["99050"])
+        self.assertEqual(report["aggiornate"], 0)
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_codice_sito_senza_stabilimento_corrispondente(self):
+        self._attiva_bc({"99050": "999"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(report["senza_stabilimento"], [{"job": "99050", "codice_sito": "999"}])
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_errore_su_una_commessa_non_ferma_le_altre(self):
+        altra = Testata.objects.create(job="99051")
+        self._attiva_bc({"99050": RuntimeError("query fallita"), "99051": "2"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(len(report["errori"]), 1)
+        self.assertEqual(report["errori"][0]["job"], "99050")
+        altra.refresh_from_db()
+        self.assertEqual(altra.sito_costruttivo_id, self.pd.pk)
+
+    def test_dry_run_non_scrive_nulla(self):
+        self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo(dry_run=True)
+
+        self.assertEqual(report["aggiornate"], 1)
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_limita_a_un_job(self):
+        Testata.objects.create(job="99052")
+        self._attiva_bc({"99050": "1", "99052": "2"})
+
+        report = sincronizza_sito_costruttivo(jobs=["99050"])
+
+        self.assertEqual(report["controllate"], 1)
+        self.assertEqual(Testata.objects.get(job="99052").sito_costruttivo_id, None)
+
+    def test_connessione_non_disponibile(self):
+        self._attiva_bc({"99050": "1"}, conn=False)
+
+        with self.assertRaises(BusinessCentralNonDisponibile):
+            sincronizza_sito_costruttivo()
+
+
 class ComandoSyncBusinessCentralTests(TestCase):
     """Il comando ``sync_business_central``, pensato per l'esecuzione giornaliera."""
 
@@ -5742,6 +5866,69 @@ class ComandoSyncBusinessCentralTests(TestCase):
         err = io.StringIO()
 
         call_command("sync_business_central", stderr=err)
+
+        self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
+
+
+class ComandoBackfillSitoCostruttivoTests(TestCase):
+    """Il comando ``backfill_sito_costruttivo``, eseguito una tantum a mano."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.testata = Testata.objects.create(job="99060")
+
+    def _attiva_bc(self, codici_per_job, conn=True):
+        fake = _FakeBusinessCentralSito(codici_per_job, conn=conn)
+        patcher = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+    def test_il_comando_aggiorna_e_riepiloga(self):
+        self._attiva_bc({"99060": "1"})
+        out = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, self.bg.pk)
+        output = out.getvalue()
+        self.assertIn("99060: sito costruttivo -> Valbrembo", output)
+        self.assertIn("aggiornate 1", output)
+
+    def test_il_comando_in_dry_run_non_salva(self):
+        self._attiva_bc({"99060": "1"})
+        out = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", "--dry-run", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertIsNone(self.testata.sito_costruttivo_id)
+        self.assertIn("[dry-run]", out.getvalue())
+
+    def test_il_comando_accetta_una_singola_commessa(self):
+        Testata.objects.create(job="99061")
+        self._attiva_bc({"99060": "1", "99061": "1"})
+
+        call_command("backfill_sito_costruttivo", "--job", "99060", stdout=io.StringIO())
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, self.bg.pk)
+        self.assertIsNone(Testata.objects.get(job="99061").sito_costruttivo_id)
+
+    def test_il_comando_segnala_una_commessa_inesistente(self):
+        self._attiva_bc({})
+        err = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", "--job", "99999", stderr=err)
+
+        self.assertIn("non trovata", err.getvalue())
+
+    def test_il_comando_segnala_business_central_non_raggiungibile(self):
+        self._attiva_bc({"99060": "1"}, conn=False)
+        err = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", stderr=err)
 
         self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
 

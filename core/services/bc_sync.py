@@ -24,7 +24,7 @@ import pandas as pd
 from django.db import transaction
 
 from ..date_fmt import format_display_date
-from ..models import AggiornamentoBC, Testata
+from ..models import AggiornamentoBC, Stabilimento, Testata
 from .commesse import _parse_date, fetch_from_bc
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,12 @@ CAMPI_SINCRONIZZATI = {
     "job_detail": "Descrizione",
     "delivery_date": "Data consegna",
 }
+
+# Etichette per il pannello "Aggiornamenti BC": include anche i campi
+# aggiornati da un percorso diverso da CAMPI_SINCRONIZZATI (sito_costruttivo,
+# vedi sincronizza_sito_costruttivo — non passa dal confronto generico perché
+# è una FK risolta da codice sito, non un valore scalare).
+_ETICHETTE_CAMPI = {**CAMPI_SINCRONIZZATI, "sito_costruttivo": "Sito costruttivo"}
 
 
 class BusinessCentralNonDisponibile(Exception):
@@ -270,7 +276,7 @@ def list_aggiornamenti(job: str, limit: int = 50) -> list[dict]:
         {
             "id": a.pk,
             "campo": a.campo,
-            "etichetta": CAMPI_SINCRONIZZATI.get(a.campo, a.campo),
+            "etichetta": _ETICHETTE_CAMPI.get(a.campo, a.campo),
             "precedente": _valore_leggibile(a.campo, a.valore_precedente),
             "nuovo": _valore_leggibile(a.campo, a.valore_nuovo),
             "created_at": a.created_at.isoformat() if a.created_at else None,
@@ -278,3 +284,138 @@ def list_aggiornamenti(job: str, limit: int = 50) -> list[dict]:
         }
         for a in qs
     ]
+
+
+# ── Sito costruttivo ─────────────────────────────────────────────────────────
+#
+# A differenza dei campi sopra, il sito costruttivo non è un valore scalare
+# precompilato: è una FK a Stabilimento risolta dal codice sito BC (NBT_BRL
+# Location Code, vedi BusinessCentral.get_commessa_codice_sito). Per questo
+# vive in funzioni proprie invece che nel confronto generico di
+# confronta_commessa/sincronizza_commessa.
+#
+# A differenza della sync giornaliera, qui un valore già impostato non viene
+# mai sovrascritto: potrebbe essere stato corretto a mano via admin, e BC non
+# è comunque la fonte di verità per questo campo (nessuna sync automatica
+# continuativa — solo backfill su richiesta, vedi il management command
+# backfill_sito_costruttivo).
+
+
+def _stabilimento_per_codice_sito(codice_sito) -> Stabilimento | None:
+    """Stabilimento il cui ``codice_bc`` corrisponde al codice sito BC dato."""
+    if codice_sito in (None, ""):
+        return None
+    try:
+        codice = int(str(codice_sito).strip())
+    except (TypeError, ValueError):
+        return None
+    return Stabilimento.objects.filter(codice_bc=codice).first()
+
+
+def commesse_senza_sito_costruttivo(jobs=None, includi_chiuse: bool = False):
+    """Testate senza sito costruttivo su cui provare il backfill da BC."""
+    qs = Testata.objects.filter(sito_costruttivo__isnull=True)
+    if jobs:
+        qs = qs.filter(job__in=list(jobs))
+    elif not includi_chiuse:
+        qs = qs.filter(actual_delivery_date__isnull=True)
+    return qs.order_by("job")
+
+
+def sincronizza_sito_costruttivo(
+    jobs=None,
+    includi_chiuse: bool = False,
+    dry_run: bool = False,
+    bc=None,
+) -> dict:
+    """Backfill di ``Testata.sito_costruttivo`` dal codice sito Business Central.
+
+    Tocca solo le commesse senza sito costruttivo (vedi
+    ``commesse_senza_sito_costruttivo``): un valore già presente non viene mai
+    sovrascritto.
+
+    Args:
+        jobs: Elenco di commesse da controllare; se omesso, tutte quelle
+            aperte senza sito costruttivo.
+        includi_chiuse: Include anche le commesse già chiuse.
+        dry_run: Calcola gli abbinamenti senza salvarli.
+        bc: Connettore già aperto da riusare; altrimenti ne viene aperto uno.
+
+    Returns:
+        Report con ``controllate``, ``aggiornate``, ``non_trovate`` (BC non ha
+        trovato la commessa, o l'ha trovata ma senza sito assegnato — i due
+        casi non sono distinguibili da ``get_commessa_codice_sito``),
+        ``senza_stabilimento`` (codice sito BC senza ``Stabilimento``
+        corrispondente), ``errori``, ``aggiornamenti`` e ``dry_run``.
+
+    Raises:
+        BusinessCentralNonDisponibile: Se la connessione a BC non è utilizzabile.
+    """
+    report = {
+        "controllate": 0,
+        "aggiornate": 0,
+        "non_trovate": [],
+        "senza_stabilimento": [],
+        "errori": [],
+        "aggiornamenti": [],
+        "dry_run": bool(dry_run),
+    }
+    testate = list(commesse_senza_sito_costruttivo(jobs, includi_chiuse))
+    if not testate:
+        return report
+
+    connessione_propria = bc is None
+    connettore = _apri_connessione() if connessione_propria else bc
+    try:
+        if getattr(connettore, "conn", None) is None:
+            raise BusinessCentralNonDisponibile(
+                "Connessione a Business Central non disponibile: controlla le "
+                "credenziali BUSINESS_CENTRAL_* e la raggiungibilità del server."
+            )
+        for testata in testate:
+            report["controllate"] += 1
+            try:
+                codice_sito = connettore.get_commessa_codice_sito(testata.job)
+            except Exception as exc:  # una commessa in errore non ferma le altre
+                logger.exception(
+                    'BC sync sito costruttivo: errore sulla commessa "%s".', testata.job
+                )
+                report["errori"].append({"job": testata.job, "errore": str(exc)})
+                continue
+            if codice_sito is None:
+                report["non_trovate"].append(testata.job)
+                continue
+            stabilimento = _stabilimento_per_codice_sito(codice_sito)
+            if stabilimento is None:
+                report["senza_stabilimento"].append(
+                    {"job": testata.job, "codice_sito": str(codice_sito)}
+                )
+                continue
+            report["aggiornate"] += 1
+            report["aggiornamenti"].append({"job": testata.job, "stabilimento": stabilimento.nome})
+            if dry_run:
+                continue
+            with transaction.atomic():
+                testata.sito_costruttivo = stabilimento
+                testata.save(update_fields=["sito_costruttivo"])
+                AggiornamentoBC.objects.create(
+                    testata=testata,
+                    campo="sito_costruttivo",
+                    valore_precedente="",
+                    valore_nuovo=stabilimento.nome,
+                )
+    finally:
+        if connessione_propria:
+            connettore.close()
+
+    logger.info(
+        "BC sync sito costruttivo: controllate %d commesse, aggiornate %d, "
+        "non trovate/senza sito in BC %d, senza stabilimento corrispondente %d, errori %d%s",
+        report["controllate"],
+        report["aggiornate"],
+        len(report["non_trovate"]),
+        len(report["senza_stabilimento"]),
+        len(report["errori"]),
+        " (dry-run)" if report["dry_run"] else "",
+    )
+    return report
