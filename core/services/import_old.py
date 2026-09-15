@@ -260,6 +260,19 @@ def importa_commessa_da_access(job: str) -> dict:
             )
 
     transaction.on_commit(_importa_persone_da_excel)
+
+    def _sito_da_bc():
+        from .bc_sync import imposta_sito_costruttivo_da_bc
+
+        try:
+            imposta_sito_costruttivo_da_bc(testata)
+        except Exception:
+            logger.exception(
+                "Risoluzione sito costruttivo da Business Central fallita (job=%s)", job_saved
+            )
+
+    transaction.on_commit(_sito_da_bc)
+
     return {
         "job": testata.job,
         "documenti": len(documenti),

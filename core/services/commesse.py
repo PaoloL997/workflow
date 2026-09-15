@@ -1,3 +1,4 @@
+import logging
 from datetime import date as date_type
 from datetime import timedelta
 
@@ -27,6 +28,8 @@ from .stato_interno import (
     stato_interno_effettivo_da_revisione,
     stato_interno_label,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_PINNED_COMMESSE = 8
 
@@ -146,6 +149,18 @@ def create_commessa(data):
     t.full_clean()
     t.save()
     _crea_persone_commessa(t, data.get("persone") or {})
+
+    def _sito_da_bc():
+        from .bc_sync import imposta_sito_costruttivo_da_bc
+
+        try:
+            imposta_sito_costruttivo_da_bc(t)
+        except Exception:
+            logger.exception(
+                'Risoluzione sito costruttivo da Business Central fallita per "%s".', t.job
+            )
+
+    transaction.on_commit(_sito_da_bc)
     return t
 
 

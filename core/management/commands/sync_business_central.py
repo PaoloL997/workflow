@@ -3,7 +3,11 @@
 from django.core.management.base import BaseCommand
 
 from core.models import Testata
-from core.services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
+from core.services.bc_sync import (
+    BusinessCentralNonDisponibile,
+    sincronizza_commesse,
+    sincronizza_sito_costruttivo,
+)
 
 
 def _forza_utf8(wrapper):
@@ -27,8 +31,10 @@ class Command(BaseCommand):
     help = (
         "Confronta cliente, PO, descrizione e data consegna delle commesse con "
         "Business Central e aggiorna quelle disallineate, registrando ogni "
-        "modifica. Pensato per essere eseguito una volta al giorno da uno "
-        "scheduler (Task Scheduler su Windows, cron su Linux)."
+        "modifica; per le commesse ancora senza sito costruttivo, prova anche "
+        "a impostarlo da BC (senza mai sovrascriverne uno già presente). "
+        "Pensato per essere eseguito una volta al giorno da uno scheduler "
+        "(Task Scheduler su Windows, cron su Linux)."
     )
 
     def add_arguments(self, parser):
@@ -90,3 +96,37 @@ class Command(BaseCommand):
         if report["dry_run"]:
             riepilogo = f"[dry-run] {riepilogo}"
         self.stdout.write(self.style.SUCCESS(riepilogo))
+
+        try:
+            report_sito = sincronizza_sito_costruttivo(
+                jobs=jobs,
+                includi_chiuse=options["tutte"],
+                dry_run=options["dry_run"],
+            )
+        except BusinessCentralNonDisponibile as exc:
+            self.stderr.write(self.style.ERROR(str(exc)))
+            return
+
+        for agg in report_sito["aggiornamenti"]:
+            self.stdout.write(f"  {agg['job']}: sito costruttivo -> {agg['stabilimento']}")
+
+        for voce in report_sito["senza_stabilimento"]:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'  {voce["job"]}: codice sito BC "{voce["codice_sito"]}" senza '
+                    "stabilimento corrispondente"
+                )
+            )
+
+        for errore in report_sito["errori"]:
+            self.stderr.write(self.style.WARNING(f"  {errore['job']}: {errore['errore']}"))
+
+        riepilogo_sito = (
+            f"Sito costruttivo — controllate {report_sito['controllate']} commesse, "
+            f"aggiornate {report_sito['aggiornate']}, "
+            f"senza stabilimento corrispondente {len(report_sito['senza_stabilimento'])}, "
+            f"errori {len(report_sito['errori'])}."
+        )
+        if report_sito["dry_run"]:
+            riepilogo_sito = f"[dry-run] {riepilogo_sito}"
+        self.stdout.write(self.style.SUCCESS(riepilogo_sito))

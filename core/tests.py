@@ -3611,6 +3611,19 @@ class ImportOldTests(TestCase):
         testata = Testata.objects.get(job="99999")
         self.assertEqual(testata.persone.count(), 0)
 
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_risolve_sito_costruttivo_da_bc(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        fake = _FakeBusinessCentralSito({"99999": "1"})
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                importa_commessa_da_access("99999")
+
+        testata = Testata.objects.get(job="99999")
+        self.assertEqual(testata.sito_costruttivo_id, bg.pk)
+
 
 class PersonaCommessaTests(TestCase):
     """Vincoli del modello: utente XOR nome libero, più persone per ruolo."""
@@ -3848,6 +3861,28 @@ class CreateCommessaConPersoneTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             create_commessa(self._dati("77006", persone={"pm": [{"utente_id": 999999}]}))
             connection.check_constraints()
+
+    def test_risolve_sito_costruttivo_da_bc_alla_creazione(self):
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        fake = _FakeBusinessCentralSito({"77007": "1"})
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                t = create_commessa(self._dati("77007"))
+
+        t.refresh_from_db()
+        self.assertEqual(t.sito_costruttivo_id, bg.pk)
+
+    def test_bc_non_raggiungibile_non_impedisce_la_creazione(self):
+        fake = _FakeBusinessCentralSito({}, conn=False)
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                t = create_commessa(self._dati("77008"))
+
+        self.assertTrue(Testata.objects.filter(job="77008").exists())
+        t.refresh_from_db()
+        self.assertIsNone(t.sito_costruttivo_id)
 
 
 class PersonePerRuoloTests(TestCase):
@@ -6358,11 +6393,17 @@ class _FakeBusinessCentral:
     così da simulare una query fallita su una singola commessa.
     """
 
-    def __init__(self, dati_per_job, conn=True):
+    def __init__(self, dati_per_job, conn=True, codici_sito=None):
         self.dati_per_job = dati_per_job
         self.conn = "connessione-finta" if conn else None
         self.jobs_richiesti = []
         self.chiusa = False
+        # sync_business_central invoca anche la sync del sito costruttivo
+        # nella stessa passata: di norma nessun test di questa classe se ne
+        # occupa, quindi "nessun sito trovato" è il comportamento neutro di
+        # default — un test puntuale può passare codici_sito per verificare
+        # anche quella parte.
+        self.codici_sito = codici_sito or {}
 
     def dati_commessa(self, job):
         self.jobs_richiesti.append(job)
@@ -6370,6 +6411,9 @@ class _FakeBusinessCentral:
         if isinstance(dati, Exception):
             raise dati
         return dict(dati)
+
+    def get_commessa_codice_sito(self, job):
+        return self.codici_sito.get(job)
 
     def close(self):
         self.chiusa = True
@@ -6752,8 +6796,8 @@ class ComandoSyncBusinessCentralTests(TestCase):
     def setUp(self):
         self.testata = Testata.objects.create(job="26010", client="Cliente Vecchio")
 
-    def _attiva_bc(self, dati_per_job, conn=True):
-        fake = _FakeBusinessCentral(dati_per_job, conn=conn)
+    def _attiva_bc(self, dati_per_job, conn=True, codici_sito=None):
+        fake = _FakeBusinessCentral(dati_per_job, conn=conn, codici_sito=codici_sito)
         connessione = patch("core.services.bc_sync._apri_connessione", return_value=fake)
         lettura = patch(
             "core.services.bc_sync.fetch_from_bc",
@@ -6776,6 +6820,37 @@ class ComandoSyncBusinessCentralTests(TestCase):
         output = out.getvalue()
         self.assertIn("26010: Cliente: Cliente Vecchio → Cliente Nuovo", output)
         self.assertIn("Controllate 1 commesse, aggiornate 1", output)
+
+    def test_il_comando_aggiorna_anche_il_sito_costruttivo(self):
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self._attiva_bc(
+            {"26010": {"job": "26010", "client": "Cliente Nuovo"}},
+            codici_sito={"26010": "1"},
+        )
+        out = io.StringIO()
+
+        call_command("sync_business_central", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, bg.pk)
+        output = out.getvalue()
+        self.assertIn("26010: sito costruttivo -> Valbrembo", output)
+        self.assertIn("Sito costruttivo — controllate 1 commesse, aggiornate 1", output)
+
+    def test_il_comando_non_sovrascrive_un_sito_gia_impostato(self):
+        pd_stabilimento = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.testata.sito_costruttivo = pd_stabilimento
+        self.testata.save(update_fields=["sito_costruttivo"])
+        self._attiva_bc(
+            {"26010": {"job": "26010", "client": "Cliente Nuovo"}},
+            codici_sito={"26010": "1"},  # BG: diverso, ma il campo è già impostato
+        )
+        out = io.StringIO()
+
+        call_command("sync_business_central", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, pd_stabilimento.pk)
 
     def test_il_comando_in_dry_run_non_salva(self):
         self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})

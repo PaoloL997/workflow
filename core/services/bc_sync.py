@@ -294,11 +294,18 @@ def list_aggiornamenti(job: str, limit: int = 50) -> list[dict]:
 # vive in funzioni proprie invece che nel confronto generico di
 # confronta_commessa/sincronizza_commessa.
 #
-# A differenza della sync giornaliera, qui un valore già impostato non viene
-# mai sovrascritto: potrebbe essere stato corretto a mano via admin, e BC non
-# è comunque la fonte di verità per questo campo (nessuna sync automatica
-# continuativa — solo backfill su richiesta, vedi il management command
-# backfill_sito_costruttivo).
+# Tre punti di ingresso, tutti convergono su _applica_sito_costruttivo:
+# - imposta_sito_costruttivo_da_bc: un tentativo best-effort, silenzioso
+#   sugli errori, alla creazione/importazione di una commessa (vedi
+#   core.services.commesse.create_commessa e
+#   core.services.import_old.importa_commessa_da_access);
+# - sincronizza_sito_costruttivo: chiamata dal sync giornaliero
+#   (sync_business_central) e dal comando manuale backfill_sito_costruttivo,
+#   per le commesse già esistenti che ne sono ancora sprovviste.
+# In entrambi i casi un valore già impostato non viene mai sovrascritto:
+# potrebbe essere stato corretto a mano via admin, e BC non è comunque la
+# fonte di verità continuativa per questo campo — solo per popolarlo la
+# prima volta.
 
 
 def _stabilimento_per_codice_sito(codice_sito) -> Stabilimento | None:
@@ -310,6 +317,66 @@ def _stabilimento_per_codice_sito(codice_sito) -> Stabilimento | None:
     except (TypeError, ValueError):
         return None
     return Stabilimento.objects.filter(codice_bc=codice).first()
+
+
+def _applica_sito_costruttivo(testata: Testata, stabilimento: Stabilimento) -> None:
+    """Imposta il sito costruttivo e registra l'aggiornamento, in una transazione."""
+    with transaction.atomic():
+        testata.sito_costruttivo = stabilimento
+        testata.save(update_fields=["sito_costruttivo"])
+        AggiornamentoBC.objects.create(
+            testata=testata,
+            campo="sito_costruttivo",
+            valore_precedente="",
+            valore_nuovo=stabilimento.nome,
+        )
+
+
+def imposta_sito_costruttivo_da_bc(testata: Testata, bc=None) -> bool:
+    """Tenta di risolvere e impostare il sito costruttivo di una commessa da BC.
+
+    Pensata per essere chiamata alla creazione o importazione di una
+    commessa (vedi ``core.services.commesse.create_commessa`` e
+    ``core.services.import_old.importa_commessa_da_access``, entrambe via
+    ``transaction.on_commit``): a differenza di ``sincronizza_sito_costruttivo``,
+    qui il fallimento è sempre silenzioso verso il chiamante — un BC
+    irraggiungibile o lento non deve mai impedire né rallentare la
+    creazione della commessa. Non sovrascrive un sito già impostato.
+
+    Args:
+        bc: Connettore già aperto da riusare; altrimenti ne viene aperto e
+            chiuso uno dedicato.
+
+    Returns:
+        True se il sito è stato impostato ora da questa chiamata; False in
+        ogni altro caso (già impostato, non trovato in BC, connessione non
+        disponibile, o errore — tutti loggati, mai sollevati).
+    """
+    if testata.sito_costruttivo_id is not None:
+        return False
+
+    connessione_propria = bc is None
+    connettore = None
+    try:
+        connettore = _apri_connessione() if connessione_propria else bc
+        if getattr(connettore, "conn", None) is None:
+            return False
+        codice_sito = connettore.get_commessa_codice_sito(testata.job)
+    except Exception:
+        logger.exception(
+            'Risoluzione sito costruttivo da Business Central fallita per "%s".', testata.job
+        )
+        return False
+    finally:
+        if connessione_propria and connettore is not None:
+            connettore.close()
+
+    stabilimento = _stabilimento_per_codice_sito(codice_sito)
+    if stabilimento is None:
+        return False
+
+    _applica_sito_costruttivo(testata, stabilimento)
+    return True
 
 
 def commesse_senza_sito_costruttivo(jobs=None, includi_chiuse: bool = False):
@@ -395,15 +462,7 @@ def sincronizza_sito_costruttivo(
             report["aggiornamenti"].append({"job": testata.job, "stabilimento": stabilimento.nome})
             if dry_run:
                 continue
-            with transaction.atomic():
-                testata.sito_costruttivo = stabilimento
-                testata.save(update_fields=["sito_costruttivo"])
-                AggiornamentoBC.objects.create(
-                    testata=testata,
-                    campo="sito_costruttivo",
-                    valore_precedente="",
-                    valore_nuovo=stabilimento.nome,
-                )
+            _applica_sito_costruttivo(testata, stabilimento)
     finally:
         if connessione_propria:
             connettore.close()
