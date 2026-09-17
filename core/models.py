@@ -690,7 +690,14 @@ class RigaTransmittalInterno(models.Model):
     )
     revisione = models.CharField(max_length=10)
     copie = models.PositiveSmallIntegerField(null=True, blank=True)
-    tpi = models.CharField(max_length=50, blank=True)
+    tpi = models.BooleanField(
+        default=False, help_text="Il documento va trasmesso a un ispettore terzo (TPI)."
+    )
+    tpi_destinatario = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Chi, se tpi è attivo (es. "No.Bo.", "AI", o un altro destinatario).',
+    )
     note = models.CharField(max_length=300, blank=True)
     cliente = models.BooleanField(default=True)
     siti = models.ManyToManyField(
@@ -713,6 +720,17 @@ class RigaTransmittalInterno(models.Model):
                 name="uniq_riga_trasmittal_interno_documento",
             ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.tpi and not self.tpi_destinatario:
+            raise ValidationError(
+                {"tpi_destinatario": "Specificare il destinatario TPI (es. No.Bo., AI)."}
+            )
+        if not self.tpi and self.tpi_destinatario:
+            raise ValidationError(
+                {"tpi_destinatario": "Il destinatario TPI ha senso solo se TPI è attivo."}
+            )
 
     def __str__(self):
         return f"{self.trasmittal_id}: {self.documento_id}"

@@ -361,7 +361,17 @@ class _SolaLetturaInline:
 
 class RigaTransmittalInternoInline(_SolaLetturaInline, admin.TabularInline):
     model = RigaTransmittalInterno
-    fields = ("posizione", "documento", "revisione", "copie", "tpi", "cliente", "siti", "note")
+    fields = (
+        "posizione",
+        "documento",
+        "revisione",
+        "copie",
+        "tpi",
+        "tpi_destinatario",
+        "cliente",
+        "siti",
+        "note",
+    )
     filter_horizontal = ("siti",)
 
 

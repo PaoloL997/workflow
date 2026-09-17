@@ -8,11 +8,12 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Max, Prefetch
 from django.utils import timezone
+from django.utils.html import escape
 
 from ..models import (
     DestinatarioTransmittalInterno,
@@ -22,6 +23,7 @@ from ..models import (
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
     Reparto,
+    Revisione,
     RigaTransmittalInterno,
     RuoloPersonaCommessa,
     Stabilimento,
@@ -29,7 +31,7 @@ from ..models import (
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
-from .fileserver import get_base_path, get_jobs_root, trova_file
+from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
 from .revisione_label import format_revisione_label
 
 logger = logging.getLogger(__name__)
@@ -356,7 +358,8 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
         righe: Iterable non vuoto di dict, uno per documento incluso, con le
             chiavi ``"documento"`` (istanza ``Documento``, obbligatoria),
             ``"revisione"`` (obbligatoria) e le opzionali ``"copie"``,
-            ``"tpi"``, ``"note"``, ``"cliente"`` (default ``True``).
+            ``"tpi"`` (bool, default ``False``), ``"tpi_destinatario"``,
+            ``"note"``, ``"cliente"`` (default ``True``).
             L'ordine nell'iterable è l'ordine di stampa (``posizione``).
         utente: Chi emette la lettera (``TransmittalInterno.creato_da``).
         data: Giorno di emissione; oggi se omesso.
@@ -402,7 +405,8 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
                 documento=documento,
                 revisione=riga["revisione"],
                 copie=riga.get("copie"),
-                tpi=riga.get("tpi", ""),
+                tpi=riga.get("tpi", False),
+                tpi_destinatario=riga.get("tpi_destinatario", ""),
                 note=riga.get("note", ""),
                 cliente=riga.get("cliente", True),
                 posizione=posizione,
@@ -429,16 +433,17 @@ def data_impegno(oggi):
     return successivo
 
 
+def _percorso_pdf_da(job, nome):
+    return get_jobs_root() / job / "Progetto" / "UT" / "Transmittal" / f"{nome}.pdf"
+
+
 def percorso_pdf(trasmittal):
     """Percorso del PDF di una lettera: ``{JOBS}/{job}/Progetto/UT/Transmittal/{nome}.pdf``."""
-    return (
-        get_jobs_root()
-        / trasmittal.testata.job
-        / "Progetto"
-        / "UT"
-        / "Transmittal"
-        / f"{trasmittal.nome}.pdf"
-    )
+    return _percorso_pdf_da(trasmittal.testata.job, trasmittal.nome)
+
+
+def _percorso_dcc_da(job, nome):
+    return get_base_path(job, "DCC") / "DA SPEDIRE" / nome
 
 
 def percorso_pdf_lettera(job, trasmittal_id):
@@ -530,7 +535,7 @@ def prepara_per_dcc(trasmittal):
         return {"cartella": None, "copiati": [], "mancanti": []}
 
     job = trasmittal.testata.job
-    cartella = get_base_path(job, "DCC") / "DA SPEDIRE" / trasmittal.nome
+    cartella = _percorso_dcc_da(job, trasmittal.nome)
     try:
         cartella.resolve().relative_to(get_jobs_root().resolve())
     except ValueError:
@@ -602,6 +607,10 @@ def stato_file_documento_ut(documento):
     risolvibile — stessa regola, stesso esito di quando la lettera arriverà
     davvero alla preparazione DCC, senza sorprese a quel punto.
 
+    Per un singolo documento: ogni chiamata riscansiona la cartella. Per un
+    elenco di documenti dello stesso reparto, usare ``elenco_selezione_ut``
+    (che scansiona una volta sola) invece di chiamare questa in un ciclo.
+
     Returns:
         Dict ``{"trovato": bool, "modificato_il": datetime | None}``.
     """
@@ -623,6 +632,12 @@ def stato_file_documento_ut(documento):
     }
 
 
+def _cerca_in_indice(indice, vendor_doc):
+    """Stessa regola di corrispondenza di ``trova_file``, su un elenco già scansionato."""
+    needle = vendor_doc.lower()
+    return [f for f in indice if needle in f["nome"].lower()]
+
+
 def elenco_selezione_ut(testata):
     """Documenti UT della commessa per la selezione della lettera trasmittal interno.
 
@@ -632,6 +647,12 @@ def elenco_selezione_ut(testata):
     (``selezionabile`` False, ``motivo`` spiegato) — non al momento della
     creazione come faceva il vecchio strumento Excel, che bloccava l'intera
     lettera.
+
+    Tutti i documenti UT condividono lo stesso reparto, quindi la stessa
+    cartella sul fileserver: viene scansionata una volta sola (non una volta
+    per documento, che su una share di rete con molti documenti è il motivo
+    per cui questa vista poteva metterci a lungo a caricare) e le revisioni/
+    destinazioni sono precaricate con prefetch invece di una query ciascuna.
 
     Returns:
         Lista di dict ordinata per ``vendor_doc``, uno per documento, con:
@@ -644,19 +665,43 @@ def elenco_selezione_ut(testata):
         - ``selezionabile``: bool
         - ``motivo``: perché non è selezionabile, altrimenti ``""``
     """
+    documenti = list(
+        documenti_ut(testata)
+        .prefetch_related(
+            Prefetch("revisioni", queryset=Revisione.objects.order_by("-rev_no", "-pk")),
+            Prefetch(
+                "destinazioni",
+                queryset=DestinazioneDocumento.objects.select_related("stabilimento").order_by(
+                    "stabilimento__codice_bc"
+                ),
+            ),
+        )
+        .order_by("vendor_doc")
+    )
+    if not documenti:
+        return []
+
+    reparto = Reparto.objects.filter(acronimo="UT").first()
+    indice_cartella = (
+        elenca_cartella(get_base_path(testata.job, reparto.acronimo))
+        if reparto and reparto.acronimo
+        else []
+    )
+
     risultato = []
-    for documento in documenti_ut(testata).order_by("vendor_doc"):
+    for documento in documenti:
         voce = {
             "id": documento.pk,
             "vendor_doc": documento.vendor_doc,
             "doc_title": documento.doc_title,
             "revisione_corrente": "",
             "file_modificato_il": None,
-            "siti": [_serializza_sito(s) for s in siti_del_documento(documento)],
+            "siti": [_serializza_sito(d.stabilimento) for d in documento.destinazioni.all()],
             "selezionabile": False,
             "motivo": "",
         }
-        latest_rev = documento.revisioni.order_by("-rev_no", "-pk").first()
+        revisioni = list(documento.revisioni.all())
+        latest_rev = revisioni[0] if revisioni else None
         if latest_rev is None:
             voce["motivo"] = "Nessuna revisione registrata."
             risultato.append(voce)
@@ -664,13 +709,16 @@ def elenco_selezione_ut(testata):
         voce["revisione_corrente"] = format_revisione_label(
             latest_rev.rev_no, latest_rev.rev_let, testata.rev_let_flag
         )
-        stato_file = stato_file_documento_ut(documento)
-        if not stato_file["trovato"]:
+        trovati = _cerca_in_indice(indice_cartella, documento.vendor_doc)
+        if len(trovati) != 1:
             voce["motivo"] = "Nessun file trovato sul fileserver."
             risultato.append(voce)
             continue
+        mtime = trovati[0]["mtime"]
         voce["file_modificato_il"] = (
-            stato_file["modificato_il"].isoformat() if stato_file["modificato_il"] else None
+            datetime.fromtimestamp(mtime, tz=timezone.get_current_timezone()).isoformat()
+            if mtime
+            else None
         )
         voce["selezionabile"] = True
         risultato.append(voce)
@@ -681,10 +729,16 @@ def _prepara_righe(testata, righe_payload):
     """Valida e converte il payload delle righe (dict JSON) per ``crea_trasmittal_interno``.
 
     Ogni voce richiede ``documento_id`` (un documento UT selezionabile di
-    questa commessa) e ``revisione``; ``copie``, ``tpi``, ``note``,
-    ``cliente`` sono opzionali. Il primo problema trovato interrompe con un
-    ``ValueError`` esplicito — niente lettera creata a metà da un payload
-    malformato o da una selezione che nel frattempo è diventata non valida.
+    questa commessa) e ``revisione``; ``copie``, ``tpi``, ``tpi_destinatario``,
+    ``note``, ``cliente`` sono opzionali. Il primo problema trovato interrompe
+    con un ``ValueError`` esplicito — niente lettera creata a metà da un
+    payload malformato o da una selezione che nel frattempo è diventata non
+    valida.
+
+    ``tpi``/``tpi_destinatario`` replicano le note (b)/(c) del modulo: se il
+    documento va a un ispettore terzo (``tpi`` True), va specificato chi
+    (``tpi_destinatario`` non vuoto); altrimenti il destinatario non ha senso
+    e deve restare vuoto — stessa regola di ``RigaTransmittalInterno.clean``.
     """
     if not righe_payload:
         raise ValueError("Selezionare almeno un documento.")
@@ -701,12 +755,21 @@ def _prepara_righe(testata, righe_payload):
         revisione = str(voce.get("revisione") or "").strip()
         if not revisione:
             raise ValueError(f"{stato['vendor_doc']}: revisione mancante.")
+        tpi = bool(voce.get("tpi", False))
+        tpi_destinatario = str(voce.get("tpi_destinatario") or "").strip()
+        if tpi and not tpi_destinatario:
+            raise ValueError(f"{stato['vendor_doc']}: specificare il destinatario TPI.")
+        if not tpi and tpi_destinatario:
+            raise ValueError(
+                f"{stato['vendor_doc']}: il destinatario TPI ha senso solo se TPI è attivo."
+            )
         righe.append(
             {
                 "documento": documenti_map[documento_id],
                 "revisione": revisione,
                 "copie": voce.get("copie") or None,
-                "tpi": str(voce.get("tpi") or "").strip(),
+                "tpi": tpi,
+                "tpi_destinatario": tpi_destinatario,
                 "note": str(voce.get("note") or "").strip(),
                 "cliente": bool(voce.get("cliente", True)),
             }
@@ -729,7 +792,19 @@ def anteprima_trasmittal(testata, righe_payload):
     """
     righe = _prepara_righe(testata, righe_payload)
     documenti = [riga["documento"] for riga in righe]
+    oggi = timezone.localdate()
+    # Anteprima del nome: il progressivo reale si assegna solo alla creazione
+    # vera, dentro la transazione — se nel frattempo un'altra lettera viene
+    # emessa per questa commessa, il nome effettivo potrebbe differire di
+    # un'unità. Stesso limite che aveva la preview del vecchio strumento.
+    nome_preview = componi_nome(testata, oggi, prossimo_progressivo(testata, oggi))
+    ha_dcc = any(riga["cliente"] for riga in righe)
     return {
+        "nome_preview": nome_preview,
+        "percorso_pdf_preview": str(_percorso_pdf_da(testata.job, nome_preview)),
+        "percorso_dcc_preview": str(_percorso_dcc_da(testata.job, nome_preview))
+        if ha_dcc
+        else None,
         "righe": [
             {
                 "documento_id": riga["documento"].pk,
@@ -738,6 +813,7 @@ def anteprima_trasmittal(testata, righe_payload):
                 "revisione": riga["revisione"],
                 "copie": riga["copie"],
                 "tpi": riga["tpi"],
+                "tpi_destinatario": riga["tpi_destinatario"],
                 "note": riga["note"],
                 "cliente": riga["cliente"],
                 "siti": [_serializza_sito(s) for s in siti_del_documento(riga["documento"])],
@@ -849,6 +925,12 @@ def _corpo_email_trasmittal(trasmittal, percorso):
     destinatario sa cosa gli è stato trasmesso senza dover aprire
     l'allegato), il percorso completo dove il PDF è salvato sul fileserver
     e il promemoria che il modulo va firmato a distribuzione avvenuta.
+
+    Versione testo semplice: fa da corpo per i client senza HTML e da
+    fallback, ma si allinea per colonna solo con un font monospace — molti
+    client (Gmail, Outlook) mostrano il testo semplice con un font
+    proporzionale, che rompe l'allineamento. Per questo l'email include anche
+    ``_corpo_email_trasmittal_html`` come alternativa ``text/html``.
     """
     return (
         f"Trasmittal interno {trasmittal.nome} — commessa {trasmittal.testata.job}.\n\n"
@@ -856,6 +938,51 @@ def _corpo_email_trasmittal(trasmittal, percorso):
         f"Salvato in: {percorso}\n\n"
         "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
         "cartacee avvenuta."
+    )
+
+
+_EMAIL_TABLE_STYLE = (
+    "border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:13px;"
+)
+_EMAIL_CELL_STYLE = "border:1px solid #999;padding:4px 8px;text-align:left;white-space:nowrap;"
+_EMAIL_HEADER_STYLE = _EMAIL_CELL_STYLE + "background:#eee;font-weight:bold;"
+
+
+def _tabella_html_righe(trasmittal):
+    """Tabella HTML delle righe della lettera: stesse colonne e valori di
+    ``_tabella_testo_righe``, ma allineata anche senza font monospace."""
+    from src.pdf import _INT_COLS, _int_row_value
+
+    righe = list(
+        trasmittal.righe.select_related("documento")
+        .prefetch_related(Prefetch("siti", queryset=Stabilimento.objects.order_by("codice_bc")))
+        .order_by("posizione")
+    )
+    intestazioni = [colonna[1] for colonna in _INT_COLS]
+    chiavi = [colonna[0] for colonna in _INT_COLS]
+
+    testa = "".join(f'<th style="{_EMAIL_HEADER_STYLE}">{escape(i)}</th>' for i in intestazioni)
+    corpo = "".join(
+        "<tr>"
+        + "".join(
+            f'<td style="{_EMAIL_CELL_STYLE}">{escape(_int_row_value(riga, chiave) or "-")}</td>'
+            for chiave in chiavi
+        )
+        + "</tr>"
+        for riga in righe
+    )
+    return f'<table style="{_EMAIL_TABLE_STYLE}"><thead><tr>{testa}</tr></thead><tbody>{corpo}</tbody></table>'
+
+
+def _corpo_email_trasmittal_html(trasmittal, percorso):
+    """Versione HTML di ``_corpo_email_trasmittal``, allegata come alternativa
+    ``text/html`` (vedi ``invia_email_trasmittal``)."""
+    return (
+        f"<p>Trasmittal interno {escape(trasmittal.nome)} — commessa {escape(trasmittal.testata.job)}.</p>"
+        f"{_tabella_html_righe(trasmittal)}"
+        f"<p>Salvato in: {escape(str(percorso))}</p>"
+        "<p>Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
+        "cartacee avvenuta.</p>"
     )
 
 
@@ -897,13 +1024,27 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
 
         pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
 
-    email = EmailMessage(
-        subject=f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}",
-        body=_corpo_email_trasmittal(trasmittal, percorso_pdf(trasmittal)),
+    percorso = percorso_pdf(trasmittal)
+    subject = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}"
+    body = _corpo_email_trasmittal(trasmittal, percorso)
+    body_html = _corpo_email_trasmittal_html(trasmittal, percorso)
+    invio_to, invio_cc = to, cc
+    test_redirect = getattr(settings, "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", "")
+    if test_redirect:
+        subject = f"[TEST — a: {', '.join(to)}; cc: {', '.join(cc) or '—'}] {subject}"
+        avviso_test = f"[TEST] Email reindirizzata da {', '.join(to + cc)} a questo indirizzo."
+        body = f"{avviso_test}\n\n{body}"
+        body_html = f"<p><strong>{escape(avviso_test)}</strong></p>{body_html}"
+        invio_to, invio_cc = [test_redirect], []
+
+    email = EmailMultiAlternatives(
+        subject=subject,
+        body=body,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        to=to,
-        cc=cc,
+        to=invio_to,
+        cc=invio_cc,
     )
+    email.attach_alternative(body_html, "text/html")
     email.attach(f"{trasmittal.nome}.pdf", pdf_bytes, "application/pdf")
     email.send(fail_silently=False)
     return {"to": to, "cc": cc}

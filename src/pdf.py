@@ -685,7 +685,7 @@ def _int_row_value(riga, key):
     if key == "copie":
         return "" if riga.copie is None else str(riga.copie)
     if key == "tpi":
-        return riga.tpi or ""
+        return riga.tpi_destinatario if riga.tpi else "NO"
     if key == "cliente":
         return "YES" if riga.cliente else "NO"
     if key == "siti":
@@ -875,10 +875,6 @@ def _draw_signature_slot(pdf, x, y, utente):
         pdf.image(immagine, x=x, y=y, w=_INT_SIGNATURE_W, h=_INT_SIGNATURE_H)
     else:
         pdf.rect(x, y, _INT_SIGNATURE_W, _INT_SIGNATURE_H)
-    pdf.set_xy(x, y + _INT_SIGNATURE_H + 0.5)
-    pdf.set_font(pdf._font_family, "", 7)
-    nome = _truncate_to_width(pdf, utente.nome_completo, _INT_SIGNATURE_W)
-    pdf.cell(_INT_SIGNATURE_W, 3.5, nome, align="C")
 
 
 def _build_distribuzione_copie(pdf, siti, data_distribuzione):
@@ -918,7 +914,7 @@ def _build_distribuzione_copie(pdf, siti, data_distribuzione):
 
         pdf.rect(x0 + w_lbl, y, w_sign, h_row)
         x_sign = x0 + w_lbl + 3
-        y_sign = y + (h_row - _INT_SIGNATURE_H - 4) / 2
+        y_sign = y + (h_row - _INT_SIGNATURE_H) / 2
         for firmatario in firmatari:
             _draw_signature_slot(pdf, x_sign, y_sign, firmatario.utente)
             x_sign += _INT_SIGNATURE_W + _INT_SIGNATURE_GAP

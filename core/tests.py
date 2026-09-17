@@ -1007,6 +1007,72 @@ class MigrazioneSigleCodiciBCTests(TestCase):
         self.assertEqual((altro.sigla, altro.codice_bc), ("XX", 99))
 
 
+class MigrazioneTpiStrutturatoTests(SimpleTestCase):
+    """La migrazione dati 0051 converte il vecchio TPI testo libero in (bool, destinatario).
+
+    La forma storica del campo (``tpi_testo``, prima della migrazione) non
+    esiste più nel modello corrente: non si può costruire con un
+    ``RigaTransmittalInterno`` reale. Le funzioni della migrazione operano
+    solo su ``apps.get_model(...).objects.all()`` e ``riga.save(update_fields=...)``,
+    quindi bastano dei doppi minimi con quella stessa forma.
+    """
+
+    def _modulo(self):
+        import importlib
+
+        return importlib.import_module(
+            "core.migrations.0051_riga_trasmittal_interno_tpi_strutturato"
+        )
+
+    class _RigaFinta:
+        def __init__(self, tpi_testo):
+            self.tpi_testo = tpi_testo
+            self.tpi_destinatario = ""
+            self.tpi_bool = False
+            self.salvata_con = None
+
+        def save(self, update_fields):
+            self.salvata_con = update_fields
+
+    class _AppsFinto:
+        def __init__(self, righe):
+            self._righe = righe
+
+        def get_model(self, app_label, model_name):
+            righe = self._righe
+
+            class _ManagerFinto:
+                def all(self):
+                    return righe
+
+            return type("RigaTransmittalInternoFinto", (), {"objects": _ManagerFinto()})
+
+    def test_tpi_testo_valorizzato_diventa_tpi_true_col_testo_come_destinatario(self):
+        riga = self._RigaFinta(tpi_testo="AI")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertTrue(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "AI")
+        self.assertEqual(riga.salvata_con, ["tpi_destinatario", "tpi_bool"])
+
+    def test_tpi_testo_vuoto_diventa_tpi_false(self):
+        riga = self._RigaFinta(tpi_testo="")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertFalse(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "")
+
+    def test_tpi_testo_solo_spazi_diventa_tpi_false(self):
+        riga = self._RigaFinta(tpi_testo="   ")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertFalse(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "")
+
+
 class IndirizziPerSitiTests(TestCase):
     """indirizzi_per_siti: TO/CC per un elenco di siti, per il trasmittal interno."""
 
@@ -1224,6 +1290,59 @@ class TrasmittalInternoArchivioTests(TestCase):
             )
 
 
+class RigaTransmittalInternoTpiTests(TestCase):
+    """TPI (b)(c) del modulo: SÌ/NO all'ispettore terzo, e se sì chi.
+
+    ``tpi`` e ``tpi_destinatario`` non possono essere in disaccordo: un
+    destinatario ha senso solo se ``tpi`` è attivo, e se è attivo va
+    specificato chi.
+    """
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="99012")
+        self.doc = Documento.objects.create(testata=self.testata, vendor_doc="99012-DOC1")
+        self.utente = User.objects.create_user("riga_tpi_utente", password="pw")
+        self.trasmittal = TransmittalInterno.objects.create(
+            testata=self.testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(self.testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+
+    def _riga(self, **overrides):
+        base = {
+            "trasmittal": self.trasmittal,
+            "documento": self.doc,
+            "revisione": "1",
+            "posizione": 1,
+        }
+        base.update(overrides)
+        return RigaTransmittalInterno(**base)
+
+    def test_tpi_spento_con_destinatario_e_un_errore_di_validazione(self):
+        riga = self._riga(tpi=False, tpi_destinatario="AI")
+
+        with self.assertRaises(ValidationError):
+            riga.full_clean()
+
+    def test_tpi_acceso_senza_destinatario_e_un_errore_di_validazione(self):
+        riga = self._riga(tpi=True, tpi_destinatario="")
+
+        with self.assertRaises(ValidationError):
+            riga.full_clean()
+
+    def test_tpi_spento_senza_destinatario_e_valido(self):
+        riga = self._riga(tpi=False, tpi_destinatario="")
+
+        riga.full_clean()  # non deve sollevare
+
+    def test_tpi_acceso_con_destinatario_e_valido(self):
+        riga = self._riga(tpi=True, tpi_destinatario="No.Bo.")
+
+        riga.full_clean()  # non deve sollevare
+
+
 class DestinatariTrasmittalInternoRuoliTests(TestCase):
     """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per documenti SHn."""
 
@@ -1386,7 +1505,14 @@ class TrasmittalInternoPdfTests(TestCase):
         self.trasmittal = crea_trasmittal_interno(
             self.testata,
             [
-                {"documento": self.doc1, "revisione": "3", "copie": 2, "tpi": "ABC", "note": "x"},
+                {
+                    "documento": self.doc1,
+                    "revisione": "3",
+                    "copie": 2,
+                    "tpi": True,
+                    "tpi_destinatario": "ABC",
+                    "note": "x",
+                },
                 {"documento": self.doc2, "revisione": "B", "cliente": False},
             ],
             self.produzione,
@@ -1410,6 +1536,30 @@ class TrasmittalInternoPdfTests(TestCase):
         )
 
         self.assertEqual([f.utente_id for f in firmatari_qualita], [self.qualita.pk])
+
+    # -- colonna TPI: "NO" se spento, il destinatario se acceso --
+
+    def test_colonna_tpi_mostra_no_se_spento(self):
+        from src.pdf import _int_row_value
+
+        riga = self.trasmittal.righe.get(documento=self.doc2)  # tpi=False di default
+
+        self.assertEqual(_int_row_value(riga, "tpi"), "NO")
+
+    def test_colonna_tpi_mostra_il_destinatario_se_acceso(self):
+        from src.pdf import _int_row_value
+
+        riga = self.trasmittal.righe.get(documento=self.doc1)  # tpi=True, dest="ABC"
+
+        self.assertEqual(_int_row_value(riga, "tpi"), "ABC")
+
+    def test_tabella_email_mostra_no_e_destinatario_come_il_pdf(self):
+        from core.services.trasmittal_interno import _tabella_testo_righe
+
+        tabella = _tabella_testo_righe(self.trasmittal)
+
+        self.assertIn("NO", tabella)
+        self.assertIn("ABC", tabella)
 
     def test_firmatario_senza_immagine_non_solleva_eccezioni(self):
         from src.pdf import genera_trasmittal_interno_pdf
@@ -1956,7 +2106,7 @@ class TrasmittalInternoLetteraTests(TestCase):
             "documento_id": documento.pk,
             "revisione": "A",
             "copie": 2,
-            "tpi": "ABC",
+            "tpi": False,
             "note": "",
             "cliente": True,
         }
@@ -2010,6 +2160,33 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertIn({"email": "bg@b.it", "tipo": "to", "origine": "stabilimento"}, destinatari)
         self.assertIn({"email": "til-pm@b.it", "tipo": "to", "origine": "pm"}, destinatari)
         self.assertEqual(sorted(risposta.json()["ruoli_mancanti"]), ["PE", "QCI"])
+
+    def test_anteprima_include_nome_e_percorso_pdf_previsti(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, cliente=False)]}),
+            content_type="application/json",
+        )
+
+        corpo = risposta.json()
+        self.assertTrue(corpo["nome_preview"].startswith(f"{self.testata.job}_"))
+        self.assertTrue(corpo["percorso_pdf_preview"].endswith(f"{corpo['nome_preview']}.pdf"))
+        self.assertIsNone(corpo["percorso_dcc_preview"])
+
+    def test_anteprima_percorso_dcc_previsto_solo_con_un_documento_cliente(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, cliente=True)]}),
+            content_type="application/json",
+        )
+
+        corpo = risposta.json()
+        self.assertIsNotNone(corpo["percorso_dcc_preview"])
+        self.assertIn(corpo["nome_preview"], corpo["percorso_dcc_preview"])
 
     def test_anteprima_rifiuta_documento_non_selezionabile(self):
         self.client.force_login(self.reader)
@@ -2128,15 +2305,16 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
 
 
-class TrasmittalInternoNuovaPaginaTests(TestCase):
-    """Pagina di compilazione (``trasmittal-interno/nuovo/``) e retry per-passo dell'esito.
+class TrasmittalInternoEmissioneApiTests(TestCase):
+    """Anteprima, emissione e retry per-passo (API): il flusso "Nuova lettera"
 
-    Nota: ``self.client`` non esegue JavaScript. L'evidenziazione dello
-    stepper, la sequenza "Emetti non invia finché il pannello non è
-    confermato" (oltre alla garanzia di non-scrittura testata qui) e
+    gira interamente in modal nella pagina ``trasmittal-interno/``, quindi
+    ``self.client`` (che non esegue JavaScript) non può esercitarlo dal vivo.
+    L'evidenziazione dello stepper, "Emetti non invia finché il pannello non
+    è confermato" (oltre alla garanzia di non-scrittura testata qui) e
     "l'assegnazione siti inline non perde lo stato delle altre righe" restano
-    verifiche manuali/di browser, fuori dalla portata di questa suite — le
-    garanzie server-side sottostanti sono invece testate qui e in
+    verifiche manuali/di browser — le garanzie server-side sottostanti sono
+    invece testate qui, direttamente sulle API, e in
     ``TrasmittalInternoDestinazioniViewTests``.
     """
 
@@ -2170,10 +2348,6 @@ class TrasmittalInternoNuovaPaginaTests(TestCase):
         base.mkdir(parents=True)
         (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
 
-        self.doc_senza_revisione = Documento.objects.create(
-            testata=self.testata, vendor_doc="99075-BETA", reparto=self.reparto_ut.nome
-        )
-
         self.writer = User.objects.create_user(
             "tinp_writer", "tinp-writer@b.it", "pw", permesso=Permesso.WRITING
         )
@@ -2181,9 +2355,8 @@ class TrasmittalInternoNuovaPaginaTests(TestCase):
             "tinp_reader", "tinp-reader@b.it", "pw", permesso=Permesso.READING
         )
 
-    def _url_nuovo(self, documenti_ids):
-        ids = ",".join(str(i) for i in documenti_ids)
-        return f"/commesse/{self.testata.job}/trasmittal-interno/nuovo/?documenti={ids}"
+    def _url_detail(self):
+        return f"/commesse/{self.testata.job}/trasmittal-interno/"
 
     def _api_url(self, path):
         return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
@@ -2193,48 +2366,19 @@ class TrasmittalInternoNuovaPaginaTests(TestCase):
             "documento_id": documento.pk,
             "revisione": "A",
             "copie": 1,
-            "tpi": "",
+            "tpi": False,
             "note": "",
             "cliente": True,
         }
         base.update(overrides)
         return base
 
-    # -- ingresso dall'elenco documenti --
-
-    def test_selezione_dall_elenco_arriva_precompilata(self):
-        self.client.force_login(self.reader)
-
-        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk]))
-
-        self.assertEqual(risposta.status_code, 200)
-        contenuto = risposta.content.decode()
-        self.assertIn(f'"id": {self.doc_ok.pk}', contenuto)
-        self.assertIn(self.doc_ok.vendor_doc, contenuto)
-
-    def test_documento_non_selezionabile_scartato_dalla_precompilazione(self):
-        self.client.force_login(self.reader)
-
-        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk, self.doc_senza_revisione.pk]))
-
-        contenuto = risposta.content.decode()
-        self.assertIn(f'"id": {self.doc_ok.pk}', contenuto)
-        self.assertNotIn(f'"id": {self.doc_senza_revisione.pk}', contenuto)
-
-    def test_nessun_documento_selezionato_mostra_messaggio_vuoto(self):
-        self.client.force_login(self.reader)
-
-        risposta = self.client.get(self._url_nuovo([]))
-
-        self.assertEqual(risposta.status_code, 200)
-        self.assertContains(risposta, "Nessun documento selezionato.")
-
-    def test_pagina_nuovo_richiede_sito_costruttivo(self):
+    def test_pagina_trasmittal_interno_richiede_sito_costruttivo(self):
         self.testata.sito_costruttivo = None
         self.testata.save(update_fields=["sito_costruttivo"])
         self.client.force_login(self.reader)
 
-        risposta = self.client.get(self._url_nuovo([self.doc_ok.pk]))
+        risposta = self.client.get(self._url_detail())
 
         self.assertEqual(risposta.status_code, 403)
 
@@ -2706,7 +2850,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
             "documento_id": documento.pk,
             "revisione": "0",
             "copie": 2,
-            "tpi": "",
+            "tpi": False,
             "note": "",
             "cliente": True,
         }

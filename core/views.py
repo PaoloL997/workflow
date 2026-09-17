@@ -11,7 +11,6 @@ from django.db import IntegrityError
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
-from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -115,7 +114,6 @@ from .services.trasmittal_interno import (
     annulla_trasmittal_interno,
     anteprima_pdf_bytes,
     anteprima_trasmittal,
-    componi_nome,
     elenco_destinazioni_ut,
     elenco_selezione_ut,
     elenco_trasmittal_interni,
@@ -126,7 +124,6 @@ from .services.trasmittal_interno import (
     invia_email_trasmittal,
     percorso_pdf_lettera,
     prepara_per_dcc,
-    prossimo_progressivo,
     salva_pdf,
     stabilimenti_costruttivi,
 )
@@ -410,50 +407,6 @@ def trasmittal_interno_detail_view(request, job):
     if testata.sito_costruttivo_id is None:
         return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
     return render(request, "core/trasmittal_interno_detail.html", {"testata": testata})
-
-
-@login_required
-def trasmittal_interno_nuovo_view(request, job):
-    """Pagina di compilazione della lettera, con i documenti già selezionati in elenco documenti."""
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
-    if testata.sito_costruttivo_id is None:
-        return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
-
-    ids_richiesti = []
-    for pezzo in request.GET.get("documenti", "").split(","):
-        pezzo = pezzo.strip()
-        if pezzo.isdigit():
-            ids_richiesti.append(int(pezzo))
-
-    # Difesa server-side: solo documenti UT davvero selezionabili in questo
-    # momento, qualunque cosa sia arrivata nell'URL (il client ha già
-    # impedito la selezione degli altri).
-    selezionabili = {v["id"]: v for v in elenco_selezione_ut(testata) if v["selezionabile"]}
-    preselezionati = [selezionabili[i] for i in ids_richiesti if i in selezionabili]
-
-    siti_per_codice = {}
-    for riga in preselezionati:
-        for sito in riga["siti"]:
-            siti_per_codice[sito["codice_bc"]] = sito
-    siti_coinvolti_preview = sorted(siti_per_codice.values(), key=lambda s: s["codice_bc"])
-
-    oggi = timezone.localdate()
-    nome_lettera_preview = componi_nome(testata, oggi, prossimo_progressivo(testata, oggi))
-
-    return render(
-        request,
-        "core/trasmittal_interno_nuovo.html",
-        {
-            "testata": testata,
-            "ha_documenti": bool(preselezionati),
-            "preselected_docs": preselezionati,
-            "nome_lettera_preview": nome_lettera_preview,
-            "siti_coinvolti_preview": siti_coinvolti_preview,
-        },
-    )
 
 
 @login_required

@@ -171,6 +171,14 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "Workflow <noreply@brembanarolle.com>",
 )
 
+# Se impostata, le email del trasmittal interno vengono reindirizzate a
+# questo indirizzo invece che ai destinatari reali (TO/CC), per testare il
+# flusso completo — creazione PDF e cartella DCC comprese — senza spammare
+# nessuno. Vuota in produzione.
+TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
+    "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", ""
+)
+
 # Destinatari per le richieste di eliminazione commessa (lista allargabile).
 COMMESSA_DELETE_REQUEST_RECIPIENTS = [
     "plitta@brembanarolle.com",
