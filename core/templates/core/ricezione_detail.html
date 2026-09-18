@@ -731,8 +731,15 @@
   }
 
   function captureDraft() {
+    // _docs è la lista fresca "in attesa di risposta": se il DOM non è ancora
+    // stato ridisegnato dopo un invio, può ancora mostrare righe di documenti
+    // già evasi. Ignorarle evita di far rivivere in _draft un doc_id già
+    // registrato, che altrimenti resterebbe in coda e verrebbe rispedito al
+    // prossimo "Registra ricezioni".
+    const validIds = new Set(_docs.map(function (d) { return String(d.id); }));
     document.querySelectorAll('.ric-date').forEach(function (el) {
       const id = String(el.dataset.doc);
+      if (!validIds.has(id)) return;
       const statoVal = document.querySelector('.ric-stato[data-doc="' + id + '"]')?.value || '';
       _draft[id] = {
         date: el.value || '',
