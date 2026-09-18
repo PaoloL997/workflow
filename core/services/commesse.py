@@ -20,6 +20,7 @@ from ..models import (
 from .revisione_label import format_revisione_label
 from .stato_esterno_colori import cell_colors
 from .stato_interno import (
+    INVIATO,
     stato_interno_effettivo,
     stato_interno_effettivo_da_revisione,
     stato_interno_label,
@@ -744,6 +745,12 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         doc = Documento.objects.select_related("testata").get(pk=doc_id)
         rev = doc.revisioni.order_by("-rev_no").first()
         if rev is None:
+            continue
+        # Una bozza rimasta in coda lato client può reinviare un doc_id già
+        # evaso: se la revisione più recente non è più "inviata al cliente"
+        # (es. già ricevuta, o mai spedita) l'invio è stantio e va ignorato,
+        # altrimenti si corromperebbe la revisione sbagliata.
+        if stato_interno_effettivo_da_revisione(rev) != INVIATO:
             continue
 
         rev.rec_act_date = rec_act_date

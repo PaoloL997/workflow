@@ -49,6 +49,7 @@ from .services.bc_sync import (
 )
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
+    esegui_ricezione,
     fetch_from_bc,
     list_documenti,
     list_home_commesse,
@@ -1456,6 +1457,59 @@ class RevisioneAnomalieTests(TestCase):
         self.assertTrue(rev.ignora_anomalie)
         self.assertEqual(audit_commessa("25012"), [])
         self.assertEqual(audit_commessa_summary("25012")["count"], 0)
+
+
+class EseguiRicezioneTests(TestCase):
+    def setUp(self):
+        self.commented = StatoEsterno.objects.create(
+            nome="Commented - To be issued as Final", colore="#f59b1d", crea_nuova_rev=True
+        )
+        self.testata = Testata.objects.create(job="25089", time_ven_doc_rev=14)
+        self.doc = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="25089-01-515",
+            doc_title="Test doc",
+        )
+        self.rev0 = Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date="2026-08-26",
+            int_status="inviato_al_cliente",
+        )
+
+    def _entry(self):
+        return {
+            "doc_id": self.doc.pk,
+            "rec_act_date": "2026-09-10",
+            "ext_status_id": self.commented.pk,
+            "crea_nuova_revisione": True,
+        }
+
+    def test_registra_ricezione_crea_nuova_revisione(self):
+        esegui_ricezione([self._entry()])
+        self.rev0.refresh_from_db()
+        self.assertEqual(self.rev0.rec_act_date, date(2026, 9, 10))
+        self.assertEqual(self.rev0.int_status, "ricevuto")
+        revs = list(self.doc.revisioni.order_by("rev_no"))
+        self.assertEqual(len(revs), 2)
+        self.assertEqual(revs[1].rev_no, 1)
+        self.assertIsNone(revs[1].rec_act_date)
+
+    def test_invio_duplicato_su_bozza_stantia_non_corrompe_nuova_revisione(self):
+        """Un doc_id già evaso, reinviato per bozza non ripulita lato client
+        (vedi ricezione_detail.html._draft), non deve toccare la revisione
+        appena creata: non è mai stata spedita, quindi non può essere
+        "rientrata"."""
+        entry = self._entry()
+        esegui_ricezione([entry])
+        esegui_ricezione([entry])  # invio duplicato/stantio dello stesso doc_id
+
+        revs = list(self.doc.revisioni.order_by("rev_no"))
+        self.assertEqual(len(revs), 2, "non deve essere creata una terza revisione fantasma")
+        nuova_rev = revs[1]
+        self.assertIsNone(nuova_rev.rec_act_date)
+        self.assertIsNone(nuova_rev.ext_status_id)
+        self.assertEqual(nuova_rev.int_status, "")
 
 
 class ImportOldTests(TestCase):

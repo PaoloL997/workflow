@@ -11,6 +11,10 @@
 - La revisione si legge sempre come dice l'archivio: con il flag **Revisioni con lettera** attivo esce ovunque la lettera (A, B, C…), con il flag spento esce ovunque il numero (0, 1, 2…). Vale per situazione documenti (viste orizzontale e verticale, comprese le intestazioni di colonna), elenco documenti, emissione, ricezione, sblocco e anomalie revisioni, per gli export Excel e PDF, per il trasmittal e per l'admin. Se il valore richiesto non è compilato viene ricavato dall'altro (0 ↔ A, 1 ↔ B, … 26 ↔ AA), quindi non compaiono più numeri al posto delle lettere sulle revisioni senza `RevLet`
 - I colori della legenda STATUS nell'header del PDF di situazione documenti seguono le risposte del cliente configurate nell'admin: quadratino, lettera e descrizione arrivano dagli stati a sistema (colore mancante → default storico della lettera, lettera mancante → dedotta dal nome) invece di essere fissi nel codice. Vale sia per la vista orizzontale sia per quella verticale
 
+### Fixed
+
+- Registra ricezioni: un documento già registrato poteva restare "in bozza" nel browser e venire reinviato ad ogni click successivo su **Registra ricezioni** nella stessa sessione di pagina, marcando come rientrata dal cliente una revisione mai spedita e generando una revisione fantasma in più. Ora la bozza non viene più letta per i documenti già evasi e il server ignora un rientro inviato per una revisione che non è "inviata al cliente"
+
 ## [0.1.4] - 2026-09-07
 
 ### Added
