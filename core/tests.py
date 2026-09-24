@@ -52,6 +52,7 @@ from .services.commesse import (
     MAX_PINNED_COMMESSE,
     esegui_ricezione,
     fetch_from_bc,
+    filtra_situazione,
     list_documenti,
     list_home_commesse,
     list_situazione,
@@ -3808,6 +3809,184 @@ class SituazioneOrizzontaleXlsxTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="btn-export" type="button" onclick="toggleExportMenu(')
         self.assertNotContains(response, "exportSituazione(")
+
+    def test_la_pagina_ha_i_controlli_di_filtro_in_barra(self):
+        response = self.client.get(f"/commesse/{self.testata.job}/situazione/")
+        self.assertContains(response, 'id="btn-stato-ultima-rev"')
+        self.assertContains(response, "stato_ultima_rev")
+        self.assertContains(response, 'id="btn-solo-ultima-rev"')
+        self.assertContains(response, "toggleSoloUltimaRev(event)")
+
+
+class FiltraSituazioneTests(SimpleTestCase):
+    """``filtra_situazione`` restringe il payload a quello che si vede a schermo."""
+
+    def setUp(self):
+        self.payload = {
+            "documenti": [{"id": 1}, {"id": 2}, {"id": 3}],
+            "revisioni_by_doc": {1: [{"id": 10}, {"id": 11}], 2: [{"id": 20}]},
+            "rev_let_flag": True,
+            "inviato_cell": {"bg": "#F4C325"},
+        }
+
+    def test_senza_id_il_payload_resta_quello(self):
+        self.assertIs(filtra_situazione(self.payload), self.payload)
+
+    def test_documenti_nell_ordine_ricevuto_e_id_ignoti_scartati(self):
+        out = filtra_situazione(self.payload, doc_ids=[3, 1, 999])
+        self.assertEqual([d["id"] for d in out["documenti"]], [3, 1])
+        self.assertEqual(out["revisioni_by_doc"], {3: [], 1: [{"id": 10}, {"id": 11}]})
+
+    def test_lista_vuota_non_vale_come_nessun_filtro(self):
+        out = filtra_situazione(self.payload, doc_ids=[])
+        self.assertEqual(out["documenti"], [])
+        self.assertEqual(out["revisioni_by_doc"], {})
+
+    def test_rev_ids_taglia_le_revisioni_dei_documenti_tenuti(self):
+        out = filtra_situazione(self.payload, doc_ids=[1, 2], rev_ids=[11, 20])
+        self.assertEqual(out["revisioni_by_doc"], {1: [{"id": 11}], 2: [{"id": 20}]})
+
+    def test_id_non_numerici_ignorati_e_resto_del_payload_intatto(self):
+        out = filtra_situazione(self.payload, doc_ids=["2", None, "x"])
+        self.assertEqual([d["id"] for d in out["documenti"]], [2])
+        self.assertTrue(out["rev_let_flag"])
+        self.assertEqual(out["inviato_cell"], {"bg": "#F4C325"})
+
+    def test_chiavi_stringa_delle_revisioni_json(self):
+        payload = {**self.payload, "revisioni_by_doc": {"1": [{"id": 10}]}}
+        out = filtra_situazione(payload, doc_ids=[1])
+        self.assertEqual(out["revisioni_by_doc"], {1: [{"id": 10}]})
+
+
+class SituazioneExportFiltratoTests(TestCase):
+    """L'export contiene solo i documenti (e le revisioni) rimasti a schermo."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "expfiltro_user",
+            "expfiltro@brembanarolle.com",
+            "pw",
+            permesso=Permesso.WRITING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="EXPF1", rev_let_flag=False)
+        self.commented = StatoEsterno.objects.create(
+            nome="Commented EXPF", lettera="C", colore="#D61D09"
+        )
+        self.doc_a = Documento.objects.create(
+            testata=self.testata, item_no="001", vendor_doc="EXPF1-01"
+        )
+        self.rev_a0 = Revisione.objects.create(
+            documento=self.doc_a,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
+        self.rev_a1 = Revisione.objects.create(
+            documento=self.doc_a, rev_no=1, dis_act_date=date(2026, 2, 1)
+        )
+        self.doc_b = Documento.objects.create(
+            testata=self.testata, item_no="002", vendor_doc="EXPF1-02"
+        )
+        self.rev_b0 = Revisione.objects.create(documento=self.doc_b, rev_no=0)
+        self.doc_c = Documento.objects.create(
+            testata=self.testata, item_no="003", vendor_doc="EXPF1-03"
+        )
+
+    def _url(self, vista="orizzontale", fmt="xlsx"):
+        return f"/api/commesse/{self.testata.job}/situazione/export/?format={fmt}&vista={vista}"
+
+    def _post(self, corpo, vista="orizzontale", fmt="xlsx"):
+        return self.client.post(
+            self._url(vista, fmt),
+            data=json.dumps(corpo),
+            content_type="application/json",
+        )
+
+    def _foglio(self, response):
+        import openpyxl
+
+        self.assertEqual(response.status_code, 200)
+        return openpyxl.load_workbook(io.BytesIO(response.content)).active
+
+    def _vendor_doc_righe(self, ws):
+        col = [c.value for c in ws[1]].index("B&R Doc") + 1
+        return [ws.cell(r, col).value for r in range(3, ws.max_row + 1) if ws.cell(r, col).value]
+
+    def test_orizzontale_esporta_solo_i_documenti_indicati(self):
+        ws = self._foglio(self._post({"doc_ids": [self.doc_b.pk, self.doc_a.pk]}))
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-02", "EXPF1-01"])
+
+    def test_orizzontale_i_gruppi_revisione_seguono_i_documenti_esportati(self):
+        ws = self._foglio(self._post({"doc_ids": [self.doc_b.pk]}))
+        intestazioni = [c.value for c in ws[1]]
+        self.assertIn("Rev. 0", intestazioni)
+        self.assertNotIn("Rev. 1", intestazioni)
+
+    def test_verticale_esporta_solo_le_revisioni_indicate(self):
+        # Come con "solo ultima revisione" attivo: una riga per documento.
+        ws = self._foglio(
+            self._post(
+                {
+                    "doc_ids": [self.doc_a.pk, self.doc_b.pk],
+                    "rev_ids": [self.rev_a1.pk, self.rev_b0.pk],
+                },
+                vista="verticale",
+            )
+        )
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-01", "EXPF1-02"])
+        col_rev = [c.value for c in ws[1]].index("Rev.") + 1
+        self.assertEqual([ws.cell(r, col_rev).value for r in (3, 4)], ["1", "0"])
+
+    def test_verticale_documento_senza_revisioni_resta_una_riga(self):
+        ws = self._foglio(
+            self._post({"doc_ids": [self.doc_c.pk], "rev_ids": []}, vista="verticale")
+        )
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-03"])
+
+    def test_rev_ids_nullo_tiene_tutte_le_revisioni(self):
+        ws = self._foglio(
+            self._post({"doc_ids": [self.doc_a.pk], "rev_ids": None}, vista="verticale")
+        )
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-01", "EXPF1-01"])
+
+    def test_doc_ids_vuoto_non_esporta_nessuna_riga(self):
+        ws = self._foglio(self._post({"doc_ids": []}))
+        self.assertEqual(self._vendor_doc_righe(ws), [])
+
+    def test_post_senza_selezione_esporta_tutto(self):
+        ws = self._foglio(self._post({}))
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-01", "EXPF1-02", "EXPF1-03"])
+
+    def test_documenti_di_altre_commesse_vengono_ignorati(self):
+        altra = Testata.objects.create(job="EXPF2")
+        estraneo = Documento.objects.create(testata=altra, item_no="001", vendor_doc="EXPF2-01")
+        ws = self._foglio(self._post({"doc_ids": [estraneo.pk, self.doc_a.pk]}))
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-01"])
+
+    def test_json_non_valido(self):
+        res = self.client.post(self._url(), data="non-json", content_type="application/json")
+        self.assertEqual(res.status_code, 400)
+
+    def test_get_continua_a_esportare_tutto(self):
+        ws = self._foglio(self.client.get(self._url()))
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-01", "EXPF1-02", "EXPF1-03"])
+
+    def test_pdf_filtrato(self):
+        res = self._post({"doc_ids": [self.doc_a.pk]}, fmt="pdf")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "application/pdf")
+        self.assertTrue(res.content.startswith(b"%PDF"))
+
+    def test_senza_csrf_token_il_post_e_rifiutato(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.user)
+        res = client.post(
+            self._url(), data=json.dumps({"doc_ids": []}), content_type="application/json"
+        )
+        self.assertEqual(res.status_code, 403)
 
 
 class LegendaStatusPdfTests(TestCase):

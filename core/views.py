@@ -51,6 +51,7 @@ from .services.commesse import (
     delete_stato_esterno,
     esegui_ricezione,
     fetch_from_bc,
+    filtra_situazione,
     genera_documenti_da_modelli,
     get_commessa,
     list_cartelle_modelli,
@@ -1741,9 +1742,14 @@ def _export_situazione_orizzontale_xlsx(job, payload):
 
 
 @login_required
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def export_situazione(request, job):
-    """Export situazione documenti as PDF (with header) or Excel (no header)."""
+    """Export situazione documenti as PDF (with header) or Excel (no header).
+
+    Con un filtro attivo la pagina manda in POST gli id dei documenti (e delle
+    revisioni, nella vista verticale) rimasti a schermo: l'export contiene solo
+    quelli.
+    """
     try:
         testata = get_commessa(job)
     except Testata.DoesNotExist:
@@ -1753,7 +1759,18 @@ def export_situazione(request, job):
     if vista not in ("orizzontale", "verticale"):
         vista = "orizzontale"
 
-    payload = list_situazione(job)
+    doc_ids = rev_ids = None
+    if request.method == "POST":
+        try:
+            selezione = json.loads(request.body or b"{}")
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "JSON non valido."}, status=400)
+        if not isinstance(selezione, dict):
+            return JsonResponse({"error": "JSON non valido."}, status=400)
+        doc_ids = selezione.get("doc_ids")
+        rev_ids = selezione.get("rev_ids")
+
+    payload = filtra_situazione(list_situazione(job), doc_ids=doc_ids, rev_ids=rev_ids)
     fmt = _export_format(request, default="pdf")
     if fmt == "xlsx":
         if vista == "orizzontale":

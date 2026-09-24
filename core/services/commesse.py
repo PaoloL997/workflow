@@ -425,6 +425,61 @@ def list_situazione(job: str) -> dict:
     }
 
 
+def _ids_int(valori):
+    """Interi validi presi da una lista di id arrivata dal browser."""
+    puliti = []
+    for v in valori or []:
+        try:
+            puliti.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return puliti
+
+
+def filtra_situazione(payload: dict, doc_ids=None, rev_ids=None) -> dict:
+    """Narrow a situazione payload to the rows the user is looking at.
+
+    L'export deve contenere quello che si vede a schermo: il browser manda gli
+    id dei documenti (e, nella vista verticale, delle revisioni) rimasti dopo i
+    filtri e qui il payload viene ristretto a quelli.
+
+    Args:
+        payload: The full payload from :func:`list_situazione`.
+        doc_ids: Ids of the documents to keep, in the order to export them.
+            ``None`` keeps every document.
+        rev_ids: Ids of the revisions to keep. ``None`` keeps every revision.
+
+    Returns:
+        A new payload; gli id sconosciuti vengono ignorati, quindi non si può
+        tirare dentro niente che non fosse già nel payload di partenza.
+    """
+    if doc_ids is None and rev_ids is None:
+        return payload
+    documenti = payload.get("documenti") or []
+    rev_map = payload.get("revisioni_by_doc") or {}
+
+    if doc_ids is None:
+        scelti = list(documenti)
+    else:
+        per_id = {d["id"]: d for d in documenti}
+        scelti = [per_id[i] for i in _ids_int(doc_ids) if i in per_id]
+
+    if rev_ids is None:
+        nuove_revisioni = {d["id"]: _revisioni_del_doc(rev_map, d["id"]) for d in scelti}
+    else:
+        tenute = set(_ids_int(rev_ids))
+        nuove_revisioni = {
+            d["id"]: [r for r in _revisioni_del_doc(rev_map, d["id"]) if r["id"] in tenute]
+            for d in scelti
+        }
+    return {**payload, "documenti": scelti, "revisioni_by_doc": nuove_revisioni}
+
+
+def _revisioni_del_doc(rev_map, doc_id):
+    """Revisioni di un documento, con le chiavi int o str dei payload JSON."""
+    return rev_map.get(doc_id) or rev_map.get(str(doc_id)) or []
+
+
 def create_documento(job, data):
     t = Testata.objects.get(job=job)
     d = Documento(testata=t, **_clean_documento_fields(data))
