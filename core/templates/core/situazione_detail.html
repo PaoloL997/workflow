@@ -439,8 +439,6 @@
   /* display:inline-flex qui sopra batte la regola [hidden] del browser. */
   .toolbar-btn[hidden] { display: none; }
 
-  .toolbar-btn:disabled { cursor: default; opacity: 0.75; }
-
   /* ── Sort indicators ── */
   .sit-table thead th[data-sort-key],
   .sit-horiz thead th[data-sort-key] {
@@ -1504,8 +1502,6 @@
   let _dateRangeCtrl = null;
   // Vista verticale: una riga sola per documento, quella dell'ultima revisione.
   let _soloUltimaRev = false;
-  // Revisioni per documento, per filtrare sullo stato dell'ultima revisione.
-  let _revsByDocId = new Map();
   // Ultime righe disegnate: sono quelle che finiscono nell'export.
   let _lastShownRows = [];
   let _lastShownDocRevs = [];
@@ -1615,7 +1611,7 @@
     const values = new Set();
     if (_vista === 'verticale') {
       _allDocRevs.forEach(function (entry) {
-        const visibili = mostraSoloUltimaRev() ? entry.revs.slice(-1) : entry.revs;
+        const visibili = _soloUltimaRev ? entry.revs.slice(-1) : entry.revs;
         const revs = visibili.length ? visibili : [null];
         revs.forEach(function (r) {
           values.add(filterDisplayValue(getColumnFilterValue({ d: entry.doc, r }, key)));
@@ -1660,14 +1656,6 @@
       + `aria-pressed="${active}">${FILTER_ICON}</button>`;
   }
 
-  /* Vista verticale: quando il filtro per risposta del cliente è acceso la
-     tabella mostra la sola ultima revisione. Il filtro guarda l'ultima
-     revisione, quindi mostrare anche le precedenti — con risposte diverse da
-     quelle spuntate — direbbe una cosa per un'altra. */
-  function mostraSoloUltimaRev() {
-    return _soloUltimaRev || isColumnFilterActive(STATO_ULTIMA_REV_KEY);
-  }
-
   // Anche il solo interruttore «solo ultima revisione» nasconde delle righe:
   // conta come filtro per il contatore e per «Azzera filtri».
   function anyFilterActive() {
@@ -1702,28 +1690,24 @@
     safeApplyFilters();
   };
 
-  /* Pulsanti della barra in alto: acceso quando il relativo filtro è attivo.
-     L'interruttore dell'ultima revisione vale solo per la vista verticale. */
+  /* Barra in alto: un controllo per vista, acceso quando sta filtrando.
+     Il filtro per risposta del cliente guarda l'ultima revisione, quindi ha
+     senso dove una riga è un documento: in orizzontale. In verticale, dove una
+     riga è una revisione, c'è l'interruttore dell'ultima revisione e il filtro
+     di colonna Client response per la risposta della singola riga. */
   function syncToolbarFilterBtns() {
     const stato = document.getElementById('btn-stato-ultima-rev');
     if (stato) {
       const attivo = isColumnFilterActive(STATO_ULTIMA_REV_KEY);
+      stato.hidden = _vista !== 'orizzontale';
       stato.classList.toggle('active', attivo);
       stato.setAttribute('aria-pressed', attivo ? 'true' : 'false');
     }
     const solo = document.getElementById('btn-solo-ultima-rev');
     if (solo) {
-      // Con il filtro acceso la riduzione c'è già: il pulsante lo dice e non si
-      // clicca, così non resta un comando che non cambia niente.
-      const imposto = isColumnFilterActive(STATO_ULTIMA_REV_KEY);
-      const acceso = mostraSoloUltimaRev();
       solo.hidden = _vista !== 'verticale';
-      solo.disabled = imposto;
-      solo.classList.toggle('active', acceso);
-      solo.setAttribute('aria-pressed', acceso ? 'true' : 'false');
-      solo.title = imposto
-        ? 'Il filtro per risposta del cliente mostra già la sola ultima revisione.'
-        : '';
+      solo.classList.toggle('active', _soloUltimaRev);
+      solo.setAttribute('aria-pressed', _soloUltimaRev ? 'true' : 'false');
     }
   }
 
@@ -1747,8 +1731,6 @@
         return formatRevLabel(r);
       case 'reparto_label':
         return d.reparto_acronimo || d.reparto_label || '';
-      case STATO_ULTIMA_REV_KEY:
-        return vendorCellMeta(_revsByDocId.get(d.id) || []).label;
       case 'dis_plan_date':
       case 'dis_act_date':
       case 'rec_plan_date':
@@ -2157,7 +2139,6 @@
         revs: (revsByDoc[d.id] || revsByDoc[String(d.id)] || [])
           .sort((a, b) => (a.rev_no ?? 0) - (b.rev_no ?? 0)),
       }));
-      _revsByDocId = new Map(_allDocRevs.map(e => [e.doc.id, e.revs]));
     } catch (e) {
       console.error(e);
       showMsg('Errore nel caricamento.');
@@ -2184,10 +2165,7 @@
     _vista = v;
     _sortKey = v === 'orizzontale' ? 'client_doc_no' : 'vendor_doc';
     _sortDir = 1;
-    // I filtri di colonna parlano di colonne diverse nelle due viste, quindi si
-    // azzerano; lo stato dell'ultima revisione è del documento e sopravvive.
-    const statoUltimaRev = _columnFilters[STATO_ULTIMA_REV_KEY];
-    _columnFilters = statoUltimaRev ? { [STATO_ULTIMA_REV_KEY]: statoUltimaRev } : {};
+    _columnFilters = {};
     _soloUltimaRev = false;
     closeColumnFilterPopover();
     document.getElementById('btn-vert').classList.toggle('active', v === 'verticale');
@@ -2352,15 +2330,13 @@
     hideExtLegend();
     if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
 
-    // Con «solo ultima revisione» (o con il filtro per risposta del cliente)
-    // resta una riga per documento; i documenti senza revisioni tengono
-    // comunque la loro riga vuota.
-    const soloUltima = mostraSoloUltimaRev();
+    // Con «solo ultima revisione» resta una riga per documento; i documenti
+    // senza revisioni tengono comunque la loro riga vuota.
     const rawRows = [];
     let totalRows = 0;
     for (const { doc: d, revs } of docRevs) {
       totalRows += revs.length || 1;
-      const visibili = soloUltima ? revs.slice(-1) : revs;
+      const visibili = _soloUltimaRev ? revs.slice(-1) : revs;
       if (visibili.length) { for (const r of visibili) rawRows.push({ d, r }); }
       else rawRows.push({ d, r: null });
     }
