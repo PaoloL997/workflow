@@ -618,6 +618,14 @@ class Notifica(models.Model):
         on_delete=models.CASCADE,
         related_name="notifiche",
     )
+    # Chi ha provocato la notifica: l'autore della segnalazione o del commento.
+    autore = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifiche_generate",
+    )
     testo = models.CharField(max_length=300)
     created_at = models.DateTimeField(auto_now_add=True)
     letta_il = models.DateTimeField(null=True, blank=True)

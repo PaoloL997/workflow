@@ -255,7 +255,7 @@ class SegnalazioneAdmin(admin.ModelAdmin):
 
 @admin.register(Notifica)
 class NotificaAdmin(admin.ModelAdmin):
-    list_display = ("id", "destinatario", "testo", "created_at", "letta_il")
+    list_display = ("id", "destinatario", "autore", "testo", "created_at", "letta_il")
     list_filter = ("letta_il",)
     search_fields = (
         "testo",
@@ -263,8 +263,8 @@ class NotificaAdmin(admin.ModelAdmin):
         "destinatario__first_name",
         "destinatario__last_name",
     )
-    readonly_fields = ("destinatario", "segnalazione", "testo", "created_at", "letta_il")
-    raw_id_fields = ("destinatario", "segnalazione")
+    readonly_fields = ("destinatario", "segnalazione", "autore", "testo", "created_at", "letta_il")
+    raw_id_fields = ("destinatario", "segnalazione", "autore")
 
     def has_add_permission(self, request):
         return False

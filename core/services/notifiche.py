@@ -1,6 +1,6 @@
 from django.utils import timezone
 
-from ..models import Notifica, TipoSegnalazione, User
+from ..models import Notifica, SegnalazioneCommento, TipoSegnalazione, User
 
 MAX_NOTIFICHE = 50
 
@@ -8,6 +8,9 @@ TESTO_PER_TIPO = {
     TipoSegnalazione.FEATURE: "{nome} ha proposto una nuova feature",
     TipoSegnalazione.PROBLEMA: "{nome} ha evidenziato un problema",
 }
+
+TESTO_COMMENTO = "{nome} ha commentato «{titolo}»"
+MAX_TITOLO_NOTIFICA = 120
 
 
 def _iso(dt):
@@ -20,12 +23,22 @@ def testo_segnalazione(segnalazione):
     return template.format(nome=segnalazione.autore.nome_completo)
 
 
+def testo_commento(commento):
+    """Notification text for a new comment, e.g. "Anna Bianchi ha commentato «Titolo»"."""
+    titolo = commento.segnalazione.titolo
+    if len(titolo) > MAX_TITOLO_NOTIFICA:
+        titolo = titolo[: MAX_TITOLO_NOTIFICA - 1].rstrip() + "…"
+    return TESTO_COMMENTO.format(nome=commento.autore.nome_completo, titolo=titolo)
+
+
 def serialize_notifica(n):
+    # Le notifiche create prima del campo "autore" ricadono sull'autore della segnalazione.
+    autore = n.autore or n.segnalazione.autore
     return {
         "id": n.pk,
         "testo": n.testo,
         # Il nome dell'autore va reso in grassetto nel testo della notifica.
-        "autore": n.segnalazione.autore.nome_completo,
+        "autore": autore.nome_completo,
         "segnalazione_id": n.segnalazione_id,
         "tipo": n.segnalazione.tipo,
         "created_at": _iso(n.created_at),
@@ -44,15 +57,67 @@ def notifica_nuova_segnalazione(segnalazione):
     testo = testo_segnalazione(segnalazione)
     destinatari = User.objects.filter(is_active=True).exclude(pk=segnalazione.autore_id)
     return Notifica.objects.bulk_create(
-        [Notifica(destinatario=u, segnalazione=segnalazione, testo=testo) for u in destinatari],
+        [
+            Notifica(
+                destinatario=u,
+                segnalazione=segnalazione,
+                autore=segnalazione.autore,
+                testo=testo,
+            )
+            for u in destinatari
+        ],
         ignore_conflicts=True,
     )
+
+
+def notifica_nuovo_commento(commento):
+    """Notify the thread author and everyone who commented on it, except the commenter.
+
+    Args:
+        commento: The freshly created SegnalazioneCommento instance.
+
+    Returns:
+        The list of Notifica rows created or refreshed.
+    """
+    segnalazione = commento.segnalazione
+    partecipanti = set(
+        SegnalazioneCommento.objects.filter(segnalazione=segnalazione).values_list(
+            "autore_id", flat=True
+        )
+    )
+    partecipanti.add(segnalazione.autore_id)
+    partecipanti.discard(commento.autore_id)
+    if not partecipanti:
+        return []
+    destinatari = User.objects.filter(is_active=True, pk__in=partecipanti)
+    testo = testo_commento(commento)
+    return [_upsert_notifica(u, segnalazione, commento.autore, testo) for u in destinatari]
+
+
+def _upsert_notifica(destinatario, segnalazione, autore, testo):
+    """Create the notification, or bring back the existing one for that thread.
+
+    Il vincolo di unicità tiene una sola notifica per destinatario e segnalazione:
+    quando ce n'è già una la si riporta a non letta con il testo aggiornato.
+    """
+    n, creata = Notifica.objects.get_or_create(
+        destinatario=destinatario,
+        segnalazione=segnalazione,
+        defaults={"autore": autore, "testo": testo},
+    )
+    if not creata:
+        n.autore = autore
+        n.testo = testo
+        n.letta_il = None
+        n.created_at = timezone.now()
+        n.save(update_fields=["autore", "testo", "letta_il", "created_at"])
+    return n
 
 
 def _non_lette_qs(user):
     return (
         Notifica.objects.filter(destinatario=user, letta_il__isnull=True)
-        .select_related("segnalazione", "segnalazione__autore")
+        .select_related("autore", "segnalazione", "segnalazione__autore")
         .order_by("-created_at", "-id")
     )
 

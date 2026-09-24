@@ -4,6 +4,8 @@
 
 ### Added
 
+- Notifiche sui commenti: quando qualcuno commenta un thread di feature o problemi, ricevono la notifica nella campanella chi ha aperto il thread e chi lo ha già commentato (escluso chi scrive il commento). Il testo è del tipo *Anna Bianchi ha commentato «Titolo del thread»*; resta una sola notifica per thread, che torna da leggere ad ogni nuovo commento
+- Barra di ricerca: digitando il codice completo di una commessa e premendo **Invio** si apre direttamente la pagina di quella commessa, senza dover cliccare il risultato. Se il codice non corrisponde esattamente a nessuna commessa vengono mostrati i risultati come prima
 - Situazione documenti: anche la vista orizzontale, oltre alla verticale, ha l'export in Excel accanto a quello in PDF (pulsante **Esporta** → Excel / PDF). L'Excel riproduce la tabella a schermo: una riga per documento, colonne fisse, gruppo Planning (Submission date, Receipt date) e un gruppo per ogni revisione (Dispatch, Received, Status), con la colonna B&R Doc e le celle Status colorate come la risposta del cliente
 
 ### Changed

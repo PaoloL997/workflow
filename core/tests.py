@@ -3046,6 +3046,89 @@ class NotificheTestCase(TestCase):
         with self.assertRaises(ValueError):
             segna_lette(self.terzo, ["x"])
 
+    def _commenta(self, user, pk, testo="Un commento"):
+        self.client.force_login(user)
+        res = self.client.post(
+            f"/api/segnalazioni/{pk}/commenti/",
+            data=json.dumps({"testo": testo}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+        return res
+
+    def test_commento_notifica_autore_del_thread(self):
+        pk = self._crea_segnalazione(self.autore)
+        segna_lette(self.autore)
+        segna_lette(self.altro)
+        segna_lette(self.terzo)
+
+        self._commenta(self.altro, pk)
+
+        self.assertEqual(count_notifiche(self.autore), 1)
+        n = list_notifiche(self.autore)[0]
+        self.assertEqual(n["testo"], "Anna Bianchi ha commentato «Titolo»")
+        self.assertEqual(n["autore"], "Anna Bianchi")
+        self.assertEqual(n["segnalazione_id"], pk)
+        # Chi commenta non si auto-notifica e chi non partecipa resta fuori.
+        self.assertEqual(count_notifiche(self.altro), 0)
+        self.assertEqual(count_notifiche(self.terzo), 0)
+
+    def test_commento_notifica_anche_gli_altri_commentatori(self):
+        pk = self._crea_segnalazione(self.autore)
+        self._commenta(self.altro, pk, "Primo commento")
+        segna_lette(self.autore)
+        segna_lette(self.altro)
+        segna_lette(self.terzo)
+
+        self._commenta(self.terzo, pk, "Secondo commento")
+
+        self.assertEqual(count_notifiche(self.autore), 1)
+        self.assertEqual(count_notifiche(self.altro), 1)
+        self.assertEqual(count_notifiche(self.terzo), 0)
+        self.assertEqual(
+            list_notifiche(self.altro)[0]["testo"],
+            "Mario Verdi ha commentato «Titolo»",
+        )
+
+    def test_commento_riporta_a_non_letta_la_notifica_del_thread(self):
+        pk = self._crea_segnalazione(self.autore)
+        segna_lette(self.altro)
+        self.assertEqual(count_notifiche(self.altro), 0)
+
+        self._commenta(self.terzo, pk)
+
+        self.assertEqual(count_notifiche(self.altro), 0)
+        self._commenta(self.altro, pk, "Rispondo io")
+        self.assertEqual(count_notifiche(self.terzo), 1)
+        self.assertEqual(
+            list_notifiche(self.terzo)[0]["testo"],
+            "Anna Bianchi ha commentato «Titolo»",
+        )
+        # Resta una sola notifica per thread e destinatario.
+        self.assertEqual(Notifica.objects.filter(destinatario=self.terzo).count(), 1)
+
+    def test_commento_non_notifica_utenti_disattivati(self):
+        pk = self._crea_segnalazione(self.autore)
+        self.autore.is_active = False
+        self.autore.save(update_fields=["is_active"])
+        segna_lette(self.autore)
+
+        self._commenta(self.altro, pk)
+
+        self.assertEqual(count_notifiche(self.autore), 0)
+
+    def test_commento_tronca_i_titoli_lunghi(self):
+        titolo = "T" * 200
+        pk = self._crea_segnalazione(self.autore, titolo=titolo)
+        segna_lette(self.autore)
+
+        self._commenta(self.altro, pk)
+
+        testo = list_notifiche(self.autore)[0]["testo"]
+        self.assertTrue(testo.startswith("Anna Bianchi ha commentato «" + "T" * 119))
+        self.assertTrue(testo.endswith("…»"))
+        self.assertLessEqual(len(testo), 300)
+
     def test_campanella_visibile_nelle_pagine_autenticate(self):
         self.client.force_login(self.altro)
         res = self.client.get("/")

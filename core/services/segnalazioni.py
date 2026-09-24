@@ -9,7 +9,7 @@ from ..models import (
     StatoSegnalazione,
     TipoSegnalazione,
 )
-from .notifiche import notifica_nuova_segnalazione
+from .notifiche import notifica_nuova_segnalazione, notifica_nuovo_commento
 
 TIPO_VALUES = {c.value for c in TipoSegnalazione}
 STATO_VALUES = {c.value for c in StatoSegnalazione}
@@ -219,7 +219,8 @@ def create_commento(user, pk, testo):
     s = Segnalazione.objects.get(pk=pk)
     if s.stato == StatoSegnalazione.CHIUSO:
         raise SegnalazioneClosed("Il thread è chiuso.")
-    SegnalazioneCommento.objects.create(segnalazione=s, autore=user, testo=testo)
+    commento = SegnalazioneCommento.objects.create(segnalazione=s, autore=user, testo=testo)
+    notifica_nuovo_commento(commento)
     return get_segnalazione(s.pk, user)
 
 
