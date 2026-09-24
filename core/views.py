@@ -8,6 +8,7 @@ from django.contrib.auth import authenticate, login, logout, update_session_auth
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
@@ -27,11 +28,13 @@ from .models import (
     Documento,
     IndirSped,
     Permesso,
+    PersonaCommessa,
     Revisione,
     Segnalazione,
     Stabilimento,
     StatoEsterno,
     Testata,
+    TransmittalInterno,
     User,
     valida_immagine_firma,
 )
@@ -64,10 +67,12 @@ from .services.commesse import (
     list_situazione,
     list_stati_esterni,
     list_stati_interni,
+    persone_per_ruolo,
     pin_commessa,
     request_delete_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
+    risolvi_persona_commessa,
     salva_file_link,
     serialize_cartella_modello,
     serialize_documento,
@@ -106,6 +111,24 @@ from .services.segnalazioni import (
 )
 from .services.situazione_cella_vendor import colori_cella_vendor
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
+from .services.trasmittal_interno import (
+    TrasmittalInternoAnnullaError,
+    annulla_trasmittal_interno,
+    anteprima_pdf_bytes,
+    anteprima_trasmittal,
+    elenco_destinazioni_ut,
+    elenco_selezione_ut,
+    elenco_trasmittal_interni,
+    emetti_trasmittal_interno,
+    imposta_destinazione_stabilimento_bulk,
+    imposta_destinazioni_ut,
+    indirizzi_per_siti,
+    invia_email_trasmittal,
+    percorso_pdf_lettera,
+    prepara_per_dcc,
+    salva_pdf,
+    stabilimenti_costruttivi,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -298,6 +321,8 @@ def commessa_detail_view(request, job):
             "ricezione_preview": ricezione_preview,
             "ricezione_extra": ricezione_extra,
             "anomalie_count": anomalie_count,
+            "persone_ruoli": persone_per_ruolo(testata),
+            "trasmittal_interno_disponibile": testata.sito_costruttivo_id is not None,
         },
     )
 
@@ -373,6 +398,17 @@ def situazione_detail_view(request, job):
         "core/situazione_detail.html",
         {"testata": testata, "commessa_folder": commessa_folder},
     )
+
+
+@login_required
+def trasmittal_interno_detail_view(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        raise Http404
+    if testata.sito_costruttivo_id is None:
+        return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
+    return render(request, "core/trasmittal_interno_detail.html", {"testata": testata})
 
 
 @login_required
@@ -492,6 +528,50 @@ def erp_api(request):
     except Exception as exc:
         logger.error('ERP: errore durante il recupero della commessa "%s": %s', job, exc)
         return JsonResponse({"data": {}, "warning": str(exc)})
+
+
+# ── API: Utenti ──────────────────────────────────────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def utenti_cerca_api(request):
+    q = request.GET.get("q", "").strip()
+    if len(q) < 2:
+        return JsonResponse({"utenti": []})
+    utenti = (
+        User.objects.filter(is_active=True)
+        .filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(username__icontains=q))
+        .order_by("last_name", "first_name")[:10]
+    )
+    return JsonResponse(
+        {
+            "utenti": [
+                {"id": u.pk, "nome_completo": u.nome_completo, "username": u.username}
+                for u in utenti
+            ]
+        }
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def persona_commessa_risolvi_api(request, pk):
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    utente_id = data.get("utente_id")
+    if not utente_id:
+        return JsonResponse({"error": "Parametro utente_id mancante."}, status=400)
+    try:
+        persona = risolvi_persona_commessa(pk, utente_id)
+    except PersonaCommessa.DoesNotExist:
+        return JsonResponse({"error": "Voce non trovata."}, status=404)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Utente non trovato."}, status=404)
+    return JsonResponse({"ok": True, "nome": persona.nome_visualizzato})
 
 
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────
@@ -841,6 +921,285 @@ def emissione_api(request):
 def stabilimenti_api(request):
     items = list(Stabilimento.objects.values("id", "nome"))
     return JsonResponse({"stabilimenti": items})
+
+
+# ── API: Trasmittal interno — destinazioni cartacee ────────────────────────────
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_destinazioni_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse(
+        {
+            "stabilimenti": [
+                {"codice_bc": s.codice_bc, "sigla": s.sigla, "nome": s.nome}
+                for s in stabilimenti_costruttivi()
+            ],
+            "documenti": elenco_destinazioni_ut(testata),
+        }
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def documento_destinazioni_api(request, job, pk):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    codici_bc = data.get("codici_bc")
+    if not isinstance(codici_bc, list) or not all(isinstance(c, int) for c in codici_bc):
+        return JsonResponse({"error": "codici_bc deve essere una lista di interi."}, status=400)
+    try:
+        imposta_destinazioni_ut(testata, pk, codici_bc)
+    except Documento.DoesNotExist:
+        return JsonResponse({"error": "Documento non trovato."}, status=404)
+    return JsonResponse({"ok": True})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    documento_ids = data.get("documento_ids")
+    attiva = data.get("attiva")
+    if not isinstance(documento_ids, list) or not isinstance(attiva, bool):
+        return JsonResponse(
+            {"error": "documento_ids deve essere una lista e attiva un booleano."}, status=400
+        )
+    documenti = imposta_destinazione_stabilimento_bulk(testata, codice_bc, documento_ids, attiva)
+    return JsonResponse({"ok": True, "documenti_aggiornati": [d.pk for d in documenti]})
+
+
+# ── API: Trasmittal interno — creazione lettera ─────────────────────────────────
+
+
+def _sigle_stabilimento_per_email(righe):
+    """Email -> sigle degli stabilimenti che la includono, solo per il pannello di conferma.
+
+    ``anteprima_trasmittal`` risolve i destinatari di origine stabilimento
+    sull'unione di tutti i siti coinvolti (una sola chiamata a
+    ``indirizzi_per_siti``), senza tracciare quale sito abbia contribuito
+    quale indirizzo. Qui, solo per la visualizzazione, si richiama la stessa
+    funzione di servizio una volta per sito per ricostruire l'associazione —
+    nessuna modifica al servizio, nessuna scrittura.
+    """
+    sigla_per_codice = {}
+    for riga in righe:
+        for sito in riga["siti"]:
+            sigla_per_codice[sito["codice_bc"]] = sito["sigla"]
+
+    sigle = {}
+    for codice, sigla in sigla_per_codice.items():
+        indirizzi = indirizzi_per_siti([codice])
+        for email in indirizzi["to"] + indirizzi["cc"]:
+            chiave = email.strip().lower()
+            lista = sigle.setdefault(chiave, [])
+            if sigla not in lista:
+                lista.append(sigla)
+    return sigle
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_selezione_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse({"documenti": elenco_selezione_ut(testata)})
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def trasmittal_interno_anteprima_api(request, job):
+    """Anteprima di una lettera: pura computazione, nessuna scrittura — accessibile in sola lettura."""
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        anteprima = anteprima_trasmittal(testata, data.get("righe") or [])
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    anteprima["sigle_stabilimento"] = _sigle_stabilimento_per_email(anteprima["righe"])
+    return JsonResponse(anteprima)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_anteprima_pdf_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        pdf_bytes = anteprima_pdf_bytes(
+            testata, data.get("righe") or [], request.user, note=data.get("note", "")
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="anteprima_trasmittal_interno.pdf"'
+    return response
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_emetti_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+    try:
+        risultato = emetti_trasmittal_interno(
+            testata,
+            data.get("righe") or [],
+            request.user,
+            note=data.get("note", ""),
+            destinatari=data.get("destinatari"),
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    return JsonResponse({"ok": True, **risultato})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettere_api(request, job):
+    try:
+        testata = get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+    return JsonResponse({"lettere": elenco_trasmittal_interni(testata)})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
+    try:
+        file_path = percorso_pdf_lettera(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404
+    except PermissionError:
+        return HttpResponseForbidden("Percorso non autorizzato.")
+    if not file_path.is_file():
+        raise Http404
+    return FileResponse(
+        open(file_path, "rb"),
+        content_type="application/pdf",
+        as_attachment=False,
+        filename=file_path.name,
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_annulla_api(request, job, trasmittal_id):
+    """Annulla l'ultimo trasmittal interno emesso per la commessa in quel giorno."""
+    try:
+        trasmittal = TransmittalInterno.objects.select_related("testata").get(
+            pk=trasmittal_id, testata__job=job
+        )
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    try:
+        esito = annulla_trasmittal_interno(trasmittal, request.user)
+    except TrasmittalInternoAnnullaError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+    return JsonResponse({"ok": True, **esito})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
+    """Riprova un solo passo (pdf/dcc/email) di una lettera già creata.
+
+    Stessa logica di orchestrazione per-passo già usata dentro
+    ``emetti_trasmittal_interno`` — qui applicata a un singolo passo, sulle
+    stesse funzioni di servizio pubbliche, nessuna logica nuova nei servizi.
+    """
+    try:
+        trasmittal = TransmittalInterno.objects.select_related("testata").get(
+            pk=trasmittal_id, testata__job=job
+        )
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "JSON non valido."}, status=400)
+
+    step = data.get("step")
+    if step not in ("pdf", "dcc", "email"):
+        return JsonResponse({"error": 'step deve essere "pdf", "dcc" o "email".'}, status=400)
+
+    if step == "pdf":
+        try:
+            percorso = salva_pdf(trasmittal)
+            esito = {"ok": True, "errore": None, "percorso": str(percorso)}
+        except Exception as exc:
+            logger.exception(
+                'Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome
+            )
+            esito = {"ok": False, "errore": str(exc), "percorso": None}
+    elif step == "dcc":
+        try:
+            esito_dcc = prepara_per_dcc(trasmittal)
+            esito = {"ok": True, "errore": None, **esito_dcc}
+        except Exception as exc:
+            logger.exception(
+                'Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome
+            )
+            esito = {
+                "ok": False,
+                "errore": str(exc),
+                "cartella": None,
+                "copiati": [],
+                "mancanti": [],
+            }
+    else:
+        try:
+            esito_email = invia_email_trasmittal(trasmittal)
+            esito = {"ok": True, "errore": None, **esito_email}
+        except Exception as exc:
+            logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
+            esito = {"ok": False, "errore": str(exc), "to": [], "cc": []}
+
+    return JsonResponse({"ok": True, "step": step, "esito": esito})
 
 
 # ── API: Trasmittal PDF ─────────────────────────────────────────────────────

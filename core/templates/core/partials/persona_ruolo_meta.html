@@ -1,0 +1,5 @@
+{# Un .commessa-meta-item per un ruolo (PM/PE/QCI/WE). Richiede: etichetta, persone (lista di {id, nome, abbinato}) #}
+<div class="commessa-meta-item">
+  <dt class="commessa-meta-label">{{ etichetta }}</dt>
+  <dd class="commessa-meta-value{% if not persone %} empty{% endif %}">{% if persone %}{% for p in persone %}{% if not forloop.first %}, {% endif %}{% if p.abbinato %}{{ p.nome }}{% else %}<button type="button" class="persona-non-abbinata" data-persona-id="{{ p.id }}" data-nome="{{ p.nome }}">{{ p.nome }}</button>{% endif %}{% endfor %}{% else %}—{% endif %}</dd>
+</div>

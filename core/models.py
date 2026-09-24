@@ -5,6 +5,16 @@ from django.db import models
 
 class Stabilimento(models.Model):
     nome = models.CharField(db_column="Nome", max_length=100, unique=True)
+    # Null perché non tutti gli stabilimenti sono siti costruttivi: solo quelli
+    # che lo sono hanno una sigla e un codice sito su Business Central.
+    sigla = models.CharField(db_column="Sigla", max_length=2, unique=True, null=True, blank=True)
+    codice_bc = models.PositiveSmallIntegerField(
+        db_column="CodiceBC",
+        unique=True,
+        null=True,
+        blank=True,
+        verbose_name="Codice sito Business Central",
+    )
 
     class Meta:
         managed = True
@@ -126,6 +136,82 @@ class User(AbstractUser):
         super().save(*args, **kwargs)
 
 
+class TipoIndirizzoStabilimento(models.TextChoices):
+    TO = "to", "A"
+    CC = "cc", "CC"
+
+
+class IndirizzoStabilimento(models.Model):
+    """Indirizzo email di uno stabilimento, per il trasmittal interno."""
+
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.CASCADE,
+        related_name="indirizzi",
+    )
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoIndirizzoStabilimento.choices)
+    attivo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = True
+        db_table = "indirizzi_stabilimento"
+        verbose_name = "Indirizzo stabilimento"
+        verbose_name_plural = "Indirizzi stabilimento"
+        ordering = ["stabilimento", "tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stabilimento", "email", "tipo"],
+                name="uniq_indirizzo_stabilimento",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.stabilimento_id}: {self.email} ({self.tipo})"
+
+
+class RuoloFirmatarioStabilimento(models.TextChoices):
+    PRODUZIONE = "produzione", "Produzione"
+    QUALITA = "qualita", "Qualità"
+
+
+class FirmatarioStabilimento(models.Model):
+    """Chi firma per uno stabilimento nel trasmittal interno, per ruolo.
+
+    L'immagine della firma è quella dell'utente (``User.firma``), non un
+    campo di questo modello. Lo stesso utente può firmare per più
+    stabilimenti: è voluto.
+    """
+
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.CASCADE,
+        related_name="firmatari",
+    )
+    ruolo = models.CharField(max_length=20, choices=RuoloFirmatarioStabilimento.choices)
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="firmatario_di",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "firmatari_stabilimento"
+        verbose_name = "Firmatario stabilimento"
+        verbose_name_plural = "Firmatari stabilimento"
+        ordering = ["stabilimento", "ruolo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stabilimento", "ruolo"],
+                name="uniq_firmatario_stabilimento_ruolo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.stabilimento_id}: {self.ruolo} = {self.utente_id}"
+
+
 class Testata(models.Model):
     job = models.CharField(db_column="Job", max_length=50, unique=True)
     client = models.CharField(db_column="Client", max_length=200, blank=True)
@@ -150,6 +236,18 @@ class Testata(models.Model):
         help_text="Giorni a nostra disposizione per emettere/revisionare un documento.",
     )
     rev_let_flag = models.BooleanField(db_column="RevLetFlag", default=False)
+    # Non sincronizzato automaticamente da Business Central (NBT_BRL Location
+    # Code, vedi src.erp.business_central.get_commessa_codice_sito): impostato
+    # a mano finché non esiste una sync dedicata. Prerequisito per il
+    # trasmittal interno, che deve sapere dove viene costruita la commessa.
+    sito_costruttivo = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commesse_costruttive",
+        verbose_name="Sito costruttivo",
+    )
 
     class Meta:
         managed = True
@@ -157,8 +255,79 @@ class Testata(models.Model):
         verbose_name = "Archivio commessa"
         verbose_name_plural = "Archivi commessa"
 
+    def clean(self):
+        super().clean()
+        if self.sito_costruttivo_id and self.sito_costruttivo.codice_bc is None:
+            raise ValidationError(
+                {
+                    "sito_costruttivo": (
+                        "Lo stabilimento selezionato non ha un codice sito: non può "
+                        "essere il sito costruttivo di una commessa."
+                    )
+                }
+            )
+
     def __str__(self):
         return self.job
+
+
+class RuoloPersonaCommessa(models.TextChoices):
+    PM = "pm", "PM"
+    PE = "pe", "PE"
+    QCI = "qci", "QCI"
+    WE = "we", "WE"
+
+
+class PersonaCommessa(models.Model):
+    """Una persona assegnata a un ruolo (PM/PE/QCI/WE) di una commessa.
+
+    La persona è un utente registrato (``utente``) oppure, se non censito
+    nell'app, un nome libero (``nome_libero``): mai entrambi, mai nessuno dei
+    due. Più persone possono coprire lo stesso ruolo sulla stessa commessa.
+    """
+
+    testata = models.ForeignKey(Testata, on_delete=models.CASCADE, related_name="persone")
+    ruolo = models.CharField(max_length=10, choices=RuoloPersonaCommessa.choices)
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="commesse_persona",
+    )
+    nome_libero = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "persone_commessa"
+        verbose_name = "Persona commessa"
+        verbose_name_plural = "Persone commessa"
+        ordering = ["testata", "ruolo", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(utente__isnull=False, nome_libero="")
+                    | (models.Q(utente__isnull=True) & ~models.Q(nome_libero=""))
+                ),
+                name="ck_persona_commessa_utente_xor_nome_libero",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.testata_id}: {self.ruolo} = {self.nome_visualizzato}"
+
+    @property
+    def nome_visualizzato(self):
+        """Nome e cognome se collegata a un utente, altrimenti il testo libero.
+
+        Mostra sempre "Nome Cognome" (non lo username): cade sullo username
+        solo nel raro caso in cui l'utente non abbia né nome né cognome
+        compilati.
+        """
+        if not self.utente_id:
+            return self.nome_libero
+        nome_cognome = f"{self.utente.first_name} {self.utente.last_name}".strip()
+        return nome_cognome or self.utente.nome_completo
 
 
 class AggiornamentoBC(models.Model):
@@ -409,6 +578,214 @@ class Documento(models.Model):
 
     def __str__(self):
         return f"{self.testata_id} — {self.doc_title or self.pk}"
+
+
+class DestinazioneDocumento(models.Model):
+    """Stabilimenti che devono ricevere copia cartacea di un documento.
+
+    Sostituisce il bitmask a 5 cifre del vecchio ``<job>-RecipientsData.txt``
+    (strumento Excel): il dato è persistente e indipendente dalla singola
+    lettera del trasmittal interno, si imposta una volta per documento e vale
+    per tutte le trasmissioni successive.
+    """
+
+    documento = models.ForeignKey(
+        Documento,
+        on_delete=models.CASCADE,
+        related_name="destinazioni",
+    )
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.PROTECT,
+        related_name="documenti_destinati",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "destinazioni_documento"
+        verbose_name = "Destinazione documento"
+        verbose_name_plural = "Destinazioni documento"
+        ordering = ["documento", "stabilimento"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["documento", "stabilimento"],
+                name="uniq_destinazione_documento",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.stabilimento_id and self.stabilimento.codice_bc is None:
+            raise ValidationError(
+                {
+                    "stabilimento": (
+                        "Lo stabilimento non ha un codice sito: non può essere una "
+                        "destinazione documento."
+                    )
+                }
+            )
+
+    def __str__(self):
+        return f"{self.documento_id}: {self.stabilimento_id}"
+
+
+class TransmittalInterno(models.Model):
+    """Lettera di trasmittal interno (form MQ 7.5-04), archiviata dopo l'emissione.
+
+    Il progressivo riparte da 1 ogni giorno, per commessa (vedi
+    ``core.services.trasmittal_interno.prossimo_progressivo``); ``nome`` è il
+    nome leggibile che ne deriva (``<job>_<yyyy-mm-dd>_E<n>``).
+    """
+
+    testata = models.ForeignKey(
+        Testata,
+        on_delete=models.PROTECT,
+        related_name="trasmittal_interni",
+    )
+    data = models.DateField()
+    progressivo = models.PositiveSmallIntegerField()
+    nome = models.CharField(max_length=100, unique=True)
+    creato_da = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="trasmittal_interni_creati",
+    )
+    creato_il = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "trasmittal_interni"
+        verbose_name = "Trasmittal interno"
+        verbose_name_plural = "Trasmittal interni"
+        ordering = ["-data", "-progressivo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["testata", "data", "progressivo"],
+                name="uniq_trasmittal_interno_progressivo",
+            ),
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class RigaTransmittalInterno(models.Model):
+    """Un documento incluso in un trasmittal interno, con la sua riga stampata.
+
+    ``siti`` è uno SNAPSHOT dei siti coinvolti al momento dell'emissione: non
+    una lettura live di ``DestinazioneDocumento``, che nel frattempo può
+    cambiare senza toccare le lettere già emesse.
+    """
+
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
+        on_delete=models.CASCADE,
+        related_name="righe",
+    )
+    documento = models.ForeignKey(
+        Documento,
+        on_delete=models.PROTECT,
+        related_name="righe_trasmittal_interno",
+    )
+    revisione = models.CharField(max_length=10)
+    copie = models.PositiveSmallIntegerField(null=True, blank=True)
+    tpi = models.BooleanField(
+        default=False, help_text="Il documento va trasmesso a un ispettore terzo (TPI)."
+    )
+    tpi_destinatario = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Chi, se tpi è attivo (es. "No.Bo.", "AI", o un altro destinatario).',
+    )
+    note = models.CharField(max_length=300, blank=True)
+    cliente = models.BooleanField(default=True)
+    siti = models.ManyToManyField(
+        Stabilimento,
+        blank=True,
+        related_name="righe_trasmittal_interno",
+        db_table="riga_trasmittal_interno_siti",
+    )
+    posizione = models.PositiveSmallIntegerField(help_text="Ordine di stampa nella lettera.")
+
+    class Meta:
+        managed = True
+        db_table = "righe_trasmittal_interno"
+        verbose_name = "Riga trasmittal interno"
+        verbose_name_plural = "Righe trasmittal interno"
+        ordering = ["trasmittal", "posizione"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "documento"],
+                name="uniq_riga_trasmittal_interno_documento",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.tpi and not self.tpi_destinatario:
+            raise ValidationError(
+                {"tpi_destinatario": "Specificare il destinatario TPI (es. No.Bo., AI)."}
+            )
+        if not self.tpi and self.tpi_destinatario:
+            raise ValidationError(
+                {"tpi_destinatario": "Il destinatario TPI ha senso solo se TPI è attivo."}
+            )
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.documento_id}"
+
+
+class TipoDestinatarioTransmittalInterno(models.TextChoices):
+    TO = "to", "A"
+    CC = "cc", "CC"
+
+
+class OrigineDestinatarioTransmittalInterno(models.TextChoices):
+    STABILIMENTO = "stabilimento", "Stabilimento"
+    PM = "pm", "PM"
+    PE = "pe", "PE"
+    QCI = "qci", "QCI"
+    EXPORT = "export", "Export"
+    MANUALE = "manuale", "Manuale"
+
+
+class DestinatarioTransmittalInterno(models.Model):
+    """Un destinatario email di un trasmittal interno, con la sua origine.
+
+    ``origine`` spiega perché quell'indirizzo è finito in lista: vedi
+    ``core.services.trasmittal_interno.crea_trasmittal_interno`` per le
+    regole di indirizzamento (stabilimento, PM, PE, QCI, export@ per i
+    documenti SHn); ``MANUALE`` per un indirizzo aggiunto a mano in
+    anteprima (vedi ``core.services.trasmittal_interno.sostituisci_destinatari``).
+    WE non ha un'origine dedicata: la sua lista di distribuzione non è
+    ancora definita.
+    """
+
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
+        on_delete=models.CASCADE,
+        related_name="destinatari",
+    )
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
+    origine = models.CharField(max_length=20, choices=OrigineDestinatarioTransmittalInterno.choices)
+
+    class Meta:
+        managed = True
+        db_table = "destinatari_trasmittal_interno"
+        verbose_name = "Destinatario trasmittal interno"
+        verbose_name_plural = "Destinatari trasmittal interno"
+        ordering = ["trasmittal", "tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "email"],
+                name="uniq_destinatario_trasmittal_interno",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):

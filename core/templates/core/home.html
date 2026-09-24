@@ -651,6 +651,71 @@
 
   .form-input::placeholder { color: var(--color-text-secondary); opacity: 0.6; }
 
+  /* ── Ruoli commessa (PM/PE/QCI/WE) ── */
+  .persona-roles { display: flex; flex-direction: column; gap: 10px; }
+  .persona-role { display: flex; flex-direction: column; gap: 4px; }
+  .persona-role-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+  .persona-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .persona-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 6px 3px 10px;
+    border-radius: 999px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+    color: var(--color-text-primary);
+  }
+  .persona-chip.libero { font-style: italic; color: var(--color-text-secondary); }
+  .persona-chip-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0;
+  }
+  .persona-chip-x:hover { background: var(--color-border); color: var(--color-text-primary); }
+  .persona-input-wrap { position: relative; }
+  .persona-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    box-shadow: 0 8px 24px hsla(0,0%,0%,0.18);
+  }
+  .persona-suggestion { padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .persona-suggestion:hover, .persona-suggestion.active { background: var(--color-border); }
+  .persona-suggestion-hint {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    padding: 6px 10px;
+    font-style: italic;
+  }
+
   .modal-error {
     padding: 10px 12px;
     border-radius: var(--radius-sm);
@@ -946,6 +1011,47 @@
           <label class="form-label" for="f-requisition">Bid No.</label>
           <input class="form-input" id="f-requisition" name="requisition" type="text"
                  placeholder="Numero offerta" autocomplete="off">
+        </div>
+        <div class="form-group full-width">
+          <label class="form-label">Ruoli commessa</label>
+          <div class="persona-roles">
+            <div class="persona-role" data-role="pm">
+              <span class="persona-role-label">PM</span>
+              <div class="persona-chips" id="persona-chips-pm"></div>
+              <div class="persona-input-wrap">
+                <input class="form-input persona-input" id="persona-input-pm" type="text"
+                       placeholder="Aggiungi persona…" autocomplete="off">
+                <ul class="persona-suggestions" id="persona-suggestions-pm" hidden></ul>
+              </div>
+            </div>
+            <div class="persona-role" data-role="pe">
+              <span class="persona-role-label">PE</span>
+              <div class="persona-chips" id="persona-chips-pe"></div>
+              <div class="persona-input-wrap">
+                <input class="form-input persona-input" id="persona-input-pe" type="text"
+                       placeholder="Aggiungi persona…" autocomplete="off">
+                <ul class="persona-suggestions" id="persona-suggestions-pe" hidden></ul>
+              </div>
+            </div>
+            <div class="persona-role" data-role="qci">
+              <span class="persona-role-label">QCI</span>
+              <div class="persona-chips" id="persona-chips-qci"></div>
+              <div class="persona-input-wrap">
+                <input class="form-input persona-input" id="persona-input-qci" type="text"
+                       placeholder="Aggiungi persona…" autocomplete="off">
+                <ul class="persona-suggestions" id="persona-suggestions-qci" hidden></ul>
+              </div>
+            </div>
+            <div class="persona-role" data-role="we">
+              <span class="persona-role-label">WE</span>
+              <div class="persona-chips" id="persona-chips-we"></div>
+              <div class="persona-input-wrap">
+                <input class="form-input persona-input" id="persona-input-we" type="text"
+                       placeholder="Aggiungi persona…" autocomplete="off">
+                <ul class="persona-suggestions" id="persona-suggestions-we" hidden></ul>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-group full-width">
           <label class="form-label" for="f-job-detail">Descrizione</label>
@@ -1317,6 +1423,7 @@
     document.getElementById('form-commessa').reset();
     setErpStatus('');
     hideModalError();
+    resetPersonaRoles();
   }
 
   /* ── ERP autofill ── */
@@ -1406,6 +1513,7 @@
       job_detail: form.job_detail.value.trim(),
       delivery_date: form.delivery_date.value || null,
       delivery_term: form.delivery_term.value.trim(),
+      persone: personaEntriesForPayload(),
     };
 
     btn.disabled = true;
@@ -1432,6 +1540,164 @@
       label.textContent = 'Crea commessa';
     }
   }
+
+  /* ──────────────────────────────────────────────
+     Ruoli commessa (PM/PE/QCI/WE): chip + autocomplete
+  ────────────────────────────────────────────── */
+  const PERSONA_ROLES = ['pm', 'pe', 'qci', 'we'];
+  const personaState = { pm: [], pe: [], qci: [], we: [] };
+  let personaDebounce = null;
+
+  function personaEntriesForPayload() {
+    const out = {};
+    PERSONA_ROLES.forEach(role => {
+      out[role] = personaState[role].map(entry =>
+        entry.type === 'utente' ? { utente_id: Number(entry.id) } : { nome: entry.label }
+      );
+    });
+    return out;
+  }
+
+  function resetPersonaRoles() {
+    PERSONA_ROLES.forEach(role => {
+      personaState[role] = [];
+      renderPersonaChips(role);
+      hidePersonaSuggestions(role);
+      document.getElementById(`persona-input-${role}`).value = '';
+    });
+  }
+
+  function renderPersonaChips(role) {
+    const container = document.getElementById(`persona-chips-${role}`);
+    container.replaceChildren(
+      ...personaState[role].map((entry, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'persona-chip' + (entry.type === 'libero' ? ' libero' : '');
+        const label = document.createElement('span');
+        label.textContent = entry.label;
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'persona-chip-x';
+        removeBtn.setAttribute('aria-label', `Rimuovi ${entry.label}`);
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          personaState[role].splice(index, 1);
+          renderPersonaChips(role);
+        });
+        chip.append(label, removeBtn);
+        return chip;
+      })
+    );
+  }
+
+  function addPersonaChip(role, entry) {
+    const chiave = entry.type === 'utente' ? `utente:${entry.id}` : `libero:${entry.label.toLowerCase()}`;
+    const esiste = personaState[role].some(e =>
+      (e.type === 'utente' ? `utente:${e.id}` : `libero:${e.label.toLowerCase()}`) === chiave
+    );
+    if (!esiste) {
+      personaState[role].push(entry);
+      renderPersonaChips(role);
+    }
+  }
+
+  function hidePersonaSuggestions(role) {
+    const list = document.getElementById(`persona-suggestions-${role}`);
+    list.hidden = true;
+    list.replaceChildren();
+  }
+
+  function commitPersonaFreeText(role, input) {
+    const valore = input.value.trim();
+    if (valore) {
+      addPersonaChip(role, { type: 'libero', label: valore });
+    }
+    input.value = '';
+    hidePersonaSuggestions(role);
+  }
+
+  async function fetchPersonaSuggestions(query) {
+    try {
+      const res = await fetch('/api/utenti/cerca/?q=' + encodeURIComponent(query));
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.utenti || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderPersonaSuggestions(role, input, utenti) {
+    const list = document.getElementById(`persona-suggestions-${role}`);
+    const valore = input.value.trim();
+    const items = utenti.map(u => {
+      const li = document.createElement('li');
+      li.className = 'persona-suggestion';
+      li.dataset.id = u.id;
+      li.dataset.label = u.nome_completo;
+      li.textContent = `${u.nome_completo} (${u.username})`;
+      return li;
+    });
+    if (valore) {
+      const hint = document.createElement('li');
+      hint.className = 'persona-suggestion-hint';
+      hint.textContent = `Premi Invio per aggiungere "${valore}" come testo libero`;
+      items.push(hint);
+    }
+    list.replaceChildren(...items);
+    list.hidden = items.length === 0;
+  }
+
+  function initPersonaRole(role) {
+    const input = document.getElementById(`persona-input-${role}`);
+    const list = document.getElementById(`persona-suggestions-${role}`);
+
+    input.addEventListener('input', () => {
+      clearTimeout(personaDebounce);
+      const valore = input.value.trim();
+      if (valore.length < 2) {
+        hidePersonaSuggestions(role);
+        return;
+      }
+      personaDebounce = setTimeout(async () => {
+        const utenti = await fetchPersonaSuggestions(valore);
+        renderPersonaSuggestions(role, input, utenti);
+      }, 250);
+    });
+
+    // mousedown (non click) e preventDefault: evita che l'input perda il
+    // focus (e quindi che scatti il blur) prima che la selezione avvenga.
+    list.addEventListener('mousedown', e => {
+      const item = e.target.closest('.persona-suggestion');
+      if (!item) return;
+      e.preventDefault();
+      addPersonaChip(role, { type: 'utente', id: item.dataset.id, label: item.dataset.label });
+      input.value = '';
+      hidePersonaSuggestions(role);
+      input.focus();
+    });
+
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',') {
+        // stopPropagation è essenziale: senza, l'Enter risale al listener
+        // globale del form (vedi sotto) e sottomette l'intera creazione
+        // della commessa invece di limitarsi ad aggiungere il chip.
+        e.stopPropagation();
+        e.preventDefault();
+        commitPersonaFreeText(role, input);
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      if (input.value.trim()) {
+        commitPersonaFreeText(role, input);
+      } else {
+        hidePersonaSuggestions(role);
+      }
+    });
+  }
+
+  PERSONA_ROLES.forEach(initPersonaRole);
 
   /* ──────────────────────────────────────────────
      Event listeners

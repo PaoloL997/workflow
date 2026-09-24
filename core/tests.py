@@ -6,12 +6,16 @@ from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import openpyxl
 import pandas as pd
+from django.apps import apps as django_apps
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from django.utils.encoding import force_bytes
@@ -22,14 +26,21 @@ from .models import (
     FIRMA_MAX_BYTE,
     AggiornamentoBC,
     CommessaPin,
+    DestinazioneDocumento,
     Documento,
     EsecuzioneSchedulata,
+    FirmatarioStabilimento,
+    IndirizzoStabilimento,
     IndirSped,
     Notifica,
     Permesso,
+    PersonaCommessa,
     Reparto,
     Revisione,
     RevisioneFileLink,
+    RigaTransmittalInterno,
+    RuoloFirmatarioStabilimento,
+    RuoloPersonaCommessa,
     Segnalazione,
     SegnalazioneCommento,
     SegnalazioneVoto,
@@ -37,8 +48,10 @@ from .models import (
     StatoEsterno,
     StatoSegnalazione,
     Testata,
+    TipoIndirizzoStabilimento,
     TipoSegnalazione,
     Transmittal,
+    TransmittalInterno,
 )
 from .page_title import format_commessa_page_title
 from .services import scheduler
@@ -47,9 +60,11 @@ from .services.bc_sync import (
     confronta_commessa,
     list_aggiornamenti,
     sincronizza_commesse,
+    sincronizza_sito_costruttivo,
 )
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
+    create_commessa,
     esegui_ricezione,
     fetch_from_bc,
     filtra_situazione,
@@ -57,9 +72,11 @@ from .services.commesse import (
     list_home_commesse,
     list_situazione,
     list_stati_esterni,
+    persone_per_ruolo,
     pin_commessa,
     revisioni_by_doc_for_job,
     risolvi_file_revisione,
+    risolvi_persona_commessa,
     salva_file_link,
     serialize_revisione,
 )
@@ -69,6 +86,15 @@ from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
+from .services.organizzazione_commesse import (
+    _dividi_nomi,
+    _normalizza_job,
+    backfill_persone_commessa,
+    leggi_organizzazione_commesse,
+    persone_per_job,
+    risolvi_persone_libere,
+    trova_utente_per_cognome,
+)
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -100,6 +126,18 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
+from .services.trasmittal_interno import (
+    componi_nome,
+    crea_trasmittal_interno,
+    data_impegno,
+    imposta_destinazioni,
+    indirizzi_per_siti,
+    prepara_per_dcc,
+    prossimo_progressivo,
+    salva_pdf,
+    siti_coinvolti,
+    siti_del_documento,
+)
 from .templatetags.page_title_extras import commessa_title
 
 User = get_user_model()
@@ -870,6 +908,1074 @@ class UserStabilimentoTest(TestCase):
         self.assertEqual(user.stabilimento.nome, "Bergamo")
 
 
+class StabilimentoSiglaCodiceBCTests(TestCase):
+    """Sigla e codice_bc: unici ma non tutti gli stabilimenti li hanno."""
+
+    def test_sigla_unica(self):
+        Stabilimento.objects.create(nome="Uno", sigla="BG")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Stabilimento.objects.create(nome="Due", sigla="BG")
+
+    def test_codice_bc_unico(self):
+        Stabilimento.objects.create(nome="Uno", codice_bc=1)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Stabilimento.objects.create(nome="Due", codice_bc=1)
+
+    def test_piu_stabilimenti_con_sigla_e_codice_null_convivono(self):
+        # Non tutti gli stabilimenti sono siti costruttivi: NULL è ammesso più volte.
+        Stabilimento.objects.create(nome="Milano")
+        Stabilimento.objects.create(nome="Roma")
+
+        self.assertEqual(
+            set(Stabilimento.objects.values_list("nome", flat=True)), {"Milano", "Roma"}
+        )
+
+
+class FirmatarioStabilimentoTests(TestCase):
+    """Un solo firmatario per stabilimento e ruolo; lo stesso utente può firmare più siti."""
+
+    def setUp(self):
+        self.stab = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.altro_stab = Stabilimento.objects.create(nome="Schio", sigla="VI", codice_bc=5)
+        self.utente = User.objects.create_user("firmatario", password="pw")
+
+    def test_un_solo_firmatario_per_ruolo_e_stabilimento(self):
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.stab,
+            ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+            utente=self.utente,
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            FirmatarioStabilimento.objects.create(
+                stabilimento=self.stab,
+                ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+                utente=self.utente,
+            )
+
+    def test_lo_stesso_utente_firma_per_piu_stabilimenti(self):
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.stab,
+            ruolo=RuoloFirmatarioStabilimento.QUALITA,
+            utente=self.utente,
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.altro_stab,
+            ruolo=RuoloFirmatarioStabilimento.QUALITA,
+            utente=self.utente,
+        )
+
+        self.assertEqual(self.utente.firmatario_di.count(), 2)
+
+
+class MigrazioneSigleCodiciBCTests(TestCase):
+    """La migrazione dati 0045 assegna sigla e codice_bc per nome."""
+
+    def _modulo(self):
+        import importlib
+
+        return importlib.import_module("core.migrations.0045_popola_sigla_codice_bc_stabilimenti")
+
+    def test_assegna_i_codici_giusti(self):
+        for nome in ("Valbrembo", "Albignasego", "Marghera", "Ricengo", "Schio", "Milano"):
+            Stabilimento.objects.create(nome=nome)
+
+        self._modulo().popola(django_apps, None)
+
+        attesi = {
+            "Valbrembo": ("BG", 1),
+            "Albignasego": ("PD", 2),
+            "Marghera": ("VE", 3),
+            "Ricengo": ("CR", 4),
+            "Schio": ("VI", 5),
+            "Milano": (None, None),
+        }
+        for nome, (sigla, codice_bc) in attesi.items():
+            stab = Stabilimento.objects.get(nome=nome)
+            self.assertEqual((stab.sigla, stab.codice_bc), (sigla, codice_bc))
+
+    def test_reverse_svuota_solo_i_nomi_noti(self):
+        Stabilimento.objects.create(nome="Ricengo", sigla="CR", codice_bc=4)
+        Stabilimento.objects.create(nome="Altro", sigla="XX", codice_bc=99)
+
+        self._modulo().svuota(django_apps, None)
+
+        self.assertEqual(
+            (
+                Stabilimento.objects.get(nome="Ricengo").sigla,
+                Stabilimento.objects.get(nome="Ricengo").codice_bc,
+            ),
+            (None, None),
+        )
+        # Uno stabilimento fuori dall'elenco della migrazione non è toccato.
+        altro = Stabilimento.objects.get(nome="Altro")
+        self.assertEqual((altro.sigla, altro.codice_bc), ("XX", 99))
+
+
+class MigrazioneTpiStrutturatoTests(SimpleTestCase):
+    """La migrazione dati 0051 converte il vecchio TPI testo libero in (bool, destinatario).
+
+    La forma storica del campo (``tpi_testo``, prima della migrazione) non
+    esiste più nel modello corrente: non si può costruire con un
+    ``RigaTransmittalInterno`` reale. Le funzioni della migrazione operano
+    solo su ``apps.get_model(...).objects.all()`` e ``riga.save(update_fields=...)``,
+    quindi bastano dei doppi minimi con quella stessa forma.
+    """
+
+    def _modulo(self):
+        import importlib
+
+        return importlib.import_module(
+            "core.migrations.0051_riga_trasmittal_interno_tpi_strutturato"
+        )
+
+    class _RigaFinta:
+        def __init__(self, tpi_testo):
+            self.tpi_testo = tpi_testo
+            self.tpi_destinatario = ""
+            self.tpi_bool = False
+            self.salvata_con = None
+
+        def save(self, update_fields):
+            self.salvata_con = update_fields
+
+    class _AppsFinto:
+        def __init__(self, righe):
+            self._righe = righe
+
+        def get_model(self, app_label, model_name):
+            righe = self._righe
+
+            class _ManagerFinto:
+                def all(self):
+                    return righe
+
+            return type("RigaTransmittalInternoFinto", (), {"objects": _ManagerFinto()})
+
+    def test_tpi_testo_valorizzato_diventa_tpi_true_col_testo_come_destinatario(self):
+        riga = self._RigaFinta(tpi_testo="AI")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertTrue(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "AI")
+        self.assertEqual(riga.salvata_con, ["tpi_destinatario", "tpi_bool"])
+
+    def test_tpi_testo_vuoto_diventa_tpi_false(self):
+        riga = self._RigaFinta(tpi_testo="")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertFalse(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "")
+
+    def test_tpi_testo_solo_spazi_diventa_tpi_false(self):
+        riga = self._RigaFinta(tpi_testo="   ")
+
+        self._modulo().popola_tpi_strutturato(self._AppsFinto([riga]), None)
+
+        self.assertFalse(riga.tpi_bool)
+        self.assertEqual(riga.tpi_destinatario, "")
+
+
+class IndirizziPerSitiTests(TestCase):
+    """indirizzi_per_siti: TO/CC per un elenco di siti, per il trasmittal interno."""
+
+    def setUp(self):
+        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", codice_bc=1)
+        self.albignasego = Stabilimento.objects.create(nome="Albignasego", codice_bc=2)
+
+    def _indirizzo(self, stabilimento, email, tipo, attivo=True):
+        return IndirizzoStabilimento.objects.create(
+            stabilimento=stabilimento, email=email, tipo=tipo, attivo=attivo
+        )
+
+    def test_input_vuoto(self):
+        self._indirizzo(self.valbrembo, "a@b.it", TipoIndirizzoStabilimento.TO)
+
+        self.assertEqual(indirizzi_per_siti([]), {"to": [], "cc": []})
+        self.assertEqual(indirizzi_per_siti(None), {"to": [], "cc": []})
+
+    def test_codici_inesistenti(self):
+        self.assertEqual(indirizzi_per_siti([999]), {"to": [], "cc": []})
+
+    def test_piu_siti_con_indirizzi_sovrapposti(self):
+        self._indirizzo(self.valbrembo, "to1@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "to2@b.it", TipoIndirizzoStabilimento.TO)
+        # Stesso indirizzo su entrambi i siti, maiuscole diverse: un solo TO.
+        self._indirizzo(self.valbrembo, "comune@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "Comune@B.it", TipoIndirizzoStabilimento.TO)
+
+        risultato = indirizzi_per_siti([1, 2])
+
+        # Deduplica case-insensitive: dei due "comune" ne resta uno solo,
+        # qualunque sia la maiuscola/minuscola sopravvissuta.
+        self.assertEqual(len(risultato["to"]), 3)
+        normalizzati = {e.lower() for e in risultato["to"]}
+        self.assertEqual(normalizzati, {"to1@b.it", "to2@b.it", "comune@b.it"})
+        self.assertEqual(risultato["cc"], [])
+
+    def test_stesso_indirizzo_in_to_e_cc_compare_solo_in_to(self):
+        self._indirizzo(self.valbrembo, "doppio@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.albignasego, "DOPPIO@b.it", TipoIndirizzoStabilimento.CC)
+        self._indirizzo(self.albignasego, "solo_cc@b.it", TipoIndirizzoStabilimento.CC)
+
+        risultato = indirizzi_per_siti([1, 2])
+
+        self.assertEqual(risultato["to"], ["doppio@b.it"])
+        self.assertEqual(risultato["cc"], ["solo_cc@b.it"])
+
+    def test_indirizzi_inattivi_esclusi(self):
+        self._indirizzo(self.valbrembo, "attivo@b.it", TipoIndirizzoStabilimento.TO)
+        self._indirizzo(self.valbrembo, "inattivo@b.it", TipoIndirizzoStabilimento.TO, attivo=False)
+
+        risultato = indirizzi_per_siti([1])
+
+        self.assertEqual(risultato["to"], ["attivo@b.it"])
+
+
+class DestinazioneDocumentoTests(TestCase):
+    """Stabilimenti destinatari della copia cartacea di un documento."""
+
+    def setUp(self):
+        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.albignasego = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.marghera = Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+        self.milano = Stabilimento.objects.create(nome="Milano")  # senza codice_bc
+
+        testata = Testata.objects.create(job="99001")
+        self.doc1 = Documento.objects.create(testata=testata, vendor_doc="99001-DOC1")
+        self.doc2 = Documento.objects.create(testata=testata, vendor_doc="99001-DOC2")
+
+    def test_unicita_documento_stabilimento(self):
+        DestinazioneDocumento.objects.create(documento=self.doc1, stabilimento=self.valbrembo)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            DestinazioneDocumento.objects.create(documento=self.doc1, stabilimento=self.valbrembo)
+
+    def test_clean_rifiuta_uno_stabilimento_senza_codice_bc(self):
+        destinazione = DestinazioneDocumento(documento=self.doc1, stabilimento=self.milano)
+
+        with self.assertRaises(ValidationError):
+            destinazione.full_clean()
+
+    def test_imposta_destinazioni_sostituisce_e_non_accumula(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [1, 2])
+
+        imposta_destinazioni(self.doc1, [3])
+
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [3])
+
+    def test_imposta_destinazioni_lista_vuota_azzera(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+
+        imposta_destinazioni(self.doc1, [])
+
+        self.assertEqual(siti_del_documento(self.doc1), [])
+
+    def test_siti_del_documento_ordinati_per_codice_bc(self):
+        imposta_destinazioni(self.doc1, [3, 1, 2])
+
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc1)], [1, 2, 3])
+
+    def test_siti_coinvolti_deduplica_su_documenti_con_siti_sovrapposti(self):
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [2, 3])
+
+        risultato = siti_coinvolti([self.doc1, self.doc2])
+
+        self.assertEqual([s.codice_bc for s in risultato], [1, 2, 3])
+
+
+class TrasmittalInternoArchivioTests(TestCase):
+    """Archivio del trasmittal interno: progressivo, nome, snapshot dei siti, destinatari."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.ve = Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.pd, email="pd@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        # Stesso indirizzo di BG, ma CC su un altro sito: nei destinatari deve
+        # restare solo in TO, senza comparire due volte.
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.ve, email="bg@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        self.testata = Testata.objects.create(job="99010")
+        self.altra_testata = Testata.objects.create(job="99011")
+        self.doc1 = Documento.objects.create(testata=self.testata, vendor_doc="99010-DOC1")
+        self.doc2 = Documento.objects.create(testata=self.testata, vendor_doc="99010-DOC2")
+
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [3])
+
+        self.utente = User.objects.create_user("trasmittal_utente", password="pw")
+
+    def _righe(self, *documenti):
+        return [{"documento": doc, "revisione": "1"} for doc in documenti]
+
+    # -- prossimo_progressivo --
+
+    def test_prossimo_progressivo_riparte_da_1_il_giorno_dopo(self):
+        crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+
+        self.assertEqual(prossimo_progressivo(self.testata, date(2026, 9, 14)), 2)
+        self.assertEqual(prossimo_progressivo(self.testata, date(2026, 9, 15)), 1)
+
+    def test_prossimo_progressivo_non_collide_fra_commesse(self):
+        crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+
+        self.assertEqual(prossimo_progressivo(self.altra_testata, date(2026, 9, 14)), 1)
+
+    # -- componi_nome --
+
+    def test_componi_nome_formato_atteso(self):
+        self.assertEqual(componi_nome(self.testata, date(2026, 9, 14), 3), "99010_2026-09-14_E3")
+
+    # -- snapshot dei siti --
+
+    def test_i_siti_della_riga_sono_uno_snapshot(self):
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1), self.utente, data=date(2026, 9, 14)
+        )
+        riga = trasmittal.righe.get(documento=self.doc1)
+        self.assertEqual(sorted(s.codice_bc for s in riga.siti.all()), [1, 2])
+
+        imposta_destinazioni(self.doc1, [3])
+
+        self.assertEqual(sorted(s.codice_bc for s in riga.siti.all()), [1, 2])
+
+    # -- destinatari di stabilimento --
+
+    def test_destinatari_di_stabilimento_dedotti_dall_unione_dei_siti_senza_duplicati(self):
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc1, self.doc2), self.utente, data=date(2026, 9, 14)
+        )
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+
+        self.assertEqual(
+            sorted(destinatari),
+            sorted(
+                [
+                    ("bg@b.it", "to", "stabilimento"),
+                    ("pd@b.it", "to", "stabilimento"),
+                ]
+            ),
+        )
+
+    # -- unicità documento nella lettera --
+
+    def test_un_documento_non_puo_comparire_due_volte_nella_stessa_lettera(self):
+        trasmittal = TransmittalInterno.objects.create(
+            testata=self.testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(self.testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+        RigaTransmittalInterno.objects.create(
+            trasmittal=trasmittal, documento=self.doc1, revisione="1", posizione=1
+        )
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            RigaTransmittalInterno.objects.create(
+                trasmittal=trasmittal, documento=self.doc1, revisione="2", posizione=2
+            )
+
+
+class RigaTransmittalInternoTpiTests(TestCase):
+    """TPI (b)(c) del modulo: SÌ/NO all'ispettore terzo, e se sì chi.
+
+    ``tpi`` e ``tpi_destinatario`` non possono essere in disaccordo: un
+    destinatario ha senso solo se ``tpi`` è attivo, e se è attivo va
+    specificato chi.
+    """
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="99012")
+        self.doc = Documento.objects.create(testata=self.testata, vendor_doc="99012-DOC1")
+        self.utente = User.objects.create_user("riga_tpi_utente", password="pw")
+        self.trasmittal = TransmittalInterno.objects.create(
+            testata=self.testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(self.testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+
+    def _riga(self, **overrides):
+        base = {
+            "trasmittal": self.trasmittal,
+            "documento": self.doc,
+            "revisione": "1",
+            "posizione": 1,
+        }
+        base.update(overrides)
+        return RigaTransmittalInterno(**base)
+
+    def test_tpi_spento_con_destinatario_e_un_errore_di_validazione(self):
+        riga = self._riga(tpi=False, tpi_destinatario="AI")
+
+        with self.assertRaises(ValidationError):
+            riga.full_clean()
+
+    def test_tpi_acceso_senza_destinatario_e_un_errore_di_validazione(self):
+        riga = self._riga(tpi=True, tpi_destinatario="")
+
+        with self.assertRaises(ValidationError):
+            riga.full_clean()
+
+    def test_tpi_spento_senza_destinatario_e_valido(self):
+        riga = self._riga(tpi=False, tpi_destinatario="")
+
+        riga.full_clean()  # non deve sollevare
+
+    def test_tpi_acceso_con_destinatario_e_valido(self):
+        riga = self._riga(tpi=True, tpi_destinatario="No.Bo.")
+
+        riga.full_clean()  # non deve sollevare
+
+
+class DestinatariTrasmittalInternoRuoliTests(TestCase):
+    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per documenti SHn."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+
+        self.testata = Testata.objects.create(job="99012")
+        self.doc = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-QCPA")
+        imposta_destinazioni(self.doc, [1])
+
+        self.utente = User.objects.create_user("destinatari_utente", password="pw")
+        self.pm = User.objects.create_user("destinatari_pm", "pm@b.it", "pw")
+        self.pe = User.objects.create_user("destinatari_pe", "pe@b.it", "pw")
+        self.qci = User.objects.create_user("destinatari_qci", "qci@b.it", "pw")
+
+    def _righe(self, *documenti):
+        return [{"documento": doc, "revisione": "1"} for doc in documenti]
+
+    def test_pm_in_to_pe_e_qci_in_cc(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=self.pe
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=self.qci
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+        self.assertEqual(
+            destinatari,
+            {
+                ("bg@b.it", "to", "stabilimento"),
+                ("pm@b.it", "to", "pm"),
+                ("pe@b.it", "cc", "pe"),
+                ("qci@b.it", "cc", "qci"),
+            },
+        )
+
+    def test_ruolo_non_valorizzato_non_e_un_errore(self):
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        self.assertEqual(
+            set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
+            {("bg@b.it", "to", "stabilimento")},
+        )
+
+    def test_documento_shn_aggiunge_export_in_cc(self):
+        doc_shn = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
+        imposta_destinazioni(doc_shn, [1])
+
+        trasmittal = crea_trasmittal_interno(
+            self.testata, self._righe(self.doc, doc_shn), self.utente
+        )
+
+        self.assertIn(
+            ("export@brembanarolle.com", "cc", "export"),
+            set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
+        )
+
+    def test_documento_non_shn_non_aggiunge_export(self):
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        self.assertNotIn(
+            "export@brembanarolle.com", trasmittal.destinatari.values_list("email", flat=True)
+        )
+
+    def test_pm_gia_indirizzo_di_stabilimento_una_sola_occorrenza_in_to(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="pm@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo"))
+        self.assertEqual(destinatari.count(("pm@b.it", "to")), 1)
+        self.assertNotIn(("pm@b.it", "cc"), destinatari)
+
+    def test_stesso_indirizzo_in_to_e_cc_resta_in_to(self):
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.CC
+        )
+
+        trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
+
+        destinatari = list(trasmittal.destinatari.values_list("email", "tipo"))
+        self.assertEqual(destinatari.count(("bg@b.it", "to")), 1)
+        self.assertNotIn(("bg@b.it", "cc"), destinatari)
+
+
+class DataImpegnoTests(SimpleTestCase):
+    """data_impegno: termine per completare la distribuzione, non la data di firma."""
+
+    def test_lunedi_martedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 14)), date(2026, 9, 15))
+
+    def test_giovedi_venerdi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 17)), date(2026, 9, 18))
+
+    def test_venerdi_lunedi_tre_giorni_dopo(self):
+        self.assertEqual(data_impegno(date(2026, 9, 18)), date(2026, 9, 21))
+
+    def test_sabato_lunedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 19)), date(2026, 9, 21))
+
+    def test_domenica_lunedi(self):
+        self.assertEqual(data_impegno(date(2026, 9, 20)), date(2026, 9, 21))
+
+
+class TrasmittalInternoPdfTests(TestCase):
+    """Generazione del PDF del trasmittal interno (form MQ 7.5-04)."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+
+        self.produzione = User.objects.create_user(
+            "pdf_produzione", "pdf-produzione@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        self.produzione.firma = SimpleUploadedFile("firma.png", _png(), "image/png")
+        self.produzione.save()
+        # Lo stesso utente firma per la Qualità di entrambi i siti: nel PDF
+        # deve comparire una sola volta.
+        self.qualita = User.objects.create_user(
+            "pdf_qualita", "pdf-qualita@b.it", "pw", first_name="Anna", last_name="Bianchi"
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg,
+            ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+            utente=self.produzione,
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=self.qualita
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.pd, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=self.qualita
+        )
+
+        self.testata = Testata.objects.create(job="99020", job_detail="Prova PDF interno")
+        self.doc1 = Documento.objects.create(testata=self.testata, vendor_doc="99020-DOC1")
+        self.doc2 = Documento.objects.create(testata=self.testata, vendor_doc="99020-DOC2")
+        imposta_destinazioni(self.doc1, [1, 2])
+        imposta_destinazioni(self.doc2, [1])
+
+        self.trasmittal = crea_trasmittal_interno(
+            self.testata,
+            [
+                {
+                    "documento": self.doc1,
+                    "revisione": "3",
+                    "copie": 2,
+                    "tpi": True,
+                    "tpi_destinatario": "ABC",
+                    "note": "x",
+                },
+                {"documento": self.doc2, "revisione": "B", "cliente": False},
+            ],
+            self.produzione,
+            data=date(2026, 9, 14),
+            note="Note libere della lettera.",
+        )
+
+    def test_il_pdf_si_genera_e_non_e_vuoto(self):
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        contenuto = genera_trasmittal_interno_pdf(self.trasmittal)
+
+        self.assertTrue(contenuto.startswith(b"%PDF"))
+        self.assertGreater(len(contenuto), 1000)
+
+    def test_firme_deduplicate_per_utente_condiviso_tra_stabilimenti(self):
+        from src.pdf import _firmatari_per_ruolo
+
+        firmatari_qualita = _firmatari_per_ruolo(
+            [self.bg, self.pd], RuoloFirmatarioStabilimento.QUALITA
+        )
+
+        self.assertEqual([f.utente_id for f in firmatari_qualita], [self.qualita.pk])
+
+    # -- colonna TPI: "NO" se spento, il destinatario se acceso --
+
+    def test_colonna_tpi_mostra_no_se_spento(self):
+        from src.pdf import _int_row_value
+
+        riga = self.trasmittal.righe.get(documento=self.doc2)  # tpi=False di default
+
+        self.assertEqual(_int_row_value(riga, "tpi"), "NO")
+
+    def test_colonna_tpi_mostra_il_destinatario_se_acceso(self):
+        from src.pdf import _int_row_value
+
+        riga = self.trasmittal.righe.get(documento=self.doc1)  # tpi=True, dest="ABC"
+
+        self.assertEqual(_int_row_value(riga, "tpi"), "ABC")
+
+    def test_tabella_email_mostra_no_e_destinatario_come_il_pdf(self):
+        from core.services.trasmittal_interno import _tabella_testo_righe
+
+        tabella = _tabella_testo_righe(self.trasmittal)
+
+        self.assertIn("NO", tabella)
+        self.assertIn("ABC", tabella)
+
+    def test_firmatario_senza_immagine_non_solleva_eccezioni(self):
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        # self.qualita non ha un'immagine di firma caricata.
+        contenuto = genera_trasmittal_interno_pdf(self.trasmittal)
+
+        self.assertTrue(contenuto.startswith(b"%PDF"))
+
+
+class SalvaPdfTrasmittalInternoTests(TestCase):
+    """salva_pdf: scrittura sul fileserver, sempre dentro la cartella JOBS."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        jobs_patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        jobs_patcher.enable()
+        self.addCleanup(jobs_patcher.disable)
+
+        self.utente = User.objects.create_user("salva_pdf_utente", "salva-pdf@b.it", "pw")
+
+    def _trasmittal(self, job):
+        testata = Testata.objects.create(job=job)
+        return TransmittalInterno.objects.create(
+            testata=testata,
+            data=date(2026, 9, 14),
+            progressivo=1,
+            nome=componi_nome(testata, date(2026, 9, 14), 1),
+            creato_da=self.utente,
+        )
+
+    def test_salva_pdf_rifiuta_un_percorso_fuori_dalla_jobs_root(self):
+        trasmittal = self._trasmittal("../fuori")
+
+        with self.assertRaises(PermissionError):
+            salva_pdf(trasmittal)
+
+
+class PreparaPerDccTests(TestCase):
+    """prepara_per_dcc: copia i PDF dei documenti cliente in una cartella dedicata."""
+
+    def setUp(self):
+        from .services.fileserver import get_base_path
+
+        self.get_base_path = get_base_path
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.reparto = Reparto.objects.create(nome="Qualità e Controllo", acronimo="QMD")
+        self.testata = Testata.objects.create(job="99030")
+        self.utente = User.objects.create_user("dcc_utente", "dcc@b.it", "pw")
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-QMDBI", reparto=self.reparto.nome
+        )
+        self.doc_non_cliente = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-QCPA", reparto=self.reparto.nome
+        )
+        self.doc_missing = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-DWG01", reparto=self.reparto.nome
+        )
+
+        base = get_base_path("99030", "QMD")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-doc-ok")
+        (base / f"{self.doc_non_cliente.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-doc-non-cliente")
+        # doc_missing: nessun file sul finto fileserver.
+
+    def _trasmittal(self, righe, testata=None):
+        return crea_trasmittal_interno(
+            testata or self.testata, righe, self.utente, data=date(2026, 9, 14)
+        )
+
+    def test_copia_solo_i_documenti_con_cliente_true(self):
+        trasmittal = self._trasmittal(
+            [
+                {"documento": self.doc_ok, "revisione": "1", "cliente": True},
+                {"documento": self.doc_non_cliente, "revisione": "1", "cliente": False},
+            ]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual([c["vendor_doc"] for c in esito["copiati"]], [self.doc_ok.vendor_doc])
+        self.assertEqual(esito["mancanti"], [])
+        cartella = Path(esito["cartella"])
+        self.assertEqual(
+            [p.name for p in cartella.iterdir()], [f"{self.doc_ok.vendor_doc} Rev A.pdf"]
+        )
+
+    def test_nessuna_riga_cliente_nessuna_cartella_creata(self):
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_non_cliente, "revisione": "1", "cliente": False}]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual(esito, {"cartella": None, "copiati": [], "mancanti": []})
+        cartella_attesa = self.get_base_path("99030", "DCC") / "DA SPEDIRE" / trasmittal.nome
+        self.assertFalse(cartella_attesa.exists())
+
+    def test_documento_mancante_gli_altri_vengono_copiati(self):
+        trasmittal = self._trasmittal(
+            [
+                {"documento": self.doc_ok, "revisione": "1", "cliente": True},
+                {"documento": self.doc_missing, "revisione": "1", "cliente": True},
+            ]
+        )
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual([c["vendor_doc"] for c in esito["copiati"]], [self.doc_ok.vendor_doc])
+        self.assertEqual(
+            [m["vendor_doc"] for m in esito["mancanti"]], [self.doc_missing.vendor_doc]
+        )
+
+    def test_seconda_esecuzione_idempotente(self):
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_ok, "revisione": "1", "cliente": True}]
+        )
+
+        esito1 = prepara_per_dcc(trasmittal)
+        esito2 = prepara_per_dcc(trasmittal)
+
+        self.assertEqual(esito1, esito2)
+        cartella = Path(esito1["cartella"])
+        self.assertEqual(len(list(cartella.iterdir())), 1)
+
+    def test_percorso_fuori_dalla_jobs_root_rifiutato(self):
+        testata_fuori = Testata.objects.create(job="../fuori")
+        doc = Documento.objects.create(
+            testata=testata_fuori, vendor_doc="X", reparto=self.reparto.nome
+        )
+        trasmittal = self._trasmittal(
+            [{"documento": doc, "revisione": "1", "cliente": True}], testata=testata_fuori
+        )
+
+        with self.assertRaises(PermissionError):
+            prepara_per_dcc(trasmittal)
+
+    def test_non_interferisce_con_trasmittal_archivio(self):
+        # La cartella "DA SPEDIRE/<nome lettera>" è sorella di "DA SPEDIRE/TRANSMITTAL",
+        # non ci finisce dentro: trasmittal_archivio non deve accorgersene.
+        from .services.trasmittal_archivio import cartella_trasmittal, lista_trasmittal
+
+        trasmittal = self._trasmittal(
+            [{"documento": self.doc_ok, "revisione": "1", "cliente": True}]
+        )
+
+        prepara_per_dcc(trasmittal)
+
+        self.assertEqual(lista_trasmittal("99030"), [])
+        self.assertEqual(
+            cartella_trasmittal("99030"), self.get_base_path("99030", "DCC") / "TRANSMITTAL"
+        )
+
+
+class TrasmittalInternoDestinazioniViewTests(TestCase):
+    """Pagina e API della griglia destinazioni cartacee del trasmittal interno."""
+
+    def setUp(self):
+        self.client = Client()
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        Stabilimento.objects.create(nome="Milano")  # non è un sito costruttivo
+
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.reparto_qc = Reparto.objects.create(nome="Qualità e Controllo", acronimo="QMD")
+
+        self.testata = Testata.objects.create(job="99040", sito_costruttivo=self.bg)
+        self.doc_alfa = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        self.doc_beta = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-BETA",
+            doc_title="Documento Beta",
+            reparto=self.reparto_ut.nome,
+        )
+        self.doc_non_ut = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-QC",
+            reparto=self.reparto_qc.nome,
+        )
+
+        self.writer = User.objects.create_user(
+            "tidv_writer", "tidv-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "tidv_reader", "tidv-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _pagina_url(self, job=None):
+        return f"/commesse/{job or self.testata.job}/trasmittal-interno/"
+
+    def _api_destinazioni_url(self, job=None):
+        return f"/api/commesse/{job or self.testata.job}/trasmittal-interno/destinazioni/"
+
+    def _api_documento_url(self, documento_id, job=None):
+        return (
+            f"/api/commesse/{job or self.testata.job}/trasmittal-interno/"
+            f"documenti/{documento_id}/destinazioni/"
+        )
+
+    def _api_bulk_url(self, codice_bc, job=None):
+        return (
+            f"/api/commesse/{job or self.testata.job}/trasmittal-interno/"
+            f"stabilimenti/{codice_bc}/destinazioni/"
+        )
+
+    # -- pagina --
+
+    def test_pagina_richiede_login(self):
+        risposta = self.client.get(self._pagina_url())
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_pagina_risponde_e_mostra_i_documenti_della_commessa(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._pagina_url())
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "Trasmittal interno")
+
+    # -- prerequisito: sito costruttivo --
+
+    def test_commessa_senza_sito_costruttivo_accesso_diretto_rifiutato(self):
+        Testata.objects.create(job="99041")  # niente sito_costruttivo
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._pagina_url(job="99041"))
+
+        self.assertEqual(risposta.status_code, 403)
+
+    def test_card_bloccata_in_pagina_commessa_senza_sito_costruttivo(self):
+        Testata.objects.create(job="99042")
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get("/commesse/99042/")
+
+        # Il nome della classe compare anche nel <style> (regole CSS), quindi
+        # va cercato sull'attributo class della card, non come sottostringa
+        # libera nell'intera risposta.
+        self.assertContains(risposta, 'class="section-card section-card-locked"')
+        self.assertContains(risposta, "Completa prima il sito costruttivo della commessa")
+
+    def test_card_non_bloccata_in_pagina_commessa_con_sito_costruttivo(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(f"/commesse/{self.testata.job}/")
+
+        self.assertNotContains(risposta, 'class="section-card section-card-locked"')
+
+    # -- API: lettura griglia --
+
+    def test_api_destinazioni_richiede_login(self):
+        risposta = self.client.get(self._api_destinazioni_url())
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_api_destinazioni_elenca_solo_i_documenti_ut(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._api_destinazioni_url())
+
+        self.assertEqual(risposta.status_code, 200)
+        dati = risposta.json()
+        self.assertEqual(
+            {d["vendor_doc"] for d in dati["documenti"]},
+            {self.doc_alfa.vendor_doc, self.doc_beta.vendor_doc},
+        )
+        self.assertEqual(
+            [s["sigla"] for s in dati["stabilimenti"]], ["BG", "PD"]
+        )  # niente Milano (senza codice_bc)
+
+    # -- API: salvataggio per documento --
+
+    def test_salvataggio_persiste_e_la_rilettura_mostra_le_destinazioni_spuntate(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_alfa.pk),
+            data=json.dumps({"codici_bc": [1, 2]}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 200)
+
+        rilettura = self.client.get(self._api_destinazioni_url()).json()
+        alfa = next(d for d in rilettura["documenti"] if d["id"] == self.doc_alfa.pk)
+        self.assertEqual(sorted(alfa["codici_bc"]), [1, 2])
+        beta = next(d for d in rilettura["documenti"] if d["id"] == self.doc_beta.pk)
+        self.assertEqual(beta["codici_bc"], [])
+
+    def test_salvataggio_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_alfa.pk),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc_alfa.destinazioni.all()), [])
+
+    def test_salvataggio_su_documento_non_ut_rifiutato(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_documento_url(self.doc_non_ut.pk),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 404)
+
+    # -- API: selezione in blocco --
+
+    def test_selezione_in_blocco_agisce_solo_sui_documenti_filtrati(self):
+        self.client.force_login(self.writer)
+        imposta_destinazioni(self.doc_beta, [2])  # beta è già su PD, fuori dal filtro
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(
+            sorted(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [1],
+        )
+        # doc_beta non era nel filtro (documento_ids): resta invariato.
+        self.assertEqual(
+            list(self.doc_beta.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [2],
+        )
+
+    def test_selezione_in_blocco_puo_disattivare(self):
+        self.client.force_login(self.writer)
+        imposta_destinazioni(self.doc_alfa, [1, 2])
+        imposta_destinazioni(self.doc_beta, [1])
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps(
+                {"documento_ids": [self.doc_alfa.pk, self.doc_beta.pk], "attiva": False}
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(
+            sorted(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [2],
+        )
+        self.assertEqual(
+            list(self.doc_beta.destinazioni.values_list("stabilimento__codice_bc", flat=True)), []
+        )
+
+    def test_selezione_in_blocco_ignora_id_estranei_a_questa_commessa(self):
+        altra_testata = Testata.objects.create(job="99043", sito_costruttivo=self.bg)
+        doc_altra = Documento.objects.create(
+            testata=altra_testata,
+            vendor_doc="99043-ALFA",
+            reparto=self.reparto_ut.nome,
+        )
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk, doc_altra.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(list(doc_altra.destinazioni.all()), [])
+        self.assertEqual(
+            list(self.doc_alfa.destinazioni.values_list("stabilimento__codice_bc", flat=True)),
+            [1],
+        )
+
+    def test_selezione_in_blocco_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_bulk_url(codice_bc=1),
+            data=json.dumps({"documento_ids": [self.doc_alfa.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc_alfa.destinazioni.all()), [])
+
+
 # ── Integration tests (real fileserver Z:\JOBS) ───────────────────────────────
 
 
@@ -942,6 +2048,1175 @@ def _make_integration_fixtures():
         "rev_qcpa_1": rev_qcpa_1,
         "rev_qcpa_2": rev_qcpa_2,
     }
+
+
+class TrasmittalInternoLetteraTests(TestCase):
+    """Creazione della lettera: selezione, anteprima, conferma, elenco emesse."""
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99070", sito_costruttivo=self.bg)
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99070-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        Revisione.objects.create(documento=self.doc_ok, rev_no=0)
+        imposta_destinazioni(self.doc_ok, [self.bg.codice_bc])
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+
+        self.doc_senza_revisione = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-BETA", reparto=self.reparto_ut.nome
+        )
+        self.doc_senza_file = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-GAMMA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc_senza_file, rev_no=0)
+
+        self.pm_utente = User.objects.create_user(
+            "til_pm", "til-pm@b.it", "pw", first_name="Mario", last_name="PM"
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm_utente
+        )
+
+        self.writer = User.objects.create_user(
+            "til_writer", "til-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "til_reader", "til-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _riga(self, documento, **overrides):
+        base = {
+            "documento_id": documento.pk,
+            "revisione": "A",
+            "copie": 2,
+            "tpi": False,
+            "note": "",
+            "cliente": True,
+        }
+        base.update(overrides)
+        return base
+
+    # -- selezione --
+
+    def test_documento_senza_revisione_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(
+            d for d in risposta.json()["documenti"] if d["id"] == self.doc_senza_revisione.pk
+        )
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Nessuna revisione registrata.")
+
+    def test_documento_senza_file_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_senza_file.pk)
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Nessun file trovato sul fileserver.")
+
+    def test_documento_valido_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
+        self.assertTrue(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "")
+
+    # -- anteprima --
+
+    def test_anteprima_mostra_destinatari_risolti_con_origine(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        destinatari = risposta.json()["destinatari"]
+        self.assertIn({"email": "bg@b.it", "tipo": "to", "origine": "stabilimento"}, destinatari)
+        self.assertIn({"email": "til-pm@b.it", "tipo": "to", "origine": "pm"}, destinatari)
+        self.assertEqual(sorted(risposta.json()["ruoli_mancanti"]), ["PE", "QCI"])
+
+    def test_anteprima_include_nome_e_percorso_pdf_previsti(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, cliente=False)]}),
+            content_type="application/json",
+        )
+
+        corpo = risposta.json()
+        self.assertTrue(corpo["nome_preview"].startswith(f"{self.testata.job}_"))
+        self.assertTrue(corpo["percorso_pdf_preview"].endswith(f"{corpo['nome_preview']}.pdf"))
+        self.assertIsNone(corpo["percorso_dcc_preview"])
+
+    def test_anteprima_percorso_dcc_previsto_solo_con_un_documento_cliente(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, cliente=True)]}),
+            content_type="application/json",
+        )
+
+        corpo = risposta.json()
+        self.assertIsNotNone(corpo["percorso_dcc_preview"])
+        self.assertIn(corpo["nome_preview"], corpo["percorso_dcc_preview"])
+
+    def test_anteprima_rifiuta_documento_non_selezionabile(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_senza_revisione)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("revisione", risposta.json()["error"].lower())
+
+    # -- conferma --
+
+    def test_conferma_crea_trasmittal_salva_pdf_popola_dcc_e_invia_email(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)], "note": "riga 1\nriga 2"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertTrue(corpo["pdf"]["ok"])
+        self.assertTrue(Path(corpo["pdf"]["percorso"]).is_file())
+        self.assertTrue(corpo["dcc"]["ok"])
+        self.assertEqual(len(corpo["dcc"]["copiati"]), 1)
+        self.assertTrue(corpo["email"]["ok"])
+
+        self.assertEqual(TransmittalInterno.objects.filter(testata=self.testata).count(), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["bg@b.it", "til-pm@b.it"])
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
+
+    def test_destinatari_modificati_in_anteprima_sono_quelli_usati_e_registrati(self):
+        self.client.force_login(self.writer)
+        destinatari_modificati = [
+            {"email": "extra@b.it", "tipo": "to", "origine": "manuale"},
+        ]
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [self._riga(self.doc_ok)], "destinatari": destinatari_modificati}
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        trasmittal = TransmittalInterno.objects.get(pk=risposta.json()["trasmittal_id"])
+        registrati = list(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+        self.assertEqual(registrati, [("extra@b.it", "to", "manuale")])
+        self.assertEqual(mail.outbox[0].to, ["extra@b.it"])
+        # I destinatari auto-risolti (stabilimento, PM) non compaiono più:
+        # quelli confermati in anteprima sono gli unici usati.
+        self.assertNotIn("bg@b.it", mail.outbox[0].to)
+
+    def test_conferma_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(TransmittalInterno.objects.count(), 0)
+
+    def test_invio_email_fallito_la_lettera_resta_in_archivio_e_l_errore_e_visibile(self):
+        self.client.force_login(self.writer)
+
+        with patch(
+            "django.core.mail.EmailMessage.send", side_effect=Exception("SMTP non raggiungibile")
+        ):
+            risposta = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertFalse(corpo["email"]["ok"])
+        self.assertIn("SMTP non raggiungibile", corpo["email"]["errore"])
+        # La lettera resta in archivio nonostante l'invio email fallito, e gli
+        # altri passi indipendenti (pdf, dcc) restano chiaramente riusciti.
+        self.assertTrue(TransmittalInterno.objects.filter(pk=corpo["trasmittal_id"]).exists())
+        self.assertTrue(corpo["pdf"]["ok"])
+        self.assertTrue(corpo["dcc"]["ok"])
+        self.assertEqual(len(mail.outbox), 0)
+
+    # -- elenco lettere emesse --
+
+    def test_elenco_lettere_emesse_in_ordine(self):
+        self.client.force_login(self.writer)
+        for _ in range(2):
+            self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        risposta = self.client.get(self._url("lettere/"))
+
+        lettere = risposta.json()["lettere"]
+        self.assertEqual(len(lettere), 2)
+        self.assertEqual(lettere[0]["nome"], "99070_" + timezone.localdate().isoformat() + "_E2")
+        self.assertEqual(lettere[1]["nome"], "99070_" + timezone.localdate().isoformat() + "_E1")
+        self.assertEqual(lettere[0]["n_documenti"], 1)
+        self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
+
+
+class TrasmittalInternoEmissioneApiTests(TestCase):
+    """Anteprima, emissione e retry per-passo (API): il flusso "Nuova lettera"
+
+    gira interamente in modal nella pagina ``trasmittal-interno/``, quindi
+    ``self.client`` (che non esegue JavaScript) non può esercitarlo dal vivo.
+    L'evidenziazione dello stepper, "Emetti non invia finché il pannello non
+    è confermato" (oltre alla garanzia di non-scrittura testata qui) e
+    "l'assegnazione siti inline non perde lo stato delle altre righe" restano
+    verifiche manuali/di browser — le garanzie server-side sottostanti sono
+    invece testate qui, direttamente sulle API, e in
+    ``TrasmittalInternoDestinazioniViewTests``.
+    """
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99075", sito_costruttivo=self.bg)
+
+        self.doc_ok = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99075-ALFA",
+            doc_title="Documento Alfa",
+            reparto=self.reparto_ut.nome,
+        )
+        Revisione.objects.create(documento=self.doc_ok, rev_no=0)
+        imposta_destinazioni(self.doc_ok, [self.bg.codice_bc])
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+        (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+
+        self.writer = User.objects.create_user(
+            "tinp_writer", "tinp-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "tinp_reader", "tinp-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url_detail(self):
+        return f"/commesse/{self.testata.job}/trasmittal-interno/"
+
+    def _api_url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _riga(self, documento, **overrides):
+        base = {
+            "documento_id": documento.pk,
+            "revisione": "A",
+            "copie": 1,
+            "tpi": False,
+            "note": "",
+            "cliente": True,
+        }
+        base.update(overrides)
+        return base
+
+    def test_pagina_trasmittal_interno_richiede_sito_costruttivo(self):
+        self.testata.sito_costruttivo = None
+        self.testata.save(update_fields=["sito_costruttivo"])
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url_detail())
+
+        self.assertEqual(risposta.status_code, 403)
+
+    # -- revisione modificata --
+
+    def test_revisione_modificata_viene_usata_nella_lettera(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._api_url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, revisione="C")]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        trasmittal_id = risposta.json()["trasmittal_id"]
+        riga = RigaTransmittalInterno.objects.get(
+            trasmittal_id=trasmittal_id, documento=self.doc_ok
+        )
+        self.assertEqual(riga.revisione, "C")
+
+    # -- "Emetti" non invia finché il pannello non è confermato --
+
+    def test_anteprima_non_scrive_nulla(self):
+        self.client.force_login(self.reader)
+
+        self.client.post(
+            self._api_url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(TransmittalInterno.objects.count(), 0)
+
+    def test_anteprima_include_sigle_stabilimento(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        sigle = risposta.json()["sigle_stabilimento"]
+        self.assertEqual(sigle.get("bg@b.it"), ["BG"])
+
+    # -- esito con un passo fallito: retry per-passo --
+
+    def _emetti_con_email_fallita(self):
+        with patch(
+            "django.core.mail.EmailMessage.send", side_effect=Exception("SMTP non raggiungibile")
+        ):
+            risposta = self.client.post(
+                self._api_url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+        return risposta.json()
+
+    def test_retry_email_riesce_dopo_un_fallimento(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+        self.assertFalse(corpo["email"]["ok"])
+        self.assertEqual(len(mail.outbox), 0)
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo_retry = risposta.json()
+        self.assertTrue(corpo_retry["ok"])
+        self.assertTrue(corpo_retry["esito"]["ok"])
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_retry_richiede_login(self):
+        risposta = self.client.post(
+            self._api_url("lettere/1/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 401)
+
+    def test_retry_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+
+    def test_retry_lettera_di_un_altra_commessa_404(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+
+        altra = Testata.objects.create(job="99076", sito_costruttivo=self.bg)
+        risposta = self.client.post(
+            f"/api/commesse/{altra.job}/trasmittal-interno/lettere/{corpo['trasmittal_id']}/retry/",
+            data=json.dumps({"step": "email"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_retry_step_non_valido_400(self):
+        self.client.force_login(self.writer)
+        corpo = self._emetti_con_email_fallita()
+
+        risposta = self.client.post(
+            self._api_url(f"lettere/{corpo['trasmittal_id']}/retry/"),
+            data=json.dumps({"step": "qualcosa"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+
+
+class AnnullaTrasmittalInternoTests(TestCase):
+    """Annullamento di una lettera emessa per errore."""
+
+    def setUp(self):
+        self.client = Client()
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99080", sito_costruttivo=self.bg)
+
+        from core.services.fileserver import get_base_path
+
+        self.get_base_path = get_base_path
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+
+        self.doc1 = Documento.objects.create(
+            testata=self.testata, vendor_doc="99080-ALFA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc1, rev_no=0)
+        imposta_destinazioni(self.doc1, [self.bg.codice_bc])
+        (base / f"{self.doc1.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-1")
+
+        self.doc2 = Documento.objects.create(
+            testata=self.testata, vendor_doc="99080-BETA", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=self.doc2, rev_no=0)
+        imposta_destinazioni(self.doc2, [self.bg.codice_bc])
+        (base / f"{self.doc2.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-2")
+
+        self.writer = User.objects.create_user(
+            "ann_writer", "ann-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "ann_reader", "ann-reader@b.it", "pw", permesso=Permesso.READING
+        )
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _emetti(self, documento):
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [{"documento_id": documento.pk, "revisione": "A", "cliente": True}]}
+            ),
+            content_type="application/json",
+        )
+        return risposta.json()
+
+    def test_annullamento_dell_ultimo_riesce_e_rimuove_record_pdf_e_cartella_dcc(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        pdf_path = Path(emesso["pdf"]["percorso"])
+        cartella_dcc = Path(emesso["dcc"]["cartella"])
+        self.assertTrue(pdf_path.is_file())
+        self.assertTrue(cartella_dcc.is_dir())
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertTrue(corpo["ok"])
+        self.assertTrue(corpo["pdf_rimosso"])
+        self.assertTrue(corpo["cartella_dcc_rimossa"])
+        self.assertIn("email", corpo["email_avviso"].lower())
+        self.assertFalse(TransmittalInterno.objects.filter(pk=emesso["trasmittal_id"]).exists())
+        self.assertFalse(pdf_path.exists())
+        self.assertFalse(cartella_dcc.exists())
+
+    def test_annullamento_di_uno_non_ultimo_rifiutato(self):
+        self.client.force_login(self.writer)
+        primo = self._emetti(self.doc1)
+        self._emetti(self.doc2)  # secondo, ora è lui l'ultimo
+
+        risposta = self.client.post(self._url(f"lettere/{primo['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 409)
+        self.assertIn("ultimo", risposta.json()["error"].lower())
+        self.assertTrue(TransmittalInterno.objects.filter(pk=primo["trasmittal_id"]).exists())
+        self.assertTrue(Path(primo["pdf"]["percorso"]).is_file())
+
+    def test_progressivo_successivo_riparte_dal_numero_liberato(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        self.assertTrue(emesso["nome"].endswith("_E1"))
+        self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        rifatto = self._emetti(self.doc2)
+
+        self.assertTrue(rifatto["nome"].endswith("_E1"))
+
+    def test_cartella_dcc_con_contenuto_estraneo_non_viene_rimossa(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        cartella_dcc = Path(emesso["dcc"]["cartella"])
+        estraneo = cartella_dcc / "documento_non_nostro.pdf"
+        estraneo.write_bytes(b"%PDF-estraneo")
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertFalse(corpo["cartella_dcc_rimossa"])
+        # Il file di questo trasmittal è stato rimosso, quello estraneo no.
+        self.assertTrue(cartella_dcc.is_dir())
+        self.assertEqual([p.name for p in cartella_dcc.iterdir()], ["documento_non_nostro.pdf"])
+        self.assertTrue(estraneo.exists())
+
+    def test_annullamento_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1)
+        self.client.logout()
+        self.client.force_login(self.reader)
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertTrue(TransmittalInterno.objects.filter(pk=emesso["trasmittal_id"]).exists())
+
+    def test_annullamento_richiede_login(self):
+        emesso_writer = Client()
+        emesso_writer.force_login(self.writer)
+        emesso = emesso_writer.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {"righe": [{"documento_id": self.doc1.pk, "revisione": "A", "cliente": True}]}
+            ),
+            content_type="application/json",
+        ).json()
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_annullabile_solo_sull_ultimo_nella_lista_lettere(self):
+        self.client.force_login(self.writer)
+        primo = self._emetti(self.doc1)
+        secondo = self._emetti(self.doc2)
+
+        lettere = {
+            voce["id"]: voce for voce in self.client.get(self._url("lettere/")).json()["lettere"]
+        }
+
+        self.assertFalse(lettere[primo["trasmittal_id"]]["annullabile"])
+        self.assertTrue(lettere[secondo["trasmittal_id"]]["annullabile"])
+
+
+class TrasmittalInternoEndToEndTests(TestCase):
+    """End-to-end: percorre il flusso utente del trasmittal interno con i dati
+    reali del vecchio strumento Excel/VBA (anagrafiche, indirizzi, firmatari)
+    e confronta il risultato con il comportamento atteso di quello strumento.
+
+    Trova divergenze, non le corregge (vedi il report consegnato con la PR).
+    Nessun invio di posta reale: solo il backend locmem di Django (mai
+    sostituito in questa classe), fileserver su una directory temporanea,
+    nessun accesso a Business Central.
+    """
+
+    def setUp(self):
+        self.client = Client()
+
+        # Garanzia esplicita: mai un backend email reale in questi test.
+        from django.core.mail import get_connection
+
+        self.assertIn("locmem", type(get_connection()).__module__)
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        fs_patch = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        fs_patch.enable()
+        self.addCleanup(fs_patch.disable)
+
+        # ── Stabilimenti ──
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.ve = Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+        self.cr = Stabilimento.objects.create(nome="Ricengo", sigla="CR", codice_bc=4)
+        self.vi = Stabilimento.objects.create(nome="Schio", sigla="VI", codice_bc=5)
+        self.milano = Stabilimento.objects.create(nome="Milano")  # nessun codice sito
+
+        # ── Indirizzi TO/CC per sito (dati del vecchio strumento) ──
+        _TO = {
+            self.bg: ["fdamiani", "locatellim"],
+            self.pd: ["egomiero", "mtoniolo", "dgiunchi", "dgigante"],
+            self.ve: ["egomiero", "mtoniolo", "dgiunchi", "dgigante"],  # identici a PD
+            self.cr: ["epaparazzo", "msolazzo", "mmaggi", "fcorradini", "poro"],
+            self.vi: ["mgasparini", "anovella", "thossain"],
+        }
+        _CC = {
+            self.bg: ["dpasserini", "quality", "mcheccolin", "fbaldin", "mcarminati", "mpersoneni"],
+            self.pd: ["dpasserini", "lterrassan", "mgalli", "asandona"],
+            self.ve: ["dpasserini", "psaccarola", "mgalli", "asandona"],
+            self.cr: ["dpasserini", "egritti", "rlucini", "egalbiati"],
+            self.vi: ["dpasserini", "lferracin", "aottoboni", "apunturieri"],
+        }
+        for stabilimento, nomi in _TO.items():
+            for nome in nomi:
+                IndirizzoStabilimento.objects.create(
+                    stabilimento=stabilimento,
+                    email=f"{nome}@brembanarolle.com",
+                    tipo=TipoIndirizzoStabilimento.TO,
+                )
+        for stabilimento, nomi in _CC.items():
+            for nome in nomi:
+                IndirizzoStabilimento.objects.create(
+                    stabilimento=stabilimento,
+                    email=f"{nome}@brembanarolle.com",
+                    tipo=TipoIndirizzoStabilimento.CC,
+                )
+
+        # ── Firmatari Produzione/Qualità per sito ──
+        def _utente_firmatario(nome):
+            return User.objects.create_user(nome.lower(), f"{nome.lower()}@brembanarolle.com", "pw")
+
+        self.firmatari_utenti = {
+            nome: _utente_firmatario(nome)
+            for nome in (
+                "MLocatelli",
+                "FBaldin",
+                "DGiunchi",
+                "MGalli",
+                "POro",
+                "RLucini",
+                "THossain",
+                "AOttoboni",
+            )
+        }
+        _FIRMATARI = {
+            self.bg: ("MLocatelli", "FBaldin"),
+            self.pd: ("DGiunchi", "MGalli"),
+            self.ve: ("DGiunchi", "MGalli"),  # stessi di PD
+            self.cr: ("POro", "RLucini"),
+            self.vi: ("THossain", "AOttoboni"),
+        }
+        for stabilimento, (produzione, qualita) in _FIRMATARI.items():
+            FirmatarioStabilimento.objects.create(
+                stabilimento=stabilimento,
+                ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+                utente=self.firmatari_utenti[produzione],
+            )
+            FirmatarioStabilimento.objects.create(
+                stabilimento=stabilimento,
+                ruolo=RuoloFirmatarioStabilimento.QUALITA,
+                utente=self.firmatari_utenti[qualita],
+            )
+        # Nessun firmatario ha un'immagine di firma caricata (punto 9): il
+        # campo firma resta vuoto per tutti, di proposito.
+
+        # ── Commessa e documenti UT ──
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99090", sito_costruttivo=self.bg)
+
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(self.testata.job, "UT")
+        base.mkdir(parents=True)
+
+        self.doc_a = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99090-01-DWGA",
+            doc_title="Documento A",
+            reparto="Ufficio Tecnico",
+        )
+        self.doc_b = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99090-01-DWGB",
+            doc_title="Documento B",
+            reparto="Ufficio Tecnico",
+        )
+        self.doc_c = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99090-01-ESH1",  # pattern SHn: ?????-??-ESH*
+            doc_title="Documento C (SHn)",
+            reparto="Ufficio Tecnico",
+        )
+        self.doc_d = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99090-01-DWGD",
+            doc_title="Documento D",
+            reparto="Ufficio Tecnico",
+        )
+        for doc in (self.doc_a, self.doc_b, self.doc_c, self.doc_d):
+            Revisione.objects.create(documento=doc, rev_no=0)
+        for doc in (self.doc_a, self.doc_b, self.doc_c):  # DOC-D: file mancante di proposito
+            (base / f"{doc.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+
+        # ── PM/PE/QCI ──
+        self.pm_utente = User.objects.create_user(
+            "mtoniolo", "mtoniolo@brembanarolle.com", "pw", first_name="Mauro", last_name="Toniolo"
+        )
+        self.pe_utente = User.objects.create_user(
+            "e2e_pe", "pe.nuovo@brembanarolle.com", "pw", first_name="Paolo", last_name="Erre"
+        )
+        self.qci_utente = User.objects.create_user(
+            "e2e_qci", "qci.nuovo@brembanarolle.com", "pw", first_name="Quinto", last_name="Ci"
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.pm_utente
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=self.pe_utente
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=self.qci_utente
+        )
+
+        self.writer = User.objects.create_user(
+            "e2e_writer", "e2e-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.client.force_login(self.writer)
+
+        # ── Percorso 1-3: dalla pagina commessa alla griglia destinazioni,
+        #    tutto attraverso il test client (mai chiamate dirette ai servizi) ──
+        self._imposta_destinazioni(self.doc_a, [self.pd.codice_bc, self.ve.codice_bc])
+        self._imposta_destinazioni(self.doc_b, [self.bg.codice_bc])
+        self._imposta_destinazioni(self.doc_c, [self.bg.codice_bc])
+        # DOC-D: nessuna destinazione, di proposito.
+
+    # ── Helper: navigazione del flusso via test client ──────────────────────
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def _imposta_destinazioni(self, documento, codici_bc):
+        risposta = self.client.post(
+            self._url(f"documenti/{documento.pk}/destinazioni/"),
+            data=json.dumps({"codici_bc": codici_bc}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        return risposta.json()
+
+    def _riga(self, documento, **overrides):
+        base = {
+            "documento_id": documento.pk,
+            "revisione": "0",
+            "copie": 2,
+            "tpi": False,
+            "note": "",
+            "cliente": True,
+        }
+        base.update(overrides)
+        return base
+
+    def _anteprima(self, righe, note=""):
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": righe, "note": note}),
+            content_type="application/json",
+        )
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        return risposta.json()
+
+    def _emetti(self, righe, note="", destinatari=None):
+        payload = {"righe": righe, "note": note}
+        if destinatari is not None:
+            payload["destinatari"] = destinatari
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        return risposta
+
+    def _righe_abcd(self, con_c=True):
+        righe = [self._riga(self.doc_a, cliente=True), self._riga(self.doc_b, cliente=False)]
+        if con_c:
+            righe.append(self._riga(self.doc_c, cliente=True))
+        return righe
+
+    # ── Percorso: card della commessa e pagina dedicata ─────────────────────
+
+    def test_01_card_sbloccata_e_pagina_raggiungibile(self):
+        pagina_commessa = self.client.get(f"/commesse/{self.testata.job}/")
+        self.assertEqual(pagina_commessa.status_code, 200)
+        self.assertNotContains(pagina_commessa, 'class="section-card section-card-locked"')
+        self.assertContains(pagina_commessa, f"/commesse/{self.testata.job}/trasmittal-interno/")
+
+        pagina_trasmittal = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
+        self.assertEqual(pagina_trasmittal.status_code, 200)
+
+    # ── Punto 19: Milano non è selezionabile come destinazione ──────────────
+
+    def test_02_milano_non_selezionabile_come_destinazione(self):
+        risposta = self.client.get(self._url("destinazioni/"))
+        sigle = [s["sigla"] for s in risposta.json()["stabilimenti"]]
+        self.assertNotIn(None, sigle)
+        self.assertEqual(sorted(sigle), ["BG", "CR", "PD", "VE", "VI"])
+
+    # ── Punto 14: documento senza file segnalato in selezione, non blocca ───
+
+    def test_03_doc_d_segnalato_in_selezione_gli_altri_selezionabili(self):
+        risposta = self.client.get(self._url("selezione/"))
+        stati = {d["id"]: d for d in risposta.json()["documenti"]}
+
+        for doc in (self.doc_a, self.doc_b, self.doc_c):
+            self.assertTrue(stati[doc.pk]["selezionabile"], stati[doc.pk])
+
+        self.assertFalse(stati[self.doc_d.pk]["selezionabile"])
+        self.assertEqual(stati[self.doc_d.pk]["motivo"], "Nessun file trovato sul fileserver.")
+
+    def test_03b_lettera_si_crea_senza_doc_d_nonostante_la_sua_presenza_in_elenco(self):
+        risposta = self._emetti(self._righe_abcd())
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        self.assertTrue(risposta.json()["ok"])
+
+    # ── Punti 1-2-3: dedup TO/CC su PD+VE+BG (indirizzi identici per PD/VE) ──
+
+    def test_04_to_pd_ve_compaiono_una_volta_ciascuno(self):
+        anteprima = self._anteprima(self._righe_abcd())
+        to = [d["email"] for d in anteprima["destinatari"] if d["tipo"] == "to"]
+        for nome in ("egomiero", "mtoniolo", "dgiunchi", "dgigante"):
+            email = f"{nome}@brembanarolle.com"
+            self.assertEqual(to.count(email), 1, f"{email}: atteso 1, trovato {to.count(email)}")
+
+    def test_05_dpasserini_una_volta_sola_nonostante_tre_siti(self):
+        anteprima = self._anteprima(self._righe_abcd())
+        emails = [d["email"] for d in anteprima["destinatari"]]
+        self.assertEqual(emails.count("dpasserini@brembanarolle.com"), 1)
+
+    def test_06_mgalli_asandona_una_volta_ciascuno(self):
+        anteprima = self._anteprima(self._righe_abcd())
+        emails = [d["email"] for d in anteprima["destinatari"]]
+        self.assertEqual(emails.count("mgalli@brembanarolle.com"), 1)
+        self.assertEqual(emails.count("asandona@brembanarolle.com"), 1)
+
+    # ── Punto 4: PM già in TO di PD → una sola occorrenza, in TO ────────────
+
+    def test_07_pm_mtoniolo_una_sola_occorrenza_in_to(self):
+        anteprima = self._anteprima(self._righe_abcd())
+        occorrenze = [
+            d for d in anteprima["destinatari"] if d["email"] == "mtoniolo@brembanarolle.com"
+        ]
+        self.assertEqual(len(occorrenze), 1)
+        self.assertEqual(occorrenze[0]["tipo"], "to")
+
+    # ── Punto 5: un indirizzo in TO e in CC resta solo in TO ─────────────────
+    # I dati di partenza dati dal task, applicati alla lettera BG+PD+VE, non
+    # producono di per sé una collisione TO/CC (i nominativi TO e CC dei tre
+    # siti coinvolti sono tutti distinti — vedi il report). Verifico quindi
+    # la regola con un caso sintetico minimo, sullo stesso sito BG già in
+    # gioco, aggiungendo un indirizzo apposta presente sia in TO che in CC.
+
+    def test_08_indirizzo_in_to_e_in_cc_resta_solo_in_to(self):
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg,
+            email="doppio@brembanarolle.com",
+            tipo=TipoIndirizzoStabilimento.CC,
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg,
+            email="doppio@brembanarolle.com",
+            tipo=TipoIndirizzoStabilimento.TO,
+        )
+        anteprima = self._anteprima(self._righe_abcd())
+        occorrenze = [
+            d for d in anteprima["destinatari"] if d["email"] == "doppio@brembanarolle.com"
+        ]
+        self.assertEqual(len(occorrenze), 1)
+        self.assertEqual(occorrenze[0]["tipo"], "to")
+
+    # ── Punto 6: DOC-C (SHn) → export@ in CC; rimosso, sparisce ──────────────
+
+    def test_09_export_presente_con_doc_c_assente_senza(self):
+        anteprima_con_c = self._anteprima(self._righe_abcd(con_c=True))
+        emails_con_c = [d["email"] for d in anteprima_con_c["destinatari"]]
+        self.assertIn("export@brembanarolle.com", emails_con_c)
+
+        anteprima_senza_c = self._anteprima(self._righe_abcd(con_c=False))
+        emails_senza_c = [d["email"] for d in anteprima_senza_c["destinatari"]]
+        self.assertNotIn("export@brembanarolle.com", emails_senza_c)
+
+    # ── Punto 7: PM/PE/QCI non valorizzati → lettera creata comunque ────────
+
+    def test_10_lettera_creata_senza_pm_pe_qci_valorizzati(self):
+        altra = Testata.objects.create(job="99091", sito_costruttivo=self.bg)
+        doc = Documento.objects.create(
+            testata=altra, vendor_doc="99091-01-DWGX", reparto="Ufficio Tecnico"
+        )
+        Revisione.objects.create(documento=doc, rev_no=0)
+        from core.services.fileserver import get_base_path
+
+        base = get_base_path(altra.job, "UT")
+        base.mkdir(parents=True)
+        (base / f"{doc.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
+        self.client.post(
+            f"/api/commesse/{altra.job}/trasmittal-interno/documenti/{doc.pk}/destinazioni/",
+            data=json.dumps({"codici_bc": [self.bg.codice_bc]}),
+            content_type="application/json",
+        )
+
+        risposta = self.client.post(
+            f"/api/commesse/{altra.job}/trasmittal-interno/emetti/",
+            data=json.dumps(
+                {"righe": [{"documento_id": doc.pk, "revisione": "0", "cliente": True}]}
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        self.assertTrue(risposta.json()["ok"])
+
+    # ── Punto 8: firmatari PD+VE deduplicati (DGiunchi/MGalli comuni) ───────
+    # Nessuna libreria di estrazione testo da PDF è disponibile in questo
+    # ambiente (fitz non installato — vedi il fallimento preesistente in
+    # SituazioneApiTestCase): verifico quindi la stessa funzione di dedup
+    # usata da genera_trasmittal_interno_pdf direttamente sui siti reali
+    # della lettera, non analizzando i byte del PDF.
+
+    def test_11_firmatari_pd_ve_deduplicati_per_ruolo(self):
+        from src.pdf import _firmatari_per_ruolo
+
+        siti = [self.pd, self.ve]
+        produzione = _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.PRODUZIONE)
+        qualita = _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.QUALITA)
+
+        self.assertEqual([f.utente_id for f in produzione], [self.firmatari_utenti["DGiunchi"].pk])
+        self.assertEqual([f.utente_id for f in qualita], [self.firmatari_utenti["MGalli"].pk])
+
+    # ── Punto 9: firmatario senza immagine → PDF generato comunque ──────────
+
+    def test_12_pdf_generato_senza_immagini_di_firma(self):
+        for firmatario in self.firmatari_utenti.values():
+            self.assertFalse(firmatario.firma)
+
+        risposta = self.client.post(
+            self._url("anteprima/pdf/"),
+            data=json.dumps({"righe": self._righe_abcd()}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta["Content-Type"], "application/pdf")
+        self.assertTrue(risposta.content.startswith(b"%PDF"))
+        self.assertGreater(len(risposta.content), 1000)
+
+    # ── Punto 10: nome file e percorso ───────────────────────────────────────
+
+    def test_13_nome_file_pdf_e_percorso(self):
+        risposta = self._emetti(self._righe_abcd())
+        corpo = risposta.json()
+        self.assertTrue(corpo["pdf"]["ok"])
+        percorso = Path(corpo["pdf"]["percorso"])
+        oggi = timezone.localdate().isoformat()
+        self.assertEqual(percorso.name, f"99090_{oggi}_E1.pdf")
+        self.assertIn(str(Path("99090") / "Progetto" / "UT" / "Transmittal"), str(percorso))
+        self.assertTrue(percorso.is_file())
+
+    # ── Punto 11: progressivo giornaliero, reset il giorno dopo ─────────────
+
+    def test_14_progressivo_giornaliero_e_reset_il_giorno_dopo(self):
+        giorno1 = date(2026, 9, 15)  # martedì
+        giorno2 = date(2026, 9, 16)
+
+        with patch("core.services.trasmittal_interno.timezone.localdate", return_value=giorno1):
+            prima = self._emetti(self._righe_abcd()).json()
+            seconda = self._emetti([self._riga(self.doc_b, cliente=False)]).json()
+        with patch("core.services.trasmittal_interno.timezone.localdate", return_value=giorno2):
+            terza = self._emetti([self._riga(self.doc_c, cliente=True)]).json()
+
+        self.assertTrue(prima["nome"].endswith("_E1"))
+        self.assertTrue(seconda["nome"].endswith("_E2"))
+        self.assertTrue(terza["nome"].endswith("_E1"))
+
+    # ── Punto 12: data di distribuzione (venerdì → lunedì, altrimenti dopo) ──
+    # La data di distribuzione mostrata all'utente riflette data_impegno()
+    # (giorno lavorativo successivo, lunedì se venerdì), non la data di
+    # emissione: verifico che generare il PDF invochi davvero data_impegno.
+
+    def test_15_data_impegno_e_invocata_generando_il_pdf(self):
+        from core.services.trasmittal_interno import data_impegno
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        venerdi = date(2026, 9, 18)
+        self.assertEqual(data_impegno(venerdi), date(2026, 9, 21))  # lunedì, per DataImpegnoTests
+
+        with patch("core.services.trasmittal_interno.timezone.localdate", return_value=venerdi):
+            esito = self._emetti(self._righe_abcd()).json()
+        trasmittal = TransmittalInterno.objects.get(pk=esito["trasmittal_id"])
+        self.assertEqual(trasmittal.data, venerdi)
+
+        with patch(
+            "core.services.trasmittal_interno.data_impegno", side_effect=data_impegno
+        ) as mock_impegno:
+            genera_trasmittal_interno_pdf(trasmittal)
+
+        self.assertTrue(
+            mock_impegno.called,
+            "data_impegno() non è invocata generando il PDF: la colonna DATE di "
+            "'PAPER COPIES DISTRIBUTION' mostrerebbe la data di emissione invece "
+            "del giorno lavorativo successivo (lunedì se venerdì).",
+        )
+
+    # ── Punti 15-16: oggetto e corpo dell'email ──────────────────────────────
+
+    def test_16_oggetto_email_formato_atteso(self):
+        esito = self._emetti(self._righe_abcd()).json()
+        self.assertEqual(len(mail.outbox), 1)
+        atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {esito['nome']}"
+        self.assertEqual(mail.outbox[0].subject, atteso)
+
+    def test_17_corpo_email_contiene_le_righe_il_percorso_e_il_promemoria_firma(self):
+        esito = self._emetti(self._righe_abcd()).json()
+        self.assertEqual(len(mail.outbox), 1)
+        corpo = mail.outbox[0].body
+        for doc in (self.doc_a, self.doc_b, self.doc_c):
+            self.assertIn(doc.vendor_doc, corpo)
+        # Non solo i documenti: anche gli altri valori di riga, come nel PDF.
+        self.assertIn("YES", corpo)  # CLIENT di doc_a/doc_c
+        self.assertIn("NO", corpo)  # CLIENT di doc_b
+        self.assertIn(esito["pdf"]["percorso"], corpo)
+        self.assertIn("firmat", corpo.lower())
+
+    # ── Punto 17: destinatari modificati in anteprima → usati e registrati ──
+
+    def test_18_destinatari_modificati_in_anteprima_usati_e_registrati(self):
+        confermati = [
+            {"email": "destinatario.scelto@brembanarolle.com", "tipo": "to", "origine": "manuale"},
+        ]
+        risposta = self._emetti(self._righe_abcd(), destinatari=confermati)
+        esito = risposta.json()
+
+        self.assertEqual(mail.outbox[0].to, ["destinatario.scelto@brembanarolle.com"])
+        trasmittal = TransmittalInterno.objects.get(pk=esito["trasmittal_id"])
+        registrati = list(trasmittal.destinatari.values_list("email", "tipo"))
+        self.assertEqual(registrati, [("destinatario.scelto@brembanarolle.com", "to")])
+
+    # ── Punto 18: il PDF è allegato ──────────────────────────────────────────
+
+    def test_19_pdf_allegato_alla_email(self):
+        esito = self._emetti(self._righe_abcd()).json()
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
+        nome_allegato, contenuto, mimetype = mail.outbox[0].attachments[0]
+        self.assertEqual(nome_allegato, f"{esito['nome']}.pdf")
+        self.assertEqual(mimetype, "application/pdf")
+        self.assertTrue(contenuto.startswith(b"%PDF"))
+
+    # ── Punto 13: DOC-B (CLIENT NO) non in DCC; DOC-A/DOC-C sì ──────────────
+
+    def test_20_doc_b_escluso_dal_dcc_doc_a_e_c_inclusi(self):
+        esito = self._emetti(self._righe_abcd())
+        corpo = esito.json()
+        copiati = {c["vendor_doc"] for c in corpo["dcc"]["copiati"]}
+
+        self.assertIn(self.doc_a.vendor_doc, copiati)
+        self.assertIn(self.doc_c.vendor_doc, copiati)
+        self.assertNotIn(self.doc_b.vendor_doc, copiati)
+
+        cartella = Path(corpo["dcc"]["cartella"])
+        nomi_file = [p.name for p in cartella.iterdir()]
+        self.assertTrue(any(self.doc_a.vendor_doc in n for n in nomi_file))
+        self.assertTrue(any(self.doc_c.vendor_doc in n for n in nomi_file))
+        self.assertFalse(any(self.doc_b.vendor_doc in n for n in nomi_file))
+
+    # ── Punto 20: modificare le destinazioni dopo l'emissione non cambia lo
+    #    snapshot della lettera già emessa ────────────────────────────────
+
+    def test_21_destinazioni_modificate_dopo_emissione_non_toccano_lo_snapshot(self):
+        esito = self._emetti(self._righe_abcd())
+        trasmittal = TransmittalInterno.objects.get(pk=esito.json()["trasmittal_id"])
+        riga_a = trasmittal.righe.get(documento=self.doc_a)
+        siti_originali = sorted(s.sigla for s in riga_a.siti.all())
+        self.assertEqual(siti_originali, ["PD", "VE"])
+
+        self._imposta_destinazioni(self.doc_a, [self.bg.codice_bc])
+
+        riga_a.refresh_from_db()
+        siti_dopo_modifica = sorted(s.sigla for s in riga_a.siti.all())
+        self.assertEqual(siti_dopo_modifica, ["PD", "VE"])  # invariato: snapshot
+
+        # Le destinazioni "vive" del documento, invece, sono cambiate davvero.
+        risposta = self.client.get(self._url("destinazioni/"))
+        doc_a_live = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_a.pk)
+        self.assertEqual(doc_a_live["codici_bc"], [self.bg.codice_bc])
+
+    # ── Punto 21: annullamento libera PDF, cartella DCC e progressivo ──────
+
+    def test_22_annullamento_rimuove_pdf_cartella_dcc_e_libera_il_progressivo(self):
+        esito = self._emetti(self._righe_abcd())
+        corpo = esito.json()
+        pdf_path = Path(corpo["pdf"]["percorso"])
+        cartella_dcc = Path(corpo["dcc"]["cartella"])
+        self.assertTrue(pdf_path.is_file())
+        self.assertTrue(cartella_dcc.is_dir())
+
+        risposta = self.client.post(self._url(f"lettere/{corpo['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        annulla_corpo = risposta.json()
+        self.assertTrue(annulla_corpo["pdf_rimosso"])
+        self.assertTrue(annulla_corpo["cartella_dcc_rimossa"])
+        self.assertFalse(pdf_path.exists())
+        self.assertFalse(cartella_dcc.exists())
+        self.assertFalse(TransmittalInterno.objects.filter(pk=corpo["trasmittal_id"]).exists())
+
+        rifatto = self._emetti([self._riga(self.doc_b, cliente=False)]).json()
+        self.assertTrue(rifatto["nome"].endswith("_E1"))  # progressivo liberato, non E2
 
 
 class FileserverIntegrationTest(TestCase):
@@ -1518,6 +3793,50 @@ class EseguiRicezioneTests(TestCase):
         self.assertEqual(nuova_rev.int_status, "")
 
 
+def _costruisci_xlsm_organizzazione(percorso, righe):
+    """Un file Excel "Organizzazione Commesse" minimo, per i test.
+
+    righe: lista di dict con chiavi Job/PM/PE/WE/QCI (e opzionalmente altre
+    colonne del foglio reale, ignorate se assenti).
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Commesse"
+    ws.append(["", "", "", "PROJECT TEAM", "", "", "", "", "", "", ""])
+    ws.append(
+        [
+            "Job no.",
+            "DWG / ITEM",
+            "Client ",
+            "PM",
+            "PE",
+            "WE",
+            "QCI",
+            "Plant",
+            "Delivery",
+            "Note",
+            "Closed",
+        ]
+    )
+    for riga in righe:
+        ws.append(
+            [
+                riga.get("Job"),
+                riga.get("DWG"),
+                riga.get("Client"),
+                riga.get("PM"),
+                riga.get("PE"),
+                riga.get("WE"),
+                riga.get("QCI"),
+                riga.get("Plant"),
+                riga.get("Delivery"),
+                riga.get("Note"),
+                riga.get("Closed"),
+            ]
+        )
+    wb.save(percorso)
+
+
 class ImportOldTests(TestCase):
     def _frames(self):
         return {
@@ -1685,6 +4004,726 @@ class ImportOldTests(TestCase):
         with self.assertRaises(ValueError):
             importa_commessa_da_access("99999")
         mock_fetch.assert_not_called()
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_legge_persone_da_excel(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        xlsm_path = Path(media.name) / "organizzazione.xlsx"
+        _costruisci_xlsm_organizzazione(
+            xlsm_path,
+            [{"Job": "99999", "PM": "ROSSI", "PE": "BIANCHI/VERDI", "WE": None, "QCI": "N/A"}],
+        )
+        # ROSSI ha un utente registrato con quel cognome: va abbinato. BIANCHI
+        # e VERDI no: restano testo libero, da risolvere a mano.
+        rossi = User.objects.create_user(
+            "rossi_test", "rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        with override_settings(ORGANIZZAZIONE_COMMESSE_XLSM_PATH=str(xlsm_path)):
+            with self.captureOnCommitCallbacks(execute=True):
+                importa_commessa_da_access("99999")
+
+        testata = Testata.objects.get(job="99999")
+        pm = testata.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertEqual(pm.nome_libero, "")
+
+        liberi = testata.persone.filter(ruolo="pe")
+        self.assertEqual(sorted(liberi.values_list("nome_libero", flat=True)), ["BIANCHI", "VERDI"])
+        self.assertTrue(all(p.utente_id is None for p in liberi))
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_file_excel_assente_non_blocca_import(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+
+        with override_settings(
+            ORGANIZZAZIONE_COMMESSE_XLSM_PATH=r"Z:\percorso\che\non\esiste.xlsm"
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                result = importa_commessa_da_access("99999")
+
+        self.assertEqual(result["documenti"], 1)
+        testata = Testata.objects.get(job="99999")
+        self.assertEqual(testata.persone.count(), 0)
+
+    @patch("core.services.import_old.fetch_commessa_frames")
+    def test_importa_commessa_da_access_risolve_sito_costruttivo_da_bc(self, mock_fetch):
+        mock_fetch.return_value = self._frames()
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        fake = _FakeBusinessCentralSito({"99999": "1"})
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                importa_commessa_da_access("99999")
+
+        testata = Testata.objects.get(job="99999")
+        self.assertEqual(testata.sito_costruttivo_id, bg.pk)
+
+
+class PersonaCommessaTests(TestCase):
+    """Vincoli del modello: utente XOR nome libero, più persone per ruolo."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="88001")
+        self.utente = User.objects.create_user("pc_utente", "pc-utente@b.it", "pw")
+
+    def test_richiede_utente_o_nome_libero(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PersonaCommessa.objects.create(testata=self.testata, ruolo=RuoloPersonaCommessa.PM)
+
+    def test_rifiuta_utente_e_nome_libero_insieme(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            PersonaCommessa.objects.create(
+                testata=self.testata,
+                ruolo=RuoloPersonaCommessa.PM,
+                utente=self.utente,
+                nome_libero="Mario Rossi",
+            )
+
+    def test_piu_persone_stesso_ruolo(self):
+        altro = User.objects.create_user("pc_altro", "pc-altro@b.it", "pw")
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=self.utente
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, utente=altro
+        )
+
+        self.assertEqual(
+            PersonaCommessa.objects.filter(
+                testata=self.testata, ruolo=RuoloPersonaCommessa.PE
+            ).count(),
+            2,
+        )
+
+    def test_cascata_alla_cancellazione_testata(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, utente=self.utente
+        )
+
+        self.testata.delete()
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+
+    def test_nome_visualizzato(self):
+        con_utente = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=self.utente
+        )
+        libero = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, nome_libero="Anna Verdi"
+        )
+
+        self.assertEqual(con_utente.nome_visualizzato, self.utente.nome_completo)
+        self.assertEqual(libero.nome_visualizzato, "Anna Verdi")
+
+    def test_nome_visualizzato_mostra_nome_e_cognome_non_lo_username(self):
+        utente = User.objects.create_user(
+            "pc_nome_cognome", "pc-nc@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=utente
+        )
+
+        self.assertEqual(persona.nome_visualizzato, "Mario Rossi")
+
+
+class DividiNomiTests(SimpleTestCase):
+    """_dividi_nomi: split di una cella grezza del foglio in singoli nomi."""
+
+    def test_nome_singolo_con_spazio_finale(self):
+        self.assertEqual(_dividi_nomi("CAPPELLOTTO "), ["CAPPELLOTTO"])
+
+    def test_split_su_slash(self):
+        self.assertEqual(_dividi_nomi("LUCINI / PILONI"), ["LUCINI", "PILONI"])
+
+    def test_split_su_a_capo(self):
+        self.assertEqual(_dividi_nomi("LUCINI\nPILONI"), ["LUCINI", "PILONI"])
+
+    def test_scarta_parti_vuote(self):
+        self.assertEqual(_dividi_nomi("LUCINI//PILONI"), ["LUCINI", "PILONI"])
+
+    def test_scarta_n_a_case_insensitive(self):
+        self.assertEqual(_dividi_nomi("N/A"), [])
+        self.assertEqual(_dividi_nomi("n/a"), [])
+
+    def test_valore_vuoto(self):
+        self.assertEqual(_dividi_nomi(None), [])
+        self.assertEqual(_dividi_nomi(""), [])
+
+    def test_caso_sporco_non_solleva_eccezioni(self):
+        # Limite noto: non c'è un modo affidabile di interpretare questo
+        # caso, importa che non sollevi eccezioni.
+        risultato = _dividi_nomi("BG: IMPALLOMENI \nVI: ")
+        self.assertIsInstance(risultato, list)
+
+
+class NormalizzaJobTests(SimpleTestCase):
+    """_normalizza_job: normalizza una cella 'Job no.' al formato Testata.job."""
+
+    def test_stringa(self):
+        self.assertEqual(_normalizza_job("22105"), "22105")
+
+    def test_intero(self):
+        self.assertEqual(_normalizza_job(22116), "22116")
+
+    def test_float_intero(self):
+        self.assertEqual(_normalizza_job(22116.0), "22116")
+
+    def test_prefisso_lettera(self):
+        self.assertEqual(_normalizza_job("I23004"), "I23004")
+
+    def test_none(self):
+        self.assertEqual(_normalizza_job(None), "")
+
+
+class LeggiOrganizzazioneCommesseTests(TestCase):
+    """leggi_organizzazione_commesse / persone_per_job: lettura del foglio Excel."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        self.xlsm_path = Path(media.name) / "organizzazione.xlsx"
+
+    def _leggi(self, righe):
+        _costruisci_xlsm_organizzazione(self.xlsm_path, righe)
+        return leggi_organizzazione_commesse(str(self.xlsm_path))
+
+    def test_job_stringa_e_intero(self):
+        dati = self._leggi(
+            [
+                {"Job": "22105", "PM": "CAPPELLOTTO"},
+                {"Job": 22116, "PM": "ROSSI"},
+            ]
+        )
+        self.assertEqual(dati["22105"]["pm"], ["CAPPELLOTTO"])
+        self.assertEqual(dati["22116"]["pm"], ["ROSSI"])
+
+    def test_job_con_prefisso_lettera(self):
+        dati = self._leggi([{"Job": "I23004", "PM": "N/A"}])
+        self.assertIn("I23004", dati)
+        self.assertEqual(dati["I23004"]["pm"], [])
+
+    def test_ruolo_multiplo_split_su_slash(self):
+        dati = self._leggi([{"Job": "23068", "PM": "BORELLI/QUIPPERETTI"}])
+        self.assertEqual(dati["23068"]["pm"], ["BORELLI", "QUIPPERETTI"])
+
+    def test_n_a_trattato_come_vuoto(self):
+        dati = self._leggi([{"Job": "99001", "QCI": "N/A"}])
+        self.assertEqual(dati["99001"]["qci"], [])
+
+    def test_ruolo_vuoto(self):
+        dati = self._leggi([{"Job": "99002"}])
+        self.assertEqual(dati["99002"], {"pm": [], "pe": [], "we": [], "qci": []})
+
+    def test_righe_con_lo_stesso_job_si_uniscono(self):
+        dati = self._leggi(
+            [
+                {"Job": "23068", "PM": "BORELLI/QUIPPERETTI"},
+                {"Job": "23068", "PM": "BORELLI"},
+            ]
+        )
+        # Deduplicato: BORELLI compare una sola volta anche se in entrambe le righe.
+        self.assertEqual(dati["23068"]["pm"], ["BORELLI", "QUIPPERETTI"])
+
+    def test_persone_per_job_non_trovato_restituisce_none(self):
+        self._leggi([{"Job": "99003", "PM": "ROSSI"}])
+        self.assertIsNone(persone_per_job("00000", str(self.xlsm_path)))
+
+    def test_persone_per_job_trovato(self):
+        self._leggi([{"Job": "99003", "PM": "ROSSI"}])
+        self.assertEqual(persone_per_job("99003", str(self.xlsm_path))["pm"], ["ROSSI"])
+
+    def test_file_non_trovato(self):
+        with self.assertRaises(FileNotFoundError):
+            leggi_organizzazione_commesse(r"Z:\percorso\che\non\esiste.xlsm")
+
+
+class CreateCommessaConPersoneTests(TestCase):
+    """create_commessa: creazione atomica di Testata + PersonaCommessa."""
+
+    def setUp(self):
+        self.utente = User.objects.create_user("cc_utente", "cc-utente@b.it", "pw")
+
+    def _dati(self, job, **extra):
+        return {"job": job, "client": "Cliente Test", **extra}
+
+    def test_utente_registrato(self):
+        t = create_commessa(self._dati("77001", persone={"pm": [{"utente_id": self.utente.pk}]}))
+
+        riga = PersonaCommessa.objects.get(testata=t, ruolo=RuoloPersonaCommessa.PM)
+        self.assertEqual(riga.utente_id, self.utente.pk)
+        self.assertEqual(riga.nome_libero, "")
+
+    def test_nome_libero(self):
+        t = create_commessa(self._dati("77002", persone={"pe": [{"nome": "Mario Rossi"}]}))
+
+        riga = PersonaCommessa.objects.get(testata=t, ruolo=RuoloPersonaCommessa.PE)
+        self.assertIsNone(riga.utente_id)
+        self.assertEqual(riga.nome_libero, "Mario Rossi")
+
+    def test_piu_persone_sullo_stesso_ruolo(self):
+        altro = User.objects.create_user("cc_altro", "cc-altro@b.it", "pw")
+        t = create_commessa(
+            self._dati(
+                "77003",
+                persone={
+                    "qci": [{"utente_id": self.utente.pk}, {"utente_id": altro.pk}],
+                },
+            )
+        )
+
+        self.assertEqual(
+            PersonaCommessa.objects.filter(testata=t, ruolo=RuoloPersonaCommessa.QCI).count(), 2
+        )
+
+    def test_senza_persone_non_crea_righe(self):
+        t = create_commessa(self._dati("77004"))
+
+        self.assertEqual(PersonaCommessa.objects.filter(testata=t).count(), 0)
+
+    def test_nome_libero_vuoto_ignorato(self):
+        t = create_commessa(self._dati("77005", persone={"we": [{"nome": "   "}]}))
+
+        self.assertEqual(PersonaCommessa.objects.filter(testata=t).count(), 0)
+
+    def test_utente_id_inesistente_solleva_integrity_error(self):
+        from django.db import connection
+
+        # Postgres non verifica sempre il vincolo di chiave esterna in modo
+        # sincrono dentro un savepoint annidato (quello di TestCase): un
+        # check_constraints() esplicito forza a farlo qui, invece di
+        # scoprirlo solo al rollback di fine test.
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            create_commessa(self._dati("77006", persone={"pm": [{"utente_id": 999999}]}))
+            connection.check_constraints()
+
+    def test_risolve_sito_costruttivo_da_bc_alla_creazione(self):
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        fake = _FakeBusinessCentralSito({"77007": "1"})
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                t = create_commessa(self._dati("77007"))
+
+        t.refresh_from_db()
+        self.assertEqual(t.sito_costruttivo_id, bg.pk)
+
+    def test_bc_non_raggiungibile_non_impedisce_la_creazione(self):
+        fake = _FakeBusinessCentralSito({}, conn=False)
+
+        with patch("core.services.bc_sync._apri_connessione", return_value=fake):
+            with self.captureOnCommitCallbacks(execute=True):
+                t = create_commessa(self._dati("77008"))
+
+        self.assertTrue(Testata.objects.filter(job="77008").exists())
+        t.refresh_from_db()
+        self.assertIsNone(t.sito_costruttivo_id)
+
+
+class PersonePerRuoloTests(TestCase):
+    """persone_per_ruolo: persone per ruolo, con lo stato di abbinamento, per l'header."""
+
+    def test_elenca_le_persone_per_ruolo_con_lo_stato_di_abbinamento(self):
+        t = Testata.objects.create(job="66001")
+        u1 = User.objects.create_user(
+            "ppr1", "ppr1@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        abbinata = PersonaCommessa.objects.create(
+            testata=t, ruolo=RuoloPersonaCommessa.PM, utente=u1
+        )
+        libera = PersonaCommessa.objects.create(
+            testata=t, ruolo=RuoloPersonaCommessa.PM, nome_libero="Libero Bianchi"
+        )
+
+        risultato = persone_per_ruolo(t)
+
+        self.assertEqual(
+            risultato["pm"],
+            [
+                {"id": abbinata.pk, "nome": "Mario Rossi", "abbinato": True},
+                {"id": libera.pk, "nome": "Libero Bianchi", "abbinato": False},
+            ],
+        )
+        self.assertEqual(risultato["pe"], [])
+        self.assertEqual(set(risultato), {"pm", "pe", "qci", "we"})
+
+
+class RisolviPersonaCommessaTests(TestCase):
+    """risolvi_persona_commessa: collega manualmente una voce a testo libero a un utente."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="66010")
+        self.persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, nome_libero="Baldelli"
+        )
+        self.utente = User.objects.create_user("rpc1", "rpc1@b.it", "pw", last_name="Baldelli")
+
+    def test_collega_l_utente_e_svuota_il_nome_libero(self):
+        persona = risolvi_persona_commessa(self.persona.pk, self.utente.pk)
+
+        self.assertEqual(persona.utente_id, self.utente.pk)
+        self.assertEqual(persona.nome_libero, "")
+
+    def test_persona_inesistente(self):
+        with self.assertRaises(PersonaCommessa.DoesNotExist):
+            risolvi_persona_commessa(999999, self.utente.pk)
+
+    def test_utente_inesistente(self):
+        with self.assertRaises(User.DoesNotExist):
+            risolvi_persona_commessa(self.persona.pk, 999999)
+
+
+class BackfillPersoneCommessaTests(TestCase):
+    """backfill_persone_commessa e il comando che lo espone."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        self.xlsm_path = Path(media.name) / "organizzazione.xlsx"
+        _costruisci_xlsm_organizzazione(
+            self.xlsm_path,
+            [
+                {"Job": "55001", "PM": "ROSSI", "PE": "BIANCHI"},
+                {"Job": "55002", "PM": "VERDI"},
+            ],
+        )
+        patcher = override_settings(ORGANIZZAZIONE_COMMESSE_XLSM_PATH=str(self.xlsm_path))
+        patcher.enable()
+        self.addCleanup(patcher.disable)
+
+        self.t1 = Testata.objects.create(job="55001")
+        self.t2 = Testata.objects.create(job="55002")
+        self.t3 = Testata.objects.create(job="55003")  # non nel foglio
+
+    def test_crea_persone_per_commesse_esistenti(self):
+        report = backfill_persone_commessa()
+
+        self.assertEqual(sorted(report["aggiornate"]), ["55001", "55002"])
+        self.assertEqual(report["non_trovate"], ["55003"])
+        self.assertEqual(
+            set(self.t1.persone.values_list("ruolo", "nome_libero")),
+            {("pm", "ROSSI"), ("pe", "BIANCHI")},
+        )
+
+    def test_salta_ruolo_gia_popolato(self):
+        PersonaCommessa.objects.create(
+            testata=self.t1, ruolo=RuoloPersonaCommessa.PM, nome_libero="Già corretto"
+        )
+
+        report = backfill_persone_commessa()
+
+        # PM non toccato (era già popolato); PE viene comunque riempito.
+        pm = list(self.t1.persone.filter(ruolo="pm").values_list("nome_libero", flat=True))
+        self.assertEqual(pm, ["Già corretto"])
+        self.assertTrue(self.t1.persone.filter(ruolo="pe", nome_libero="BIANCHI").exists())
+        self.assertEqual(report["ruoli_saltati"], 1)
+
+    def test_rieseguibile_senza_duplicare(self):
+        backfill_persone_commessa()
+        prima = PersonaCommessa.objects.count()
+
+        backfill_persone_commessa()
+
+        self.assertEqual(PersonaCommessa.objects.count(), prima)
+
+    def test_dry_run_non_scrive(self):
+        report = backfill_persone_commessa(dry_run=True)
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+        self.assertEqual(sorted(report["aggiornate"]), ["55001", "55002"])
+
+    def test_jobs_limita_il_backfill(self):
+        backfill_persone_commessa(jobs=["55001"])
+
+        self.assertTrue(self.t1.persone.exists())
+        self.assertFalse(self.t2.persone.exists())
+
+    def test_comando_job_singolo(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--job=55001", stdout=out)
+
+        self.assertTrue(self.t1.persone.exists())
+        self.assertFalse(self.t2.persone.exists())
+        self.assertIn("55001", out.getvalue())
+
+    def test_comando_job_non_trovato_in_workflow(self):
+        err = io.StringIO()
+        call_command("backfill_persone_commessa", "--job=00000", stderr=err)
+
+        self.assertIn("non trovata", err.getvalue())
+
+    def test_comando_dry_run(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--dry-run", stdout=out)
+
+        self.assertEqual(PersonaCommessa.objects.count(), 0)
+        self.assertIn("dry-run", out.getvalue())
+
+    def test_abbina_un_cognome_a_un_utente_registrato(self):
+        rossi = User.objects.create_user(
+            "bpc_rossi", "bpc-rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        backfill_persone_commessa()
+
+        pm = self.t1.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertEqual(pm.nome_libero, "")
+        # BIANCHI non ha un utente corrispondente: resta testo libero.
+        pe = self.t1.persone.get(ruolo="pe")
+        self.assertIsNone(pe.utente_id)
+        self.assertEqual(pe.nome_libero, "BIANCHI")
+
+    def test_da_risolvere_elenca_i_cognomi_non_abbinati(self):
+        report = backfill_persone_commessa()
+
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["da_risolvere"]},
+            {("55001", "pm", "ROSSI"), ("55001", "pe", "BIANCHI"), ("55002", "pm", "VERDI")},
+        )
+
+    def test_comando_segnala_da_risolvere(self):
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", stdout=out)
+
+        self.assertIn("Da risolvere", out.getvalue())
+        self.assertIn("ROSSI", out.getvalue())
+
+    def test_comando_risolvi_esistenti(self):
+        backfill_persone_commessa()  # crea le righe a testo libero
+        rossi = User.objects.create_user(
+            "bpc_rossi2", "bpc-rossi2@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+
+        out = io.StringIO()
+        call_command("backfill_persone_commessa", "--risolvi-esistenti", stdout=out)
+
+        pm = self.t1.persone.get(ruolo="pm")
+        self.assertEqual(pm.utente_id, rossi.pk)
+        self.assertIn("ROSSI", out.getvalue())
+
+
+class TrovaUtentePerCognomeTests(TestCase):
+    """trova_utente_per_cognome: abbinamento cognome -> utente registrato."""
+
+    def test_una_sola_corrispondenza(self):
+        u = User.objects.create_user("tup1", "tup1@b.it", "pw", last_name="Rossi")
+
+        self.assertEqual(trova_utente_per_cognome("Rossi"), u)
+
+    def test_case_insensitive(self):
+        u = User.objects.create_user("tup2", "tup2@b.it", "pw", last_name="Rossi")
+
+        self.assertEqual(trova_utente_per_cognome("ROSSI"), u)
+
+    def test_nessuna_corrispondenza(self):
+        self.assertIsNone(trova_utente_per_cognome("Sconosciuto"))
+
+    def test_piu_corrispondenze_troppo_ambiguo(self):
+        User.objects.create_user("tup3", "tup3@b.it", "pw", last_name="Rossi")
+        User.objects.create_user("tup4", "tup4@b.it", "pw", last_name="Rossi")
+
+        self.assertIsNone(trova_utente_per_cognome("Rossi"))
+
+
+class RisolviPersoneLibereTests(TestCase):
+    """risolvi_persone_libere: ri-abbina le PersonaCommessa già a testo libero."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="55010")
+        self.non_abbinata = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, nome_libero="Rossi"
+        )
+        self.senza_utente = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, nome_libero="Sconosciuto"
+        )
+
+    def test_risolve_quando_un_utente_ora_esiste(self):
+        rossi = User.objects.create_user("rpl1", "rpl1@b.it", "pw", last_name="Rossi")
+
+        report = risolvi_persone_libere()
+
+        self.non_abbinata.refresh_from_db()
+        self.assertEqual(self.non_abbinata.utente_id, rossi.pk)
+        self.assertEqual(self.non_abbinata.nome_libero, "")
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["risolte"]},
+            {("55010", "pm", "Rossi")},
+        )
+
+    def test_lascia_intatte_quelle_ancora_senza_corrispondenza(self):
+        User.objects.create_user("rpl2", "rpl2@b.it", "pw", last_name="Rossi")
+
+        report = risolvi_persone_libere()
+
+        self.senza_utente.refresh_from_db()
+        self.assertIsNone(self.senza_utente.utente_id)
+        self.assertEqual(self.senza_utente.nome_libero, "Sconosciuto")
+        self.assertEqual(
+            {(v["job"], v["ruolo"], v["nome"]) for v in report["non_risolte"]},
+            {("55010", "pe", "Sconosciuto")},
+        )
+
+    def test_dry_run_non_scrive(self):
+        User.objects.create_user("rpl3", "rpl3@b.it", "pw", last_name="Rossi")
+
+        risolvi_persone_libere(dry_run=True)
+
+        self.non_abbinata.refresh_from_db()
+        self.assertIsNone(self.non_abbinata.utente_id)
+        self.assertEqual(self.non_abbinata.nome_libero, "Rossi")
+
+    def test_jobs_limita_la_ricerca(self):
+        User.objects.create_user("rpl4", "rpl4@b.it", "pw", last_name="Rossi")
+        altra_testata = Testata.objects.create(job="55011")
+        PersonaCommessa.objects.create(
+            testata=altra_testata, ruolo=RuoloPersonaCommessa.PM, nome_libero="Rossi"
+        )
+
+        risolvi_persone_libere(jobs=["55011"])
+
+        self.non_abbinata.refresh_from_db()
+        self.assertIsNone(self.non_abbinata.utente_id)
+        altra = PersonaCommessa.objects.get(testata=altra_testata)
+        self.assertIsNotNone(altra.utente_id)
+
+
+class UtentiCercaApiTests(TestCase):
+    """GET /api/utenti/cerca/: autocomplete per PM/PE/QCI/WE."""
+
+    def setUp(self):
+        self.client = Client()
+        self.utente = User.objects.create_user(
+            "uca_utente",
+            "uca@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            first_name="Mario",
+            last_name="Rossi",
+        )
+        self.client.force_login(self.utente)
+        User.objects.create_user(
+            "uca_bianchi",
+            "uca-bianchi@b.it",
+            "pw",
+            first_name="Anna",
+            last_name="Bianchi",
+        )
+        User.objects.create_user(
+            "uca_inattivo",
+            "uca-inattivo@b.it",
+            "pw",
+            first_name="Fuori",
+            last_name="Servizio",
+            is_active=False,
+        )
+
+    def test_richiede_login(self):
+        self.client.logout()
+        risposta = self.client.get("/api/utenti/cerca/?q=Rossi")
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_cerca_per_cognome(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=Rossi")
+        utenti = risposta.json()["utenti"]
+        self.assertEqual([u["username"] for u in utenti], ["uca_utente"])
+
+    def test_cerca_per_username(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=uca_bianchi")
+        utenti = risposta.json()["utenti"]
+        self.assertEqual([u["username"] for u in utenti], ["uca_bianchi"])
+
+    def test_meno_di_due_caratteri_restituisce_vuoto(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=R")
+        self.assertEqual(risposta.json()["utenti"], [])
+
+    def test_esclude_utenti_non_attivi(self):
+        risposta = self.client.get("/api/utenti/cerca/?q=Servizio")
+        self.assertEqual(risposta.json()["utenti"], [])
+
+    def test_limita_a_dieci_risultati(self):
+        for i in range(15):
+            User.objects.create_user(f"uca_molti{i}", f"uca-molti{i}@b.it", "pw", last_name="Molti")
+        risposta = self.client.get("/api/utenti/cerca/?q=Molti")
+        self.assertEqual(len(risposta.json()["utenti"]), 10)
+
+
+class PersonaCommessaRisolviApiTests(TestCase):
+    """POST /api/persone-commessa/<pk>/risolvi/: collega a mano un nome libero a un utente."""
+
+    def setUp(self):
+        self.client = Client()
+        self.utente_scrittura = User.objects.create_user(
+            "pcr_scrittura", "pcr-scrittura@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.utente_lettura = User.objects.create_user(
+            "pcr_lettura", "pcr-lettura@b.it", "pw", permesso=Permesso.READING
+        )
+        self.candidato = User.objects.create_user(
+            "pcr_candidato", "pcr-candidato@b.it", "pw", last_name="Baldelli"
+        )
+        self.testata = Testata.objects.create(job="66020")
+        self.persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.WE, nome_libero="Baldelli"
+        )
+
+    def _risolvi(self, persona_id, utente_id):
+        return self.client.post(
+            f"/api/persone-commessa/{persona_id}/risolvi/",
+            data=json.dumps({"utente_id": utente_id}),
+            content_type="application/json",
+        )
+
+    def test_richiede_login(self):
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+        self.assertNotEqual(risposta.status_code, 200)
+
+    def test_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.utente_lettura)
+
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 403)
+        self.persona.refresh_from_db()
+        self.assertIsNone(self.persona.utente_id)
+
+    def test_collega_l_utente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(self.persona.pk, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta.json()["nome"], self.candidato.nome_completo)
+        self.persona.refresh_from_db()
+        self.assertEqual(self.persona.utente_id, self.candidato.pk)
+        self.assertEqual(self.persona.nome_libero, "")
+
+    def test_persona_inesistente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(999999, self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_utente_inesistente(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self._risolvi(self.persona.pk, 999999)
+
+        self.assertEqual(risposta.status_code, 404)
+
+    def test_utente_id_mancante(self):
+        self.client.force_login(self.utente_scrittura)
+
+        risposta = self.client.post(
+            f"/api/persone-commessa/{self.persona.pk}/risolvi/",
+            data=json.dumps({}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
 
 
 class SituazioneApiTestCase(TestCase):
@@ -4177,11 +7216,17 @@ class _FakeBusinessCentral:
     così da simulare una query fallita su una singola commessa.
     """
 
-    def __init__(self, dati_per_job, conn=True):
+    def __init__(self, dati_per_job, conn=True, codici_sito=None):
         self.dati_per_job = dati_per_job
         self.conn = "connessione-finta" if conn else None
         self.jobs_richiesti = []
         self.chiusa = False
+        # sync_business_central invoca anche la sync del sito costruttivo
+        # nella stessa passata: di norma nessun test di questa classe se ne
+        # occupa, quindi "nessun sito trovato" è il comportamento neutro di
+        # default — un test puntuale può passare codici_sito per verificare
+        # anche quella parte.
+        self.codici_sito = codici_sito or {}
 
     def dati_commessa(self, job):
         self.jobs_richiesti.append(job)
@@ -4189,6 +7234,9 @@ class _FakeBusinessCentral:
         if isinstance(dati, Exception):
             raise dati
         return dict(dati)
+
+    def get_commessa_codice_sito(self, job):
+        return self.codici_sito.get(job)
 
     def close(self):
         self.chiusa = True
@@ -4442,14 +7490,137 @@ class SincronizzazioneBusinessCentralTests(TestCase):
         bc.close.assert_not_called()
 
 
+class _FakeBusinessCentralSito:
+    """Connettore finto per get_commessa_codice_sito, per commessa.
+
+    Un valore ``Exception`` fra i dati viene sollevato al posto della
+    risposta, per simulare una query fallita su una singola commessa.
+    """
+
+    def __init__(self, codici_per_job, conn=True):
+        self.codici_per_job = codici_per_job
+        self.conn = "connessione-finta" if conn else None
+        self.chiusa = False
+
+    def get_commessa_codice_sito(self, job):
+        codice = self.codici_per_job.get(job)
+        if isinstance(codice, Exception):
+            raise codice
+        return codice
+
+    def close(self):
+        self.chiusa = True
+
+
+class SincronizzazioneSitoCostruttivoTests(TestCase):
+    """Backfill di Testata.sito_costruttivo dal codice sito Business Central."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.senza_sito = Testata.objects.create(job="99050")
+
+    def _attiva_bc(self, codici_per_job, conn=True):
+        fake = _FakeBusinessCentralSito(codici_per_job, conn=conn)
+        patcher = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+    def test_imposta_il_sito_dal_codice_bc(self):
+        self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.senza_sito.refresh_from_db()
+        self.assertEqual(self.senza_sito.sito_costruttivo_id, self.bg.pk)
+        self.assertEqual(report["aggiornate"], 1)
+        self.assertEqual(report["aggiornamenti"], [{"job": "99050", "stabilimento": "Valbrembo"}])
+
+    def test_registra_l_aggiornamento_per_il_pannello_archivio(self):
+        self._attiva_bc({"99050": "2"})
+
+        sincronizza_sito_costruttivo()
+
+        voci = {v["campo"]: v for v in list_aggiornamenti("99050")}
+        self.assertEqual(voci["sito_costruttivo"]["etichetta"], "Sito costruttivo")
+        self.assertEqual(voci["sito_costruttivo"]["nuovo"], "Albignasego")
+
+    def test_non_sovrascrive_un_sito_gia_impostato(self):
+        self.senza_sito.sito_costruttivo = self.pd
+        self.senza_sito.save(update_fields=["sito_costruttivo"])
+        fake = self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.senza_sito.refresh_from_db()
+        self.assertEqual(self.senza_sito.sito_costruttivo_id, self.pd.pk)
+        self.assertEqual(report["controllate"], 0)
+        self.assertEqual(fake.chiusa, False)  # mai aperta: nessuna commessa da controllare
+
+    def test_commessa_non_trovata_o_senza_sito_in_bc(self):
+        self._attiva_bc({"99050": None})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(report["non_trovate"], ["99050"])
+        self.assertEqual(report["aggiornate"], 0)
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_codice_sito_senza_stabilimento_corrispondente(self):
+        self._attiva_bc({"99050": "999"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(report["senza_stabilimento"], [{"job": "99050", "codice_sito": "999"}])
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_errore_su_una_commessa_non_ferma_le_altre(self):
+        altra = Testata.objects.create(job="99051")
+        self._attiva_bc({"99050": RuntimeError("query fallita"), "99051": "2"})
+
+        report = sincronizza_sito_costruttivo()
+
+        self.assertEqual(len(report["errori"]), 1)
+        self.assertEqual(report["errori"][0]["job"], "99050")
+        altra.refresh_from_db()
+        self.assertEqual(altra.sito_costruttivo_id, self.pd.pk)
+
+    def test_dry_run_non_scrive_nulla(self):
+        self._attiva_bc({"99050": "1"})
+
+        report = sincronizza_sito_costruttivo(dry_run=True)
+
+        self.assertEqual(report["aggiornate"], 1)
+        self.senza_sito.refresh_from_db()
+        self.assertIsNone(self.senza_sito.sito_costruttivo_id)
+
+    def test_limita_a_un_job(self):
+        Testata.objects.create(job="99052")
+        self._attiva_bc({"99050": "1", "99052": "2"})
+
+        report = sincronizza_sito_costruttivo(jobs=["99050"])
+
+        self.assertEqual(report["controllate"], 1)
+        self.assertEqual(Testata.objects.get(job="99052").sito_costruttivo_id, None)
+
+    def test_connessione_non_disponibile(self):
+        self._attiva_bc({"99050": "1"}, conn=False)
+
+        with self.assertRaises(BusinessCentralNonDisponibile):
+            sincronizza_sito_costruttivo()
+
+
 class ComandoSyncBusinessCentralTests(TestCase):
     """Il comando ``sync_business_central``, pensato per l'esecuzione giornaliera."""
 
     def setUp(self):
         self.testata = Testata.objects.create(job="26010", client="Cliente Vecchio")
 
-    def _attiva_bc(self, dati_per_job, conn=True):
-        fake = _FakeBusinessCentral(dati_per_job, conn=conn)
+    def _attiva_bc(self, dati_per_job, conn=True, codici_sito=None):
+        fake = _FakeBusinessCentral(dati_per_job, conn=conn, codici_sito=codici_sito)
         connessione = patch("core.services.bc_sync._apri_connessione", return_value=fake)
         lettura = patch(
             "core.services.bc_sync.fetch_from_bc",
@@ -4472,6 +7643,37 @@ class ComandoSyncBusinessCentralTests(TestCase):
         output = out.getvalue()
         self.assertIn("26010: Cliente: Cliente Vecchio → Cliente Nuovo", output)
         self.assertIn("Controllate 1 commesse, aggiornate 1", output)
+
+    def test_il_comando_aggiorna_anche_il_sito_costruttivo(self):
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self._attiva_bc(
+            {"26010": {"job": "26010", "client": "Cliente Nuovo"}},
+            codici_sito={"26010": "1"},
+        )
+        out = io.StringIO()
+
+        call_command("sync_business_central", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, bg.pk)
+        output = out.getvalue()
+        self.assertIn("26010: sito costruttivo -> Valbrembo", output)
+        self.assertIn("Sito costruttivo — controllate 1 commesse, aggiornate 1", output)
+
+    def test_il_comando_non_sovrascrive_un_sito_gia_impostato(self):
+        pd_stabilimento = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        self.testata.sito_costruttivo = pd_stabilimento
+        self.testata.save(update_fields=["sito_costruttivo"])
+        self._attiva_bc(
+            {"26010": {"job": "26010", "client": "Cliente Nuovo"}},
+            codici_sito={"26010": "1"},  # BG: diverso, ma il campo è già impostato
+        )
+        out = io.StringIO()
+
+        call_command("sync_business_central", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, pd_stabilimento.pk)
 
     def test_il_comando_in_dry_run_non_salva(self):
         self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
@@ -4504,6 +7706,69 @@ class ComandoSyncBusinessCentralTests(TestCase):
         err = io.StringIO()
 
         call_command("sync_business_central", stderr=err)
+
+        self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
+
+
+class ComandoBackfillSitoCostruttivoTests(TestCase):
+    """Il comando ``backfill_sito_costruttivo``, eseguito una tantum a mano."""
+
+    def setUp(self):
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.testata = Testata.objects.create(job="99060")
+
+    def _attiva_bc(self, codici_per_job, conn=True):
+        fake = _FakeBusinessCentralSito(codici_per_job, conn=conn)
+        patcher = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return fake
+
+    def test_il_comando_aggiorna_e_riepiloga(self):
+        self._attiva_bc({"99060": "1"})
+        out = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, self.bg.pk)
+        output = out.getvalue()
+        self.assertIn("99060: sito costruttivo -> Valbrembo", output)
+        self.assertIn("aggiornate 1", output)
+
+    def test_il_comando_in_dry_run_non_salva(self):
+        self._attiva_bc({"99060": "1"})
+        out = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", "--dry-run", stdout=out)
+
+        self.testata.refresh_from_db()
+        self.assertIsNone(self.testata.sito_costruttivo_id)
+        self.assertIn("[dry-run]", out.getvalue())
+
+    def test_il_comando_accetta_una_singola_commessa(self):
+        Testata.objects.create(job="99061")
+        self._attiva_bc({"99060": "1", "99061": "1"})
+
+        call_command("backfill_sito_costruttivo", "--job", "99060", stdout=io.StringIO())
+
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, self.bg.pk)
+        self.assertIsNone(Testata.objects.get(job="99061").sito_costruttivo_id)
+
+    def test_il_comando_segnala_una_commessa_inesistente(self):
+        self._attiva_bc({})
+        err = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", "--job", "99999", stderr=err)
+
+        self.assertIn("non trovata", err.getvalue())
+
+    def test_il_comando_segnala_business_central_non_raggiungibile(self):
+        self._attiva_bc({"99060": "1"}, conn=False)
+        err = io.StringIO()
+
+        call_command("backfill_sito_costruttivo", stderr=err)
 
         self.assertIn("Connessione a Business Central non disponibile", err.getvalue())
 

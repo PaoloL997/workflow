@@ -171,6 +171,14 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "Workflow <noreply@brembanarolle.com>",
 )
 
+# Se impostata, le email del trasmittal interno vengono reindirizzate a
+# questo indirizzo invece che ai destinatari reali (TO/CC), per testare il
+# flusso completo — creazione PDF e cartella DCC comprese — senza spammare
+# nessuno. Vuota in produzione.
+TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
+    "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", ""
+)
+
 # Destinatari per le richieste di eliminazione commessa (lista allargabile).
 COMMESSA_DELETE_REQUEST_RECIPIENTS = [
     "plitta@brembanarolle.com",
@@ -223,6 +231,11 @@ ACCESS_MDB_PATH = os.environ.get(
 ACCESS_ODBC_DRIVER = os.environ.get(
     "ACCESS_ODBC_DRIVER",
     "Microsoft Access Driver (*.mdb, *.accdb)",
+)
+
+ORGANIZZAZIONE_COMMESSE_XLSM_PATH = os.environ.get(
+    "ORGANIZZAZIONE_COMMESSE_XLSM_PATH",
+    r"Z:\Organizzazione commesse\MQ 8.3-06 Rev1_Organizzazione Commesse.xlsm",
 )
 
 # Create the logs directory if it doesn't exist to prevent startup crash.

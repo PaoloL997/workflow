@@ -6,6 +6,7 @@ All operations are restricted to the JOBS root directory defined by
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from django.conf import settings
@@ -49,6 +50,28 @@ def get_ricevuti_path(commessa: str, reparto_acronimo: str, data_str: str) -> Pa
     return get_base_path(commessa, reparto_acronimo) / "RICEVUTI" / data_str
 
 
+def _scandir_files(directory: Path):
+    """Yield ``os.DirEntry`` for the regular files in ``directory``.
+
+    Uses ``os.scandir`` rather than ``Path.iterdir`` because on a network
+    share (SMB), ``DirEntry.is_file()``/``.stat()`` reuse the metadata
+    already returned by the directory listing itself — ``Path`` objects from
+    ``iterdir()`` don't cache that, so each ``is_file()``/``.stat()`` call
+    becomes its own network round trip. On a share with a few dozen files
+    that difference is a couple hundred milliseconds; with realistic latency
+    it can turn a page load into a multi-second (or worse, per-caller-loop,
+    multi-minute) wait — see ``elenco_selezione_ut``.
+
+    Returns empty if ``directory`` does not exist.
+    """
+    try:
+        with os.scandir(directory) as it:
+            entries = list(it)
+    except OSError:
+        return []
+    return [e for e in entries if e.is_file()]
+
+
 def trova_file(directory: Path, vendor_doc: str) -> list[dict]:
     """Find all files in a directory whose name contains ``vendor_doc``.
 
@@ -64,20 +87,47 @@ def trova_file(directory: Path, vendor_doc: str) -> list[dict]:
     Returns:
         List of dicts, each with keys ``percorso``, ``nome``, ``estensione``.
     """
-    if not directory.exists() or not directory.is_dir():
-        return []
-
     needle = vendor_doc.lower()
+    return [
+        {
+            "percorso": entry.path,
+            "nome": entry.name,
+            "estensione": Path(entry.name).suffix.lstrip(".").lower(),
+        }
+        for entry in _scandir_files(directory)
+        if needle in entry.name.lower()
+    ]
+
+
+def elenca_cartella(directory: Path) -> list[dict]:
+    """List all files in a directory in a single scan, with their mtime.
+
+    Unlike ``trova_file``, this does not filter by name: it exists so callers
+    matching many names against the same directory (e.g. one document list)
+    can scan it once and match in memory, instead of re-scanning per name —
+    each scan is a full network round trip on a fileserver share.
+
+    Args:
+        directory: Directory to scan. Returns empty list if it does not exist.
+
+    Returns:
+        List of dicts, each with keys ``percorso``, ``nome``, ``estensione``,
+        ``mtime`` (``float`` epoch seconds, or ``None`` if unreadable).
+    """
     results = []
-    for entry in directory.iterdir():
-        if entry.is_file() and needle in entry.name.lower():
-            results.append(
-                {
-                    "percorso": str(entry),
-                    "nome": entry.name,
-                    "estensione": entry.suffix.lstrip(".").lower(),
-                }
-            )
+    for entry in _scandir_files(directory):
+        try:
+            mtime = entry.stat().st_mtime
+        except OSError:
+            mtime = None
+        results.append(
+            {
+                "percorso": entry.path,
+                "nome": entry.name,
+                "estensione": Path(entry.name).suffix.lstrip(".").lower(),
+                "mtime": mtime,
+            }
+        )
     return results
 
 

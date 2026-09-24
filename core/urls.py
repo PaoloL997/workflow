@@ -53,6 +53,11 @@ urlpatterns = [
     path("commesse/<str:job>/emissione/", views.emissione_detail_view, name="emissione_detail"),
     path("commesse/<str:job>/ricezione/", views.ricezione_detail_view, name="ricezione_detail"),
     path("commesse/<str:job>/situazione/", views.situazione_detail_view, name="situazione_detail"),
+    path(
+        "commesse/<str:job>/trasmittal-interno/",
+        views.trasmittal_interno_detail_view,
+        name="trasmittal_interno_detail",
+    ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
@@ -85,6 +90,13 @@ urlpatterns = [
         name="commessa_revisione_sblocca_api",
     ),
     path("api/erp/", views.erp_api, name="erp_api"),
+    # API — Utenti
+    path("api/utenti/cerca/", views.utenti_cerca_api, name="utenti_cerca_api"),
+    path(
+        "api/persone-commessa/<int:pk>/risolvi/",
+        views.persona_commessa_risolvi_api,
+        name="persona_commessa_risolvi_api",
+    ),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),
@@ -161,6 +173,63 @@ urlpatterns = [
     ),
     # API — Stabilimenti
     path("api/stabilimenti/", views.stabilimenti_api, name="stabilimenti_api"),
+    # API — Trasmittal interno: destinazioni cartacee
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/destinazioni/",
+        views.trasmittal_interno_destinazioni_api,
+        name="trasmittal_interno_destinazioni_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/documenti/<int:pk>/destinazioni/",
+        views.documento_destinazioni_api,
+        name="documento_destinazioni_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/stabilimenti/<int:codice_bc>/destinazioni/",
+        views.stabilimento_destinazioni_bulk_api,
+        name="stabilimento_destinazioni_bulk_api",
+    ),
+    # API — Trasmittal interno: creazione lettera
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/selezione/",
+        views.trasmittal_interno_selezione_api,
+        name="trasmittal_interno_selezione_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/anteprima/",
+        views.trasmittal_interno_anteprima_api,
+        name="trasmittal_interno_anteprima_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/anteprima/pdf/",
+        views.trasmittal_interno_anteprima_pdf_api,
+        name="trasmittal_interno_anteprima_pdf_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/emetti/",
+        views.trasmittal_interno_emetti_api,
+        name="trasmittal_interno_emetti_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/",
+        views.trasmittal_interno_lettere_api,
+        name="trasmittal_interno_lettere_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/file/",
+        views.trasmittal_interno_lettera_file_serve,
+        name="trasmittal_interno_lettera_file_serve",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/annulla/",
+        views.trasmittal_interno_annulla_api,
+        name="trasmittal_interno_annulla_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/retry/",
+        views.trasmittal_interno_lettera_retry_api,
+        name="trasmittal_interno_lettera_retry_api",
+    ),
     # API — Emissione
     path("api/emissione/", views.emissione_api, name="emissione_api"),
     path("api/trasmittal/pdf/", views.trasmittal_pdf_api, name="trasmittal_pdf_api"),

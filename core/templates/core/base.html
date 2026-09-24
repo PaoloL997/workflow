@@ -580,6 +580,48 @@
       if (numero === null) numero = revNumeroIntero(lettera);
       return numero === null ? '' : String(numero);
     }
+
+    /* ── Helpers globali ──
+       Definiti qui, prima del blocco content, e non più dopo: uno script di
+       pagina che li usa in modo sincrono al caricamento (non dentro un
+       handler o una callback async) girerebbe prima che siano definiti, se
+       stessero dopo il contenuto della pagina. */
+    var _permissionToastTimer = null;
+
+    function showPermissionDenied(message) {
+      var el = document.getElementById('permission-toast');
+      if (!el) return;
+      el.textContent = message || 'Non hai i permessi per eseguire questa operazione.';
+      el.classList.add('visible');
+      if (_permissionToastTimer) clearTimeout(_permissionToastTimer);
+      _permissionToastTimer = setTimeout(function () {
+        el.classList.remove('visible');
+      }, 4200);
+    }
+
+    function requireWrite() {
+      if (!window.USER_CAN_WRITE) {
+        showPermissionDenied();
+        return false;
+      }
+      return true;
+    }
+
+    function isPermissionDeniedResponse(res, body) {
+      if (res && res.status === 403) {
+        showPermissionDenied(body && body.error ? body.error : undefined);
+        return true;
+      }
+      return false;
+    }
+
+    function escHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
   </script>
   <div id="permission-toast" class="permission-toast" role="alert" aria-live="assertive"></div>
   {% block content %}{% endblock %}
@@ -638,36 +680,6 @@
   </div>
 
   <script>
-    /* ── Helpers globali ── */
-    var _permissionToastTimer = null;
-
-    function showPermissionDenied(message) {
-      var el = document.getElementById('permission-toast');
-      if (!el) return;
-      el.textContent = message || 'Non hai i permessi per eseguire questa operazione.';
-      el.classList.add('visible');
-      if (_permissionToastTimer) clearTimeout(_permissionToastTimer);
-      _permissionToastTimer = setTimeout(function () {
-        el.classList.remove('visible');
-      }, 4200);
-    }
-
-    function requireWrite() {
-      if (!window.USER_CAN_WRITE) {
-        showPermissionDenied();
-        return false;
-      }
-      return true;
-    }
-
-    function isPermissionDeniedResponse(res, body) {
-      if (res && res.status === 403) {
-        showPermissionDenied(body && body.error ? body.error : undefined);
-        return true;
-      }
-      return false;
-    }
-
     document.addEventListener('click', function (e) {
       var link = e.target.closest('a[href="/admin/"]');
       if (link && !window.USER_IS_ADMIN) {
@@ -675,14 +687,6 @@
         showPermissionDenied('Non hai accesso al pannello amministrazione.');
       }
     });
-
-    function escHtml(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
 
     /* ── Spotlight ── */
     let _searchTimer = null;
