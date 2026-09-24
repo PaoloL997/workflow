@@ -24,17 +24,17 @@ PDF_STATUS_LABELS = {
     **{letter: alias for alias, letter in _STATUS_NAME_ALIASES.items()},
 }
 
-# Letter → colore di default della risposta del cliente. Sono i colori creati
-# all'import da Access: valgono finché l'admin non ne configura uno a sistema.
+# Letter → colore di default della risposta del cliente. È la palette a sistema
+# (vedi la migrazione 0045): vale finché l'admin non ne configura uno diverso.
 DEFAULT_STATUS_COLORS = {
-    "A": "#00B050",
-    "C": "#D61D09",
-    "F": "#FFC000",
-    "I": "#D61D09",
-    "O": "#D61D09",
-    "R": "#D61D09",
-    "S": "#B8B8B8",
-    "Z": "#FFC000",
+    "A": "#4AF536",
+    "C": "#E32400",
+    "F": "#1649F0",
+    "I": "#E32400",
+    "O": "#131314",
+    "R": "#000000",
+    "S": "#1649F0",
+    "Z": "#4AF536",
 }
 
 # Legenda STATUS di ripiego per il PDF: ``(lettera, nome, colore)`` in ordine
