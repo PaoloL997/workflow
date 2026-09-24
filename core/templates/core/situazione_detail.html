@@ -439,6 +439,8 @@
   /* display:inline-flex qui sopra batte la regola [hidden] del browser. */
   .toolbar-btn[hidden] { display: none; }
 
+  .toolbar-btn:disabled { cursor: default; opacity: 0.75; }
+
   /* ── Sort indicators ── */
   .sit-table thead th[data-sort-key],
   .sit-horiz thead th[data-sort-key] {
@@ -1613,7 +1615,7 @@
     const values = new Set();
     if (_vista === 'verticale') {
       _allDocRevs.forEach(function (entry) {
-        const visibili = _soloUltimaRev ? entry.revs.slice(-1) : entry.revs;
+        const visibili = mostraSoloUltimaRev() ? entry.revs.slice(-1) : entry.revs;
         const revs = visibili.length ? visibili : [null];
         revs.forEach(function (r) {
           values.add(filterDisplayValue(getColumnFilterValue({ d: entry.doc, r }, key)));
@@ -1656,6 +1658,14 @@
       + `onclick="openColumnFilter('${escHtml(key)}', event)" `
       + `aria-label="Filtra ${escHtml(FILTER_LABELS[key] || key)}" `
       + `aria-pressed="${active}">${FILTER_ICON}</button>`;
+  }
+
+  /* Vista verticale: quando il filtro per risposta del cliente è acceso la
+     tabella mostra la sola ultima revisione. Il filtro guarda l'ultima
+     revisione, quindi mostrare anche le precedenti — con risposte diverse da
+     quelle spuntate — direbbe una cosa per un'altra. */
+  function mostraSoloUltimaRev() {
+    return _soloUltimaRev || isColumnFilterActive(STATO_ULTIMA_REV_KEY);
   }
 
   // Anche il solo interruttore «solo ultima revisione» nasconde delle righe:
@@ -1703,9 +1713,17 @@
     }
     const solo = document.getElementById('btn-solo-ultima-rev');
     if (solo) {
+      // Con il filtro acceso la riduzione c'è già: il pulsante lo dice e non si
+      // clicca, così non resta un comando che non cambia niente.
+      const imposto = isColumnFilterActive(STATO_ULTIMA_REV_KEY);
+      const acceso = mostraSoloUltimaRev();
       solo.hidden = _vista !== 'verticale';
-      solo.classList.toggle('active', _soloUltimaRev);
-      solo.setAttribute('aria-pressed', _soloUltimaRev ? 'true' : 'false');
+      solo.disabled = imposto;
+      solo.classList.toggle('active', acceso);
+      solo.setAttribute('aria-pressed', acceso ? 'true' : 'false');
+      solo.title = imposto
+        ? 'Il filtro per risposta del cliente mostra già la sola ultima revisione.'
+        : '';
     }
   }
 
@@ -2334,13 +2352,15 @@
     hideExtLegend();
     if (!docRevs.length) { showMsg('Nessun documento trovato'); return; }
 
-    // Con «solo ultima revisione» resta una riga per documento; i documenti
-    // senza revisioni tengono comunque la loro riga vuota.
+    // Con «solo ultima revisione» (o con il filtro per risposta del cliente)
+    // resta una riga per documento; i documenti senza revisioni tengono
+    // comunque la loro riga vuota.
+    const soloUltima = mostraSoloUltimaRev();
     const rawRows = [];
     let totalRows = 0;
     for (const { doc: d, revs } of docRevs) {
       totalRows += revs.length || 1;
-      const visibili = _soloUltimaRev ? revs.slice(-1) : revs;
+      const visibili = soloUltima ? revs.slice(-1) : revs;
       if (visibili.length) { for (const r of visibili) rawRows.push({ d, r }); }
       else rawRows.push({ d, r: null });
     }
