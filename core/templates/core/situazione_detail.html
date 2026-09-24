@@ -1414,21 +1414,29 @@
   }
 
   /* Cella B&R Doc: da sola dice come sta il documento, quindi le celle Status
-     delle singole revisioni restano senza colore. Conta l'ultimo stato
-     dell'ultima revisione: la risposta del cliente se è arrivata, il giallo
-     dell'«inviato al cliente» se il documento è partito e la risposta manca
-     ancora, il grigio del «da inviare» finché la revisione non è partita.
-     Stessa regola del server (services/situazione_cella_vendor.py). */
+     delle singole revisioni restano senza colore. Vale l'ultimo stato: il
+     giallo dell'«inviato al cliente» se l'ultima revisione è partita e la
+     risposta manca ancora, altrimenti il colore dell'ultima risposta arrivata;
+     il grigio del «da inviare» resta ai documenti mai inviati e senza nessuna
+     risposta. Stessa regola del server (services/situazione_cella_vendor.py). */
   function vendorCellMeta(revs) {
-    if (!revs || !revs.length) return { bg: '', fg: '', label: '' };
-    const ultima = revs[revs.length - 1];
-    const risposta = (ultima.ext_status_label || '').trim();
-    if (risposta) {
-      const { bg, fg } = extCellColors(ultima);
-      return { bg, fg, label: risposta };
+    if (!revs || !revs.length) return { bg: '', fg: '', label: '', lettera: '' };
+    if (isSentAwaitingReply(revs[revs.length - 1])) {
+      return { bg: SENT_CELL.bg, fg: SENT_CELL.fg, label: SENT_CELL.label, lettera: '', interno: true };
     }
-    const stato = isSentAwaitingReply(ultima) ? SENT_CELL : DA_INVIARE_CELL;
-    return { bg: stato.bg, fg: stato.fg, label: stato.label, interno: true };
+    for (let i = revs.length - 1; i >= 0; i--) {
+      const risposta = (revs[i].ext_status_label || '').trim();
+      if (!risposta) continue;
+      const { bg, fg } = extCellColors(revs[i]);
+      return { bg, fg, label: risposta, lettera: (revs[i].ext_status_lettera || '').trim() };
+    }
+    return {
+      bg: DA_INVIARE_CELL.bg,
+      fg: DA_INVIARE_CELL.fg,
+      label: DA_INVIARE_CELL.label,
+      lettera: '',
+      interno: true,
+    };
   }
 
   function getRowHighlightStyle(rev) {
@@ -2091,12 +2099,7 @@
         continue;
       }
       if (byLabel.has(meta.label)) continue;
-      const ultima = revs[revs.length - 1];
-      byLabel.set(meta.label, {
-        bg: meta.bg,
-        fg: meta.fg,
-        letter: (ultima.ext_status_lettera || '').trim(),
-      });
+      byLabel.set(meta.label, { bg: meta.bg, fg: meta.fg, letter: meta.lettera || '' });
     }
     if (!byLabel.size && !interni.size) {
       hideExtLegend();

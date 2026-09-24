@@ -3599,60 +3599,73 @@ class CellaVendorDocTests(TestCase):
             for r in self.doc.revisioni.select_related("ext_status").order_by("rev_no")
         ]
 
-    def test_colore_della_risposta_sull_ultima_revisione(self):
-        Revisione.objects.create(
+    def _rev_con_risposta(self, rev_no=0):
+        return Revisione.objects.create(
             documento=self.doc,
-            rev_no=0,
+            rev_no=rev_no,
             dis_act_date=date(2026, 1, 10),
             rec_act_date=date(2026, 1, 20),
             ext_status=self.commented,
         )
+
+    def test_colore_della_risposta_sull_ultima_revisione(self):
+        self._rev_con_risposta()
         self.assertEqual(
             colori_cella_vendor(self._revs()),
-            {"bg": "#D61D09", "fg": TEXT_LIGHT, "label": "Commented"},
+            {"bg": "#D61D09", "fg": TEXT_LIGHT, "label": "Commented", "lettera": "C"},
+        )
+
+    def test_revisione_nuova_non_ancora_inviata_tiene_l_ultima_risposta(self):
+        self._rev_con_risposta()
+        # La Rev. 1 non è partita: il grigio è riservato a chi non ha mai avuto
+        # una risposta, quindi resta il colore della risposta sulla Rev. 0.
+        Revisione.objects.create(documento=self.doc, rev_no=1, dis_plan_date=date(2026, 4, 1))
+        self.assertEqual(
+            colori_cella_vendor(self._revs()),
+            {"bg": "#D61D09", "fg": TEXT_LIGHT, "label": "Commented", "lettera": "C"},
         )
 
     def test_giallo_quando_la_revisione_attende_risposta(self):
-        Revisione.objects.create(
-            documento=self.doc,
-            rev_no=0,
-            dis_act_date=date(2026, 1, 10),
-            rec_act_date=date(2026, 1, 20),
-            ext_status=self.commented,
-        )
+        self._rev_con_risposta()
         # La revisione nuova è partita: conta lei, non la risposta sulla Rev. 0.
         Revisione.objects.create(documento=self.doc, rev_no=1, dis_act_date=date(2026, 2, 1))
         self.assertEqual(
             colori_cella_vendor(self._revs()),
-            {"bg": INVIATO_BG, "fg": TEXT_DARK, "label": "Inviato al Cliente"},
+            {"bg": INVIATO_BG, "fg": TEXT_DARK, "label": "Inviato al Cliente", "lettera": ""},
         )
 
-    def test_grigio_finche_la_revisione_non_e_partita(self):
+    def test_giallo_anche_sulla_prima_revisione_appena_inviata(self):
+        Revisione.objects.create(documento=self.doc, rev_no=0, dis_act_date=date(2026, 1, 10))
+        self.assertEqual(
+            colori_cella_vendor(self._revs()),
+            {"bg": INVIATO_BG, "fg": TEXT_DARK, "label": "Inviato al Cliente", "lettera": ""},
+        )
+
+    def test_grigio_solo_senza_risposte_e_senza_invii(self):
         Revisione.objects.create(documento=self.doc, rev_no=0, dis_plan_date=date(2026, 4, 1))
         self.assertEqual(
             colori_cella_vendor(self._revs()),
-            {"bg": DA_INVIARE_BG, "fg": TEXT_DARK, "label": "Da inviare"},
+            {"bg": DA_INVIARE_BG, "fg": TEXT_DARK, "label": "Da inviare", "lettera": ""},
         )
 
     def test_documento_senza_revisioni_resta_senza_colore(self):
-        self.assertEqual(colori_cella_vendor([]), {"bg": "", "fg": "", "label": ""})
+        self.assertEqual(colori_cella_vendor([]), {"bg": "", "fg": "", "label": "", "lettera": ""})
 
     def test_pdf_usa_gli_stessi_colori(self):
         from src.pdf import _vendor_doc_cell_color
 
-        Revisione.objects.create(
-            documento=self.doc,
-            rev_no=0,
-            dis_act_date=date(2026, 1, 10),
-            rec_act_date=date(2026, 1, 20),
-            ext_status=self.commented,
-        )
+        self._rev_con_risposta()
         self.assertEqual(_vendor_doc_cell_color(self._revs()), "#D61D09")
 
         Revisione.objects.create(documento=self.doc, rev_no=1, dis_act_date=date(2026, 2, 1))
         self.assertEqual(_vendor_doc_cell_color(self._revs()), INVIATO_BG)
 
+        # Rev. 1 non più inviata: torna l'ultima risposta, non il grigio.
         Revisione.objects.filter(rev_no=1).update(dis_act_date=None)
+        self.assertEqual(_vendor_doc_cell_color(self._revs()), "#D61D09")
+
+        Revisione.objects.filter(documento=self.doc).delete()
+        Revisione.objects.create(documento=self.doc, rev_no=0)
         self.assertEqual(_vendor_doc_cell_color(self._revs()), DA_INVIARE_BG)
 
 
