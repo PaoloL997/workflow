@@ -299,8 +299,8 @@
     background: var(--color-surface);
   }
 
-  /* Celle legate alla risposta del cliente: colore pieno (uguale alla legenda)
-     e testo bianco/nero scelto per contrasto lato server. */
+  /* Cella B&R Doc della vista orizzontale: colore pieno dell'ultimo stato
+     (uguale alla legenda) e testo bianco/nero scelto per contrasto. */
   .sit-horiz td.sit-status-cell,
   .sit-horiz tbody td.sit-fix.sit-status-cell {
     background: var(--sit-status-bg) !important;
@@ -1373,11 +1373,20 @@
     return { bg, fg };
   }
 
-  /* Giallo dell'«inviato al cliente»: lo prende la cella B&R Doc quando
-     l'ultima revisione è partita e il cliente non ha ancora risposto. I valori
-     arrivano dal payload della situazione (services/stato_esterno_colori.py);
-     qui resta solo il fallback. */
-  let SENT_CELL = { bg: '#F4C325', fg: '#111111', label: 'Inviato al Cliente' };
+  /* Colori degli stati interni che la cella B&R Doc mostra quando sull'ultima
+     revisione non c'è ancora una risposta del cliente. Arrivano dal payload
+     della situazione (services/stato_esterno_colori.py); qui il fallback. */
+  let SENT_CELL       = { bg: '#F4C325', fg: '#111111', label: 'Inviato al Cliente' };
+  let DA_INVIARE_CELL = { bg: '#B8BFCC', fg: '#111111', label: 'Da inviare' };
+
+  function mergeStateCell(fallback, payload) {
+    if (!payload || !payload.bg) return fallback;
+    return {
+      bg: payload.bg,
+      fg: payload.fg || readableTextColor(payload.bg),
+      label: payload.label || fallback.label,
+    };
+  }
 
   function isSentAwaitingReply(rev) {
     if (!rev) return false;
@@ -1404,22 +1413,22 @@
     return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-strong-pct, var(--status-tint-pct)), var(--color-surface))`;
   }
 
-  // Colore della cella B&R Doc: se l'ultima revisione è partita e non ha ancora
-  // risposta vince il giallo dell'«inviato al cliente», altrimenti si usa il
-  // colore dell'ultima risposta arrivata.
-  function latestExtStatusMeta(revs) {
+  /* Cella B&R Doc: da sola dice come sta il documento, quindi le celle Status
+     delle singole revisioni restano senza colore. Conta l'ultimo stato
+     dell'ultima revisione: la risposta del cliente se è arrivata, il giallo
+     dell'«inviato al cliente» se il documento è partito e la risposta manca
+     ancora, il grigio del «da inviare» finché la revisione non è partita.
+     Stessa regola del server (services/situazione_cella_vendor.py). */
+  function vendorCellMeta(revs) {
     if (!revs || !revs.length) return { bg: '', fg: '', label: '' };
-    if (isSentAwaitingReply(revs[revs.length - 1])) {
-      return { bg: SENT_CELL.bg, fg: SENT_CELL.fg, label: SENT_CELL.label, sent: true };
+    const ultima = revs[revs.length - 1];
+    const risposta = (ultima.ext_status_label || '').trim();
+    if (risposta) {
+      const { bg, fg } = extCellColors(ultima);
+      return { bg, fg, label: risposta };
     }
-    for (let i = revs.length - 1; i >= 0; i--) {
-      const color = (revs[i].ext_status_bg || revs[i].ext_status_colore || '').trim();
-      if (color) {
-        const { bg, fg } = extCellColors(revs[i]);
-        return { bg, fg, label: (revs[i].ext_status_label || '').trim() };
-      }
-    }
-    return { bg: '', fg: '', label: '' };
+    const stato = isSentAwaitingReply(ultima) ? SENT_CELL : DA_INVIARE_CELL;
+    return { bg: stato.bg, fg: stato.fg, label: stato.label, interno: true };
   }
 
   function getRowHighlightStyle(rev) {
@@ -2009,13 +2018,8 @@
       if (typeof data.rev_let_flag === 'boolean') {
         REV_LET_FLAG = data.rev_let_flag;
       }
-      if (data.inviato_cell && data.inviato_cell.bg) {
-        SENT_CELL = {
-          bg: data.inviato_cell.bg,
-          fg: data.inviato_cell.fg || readableTextColor(data.inviato_cell.bg),
-          label: data.inviato_cell.label || SENT_CELL.label,
-        };
-      }
+      SENT_CELL = mergeStateCell(SENT_CELL, data.inviato_cell);
+      DA_INVIARE_CELL = mergeStateCell(DA_INVIARE_CELL, data.da_inviare_cell);
       _allDocs = data.documenti || [];
       _allDocs.sort((a, b) =>
         (a.vendor_doc || '').localeCompare(b.vendor_doc || '', undefined, { numeric: true, sensitivity: 'base' }));
@@ -2072,31 +2076,39 @@
     el.classList.remove('is-visible');
   }
 
+  /* La legenda spiega la colonna B&R Doc: ci finiscono solo gli stati che le
+     celle mostrano davvero, cioè l'ultimo stato di ogni documento. */
   function updateExtLegend(docRevs) {
     const el = document.getElementById('sit-ext-legend');
     if (!el) return;
     const byLabel = new Map();
-    let hasSent = false;
+    const interni = new Map();
     for (const { revs } of docRevs || []) {
-      if (latestExtStatusMeta(revs).sent) hasSent = true;
-      for (const rev of revs || []) {
-        const label = (rev.ext_status_label || '').trim();
-        const color = (rev.ext_status_bg || rev.ext_status_colore || '').trim();
-        const letter = (rev.ext_status_lettera || '').trim();
-        if (!label || !color || byLabel.has(label)) continue;
-        byLabel.set(label, { ...extCellColors(rev), letter });
+      const meta = vendorCellMeta(revs);
+      if (!meta.label || !meta.bg) continue;
+      if (meta.interno) {
+        if (!interni.has(meta.label)) interni.set(meta.label, { bg: meta.bg, fg: meta.fg, letter: '' });
+        continue;
       }
+      if (byLabel.has(meta.label)) continue;
+      const ultima = revs[revs.length - 1];
+      byLabel.set(meta.label, {
+        bg: meta.bg,
+        fg: meta.fg,
+        letter: (ultima.ext_status_lettera || '').trim(),
+      });
     }
-    if (!byLabel.size && !hasSent) {
+    if (!byLabel.size && !interni.size) {
       hideExtLegend();
       return;
     }
     const items = [...byLabel.entries()].sort((a, b) =>
       a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
-    // In fondo la voce del giallo «inviato al cliente»: non è una risposta del
-    // cliente, quindi non ha lettera e resta fuori dall'ordinamento.
-    if (hasSent) {
-      items.push([SENT_CELL.label, { bg: SENT_CELL.bg, fg: SENT_CELL.fg, letter: '' }]);
+    // In fondo gli stati interni: non sono risposte del cliente, quindi non
+    // hanno lettera e restano fuori dall'ordinamento alfabetico.
+    for (const label of [SENT_CELL.label, DA_INVIARE_CELL.label]) {
+      const meta = interni.get(label);
+      if (meta) items.push([label, meta]);
     }
     el.innerHTML = items.map(([label, meta]) => {
       // Il riquadro ripete esattamente la cella: stesso colore, stessa lettera.
@@ -2368,7 +2380,7 @@
     }
     for (const { doc, revs } of rows) {
       const planned = plannedDatesForLatestRev(revs);
-      const extMeta = latestExtStatusMeta(revs);
+      const extMeta = vendorCellMeta(revs);
       tbody += '<tr>';
       FIX.forEach((col, i) => {
         let val;
@@ -2414,11 +2426,10 @@
           }
           const statusTitle = extLabel ? ` title="${escHtml(extLabel)}"` : '';
           const statusText = extLetter || '\u2014';
-          // La cella Status porta il colore della risposta con testo leggibile.
-          const statusCls = extLabel ? ' sit-status-cell' : '';
-          const statusVars = extLabel ? extCellStyleVars(extCellColors(rev)) : '';
+          // Le celle Status restano senza colore: a dire come sta il documento
+          // ci pensa la colonna B&R Doc, qui basta la lettera della risposta.
           if (extLetter || rev.rec_act_date) {
-            tbody += `<td class="sit-row-clickable${statusCls}" style="text-align:center;font-weight:700;${statusVars}"${statusTitle} onclick="onRevBtnClick(${rev.id}, this)">${escHtml(statusText)}</td>`;
+            tbody += `<td class="sit-row-clickable" style="text-align:center;font-weight:700"${statusTitle} onclick="onRevBtnClick(${rev.id}, this)">${escHtml(statusText)}</td>`;
           } else {
             tbody += `<td style="text-align:center;font-weight:700">\u2014</td>`;
           }

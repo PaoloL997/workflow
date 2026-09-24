@@ -12,18 +12,10 @@ from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
 from core.services.revisione_label import format_revisione_label
-from core.services.stato_esterno_colori import (
-    FALLBACK_BG,
-    INVIATO_BG,
-    cell_colors,
-    hex_to_rgb,
-)
+from core.services.situazione_cella_vendor import colore_cella_vendor
+from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
 from core.services.stato_esterno_legenda import legenda_stati_esterni
-from core.services.stato_interno import (
-    DA_INVIARE_LABEL,
-    stato_interno_label,
-    ultima_rev_in_attesa,
-)
+from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
@@ -1328,25 +1320,15 @@ def _status_cell_rgb(hex_color: str):
     return hex_to_rgb(cella["bg"]), hex_to_rgb(cella["fg"])
 
 
-def _latest_ext_status_color(revs: list) -> str:
-    """Hex color of the latest revision that has an external status."""
-    for rev in reversed(revs or []):
-        color = (rev.get("ext_status_colore") or "").strip()
-        if color:
-            return color
-    return ""
-
-
 def _vendor_doc_cell_color(revs: list) -> str:
     """Hex color of the B&R Doc cell, as in the vista orizzontale on screen.
 
-    Il giallo dell'«inviato al cliente» quando l'ultima revisione è partita e
-    il cliente non ha ancora risposto, altrimenti il colore dell'ultima
-    risposta arrivata.
+    L'ultimo stato del documento: la risposta del cliente sull'ultima revisione,
+    il giallo dell'«inviato al cliente» quando la risposta manca ancora, il
+    grigio del «da inviare» finché la revisione non è partita
+    (services/situazione_cella_vendor.py).
     """
-    if ultima_rev_in_attesa(revs):
-        return INVIATO_BG
-    return _latest_ext_status_color(revs)
+    return colore_cella_vendor(revs)
 
 
 def _is_iso_overdue(iso) -> bool:

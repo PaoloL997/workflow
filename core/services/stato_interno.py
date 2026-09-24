@@ -73,13 +73,3 @@ def in_attesa_di_risposta(rev) -> bool:
         return False
     code = (rev.get("int_status_eff") or rev.get("int_status") or "").strip()
     return code == INVIATO
-
-
-def ultima_rev_in_attesa(revs) -> bool:
-    """True when the document's latest revision is sent and still unanswered.
-
-    È il caso in cui la cella B&R Doc della vista orizzontale prende il giallo
-    dell'«inviato al cliente» invece del colore dell'ultima risposta.
-    """
-    revs = list(revs or [])
-    return bool(revs) and in_attesa_di_risposta(revs[-1])

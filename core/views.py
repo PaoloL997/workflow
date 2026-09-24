@@ -103,12 +103,8 @@ from .services.segnalazioni import (
     riapri_segnalazione,
     set_voto,
 )
-from .services.stato_esterno_colori import inviato_cell_colors
-from .services.stato_interno import (
-    DA_INVIARE_LABEL,
-    stato_interno_label,
-    ultima_rev_in_attesa,
-)
+from .services.situazione_cella_vendor import colori_cella_vendor
+from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 
 logger = logging.getLogger(__name__)
 
@@ -1634,11 +1630,6 @@ def _paint_xlsx_cell(cell, bg, fg, *, bold=False):
     cell.font = Font(color=fg or None, bold=bold)
 
 
-def _paint_xlsx_status_cell(cell, rev, *, bold=False):
-    """Fill ``cell`` with the client-response colors of ``rev``, as in the UI."""
-    _paint_xlsx_cell(cell, rev.get("ext_status_bg"), rev.get("ext_status_fg"), bold=bold)
-
-
 # Fixed columns of the vista orizzontale, same order as the UI table.
 _SITUAZIONE_ORIZZONTALE_FIXED = [
     ("Client Doc N°", "client_doc_no"),
@@ -1655,9 +1646,9 @@ _SITUAZIONE_REV_SUB = ["Dispatch", "Received", "Status"]
 def _export_situazione_orizzontale_xlsx(job, payload):
     """Excel of the vista orizzontale: one row per document, columns per revision.
 
-    B&R Doc takes the color of the latest client response — or the «inviato al
-    cliente» yellow when the latest revision is still unanswered — and each
-    Status cell the color of its own revision (same pairs as the UI and the PDF).
+    Solo la cella B&R Doc è colorata, con l'ultimo stato del documento come a
+    schermo e nel PDF (vedi services/situazione_cella_vendor.py); le celle
+    Status riportano la lettera della risposta senza colore.
     """
     from .date_fmt import format_display_date
 
@@ -1676,7 +1667,6 @@ def _export_situazione_orizzontale_xlsx(job, payload):
     fixed = _SITUAZIONE_ORIZZONTALE_FIXED
     rev_sub = _SITUAZIONE_REV_SUB
     leaf_headers = [label for label, _ in fixed] + _SITUAZIONE_PLAN_SUB + rev_sub * max_revs
-    first_rev_col = len(fixed) + len(_SITUAZIONE_PLAN_SUB) + 1
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1735,19 +1725,12 @@ def _export_situazione_orizzontale_xlsx(job, payload):
                 wrap=col_idx == title_col,
             )
 
-        # Come a schermo: l'ultima revisione partita e senza risposta tinge la
-        # cella B&R Doc del giallo dell'«inviato al cliente».
-        if ultima_rev_in_attesa(revs):
-            inviato = inviato_cell_colors()
-            _paint_xlsx_cell(ws.cell(row=row_idx, column=vendor_col), inviato["bg"], inviato["fg"])
-        else:
-            latest = next((rev for rev in reversed(revs) if rev.get("ext_status_bg")), None)
-            if latest:
-                _paint_xlsx_status_cell(ws.cell(row=row_idx, column=vendor_col), latest)
-        for r, rev in enumerate(revs):
-            if (rev.get("ext_status_label") or "").strip():
-                status_cell = ws.cell(row=row_idx, column=first_rev_col + r * len(rev_sub) + 2)
-                _paint_xlsx_status_cell(status_cell, rev, bold=True)
+        vendor_colors = colori_cella_vendor(revs)
+        _paint_xlsx_cell(
+            ws.cell(row=row_idx, column=vendor_col),
+            vendor_colors["bg"],
+            vendor_colors["fg"],
+        )
         row_idx += 1
 
     _autosize_xlsx_columns(ws, leaf_headers, data_start_row=3)
