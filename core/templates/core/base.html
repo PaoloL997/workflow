@@ -699,30 +699,59 @@
       document.getElementById('spotlight-overlay').classList.remove('open');
     }
 
+    function renderCommesseResults(commesse) {
+      const results = document.getElementById('spotlight-results');
+      if (!commesse.length) {
+        results.innerHTML = '<div class="spotlight-empty">Nessun risultato trovato.</div>';
+        return;
+      }
+      results.innerHTML = commesse.slice(0, 8).map(c => `
+        <a class="spotlight-result-item" href="/commesse/${encodeURIComponent(c.job)}/"
+           role="option" onclick="closeSpotlight()"
+           aria-label="${escHtml(c.job)} — ${escHtml(c.client || '')}">
+          <div class="spotlight-result-left">
+            <span class="spotlight-result-job">${escHtml(c.job)}</span>
+            <span class="spotlight-result-client">${escHtml(c.client || '—')}</span>
+            ${c.job_detail ? `<span class="spotlight-result-detail">${escHtml(c.job_detail)}</span>` : ''}
+          </div>
+          <span class="spotlight-result-date">${formatDate(c.delivery_date)}</span>
+        </a>
+      `).join('');
+    }
+
+    async function fetchCommesse(q) {
+      const res = await fetch(`/api/commesse/?q=${encodeURIComponent(q)}`);
+      if (!res.ok) throw new Error();
+      const { commesse } = await res.json();
+      return commesse;
+    }
+
     async function searchCommesse(q) {
       const results = document.getElementById('spotlight-results');
       if (!q.trim()) { results.innerHTML = ''; return; }
       results.innerHTML = '<div class="spotlight-empty">Ricerca…</div>';
       try {
-        const res = await fetch(`/api/commesse/?q=${encodeURIComponent(q)}`);
-        if (!res.ok) throw new Error();
-        const { commesse } = await res.json();
-        if (!commesse.length) {
-          results.innerHTML = '<div class="spotlight-empty">Nessun risultato trovato.</div>';
+        renderCommesseResults(await fetchCommesse(q));
+      } catch {
+        results.innerHTML = '<div class="spotlight-empty">Errore durante la ricerca.</div>';
+      }
+    }
+
+    /* Invio: se il testo è il codice completo di una commessa, apre subito la sua pagina. */
+    async function apriCommessaDaRicerca(q) {
+      const job = q.trim();
+      const results = document.getElementById('spotlight-results');
+      if (!job) return;
+      results.innerHTML = '<div class="spotlight-empty">Ricerca…</div>';
+      try {
+        const commesse = await fetchCommesse(job);
+        const match = commesse.find(c => String(c.job ?? '').trim().toLowerCase() === job.toLowerCase());
+        if (match) {
+          closeSpotlight();
+          window.location.href = `/commesse/${encodeURIComponent(match.job)}/`;
           return;
         }
-        results.innerHTML = commesse.slice(0, 8).map(c => `
-          <a class="spotlight-result-item" href="/commesse/${encodeURIComponent(c.job)}/"
-             role="option" onclick="closeSpotlight()"
-             aria-label="${escHtml(c.job)} — ${escHtml(c.client || '')}">
-            <div class="spotlight-result-left">
-              <span class="spotlight-result-job">${escHtml(c.job)}</span>
-              <span class="spotlight-result-client">${escHtml(c.client || '—')}</span>
-              ${c.job_detail ? `<span class="spotlight-result-detail">${escHtml(c.job_detail)}</span>` : ''}
-            </div>
-            <span class="spotlight-result-date">${formatDate(c.delivery_date)}</span>
-          </a>
-        `).join('');
+        renderCommesseResults(commesse);
       } catch {
         results.innerHTML = '<div class="spotlight-empty">Errore durante la ricerca.</div>';
       }
@@ -731,6 +760,13 @@
     document.getElementById('spotlight-input').addEventListener('input', e => {
       clearTimeout(_searchTimer);
       _searchTimer = setTimeout(() => searchCommesse(e.target.value), 280);
+    });
+
+    document.getElementById('spotlight-input').addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      clearTimeout(_searchTimer);
+      apriCommessaDaRicerca(e.target.value);
     });
 
     document.getElementById('spotlight-overlay').addEventListener('click', e => {
