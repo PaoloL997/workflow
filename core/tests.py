@@ -40,6 +40,7 @@ from .models import (
     TipoSegnalazione,
     Transmittal,
 )
+from .page_title import format_commessa_page_title
 from .services import scheduler
 from .services.bc_sync import (
     BusinessCentralNonDisponibile,
@@ -95,6 +96,7 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
+from .templatetags.page_title_extras import commessa_title
 
 User = get_user_model()
 
@@ -4368,3 +4370,66 @@ class FirmaUtenteTests(TestCase):
         pagina = self.client.get("/profilo/").content.decode()
         self.assertIn("Nessuna immagine di firma caricata.", pagina)
         self.assertNotIn("firma digitale", pagina.lower())
+
+
+class TitoloPaginaCommessaTests(SimpleTestCase):
+    """Nel titolo della pagina la commessa si legge dal numero, non dalla parola."""
+
+    def test_la_pagina_della_commessa_mostra_solo_il_numero(self):
+        self.assertEqual(format_commessa_page_title("25056"), "25056")
+
+    def test_le_sezioni_hanno_il_numero_davanti_al_nome(self):
+        self.assertEqual(
+            format_commessa_page_title("25056", "Lista documenti"),
+            "25056 · Lista documenti",
+        )
+
+    def test_senza_numero_resta_il_nome_della_sezione(self):
+        self.assertEqual(format_commessa_page_title("", "Archivio"), "Archivio")
+        self.assertEqual(format_commessa_page_title(None), "Commessa")
+        self.assertEqual(format_commessa_page_title("   "), "Commessa")
+
+    def test_il_tag_legge_il_numero_da_testata_dizionario_o_stringa(self):
+        self.assertEqual(commessa_title(Testata(job="26010")), "26010")
+        self.assertEqual(commessa_title({"job": "26010"}, "Archivio"), "26010 · Archivio")
+        self.assertEqual(commessa_title("26010"), "26010")
+        self.assertEqual(commessa_title(None, "Archivio"), "Archivio")
+
+
+class TitoloPaginaCommessaViewTests(TestCase):
+    """Le pagine della commessa portano il numero nel nome che compare in alto."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "titolo_user",
+            "titolo@brembanarolle.com",
+            "pw",
+            permesso=Permesso.READING,
+        )
+        self.client.force_login(self.user)
+        self.testata = Testata.objects.create(job="26042", client="Cliente Titolo")
+
+    def test_ogni_pagina_della_commessa_ha_il_numero_nel_titolo(self):
+        job = self.testata.job
+        attesi = {
+            "": job,
+            "documenti/": f"{job} · Lista documenti",
+            "archivio/": f"{job} · Archivio",
+            "emissione/": f"{job} · Gestisci emissione",
+            "ricezione/": f"{job} · Gestisci ricezione",
+            "situazione/": f"{job} · Situazione documenti",
+        }
+        for sezione, titolo in attesi.items():
+            with self.subTest(sezione=sezione or "commessa"):
+                response = self.client.get(f"/commesse/{job}/{sezione}")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, f"<title>{titolo}</title>")
+                self.assertNotContains(response, "<title>Commessa</title>")
+
+    def test_fuori_dalla_commessa_il_titolo_non_cambia(self):
+        response = self.client.get("/commesse/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "<title>Elenco Commesse</title>")
