@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-24
+
 ### Added
 
 - Situazione documenti: nella barra in alto c'è un controllo nuovo per ogni vista. In **orizzontale**, dove una riga è un documento, *Filtra per risposta del cliente* tiene i documenti in base a come sta l'ultima revisione, a spunte multiple: ci sono le risposte del cliente in uso più *Inviato al Cliente* e *Da inviare*, così si includono o si escludono in un colpo solo quelli in attesa di risposta e quelli mai inviati; ogni voce porta il quadratino del colore che si vede nella colonna B&R Doc. In **verticale**, dove una riga è una revisione, c'è *Mostra solo ultima revisione*, che riduce la tabella a una riga per documento; per la risposta del cliente resta il filtro sulla colonna *Client response*, che guarda la singola revisione
