@@ -1373,6 +1373,18 @@
     return { bg, fg };
   }
 
+  /* Giallo dell'«inviato al cliente»: lo prende la cella B&R Doc quando
+     l'ultima revisione è partita e il cliente non ha ancora risposto. I valori
+     arrivano dal payload della situazione (services/stato_esterno_colori.py);
+     qui resta solo il fallback. */
+  let SENT_CELL = { bg: '#F4C325', fg: '#111111', label: 'Inviato al Cliente' };
+
+  function isSentAwaitingReply(rev) {
+    if (!rev) return false;
+    if ((rev.ext_status_label || '').trim()) return false;
+    return intStatusCode(rev) === 'inviato_al_cliente';
+  }
+
   function extCellStyleVars(colors) {
     return `--sit-status-bg:${escHtml(colors.bg)};--sit-status-fg:${escHtml(colors.fg)};`;
   }
@@ -1392,8 +1404,14 @@
     return `color-mix(in srgb, ${escHtml(color)} var(--status-tint-strong-pct, var(--status-tint-pct)), var(--color-surface))`;
   }
 
+  // Colore della cella B&R Doc: se l'ultima revisione è partita e non ha ancora
+  // risposta vince il giallo dell'«inviato al cliente», altrimenti si usa il
+  // colore dell'ultima risposta arrivata.
   function latestExtStatusMeta(revs) {
     if (!revs || !revs.length) return { bg: '', fg: '', label: '' };
+    if (isSentAwaitingReply(revs[revs.length - 1])) {
+      return { bg: SENT_CELL.bg, fg: SENT_CELL.fg, label: SENT_CELL.label, sent: true };
+    }
     for (let i = revs.length - 1; i >= 0; i--) {
       const color = (revs[i].ext_status_bg || revs[i].ext_status_colore || '').trim();
       if (color) {
@@ -1991,6 +2009,13 @@
       if (typeof data.rev_let_flag === 'boolean') {
         REV_LET_FLAG = data.rev_let_flag;
       }
+      if (data.inviato_cell && data.inviato_cell.bg) {
+        SENT_CELL = {
+          bg: data.inviato_cell.bg,
+          fg: data.inviato_cell.fg || readableTextColor(data.inviato_cell.bg),
+          label: data.inviato_cell.label || SENT_CELL.label,
+        };
+      }
       _allDocs = data.documenti || [];
       _allDocs.sort((a, b) =>
         (a.vendor_doc || '').localeCompare(b.vendor_doc || '', undefined, { numeric: true, sensitivity: 'base' }));
@@ -2051,7 +2076,9 @@
     const el = document.getElementById('sit-ext-legend');
     if (!el) return;
     const byLabel = new Map();
+    let hasSent = false;
     for (const { revs } of docRevs || []) {
+      if (latestExtStatusMeta(revs).sent) hasSent = true;
       for (const rev of revs || []) {
         const label = (rev.ext_status_label || '').trim();
         const color = (rev.ext_status_bg || rev.ext_status_colore || '').trim();
@@ -2060,12 +2087,17 @@
         byLabel.set(label, { ...extCellColors(rev), letter });
       }
     }
-    if (!byLabel.size) {
+    if (!byLabel.size && !hasSent) {
       hideExtLegend();
       return;
     }
     const items = [...byLabel.entries()].sort((a, b) =>
       a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }));
+    // In fondo la voce del giallo «inviato al cliente»: non è una risposta del
+    // cliente, quindi non ha lettera e resta fuori dall'ordinamento.
+    if (hasSent) {
+      items.push([SENT_CELL.label, { bg: SENT_CELL.bg, fg: SENT_CELL.fg, letter: '' }]);
+    }
     el.innerHTML = items.map(([label, meta]) => {
       // Il riquadro ripete esattamente la cella: stesso colore, stessa lettera.
       const swatchStyle = `background:${escHtml(meta.bg)};color:${escHtml(meta.fg)}`;

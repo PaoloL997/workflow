@@ -103,7 +103,12 @@ from .services.segnalazioni import (
     riapri_segnalazione,
     set_voto,
 )
-from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
+from .services.stato_esterno_colori import inviato_cell_colors
+from .services.stato_interno import (
+    DA_INVIARE_LABEL,
+    stato_interno_label,
+    ultima_rev_in_attesa,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1619,14 +1624,19 @@ def _export_situazione_verticale_xlsx(job, payload):
     return _xlsx_response(wb, f"situazione_documenti_verticale_{safe_job}.xlsx")
 
 
-def _paint_xlsx_status_cell(cell, rev, *, bold=False):
-    """Fill ``cell`` with the client-response colors of ``rev``, as in the UI."""
-    bg = (rev.get("ext_status_bg") or "").lstrip("#")
-    fg = (rev.get("ext_status_fg") or "").lstrip("#")
+def _paint_xlsx_cell(cell, bg, fg, *, bold=False):
+    """Fill ``cell`` with a ``#RRGGBB`` background and its readable text color."""
+    bg = (bg or "").lstrip("#")
+    fg = (fg or "").lstrip("#")
     if not bg:
         return
     cell.fill = PatternFill(start_color=bg, end_color=bg, fill_type="solid")
     cell.font = Font(color=fg or None, bold=bold)
+
+
+def _paint_xlsx_status_cell(cell, rev, *, bold=False):
+    """Fill ``cell`` with the client-response colors of ``rev``, as in the UI."""
+    _paint_xlsx_cell(cell, rev.get("ext_status_bg"), rev.get("ext_status_fg"), bold=bold)
 
 
 # Fixed columns of the vista orizzontale, same order as the UI table.
@@ -1645,8 +1655,9 @@ _SITUAZIONE_REV_SUB = ["Dispatch", "Received", "Status"]
 def _export_situazione_orizzontale_xlsx(job, payload):
     """Excel of the vista orizzontale: one row per document, columns per revision.
 
-    B&R Doc takes the color of the latest client response, each Status cell the
-    color of its own revision (same pairs as the UI and the PDF).
+    B&R Doc takes the color of the latest client response — or the «inviato al
+    cliente» yellow when the latest revision is still unanswered — and each
+    Status cell the color of its own revision (same pairs as the UI and the PDF).
     """
     from .date_fmt import format_display_date
 
@@ -1724,9 +1735,15 @@ def _export_situazione_orizzontale_xlsx(job, payload):
                 wrap=col_idx == title_col,
             )
 
-        latest = next((rev for rev in reversed(revs) if rev.get("ext_status_bg")), None)
-        if latest:
-            _paint_xlsx_status_cell(ws.cell(row=row_idx, column=vendor_col), latest)
+        # Come a schermo: l'ultima revisione partita e senza risposta tinge la
+        # cella B&R Doc del giallo dell'«inviato al cliente».
+        if ultima_rev_in_attesa(revs):
+            inviato = inviato_cell_colors()
+            _paint_xlsx_cell(ws.cell(row=row_idx, column=vendor_col), inviato["bg"], inviato["fg"])
+        else:
+            latest = next((rev for rev in reversed(revs) if rev.get("ext_status_bg")), None)
+            if latest:
+                _paint_xlsx_status_cell(ws.cell(row=row_idx, column=vendor_col), latest)
         for r, rev in enumerate(revs):
             if (rev.get("ext_status_label") or "").strip():
                 status_cell = ws.cell(row=row_idx, column=first_rev_col + r * len(rev_sub) + 2)

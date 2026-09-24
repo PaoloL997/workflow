@@ -86,6 +86,7 @@ from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indic
 from .services.stato_esterno_codes import DEFAULT_STATUS_COLORS, letter_for_status_name
 from .services.stato_esterno_colori import (
     FALLBACK_BG,
+    INVIATO_BG,
     MIN_CONTRAST,
     TEXT_DARK,
     TEXT_LIGHT,
@@ -96,6 +97,7 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
+from .services.stato_interno import ultima_rev_in_attesa
 from .templatetags.page_title_extras import commessa_title
 
 User = get_user_model()
@@ -3569,6 +3571,74 @@ class ColoriRisposteClienteApiTests(TestCase):
         self.assertEqual(_status_cell_rgb("#D61D09"), ((214, 29, 9), hex_to_rgb(TEXT_LIGHT)))
         self.assertIsNone(_status_cell_rgb(""))
 
+    def test_situazione_api_porta_i_colori_dell_inviato_al_cliente(self):
+        response = self.client.get(f"/api/commesse/{self.testata.job}/situazione/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["inviato_cell"],
+            {"bg": INVIATO_BG, "fg": TEXT_DARK, "label": "Inviato al Cliente"},
+        )
+
+
+class CellaVendorDocInAttesaTests(TestCase):
+    """Cella B&R Doc: giallo quando l'ultima revisione attende risposta."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="ATT01")
+        self.doc = Documento.objects.create(
+            testata=self.testata, item_no="001", vendor_doc="ATT01-01"
+        )
+        self.commented = StatoEsterno.objects.create(
+            nome="Commented", lettera="C", colore="#D61D09"
+        )
+
+    def _revs(self):
+        return [
+            serialize_revisione(r)
+            for r in self.doc.revisioni.select_related("ext_status").order_by("rev_no")
+        ]
+
+    def test_ultima_revisione_inviata_senza_risposta(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
+        Revisione.objects.create(documento=self.doc, rev_no=1, dis_act_date=date(2026, 2, 1))
+        self.assertTrue(ultima_rev_in_attesa(self._revs()))
+
+    def test_ultima_revisione_con_risposta_non_e_in_attesa(self):
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
+        self.assertFalse(ultima_rev_in_attesa(self._revs()))
+
+    def test_revisione_mai_inviata_non_e_in_attesa(self):
+        Revisione.objects.create(documento=self.doc, rev_no=0)
+        self.assertFalse(ultima_rev_in_attesa(self._revs()))
+        self.assertFalse(ultima_rev_in_attesa([]))
+
+    def test_pdf_usa_il_giallo_per_la_cella_vendor(self):
+        from src.pdf import _vendor_doc_cell_color
+
+        Revisione.objects.create(
+            documento=self.doc,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
+        self.assertEqual(_vendor_doc_cell_color(self._revs()), "#D61D09")
+
+        Revisione.objects.create(documento=self.doc, rev_no=1, dis_act_date=date(2026, 2, 1))
+        self.assertEqual(_vendor_doc_cell_color(self._revs()), INVIATO_BG)
+
 
 class SituazioneOrizzontaleXlsxTests(TestCase):
     """L'Excel della vista orizzontale riproduce la tabella a schermo."""
@@ -3660,8 +3730,17 @@ class SituazioneOrizzontaleXlsxTests(TestCase):
         self.assertEqual(ws.cell(row, col - 1).value, format_display_date(date(2026, 3, 1)))
 
     def test_b_r_doc_e_status_hanno_il_colore_della_risposta(self):
+        # Ultima revisione già rientrata: la cella B&R Doc segue quella risposta.
+        doc = Documento.objects.create(testata=self.testata, item_no="003", vendor_doc="SITXLS1-03")
+        Revisione.objects.create(
+            documento=doc,
+            rev_no=0,
+            dis_act_date=date(2026, 1, 10),
+            rec_act_date=date(2026, 1, 20),
+            ext_status=self.commented,
+        )
         ws = self._foglio()
-        row = self._riga(ws, "SITXLS1-01")
+        row = self._riga(ws, "SITXLS1-03")
         intestazioni = [c.value for c in ws[1]]
         vendor = ws.cell(row, intestazioni.index("B&R Doc") + 1)
         status_rev0 = ws.cell(row, intestazioni.index("Rev. 0") + 3)
@@ -3674,6 +3753,18 @@ class SituazioneOrizzontaleXlsxTests(TestCase):
 
         senza_revisioni = ws.cell(self._riga(ws, "SITXLS1-02"), intestazioni.index("B&R Doc") + 1)
         self.assertIsNone(senza_revisioni.fill.fill_type)
+
+    def test_b_r_doc_giallo_se_l_ultima_revisione_attende_risposta(self):
+        ws = self._foglio()
+        row = self._riga(ws, "SITXLS1-01")
+        intestazioni = [c.value for c in ws[1]]
+        vendor = ws.cell(row, intestazioni.index("B&R Doc") + 1)
+        status_rev1 = ws.cell(row, intestazioni.index("Rev. 1") + 3)
+        # La Rev. 1 è partita e non ha risposta: vince il giallo dell'inviato al
+        # cliente, non il rosso della risposta arrivata sulla Rev. 0.
+        self.assertEqual(vendor.fill.fgColor.rgb[-6:], INVIATO_BG.lstrip("#"))
+        self.assertEqual(vendor.font.color.rgb[-6:], TEXT_DARK.lstrip("#"))
+        self.assertIsNone(status_rev1.fill.fill_type)
 
     def test_la_pagina_apre_il_menu_excel_pdf_in_ogni_vista(self):
         response = self.client.get(f"/commesse/{self.testata.job}/situazione/")

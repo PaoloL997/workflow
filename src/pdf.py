@@ -12,9 +12,18 @@ from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
 from core.services.revisione_label import format_revisione_label
-from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
+from core.services.stato_esterno_colori import (
+    FALLBACK_BG,
+    INVIATO_BG,
+    cell_colors,
+    hex_to_rgb,
+)
 from core.services.stato_esterno_legenda import legenda_stati_esterni
-from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
+from core.services.stato_interno import (
+    DA_INVIARE_LABEL,
+    stato_interno_label,
+    ultima_rev_in_attesa,
+)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
@@ -1328,6 +1337,18 @@ def _latest_ext_status_color(revs: list) -> str:
     return ""
 
 
+def _vendor_doc_cell_color(revs: list) -> str:
+    """Hex color of the B&R Doc cell, as in the vista orizzontale on screen.
+
+    Il giallo dell'«inviato al cliente» quando l'ultima revisione è partita e
+    il cliente non ha ancora risposto, altrimenti il colore dell'ultima
+    risposta arrivata.
+    """
+    if ultima_rev_in_attesa(revs):
+        return INVIATO_BG
+    return _latest_ext_status_color(revs)
+
+
 def _is_iso_overdue(iso) -> bool:
     """True when ``iso`` (YYYY-MM-DD…) is strictly before today."""
     if not iso:
@@ -1448,7 +1469,7 @@ def _build_situazione_table(
         if pdf.get_y() + row_h > bottom_limit:
             pdf.add_page()
         cells = _situazione_row_values(doc, revs, max_revs, active_fixed)
-        vendor_colors = _status_cell_rgb(_latest_ext_status_color(revs))
+        vendor_colors = _status_cell_rgb(_vendor_doc_cell_color(revs))
         x = table_x0
         y = pdf.get_y()
         for i, ((text, overdue), w) in enumerate(zip(cells, widths)):

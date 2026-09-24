@@ -14,6 +14,12 @@ TEXT_DARK = "#111111"
 # Usato quando lo stato esterno non ha un colore (o ne ha uno non valido).
 FALLBACK_BG = "#9E9E9E"
 
+# Giallo dell'«inviato al cliente»: nella vista orizzontale la cella B&R Doc lo
+# usa quando l'ultima revisione è partita e il cliente non ha ancora risposto,
+# al posto del colore dell'ultima risposta ricevuta. Uguale a schermo, in Excel
+# e nel PDF.
+INVIATO_BG = "#F4C325"
+
 # Contrasto minimo WCAG AA per testo normale.
 MIN_CONTRAST = 4.5
 
@@ -105,3 +111,8 @@ def cell_colors(colore) -> dict:
         amount = min(amount + _ADJUST_STEP, _MAX_ADJUST)
         fondo = _blend(rgb, target, amount)
     return {"bg": rgb_to_hex(fondo), "fg": testo}
+
+
+def inviato_cell_colors() -> dict:
+    """``{"bg", "fg"}`` della cella «inviato al cliente, in attesa di risposta»."""
+    return cell_colors(INVIATO_BG)

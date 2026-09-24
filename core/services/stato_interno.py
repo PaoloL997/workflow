@@ -59,3 +59,27 @@ def stato_interno_effettivo_da_revisione(rev) -> str:
         rec_act_date=rev.rec_act_date,
         ha_risposta_cliente=bool(rev.ext_status_id),
     )
+
+
+def in_attesa_di_risposta(rev) -> bool:
+    """True when a serialized revision is sent to the client and still unanswered.
+
+    ``rev`` è una revisione serializzata (``serialize_revisione``): la risposta
+    del cliente manca e lo stato interno effettivo è «inviato al cliente».
+    """
+    if not rev:
+        return False
+    if (rev.get("ext_status_label") or "").strip():
+        return False
+    code = (rev.get("int_status_eff") or rev.get("int_status") or "").strip()
+    return code == INVIATO
+
+
+def ultima_rev_in_attesa(revs) -> bool:
+    """True when the document's latest revision is sent and still unanswered.
+
+    È il caso in cui la cella B&R Doc della vista orizzontale prende il giallo
+    dell'«inviato al cliente» invece del colore dell'ultima risposta.
+    """
+    revs = list(revs or [])
+    return bool(revs) and in_attesa_di_risposta(revs[-1])

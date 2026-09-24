@@ -18,7 +18,7 @@ from ..models import (
     Testata,
 )
 from .revisione_label import format_revisione_label
-from .stato_esterno_colori import cell_colors
+from .stato_esterno_colori import cell_colors, inviato_cell_colors
 from .stato_interno import (
     INVIATO,
     stato_interno_effettivo,
@@ -411,6 +411,12 @@ def list_situazione(job: str) -> dict:
         "documenti": list_documenti(job),
         "revisioni_by_doc": revisioni_by_doc_for_job(job),
         "rev_let_flag": t.rev_let_flag,
+        # Colori della cella B&R Doc quando l'ultima revisione è partita e il
+        # cliente non ha ancora risposto (vista orizzontale e sua legenda).
+        "inviato_cell": {
+            **inviato_cell_colors(),
+            "label": stato_interno_label(INVIATO),
+        },
     }
 
 
