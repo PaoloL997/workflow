@@ -236,10 +236,12 @@ class Testata(models.Model):
         help_text="Giorni a nostra disposizione per emettere/revisionare un documento.",
     )
     rev_let_flag = models.BooleanField(db_column="RevLetFlag", default=False)
-    # Non sincronizzato automaticamente da Business Central (NBT_BRL Location
-    # Code, vedi src.erp.business_central.get_commessa_codice_sito): impostato
-    # a mano finché non esiste una sync dedicata. Prerequisito per il
-    # trasmittal interno, che deve sapere dove viene costruita la commessa.
+    # Letto da Business Central (NBT_BRL Location Code, vedi
+    # src.erp.business_central.get_commessa_codice_sito) alla creazione della
+    # commessa e dal sync giornaliero, solo se ancora vuoto: un valore già
+    # presente, anche impostato a mano da admin, non viene mai sovrascritto
+    # (vedi core.services.bc_sync.sincronizza_sito_costruttivo). Prerequisito
+    # per il trasmittal interno, che deve sapere dove viene costruita la commessa.
     sito_costruttivo = models.ForeignKey(
         Stabilimento,
         on_delete=models.PROTECT,

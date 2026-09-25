@@ -897,7 +897,7 @@
       ? '<a href="/admin/core/firmatariostabilimento/add/" target="_blank" rel="noopener">aggiungila da Admin</a>'
       : 'chiedi a un amministratore di registrarla da <strong>Admin → Firmatario stabilimento</strong>';
     document.getElementById('info-firme-body').innerHTML =
-      '<p class="ti-info-intro">Le firme di Produzione e Qualità nel PDF compaiono automaticamente solo se sono vere entrambe le condizioni:</p>'
+      '<p class="ti-info-intro">Le firme di Produzione e Qualità nel PDF compaiono automaticamente solo se sono vere entrambe queste condizioni:</p>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">1</div>'
       + '<div class="ti-info-step-text">La persona ha caricato la propria firma nella <a href="/profilo/">pagina profilo</a>.</div>'
@@ -908,7 +908,7 @@
       + '</div>'
       + '<div class="ti-info-callout">'
       + '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>'
-      + '<span>Se manca anche solo una delle due, nel PDF non compare né l\'immagine né il riquadro vuoto da firmare a mano.</span>'
+      + '<span>Se la persona è registrata come firmatario ma non ha caricato la firma, nel PDF compare un riquadro vuoto da firmare a mano. Se non è registrata come firmatario, per quel ruolo non compare nulla.</span>'
       + '</div>';
     document.getElementById('info-firme-modal').classList.add('open');
   };
