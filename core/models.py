@@ -221,7 +221,7 @@ class Testata(models.Model):
     actual_delivery_date = models.DateField(db_column="ActualDeliveryDate", blank=True, null=True)
     delivery_term = models.CharField(db_column="DeliveryTerm", max_length=200, blank=True)
     requisition = models.CharField(
-        db_column="Requisition", max_length=100, blank=True, verbose_name="Bid no."
+        db_column="Requisition", max_length=300, blank=True, verbose_name="Bid no."
     )
     time_cli_doc_rev = models.IntegerField(
         db_column="TimeCliDocRev",

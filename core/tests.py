@@ -3940,6 +3940,19 @@ class ImportOldTests(TestCase):
         self.assertIsNotNone(rev.ext_status)
 
     @patch("core.services.import_old.fetch_commessa_frames")
+    def test_import_accetta_requisition_lunga(self, mock_fetch):
+        """Regressione: Access può avere Requisition oltre i 100 caratteri
+        storici del campo (es. due bid concatenate); il limite è 300."""
+        frames = self._frames()
+        requisition_lunga = "TECHNICAL REQUISITION FOR TRIM COOLERS 21- HA-104/204 " * 3
+        self.assertGreater(len(requisition_lunga), 100)
+        frames["testata"].loc[0, "Requisition"] = requisition_lunga
+        mock_fetch.return_value = frames
+        importa_commessa_da_access("99999")
+        testata = Testata.objects.get(job="99999")
+        self.assertEqual(testata.requisition, requisition_lunga.strip())
+
+    @patch("core.services.import_old.fetch_commessa_frames")
     def test_import_excludes_orphan_after_approved(self, mock_fetch):
         StatoEsterno.objects.create(nome="Approved", colore="#00B050", crea_nuova_rev=False)
         frames = self._frames()

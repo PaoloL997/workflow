@@ -45,6 +45,9 @@ Thumbs.db
 # Project specific
 /code_template/
 
+# Local DB/env backups (dump/.env snapshots, may contain credentials)
+/backups/
+
 # Test / coverage
 .coverage
 htmlcov/
