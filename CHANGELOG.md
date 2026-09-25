@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Import commessa da Access: il campo Requisition ("Bid no.") passa da 100 a 300 caratteri. Alcune commesse hanno in Access una Requisition più lunga del vecchio limite (es. due bid concatenate) e l'importazione falliva con un errore generico di troncamento
+
 ## [0.1.5] - 2026-09-24
 
 ### Added
