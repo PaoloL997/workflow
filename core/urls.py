@@ -97,6 +97,12 @@ urlpatterns = [
         views.persona_commessa_risolvi_api,
         name="persona_commessa_risolvi_api",
     ),
+    # API — Archivio: sincronizzazione manuale da Business Central
+    path(
+        "api/commesse/<str:job>/archivio/bc-sync/",
+        views.archivio_bc_sync_api,
+        name="archivio_bc_sync_api",
+    ),
     # API — Indirizzi di spedizione
     path("api/commesse/<str:job>/indirizzi/", views.indirizzi_api, name="indirizzi_api"),
     path("api/indirizzi/<int:pk>/", views.indirizzo_api_detail, name="indirizzo_api_detail"),

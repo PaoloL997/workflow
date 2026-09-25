@@ -7503,6 +7503,109 @@ class SincronizzazioneBusinessCentralTests(TestCase):
         bc.close.assert_not_called()
 
 
+class ArchivioBcSyncApiTest(TestCase):
+    """Pulsante "Aggiorna da BC" nella pagina Informazioni archivio."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(
+            job="26010",
+            client="Cliente Vecchio",
+            po_no="PO-1",
+            job_detail="Descrizione vecchia",
+            delivery_date=date(2026, 1, 10),
+        )
+        self.writer = User.objects.create_user(
+            "writer_bcsync", "writer_bcsync@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.reader = User.objects.create_user(
+            "reader_bcsync", "reader_bcsync@example.com", "pw", permesso=Permesso.READING
+        )
+        self.client = Client()
+        self.client.force_login(self.writer)
+
+    def _attiva_bc(self, dati_per_job, conn=True):
+        fake = _FakeBusinessCentral(dati_per_job, conn=conn)
+        connessione = patch("core.services.bc_sync._apri_connessione", return_value=fake)
+        lettura = patch(
+            "core.services.bc_sync.fetch_from_bc",
+            side_effect=lambda job, bc=None: bc.dati_commessa(job),
+        )
+        connessione.start()
+        lettura.start()
+        self.addCleanup(connessione.stop)
+        self.addCleanup(lettura.stop)
+        return fake
+
+    def test_sincronizza_e_ritorna_gli_aggiornamenti(self):
+        self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["aggiornate"], 1)
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Nuovo")
+        self.assertEqual(
+            {a["campo"] for a in data["aggiornamenti_bc"]},
+            {"client"},
+        )
+
+    def test_nessuna_differenza_ritorna_lista_vuota(self):
+        self._attiva_bc({"26010": {"job": "26010"}})
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["aggiornate"], 0)
+        self.assertEqual(data["aggiornamenti_bc"], [])
+
+    def test_sincronizza_anche_commessa_chiusa(self):
+        self.testata.actual_delivery_date = date(2026, 2, 1)
+        self.testata.save(update_fields=["actual_delivery_date"])
+        self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["aggiornate"], 1)
+
+    def test_commessa_non_trovata_in_bc(self):
+        self._attiva_bc({})
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("error", response.json())
+
+    def test_bc_non_disponibile(self):
+        self._attiva_bc({"26010": {"job": "26010"}}, conn=False)
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 503)
+
+    def test_commessa_inesistente_404(self):
+        response = self.client.post("/api/commesse/NON-ESISTE/archivio/bc-sync/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.reader)
+        self._attiva_bc({"26010": {"job": "26010", "client": "Cliente Nuovo"}})
+
+        response = self.client.post("/api/commesse/26010/archivio/bc-sync/")
+
+        self.assertEqual(response.status_code, 403)
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.client, "Cliente Vecchio")
+
+    def test_get_non_ammesso(self):
+        response = self.client.get("/api/commesse/26010/archivio/bc-sync/")
+        self.assertEqual(response.status_code, 405)
+
+
 class _FakeBusinessCentralSito:
     """Connettore finto per get_commessa_codice_sito, per commessa.
 

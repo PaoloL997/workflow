@@ -39,7 +39,9 @@ from .models import (
     valida_immagine_firma,
 )
 from .permissions import api_write_required
+from .services.bc_sync import BusinessCentralNonDisponibile
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
+from .services.bc_sync import sincronizza_commesse
 from .services.commesse import (
     close_commessa,
     create_commessa,
@@ -363,6 +365,36 @@ def archivio_detail_view(request, job):
             "testata": testata,
             "aggiornamenti_bc": list_aggiornamenti_bc(job, limit=10),
         },
+    )
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def archivio_bc_sync_api(request, job):
+    try:
+        get_commessa(job)
+    except Testata.DoesNotExist:
+        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    try:
+        report = sincronizza_commesse(jobs=[job], includi_chiuse=True)
+    except BusinessCentralNonDisponibile as exc:
+        return JsonResponse({"error": str(exc)}, status=503)
+
+    if report["non_trovate"]:
+        return JsonResponse(
+            {"error": f'Commessa "{job}" non trovata in Business Central.'}, status=404
+        )
+    if report["errori"]:
+        return JsonResponse({"error": report["errori"][0]["errore"]}, status=502)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "aggiornate": report["aggiornate"],
+            "aggiornamenti_bc": list_aggiornamenti_bc(job, limit=10),
+        }
     )
 
 

@@ -501,6 +501,40 @@
     opacity: 0.7;
   }
 
+  .bc-sync-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+    flex-shrink: 0;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .bc-sync-btn:hover:not(:disabled) {
+    background: var(--color-accent);
+    color: #fff;
+    border-color: var(--color-accent);
+  }
+  .bc-sync-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .bc-sync-btn.spinning svg { animation: bc-spin 0.9s linear infinite; }
+  @keyframes bc-spin { to { transform: rotate(360deg); } }
+
+  .bc-sync-status {
+    display: block;
+    padding-top: 4px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    min-height: 16px;
+  }
+  .bc-sync-status.error { color: var(--color-danger); }
+
   @media (max-width: 600px) {
     .bc-row { flex-direction: column; align-items: flex-start; gap: 4px; }
     .bc-date, .bc-campo { width: auto; }
@@ -658,10 +692,17 @@
           <div class="arch-section-title">Aggiornamenti da Business Central</div>
           <div class="arch-section-subtitle">Modifiche applicate dal controllo giornaliero</div>
         </div>
+        <button class="bc-sync-btn" type="button" id="bc-sync-btn" onclick="sincronizzaBc()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M17.65 6.35A7.958 7.958 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+          </svg>
+          Aggiorna da BC
+        </button>
       </div>
       <div class="arch-section-body">
-        {% if aggiornamenti_bc %}
-        <div class="bc-list">
+        <span class="bc-sync-status" id="bc-sync-status"></span>
+        <div class="bc-list" id="bc-list">
+          {% if aggiornamenti_bc %}
           {% for agg in aggiornamenti_bc %}
           <div class="bc-row">
             <span class="bc-date">{{ agg.data }}</span>
@@ -671,10 +712,9 @@
             </span>
           </div>
           {% endfor %}
+          {% endif %}
         </div>
-        {% else %}
-        <div class="bc-empty">Nessun aggiornamento da Business Central: i dati sono allineati.</div>
-        {% endif %}
+        <div class="bc-empty" id="bc-empty" {% if aggiornamenti_bc %}hidden{% endif %}>Nessun aggiornamento da Business Central: i dati sono allineati.</div>
       </div>
     </div>
 
@@ -798,6 +838,70 @@
   }
 
   window.saveArchivioInfo = saveArchivioInfo;
+
+  /* ── Sincronizzazione manuale da Business Central ── */
+  function renderBcList(aggiornamenti) {
+    const list  = document.getElementById('bc-list');
+    const empty = document.getElementById('bc-empty');
+    if (!aggiornamenti.length) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+    empty.hidden = true;
+    list.innerHTML = aggiornamenti.map(function (agg) {
+      const precedente = agg.precedente || '—';
+      const nuovo = agg.nuovo || '—';
+      return '<div class="bc-row">'
+        + '<span class="bc-date">' + esc(agg.data) + '</span>'
+        + '<span class="bc-campo">' + esc(agg.etichetta) + '</span>'
+        + '<span class="bc-valori">' + esc(precedente) + ' → <span class="bc-nuovo">' + esc(nuovo) + '</span></span>'
+        + '</div>';
+    }).join('');
+  }
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s ?? '';
+    return d.innerHTML;
+  }
+
+  async function sincronizzaBc() {
+    if (!requireWrite()) return;
+    const btn = document.getElementById('bc-sync-btn');
+    const statusEl = document.getElementById('bc-sync-status');
+    btn.disabled = true;
+    btn.classList.add('spinning');
+    statusEl.className = 'bc-sync-status';
+    statusEl.textContent = 'Sincronizzazione con Business Central…';
+
+    try {
+      const res = await fetch(`/api/commesse/${encodeURIComponent(JOB)}/archivio/bc-sync/`, {
+        method:  'POST',
+        headers: { 'X-CSRFToken': CSRF },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (isPermissionDeniedResponse(res, data)) return;
+        statusEl.className = 'bc-sync-status error';
+        statusEl.textContent = data.error || 'Errore durante la sincronizzazione.';
+        return;
+      }
+      renderBcList(data.aggiornamenti_bc || []);
+      statusEl.textContent = data.aggiornate
+        ? `✓ ${data.aggiornate} camp${data.aggiornate === 1 ? 'o aggiornato' : 'i aggiornati'}`
+        : '✓ Nessuna modifica: i dati sono già allineati';
+      setTimeout(() => { statusEl.textContent = ''; }, 4000);
+    } catch {
+      statusEl.className = 'bc-sync-status error';
+      statusEl.textContent = 'Errore di rete.';
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('spinning');
+    }
+  }
+
+  window.sincronizzaBc = sincronizzaBc;
 
   /* ── Indirizzi ── */
   let _addrData      = [];

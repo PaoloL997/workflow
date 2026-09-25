@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Informazioni archivio: pulsante **Aggiorna da BC** accanto ad "Aggiornamenti da Business Central" per lanciare a mano il confronto con Business Central sulla singola commessa, senza aspettare il controllo giornaliero delle 17:00. Funziona anche sulle commesse già chiuse
+
 ### Fixed
 
 - Import commessa da Access: il campo Requisition ("Bid no.") passa da 100 a 300 caratteri. Alcune commesse hanno in Access una Requisition più lunga del vecchio limite (es. due bid concatenate) e l'importazione falliva con un errore generico di troncamento
