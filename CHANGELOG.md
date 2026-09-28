@@ -6,6 +6,7 @@
 
 - Informazioni archivio: pulsante **Aggiorna da BC** accanto ad "Aggiornamenti da Business Central" per lanciare a mano il confronto con Business Central sulla singola commessa, senza aspettare il controllo giornaliero delle 17:00. Funziona anche sulle commesse già chiuse
 - Informazioni archivio: nuovo campo **Sito costruttivo**, con la lista degli stabilimenti che hanno un codice sito Business Central. Serve a sbloccare il trasmittal interno quando Business Central non ha (o non ha ancora) il dato: fino ad ora l'unico modo per impostarlo era l'admin di Django
+- Trasmittal interno: le destinazioni cartacee dei documenti UT vengono precompilate automaticamente, ogni giorno insieme al controllo BC, dal vecchio file `<job>-RecipientsData.txt` sul fileserver quando presente. Tocca solo i documenti senza nessuna destinazione già registrata: una volta impostate (a mano o dall'import) non vengono più toccate. Comando manuale: `python manage.py import_destinazioni_ut` (opzioni `--job`, `--tutte`, `--dry-run`)
 
 ### Changed
 

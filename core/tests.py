@@ -126,6 +126,11 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
+from .services.recipients_import import (
+    importa_destinazioni_commessa,
+    importa_destinazioni_tutte_le_commesse,
+    leggi_recipients_data,
+)
 from .services.trasmittal_interno import (
     componi_nome,
     crea_trasmittal_interno,
@@ -1188,6 +1193,154 @@ class DestinazioneDocumentoTests(TestCase):
         risultato = siti_coinvolti([self.doc1, self.doc2])
 
         self.assertEqual([s.codice_bc for s in risultato], [1, 2, 3])
+
+
+class ImportDestinazioniUtTests(TestCase):
+    """Precompilazione delle destinazioni UT dal vecchio <job>-RecipientsData.txt."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
+
+        Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        Stabilimento.objects.create(nome="Marghera", sigla="VE", codice_bc=3)
+        Stabilimento.objects.create(nome="Ricengo", sigla="CR", codice_bc=4)
+        Stabilimento.objects.create(nome="Schio", sigla="VI", codice_bc=5)
+
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99070")
+        self.doc = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-01-ALFA", reparto=self.reparto_ut.nome
+        )
+
+    def _scrivi_file(self, job, contenuto):
+        cartella = Path(self.tmp) / job / "PROGETTO" / "UT" / "TRANSMITTAL"
+        cartella.mkdir(parents=True, exist_ok=True)
+        (cartella / f"{job}-RecipientsData.txt").write_text(contenuto, encoding="utf-8")
+
+    # -- leggi_recipients_data --
+
+    def test_file_assente_ritorna_none(self):
+        self.assertIsNone(leggi_recipients_data("99070"))
+
+    def test_parsing_righe_valide(self):
+        self._scrivi_file("99070", "99070-01-ALFA 11000\n99070-01-BETA 00001\n")
+
+        dati = leggi_recipients_data("99070")
+
+        self.assertEqual(dati, {"99070-01-ALFA": {1, 2}, "99070-01-BETA": {5}})
+
+    def test_righe_malformate_ignorate(self):
+        self._scrivi_file(
+            "99070",
+            "99070-01-ALFA 11000\n"
+            "riga senza bitmask\n"
+            "99070-01-BETA 999\n"  # non 5 cifre 0/1
+            "\n",  # riga vuota
+        )
+
+        dati = leggi_recipients_data("99070")
+
+        self.assertEqual(dati, {"99070-01-ALFA": {1, 2}})
+
+    # -- importa_destinazioni_commessa --
+
+    def test_precompila_un_documento_senza_destinazioni(self):
+        self._scrivi_file("99070", "99070-01-ALFA 10001\n")
+
+        esito = importa_destinazioni_commessa(self.testata)
+
+        self.assertTrue(esito["trovato"])
+        self.assertEqual(esito["precompilati"], ["99070-01-ALFA"])
+        self.assertEqual(esito["gia_impostati"], 0)
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc)], [1, 5])
+
+    def test_non_tocca_un_documento_gia_impostato(self):
+        imposta_destinazioni(self.doc, [3])  # corretto a mano, es. da mcielok
+        self._scrivi_file("99070", "99070-01-ALFA 11000\n")  # il vecchio file direbbe altro
+
+        esito = importa_destinazioni_commessa(self.testata)
+
+        self.assertEqual(esito["precompilati"], [])
+        self.assertEqual(esito["gia_impostati"], 1)
+        self.assertEqual([s.codice_bc for s in siti_del_documento(self.doc)], [3])
+
+    def test_vendor_doc_non_tra_i_documenti_ut_va_in_non_trovati(self):
+        self._scrivi_file("99070", "99070-01-ALFA 10000\n99070-01-INESISTENTE 01000\n")
+
+        esito = importa_destinazioni_commessa(self.testata)
+
+        self.assertEqual(esito["non_trovati"], ["99070-01-INESISTENTE"])
+
+    def test_dry_run_non_scrive_nulla(self):
+        self._scrivi_file("99070", "99070-01-ALFA 10001\n")
+
+        esito = importa_destinazioni_commessa(self.testata, dry_run=True)
+
+        self.assertEqual(esito["precompilati"], ["99070-01-ALFA"])
+        self.assertEqual(siti_del_documento(self.doc), [])
+
+    def test_file_senza_righe_valide_ritorna_trovato_ma_vuoto(self):
+        self._scrivi_file("99070", "riga non valida\n")
+
+        esito = importa_destinazioni_commessa(self.testata)
+
+        self.assertTrue(esito["trovato"])
+        self.assertEqual(esito["precompilati"], [])
+
+    # -- importa_destinazioni_tutte_le_commesse --
+
+    def test_aggrega_su_piu_commesse_e_salta_quelle_senza_file(self):
+        altra = Testata.objects.create(job="99071")
+        Documento.objects.create(
+            testata=altra, vendor_doc="99071-01-GAMMA", reparto=self.reparto_ut.nome
+        )
+        self._scrivi_file("99070", "99070-01-ALFA 10001\n")
+        # 99071 non ha il file: deve essere solo "controllata", non "con_file".
+
+        report = importa_destinazioni_tutte_le_commesse(jobs=["99070", "99071"])
+
+        self.assertEqual(report["controllate"], 2)
+        self.assertEqual(report["con_file"], 1)
+        self.assertEqual(report["precompilati"], 1)
+
+    def test_una_commessa_in_errore_non_ferma_le_altre(self):
+        altra = Testata.objects.create(job="99071")
+        Documento.objects.create(
+            testata=altra, vendor_doc="99071-01-GAMMA", reparto=self.reparto_ut.nome
+        )
+        self._scrivi_file("99070", "99070-01-ALFA 10001\n")
+        self._scrivi_file("99071", "99071-01-GAMMA 01000\n")
+
+        with patch(
+            "core.services.recipients_import.importa_destinazioni_commessa",
+            side_effect=[RuntimeError("condivisione irraggiungibile"), {
+                "trovato": True, "precompilati": ["99071-01-GAMMA"],
+                "gia_impostati": 0, "non_trovati": [],
+            }],
+        ):
+            report = importa_destinazioni_tutte_le_commesse(jobs=["99070", "99071"])
+
+        self.assertEqual(len(report["errori"]), 1)
+        self.assertEqual(report["errori"][0]["job"], "99070")
+        self.assertEqual(report["precompilati"], 1)
+
+    def test_esclude_le_commesse_chiuse_di_default(self):
+        self.testata.actual_delivery_date = date(2026, 1, 1)
+        self.testata.save(update_fields=["actual_delivery_date"])
+        self._scrivi_file("99070", "99070-01-ALFA 10001\n")
+
+        report = importa_destinazioni_tutte_le_commesse()
+
+        self.assertEqual(report["controllate"], 0)
+
+        report_tutte = importa_destinazioni_tutte_le_commesse(includi_chiuse=True)
+
+        self.assertEqual(report_tutte["controllate"], 1)
+        self.assertEqual(report_tutte["con_file"], 1)
 
 
 class TrasmittalInternoArchivioTests(TestCase):
@@ -8014,6 +8167,7 @@ class SchedulerBusinessCentralTests(TestCase):
         mock = finta.start()
         self.addCleanup(finta.stop)
         self._sync_sito_finta()
+        self._sync_destinazioni_finta()
         return mock
 
     def _sync_sito_finta(self, **report):
@@ -8026,6 +8180,25 @@ class SchedulerBusinessCentralTests(TestCase):
         }
         dati.update(report)
         finta = patch("core.services.scheduler.sincronizza_sito_costruttivo", return_value=dati)
+        mock = finta.start()
+        self.addCleanup(finta.stop)
+        return mock
+
+    def _sync_destinazioni_finta(self, **report):
+        """Sostituisce l'import delle destinazioni UT con un doppio di test."""
+        dati = {
+            "controllate": 0,
+            "con_file": 0,
+            "precompilati": 0,
+            "gia_impostati": 0,
+            "non_trovati": [],
+            "errori": [],
+            "dry_run": False,
+        }
+        dati.update(report)
+        finta = patch(
+            "core.services.scheduler.importa_destinazioni_tutte_le_commesse", return_value=dati
+        )
         mock = finta.start()
         self.addCleanup(finta.stop)
         return mock
@@ -8098,6 +8271,38 @@ class SchedulerBusinessCentralTests(TestCase):
         self.assertIn("controllate 3", esito)  # la sync principale è comunque registrata
         self.assertIn("sito costruttivo: errore", esito)
 
+    def test_precompila_anche_le_destinazioni_ut(self):
+        self._sync_finta()
+        sync_destinazioni = self._sync_destinazioni_finta(
+            controllate=5, con_file=2, precompilati=7
+        )
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        sync_destinazioni.assert_called_once_with()
+        esito = self._stato().esito
+        self.assertIn("destinazioni UT", esito)
+        self.assertIn("con file 2", esito)
+        self.assertIn("precompilati 7", esito)
+
+    def test_destinazioni_ut_in_errore_non_blocca_il_resto(self):
+        sync = self._sync_finta()
+        finta = patch(
+            "core.services.scheduler.importa_destinazioni_tutte_le_commesse",
+            side_effect=RuntimeError("condivisione di rete irraggiungibile"),
+        )
+        finta.start()
+        self.addCleanup(finta.stop)
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        sync.assert_called_once_with()
+        esito = self._stato().esito
+        self.assertIn("controllate 3", esito)  # la sync principale è comunque registrata
+        self.assertIn("destinazioni UT: errore", esito)
+
     def test_un_secondo_giro_non_riesegue(self):
         sync = self._sync_finta()
         adesso = self._momento(self.oggi, 17, 1)
@@ -8116,6 +8321,7 @@ class SchedulerBusinessCentralTests(TestCase):
         sync = finta.start()
         self.addCleanup(finta.stop)
         self._sync_sito_finta()
+        self._sync_destinazioni_finta()
         adesso = self._momento(self.oggi, 17, 1)
 
         self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
@@ -8133,6 +8339,7 @@ class SchedulerBusinessCentralTests(TestCase):
         finta.start()
         self.addCleanup(finta.stop)
         self._sync_sito_finta()
+        self._sync_destinazioni_finta()
 
         scheduler.esegui_se_dovuto(adesso=self._momento(self.oggi, 17, 1))
 

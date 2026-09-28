@@ -41,6 +41,7 @@ from .bc_sync import (
     sincronizza_commesse,
     sincronizza_sito_costruttivo,
 )
+from .recipients_import import importa_destinazioni_tutte_le_commesse
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,15 @@ def _riepilogo_sito(report: dict) -> str:
     )
 
 
+def _riepilogo_destinazioni(report: dict) -> str:
+    return (
+        f"destinazioni UT — controllate {report['controllate']}, "
+        f"con file {report['con_file']}, "
+        f"precompilati {report['precompilati']}, "
+        f"errori {len(report['errori'])}"
+    )
+
+
 def _prenota(adesso) -> bool:
     """Segna l'esecuzione di oggi come presa in carico da questo processo.
 
@@ -185,6 +195,13 @@ def esegui_se_dovuto(adesso=None) -> bool:
     except Exception as exc:  # noqa: BLE001 — il thread non deve morire mai
         logger.exception("Scheduler: sync sito costruttivo fallita.")
         esito = f"{esito}; sito costruttivo: errore: {exc}"
+
+    try:
+        report_destinazioni = importa_destinazioni_tutte_le_commesse()
+        esito = f"{esito}; {_riepilogo_destinazioni(report_destinazioni)}"
+    except Exception as exc:  # noqa: BLE001 — il thread non deve morire mai
+        logger.exception("Scheduler: import destinazioni UT fallito.")
+        esito = f"{esito}; destinazioni UT: errore: {exc}"
 
     EsecuzioneSchedulata.objects.filter(nome=NOME_JOB).update(esito=esito[:300])
     return True
