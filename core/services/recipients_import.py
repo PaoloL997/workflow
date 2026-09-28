@@ -7,7 +7,10 @@ Albignasego, Marghera, Ricengo, Schio — in quest'ordine, che coincide con i
 ``codice_bc`` 1..5 già assegnati a quegli stabilimenti (vedi la migration
 ``0045_popola_sigla_codice_bc_stabilimenti``). Il file vive in
 ``{FILESERVER_JOBS_PATH}/{job}/PROGETTO/UT/TRANSMITTAL/{job}-RecipientsData.txt``
-e può non esistere per una commessa: è normale, non un errore.
+e può non esistere per una commessa: è normale, non un errore. Un documento
+mai destinato a nessuno nel vecchio strumento compare con la sola prima
+colonna (nessuna cifra dopo): comune quanto le righe compilate, non un
+errore di formato.
 
 Il vecchio strumento resta in uso durante la transizione, quindi il file
 continua ad aggiornarsi: qui però lo trattiamo come un seed una tantum, non
@@ -29,7 +32,7 @@ from .trasmittal_interno import documenti_ut, imposta_destinazioni
 logger = logging.getLogger(__name__)
 
 _CARTELLA = "TRANSMITTAL"
-_RIGA_RE = re.compile(r"^(\S+)\s+([01]{5})\s*$")
+_BITMASK_RE = re.compile(r"^[01]{5}$")
 
 
 def percorso_recipients_data(job: str):
@@ -40,8 +43,12 @@ def percorso_recipients_data(job: str):
 def leggi_recipients_data(job: str) -> dict[str, set[int]] | None:
     """Legge il file e ritorna ``{vendor_doc: {codici_bc}}``.
 
-    Le righe malformate (non due colonne, o la seconda non esattamente 5
-    cifre 0/1) vengono ignorate e loggate come warning.
+    Un documento elencato con la sola prima colonna (nessuna cifra dopo,
+    tipicamente uno spazio finale e basta) è una riga mai compilata nel
+    vecchio strumento: stato comune e legittimo, viene ignorata senza
+    log. Una riga con una seconda colonna presente ma diversa da 5 cifre
+    0/1, o con più di due colonne, è invece malformata e viene loggata
+    come warning.
 
     Returns:
         ``None`` se il file non esiste o non è leggibile; un dict (vuoto se
@@ -62,8 +69,12 @@ def leggi_recipients_data(job: str) -> dict[str, set[int]] | None:
         riga = riga.strip()
         if not riga:
             continue
-        match = _RIGA_RE.match(riga)
-        if not match:
+        parti = riga.split()
+        if len(parti) == 1:
+            # Documento nel foglio ma destinazioni mai compilate nel vecchio
+            # strumento: non c'è nulla da precompilare, non è un errore.
+            continue
+        if len(parti) != 2 or not _BITMASK_RE.match(parti[1]):
             logger.warning(
                 'Import destinazioni (%s): riga %d non riconosciuta: "%s"',
                 job,
@@ -71,7 +82,7 @@ def leggi_recipients_data(job: str) -> dict[str, set[int]] | None:
                 riga,
             )
             continue
-        vendor_doc, bitmask = match.groups()
+        vendor_doc, bitmask = parti
         risultato[vendor_doc] = {i + 1 for i, bit in enumerate(bitmask) if bit == "1"}
     return risultato
 

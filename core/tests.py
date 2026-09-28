@@ -1246,6 +1246,21 @@ class ImportDestinazioniUtTests(TestCase):
 
         self.assertEqual(dati, {"99070-01-ALFA": {1, 2}})
 
+    def test_documento_senza_bitmask_ancora_compilato_viene_ignorato_senza_errore(self):
+        """Riga con solo il B&R Doc (spazio finale, nessuna cifra): comune nel
+        vecchio strumento per un documento mai destinato a nessuno — non è una
+        riga malformata."""
+        self._scrivi_file(
+            "99070",
+            "99070-01-ALFA 11000\n"
+            "99070-01-BETA \n"  # mai compilata: solo la prima colonna
+            "99070-01-GAMMA\n",  # idem, senza nemmeno lo spazio finale
+        )
+
+        dati = leggi_recipients_data("99070")
+
+        self.assertEqual(dati, {"99070-01-ALFA": {1, 2}})
+
     # -- importa_destinazioni_commessa --
 
     def test_precompila_un_documento_senza_destinazioni(self):
