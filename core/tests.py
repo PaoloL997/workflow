@@ -7912,6 +7912,21 @@ class SchedulerBusinessCentralTests(TestCase):
         finta = patch("core.services.scheduler.sincronizza_commesse", return_value=dati)
         mock = finta.start()
         self.addCleanup(finta.stop)
+        self._sync_sito_finta()
+        return mock
+
+    def _sync_sito_finta(self, **report):
+        """Sostituisce la sincronizzazione del sito costruttivo con un doppio di test."""
+        dati = {
+            "controllate": 0,
+            "aggiornate": 0,
+            "senza_stabilimento": [],
+            "errori": [],
+        }
+        dati.update(report)
+        finta = patch("core.services.scheduler.sincronizza_sito_costruttivo", return_value=dati)
+        mock = finta.start()
+        self.addCleanup(finta.stop)
         return mock
 
     def _stato(self):
@@ -7952,6 +7967,36 @@ class SchedulerBusinessCentralTests(TestCase):
         self.assertIn("controllate 3", stato.esito)
         self.assertIn("aggiornate 1", stato.esito)
 
+    def test_sincronizza_anche_il_sito_costruttivo(self):
+        self._sync_finta()
+        sync_sito = self._sync_sito_finta(controllate=5, aggiornate=2)
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        sync_sito.assert_called_once_with()
+        esito = self._stato().esito
+        self.assertIn("sito costruttivo", esito)
+        self.assertIn("controllate 5", esito)
+        self.assertIn("aggiornate 2", esito)
+
+    def test_sito_costruttivo_non_disponibile_non_blocca_la_sync_principale(self):
+        sync = self._sync_finta()
+        finta = patch(
+            "core.services.scheduler.sincronizza_sito_costruttivo",
+            side_effect=BusinessCentralNonDisponibile("ERP irraggiungibile"),
+        )
+        finta.start()
+        self.addCleanup(finta.stop)
+        adesso = self._momento(self.oggi, 17, 1)
+
+        self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
+
+        sync.assert_called_once_with()
+        esito = self._stato().esito
+        self.assertIn("controllate 3", esito)  # la sync principale è comunque registrata
+        self.assertIn("sito costruttivo: errore", esito)
+
     def test_un_secondo_giro_non_riesegue(self):
         sync = self._sync_finta()
         adesso = self._momento(self.oggi, 17, 1)
@@ -7969,6 +8014,7 @@ class SchedulerBusinessCentralTests(TestCase):
         )
         sync = finta.start()
         self.addCleanup(finta.stop)
+        self._sync_sito_finta()
         adesso = self._momento(self.oggi, 17, 1)
 
         self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
@@ -7985,6 +8031,7 @@ class SchedulerBusinessCentralTests(TestCase):
         )
         finta.start()
         self.addCleanup(finta.stop)
+        self._sync_sito_finta()
 
         scheduler.esegui_se_dovuto(adesso=self._momento(self.oggi, 17, 1))
 
@@ -8036,6 +8083,62 @@ class ArchivioAggiornamentiBCViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Nessun aggiornamento da Business Central")
+
+
+class ArchivioSitoCostruttivoManualeTests(TestCase):
+    """Il sito costruttivo si può impostare/correggere a mano da Informazioni archivio."""
+
+    def setUp(self):
+        self.valido = Stabilimento.objects.create(nome="Valbrembo", sigla="VB", codice_bc=1)
+        self.non_valido = Stabilimento.objects.create(nome="Milano", sigla=None, codice_bc=None)
+        self.testata = Testata.objects.create(job="26010")
+        self.writer = User.objects.create_user(
+            "writer_sito", "writer_sito@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.client = Client()
+        self.client.force_login(self.writer)
+
+    def test_dropdown_mostra_solo_stabilimenti_con_codice_bc(self):
+        response = self.client.get(f"/commesse/{self.testata.job}/archivio/")
+
+        self.assertContains(response, "Valbrembo")
+        self.assertNotContains(response, "Milano")
+
+    def test_salvataggio_imposta_il_sito_costruttivo(self):
+        response = self.client.put(
+            f"/api/commesse/{self.testata.job}/",
+            data={"sito_costruttivo_id": self.valido.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.sito_costruttivo_id, self.valido.id)
+
+    def test_stabilimento_senza_codice_bc_viene_rifiutato(self):
+        response = self.client.put(
+            f"/api/commesse/{self.testata.job}/",
+            data={"sito_costruttivo_id": self.non_valido.id},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.testata.refresh_from_db()
+        self.assertIsNone(self.testata.sito_costruttivo_id)
+
+    def test_si_puo_azzerare_il_sito_costruttivo(self):
+        self.testata.sito_costruttivo = self.valido
+        self.testata.save(update_fields=["sito_costruttivo"])
+
+        response = self.client.put(
+            f"/api/commesse/{self.testata.job}/",
+            data={"sito_costruttivo_id": None},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.testata.refresh_from_db()
+        self.assertIsNone(self.testata.sito_costruttivo_id)
 
 
 def _dai_firma(utente, nome="firme/prova.png"):

@@ -338,6 +338,7 @@ _TESTATA_FIELDS = {
     "time_cli_doc_rev",
     "time_ven_doc_rev",
     "rev_let_flag",
+    "sito_costruttivo_id",
 }
 
 _INDIRIZZO_FIELDS = {

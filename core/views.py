@@ -363,6 +363,9 @@ def archivio_detail_view(request, job):
         "core/archivio_detail.html",
         {
             "testata": testata,
+            "stabilimenti_costruttivi": Stabilimento.objects.filter(
+                codice_bc__isnull=False
+            ).order_by("nome"),
             "aggiornamenti_bc": list_aggiornamenti_bc(job, limit=10),
         },
     )

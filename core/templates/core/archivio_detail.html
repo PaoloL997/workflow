@@ -203,6 +203,25 @@
     color: var(--color-text-secondary);
   }
 
+  .arch-select {
+    flex-shrink: 0;
+    width: 180px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .arch-select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px hsla(221, 70%, 60%, 0.18);
+  }
+
   /* ── Toggle ── */
   .toggle-track {
     position: relative;
@@ -652,6 +671,23 @@
             <span class="toggle-thumb"></span>
           </label>
         </div>
+        <div class="arch-field">
+          <div class="field-icon field-icon-orange">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+          </div>
+          <div class="arch-field-label-wrap">
+            <label for="arch-sito-costruttivo">Sito costruttivo</label>
+            <span class="field-hint">Serve per il trasmittal interno; se vuoto si prova a impostarlo da BC</span>
+          </div>
+          <select id="arch-sito-costruttivo" class="arch-select">
+            <option value="">—</option>
+            {% for st in stabilimenti_costruttivi %}
+            <option value="{{ st.id }}" {% if testata.sito_costruttivo_id == st.id %}selected{% endif %}>{{ st.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="arch-save-row">
           <button class="arch-save-btn" type="button" onclick="saveArchivioInfo()">Salva modifiche</button>
           <span class="arch-save-status" id="arch-save-status"></span>
@@ -807,11 +843,13 @@
     const timeCli = document.getElementById('arch-time-cli').value;
     const timeVen = document.getElementById('arch-time-ven').value;
     const revLet  = document.getElementById('arch-rev-let').checked;
+    const sito    = document.getElementById('arch-sito-costruttivo').value;
 
     const payload = {
-      time_cli_doc_rev: timeCli !== '' ? parseInt(timeCli, 10) : null,
-      time_ven_doc_rev: timeVen !== '' ? parseInt(timeVen, 10) : null,
-      rev_let_flag:     revLet,
+      time_cli_doc_rev:    timeCli !== '' ? parseInt(timeCli, 10) : null,
+      time_ven_doc_rev:    timeVen !== '' ? parseInt(timeVen, 10) : null,
+      rev_let_flag:        revLet,
+      sito_costruttivo_id: sito !== '' ? parseInt(sito, 10) : null,
     };
 
     const statusEl = document.getElementById('arch-save-status');

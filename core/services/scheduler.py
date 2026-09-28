@@ -36,7 +36,11 @@ from django.db import close_old_connections, transaction
 from django.utils import timezone
 
 from ..models import EsecuzioneSchedulata
-from .bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
+from .bc_sync import (
+    BusinessCentralNonDisponibile,
+    sincronizza_commesse,
+    sincronizza_sito_costruttivo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +114,15 @@ def _riepilogo(report: dict) -> str:
     )
 
 
+def _riepilogo_sito(report: dict) -> str:
+    return (
+        f"sito costruttivo — controllate {report['controllate']}, "
+        f"aggiornate {report['aggiornate']}, "
+        f"senza stabilimento corrispondente {len(report['senza_stabilimento'])}, "
+        f"errori {len(report['errori'])}"
+    )
+
+
 def _prenota(adesso) -> bool:
     """Segna l'esecuzione di oggi come presa in carico da questo processo.
 
@@ -162,6 +175,16 @@ def esegui_se_dovuto(adesso=None) -> bool:
     except Exception as exc:  # noqa: BLE001 — il thread non deve morire mai
         logger.exception("Scheduler: sincronizzazione BC fallita.")
         esito = f"errore: {exc}"
+
+    try:
+        report_sito = sincronizza_sito_costruttivo()
+        esito = f"{esito}; {_riepilogo_sito(report_sito)}"
+    except BusinessCentralNonDisponibile as exc:
+        logger.error("Scheduler: sync sito costruttivo non eseguita — %s", exc)
+        esito = f"{esito}; sito costruttivo: errore: {exc}"
+    except Exception as exc:  # noqa: BLE001 — il thread non deve morire mai
+        logger.exception("Scheduler: sync sito costruttivo fallita.")
+        esito = f"{esito}; sito costruttivo: errore: {exc}"
 
     EsecuzioneSchedulata.objects.filter(nome=NOME_JOB).update(esito=esito[:300])
     return True

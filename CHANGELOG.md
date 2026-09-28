@@ -5,6 +5,11 @@
 ### Added
 
 - Informazioni archivio: pulsante **Aggiorna da BC** accanto ad "Aggiornamenti da Business Central" per lanciare a mano il confronto con Business Central sulla singola commessa, senza aspettare il controllo giornaliero delle 17:00. Funziona anche sulle commesse già chiuse
+- Informazioni archivio: nuovo campo **Sito costruttivo**, con la lista degli stabilimenti che hanno un codice sito Business Central. Serve a sbloccare il trasmittal interno quando Business Central non ha (o non ha ancora) il dato: fino ad ora l'unico modo per impostarlo era l'admin di Django
+
+### Changed
+
+- Il controllo giornaliero delle 17:00 allinea anche il sito costruttivo delle commesse che ne sono ancora sprovviste (prima lo faceva solo il comando manuale `sync_business_central`)
 
 ### Fixed
 
