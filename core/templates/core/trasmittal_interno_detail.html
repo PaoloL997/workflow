@@ -888,6 +888,17 @@
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
   const REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
+  // Scrittura riservata a chi ha User.trasmittal_interno_writer (spuntabile da admin):
+  // indipendente dal permesso generale USER_CAN_WRITE.
+  const TI_CAN_WRITE = {{ trasmittal_interno_can_write|yesno:"true,false" }};
+
+  function requireWriteTI() {
+    if (!TI_CAN_WRITE) {
+      showPermissionDenied('Permesso negato: solo alcuni utenti possono modificare il trasmittal interno.');
+      return false;
+    }
+    return true;
+  }
 
   function baseUrl() { return '/api/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/'; }
 
@@ -954,7 +965,7 @@
       list.innerHTML = lettere.map(function (l) {
         var actions = '<div class="storico-row-actions">'
           + '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>';
-        if (l.annullabile && window.USER_CAN_WRITE) {
+        if (l.annullabile && TI_CAN_WRITE) {
           actions += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>';
         }
         actions += '</div>';
@@ -969,7 +980,7 @@
   }
 
   window.annullaLettera = async function (id, nome) {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     if (!confirm(
       'Annullare la lettera ' + nome + '?\n\n'
       + 'Il PDF e la cartella preparata per il DCC verranno rimossi. '
@@ -1027,7 +1038,7 @@
   function renderSelTbl(docs) {
     if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
     if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
-    var canWrite = window.USER_CAN_WRITE;
+    var canWrite = TI_CAN_WRITE;
     document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
       var checked = _selezionati.has(d.id);
       var disabledAttr = (!d.selezionabile || !canWrite) ? ' disabled' : '';
@@ -1148,7 +1159,7 @@
   });
 
   window.vaiAllaCompilazione = function () {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     if (!_selezionati.size) return;
     apriComponi(_docsSel.filter(function (d) { return _selezionati.has(d.id); }));
   };
@@ -1205,7 +1216,7 @@
   var _notaScrollHandler = null;
 
   window.apriNotaDropdown = function (id, boxEl) {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     if (_notaDropdownDocId === id) {
       // Stesso box ricliccato mentre è già aperto: è un "chiudi", non un
       // riapri — riaprire avrebbe richiesto la posizione di `boxEl`, ma
@@ -1295,7 +1306,7 @@
   }
 
   function apriSitiDropdown(cellId, boxEl, correntiCodici, renderCell, onToggle) {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     if (_sitiDropdownCtx && _sitiDropdownCtx.cellId === cellId) {
       chiudiSitiDropdown();
       return;
@@ -1526,7 +1537,7 @@
   var ORIGINE_ORDER = ['stabilimento', 'pm', 'pe', 'qci', 'export', 'manuale'];
 
   window.apriConferma = async function () {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     _esitoMostrato = false;
     document.getElementById('componi-modal').classList.remove('open');
     document.getElementById('conferma-modal').classList.add('open');
@@ -1696,7 +1707,7 @@
   };
 
   window.confermaEmissione = async function () {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     var btn = document.getElementById('invia-btn');
     if (!btn) return;
     var etichettaOriginale = btn.textContent;
@@ -1761,7 +1772,7 @@
   }
 
   window.riprovaPasso = async function (trasmittalId, step, btn) {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     btn.disabled = true;
     btn.textContent = 'Riprovo…';
     try {
@@ -1891,7 +1902,7 @@
   }
 
   window.destBulkAssegnaSiti = async function (attiva) {
-    if (!requireWrite()) return;
+    if (!requireWriteTI()) return;
     if (!_selezionatiDest.size) { setBulkStatusDest('Seleziona almeno un documento.', true); return; }
     var sel = document.getElementById('dest-bulk-sito');
     var codiceBc = parseInt(sel.value, 10);

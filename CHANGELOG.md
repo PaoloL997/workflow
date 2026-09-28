@@ -9,6 +9,7 @@
 
 ### Changed
 
+- Trasmittal interno: la scrittura (impostare destinazioni, generare/emettere una lettera, annullarla, ritentare un passo) è ora riservata agli utenti con il nuovo flag **"Può scrivere sul trasmittal interno"**, impostabile per singolo utente dall'admin di Django (scheda Utenti → Permessi app) — indipendente dal permesso generale. Tutti gli altri vedono la sezione ma non possono modificarla; l'anteprima resta accessibile a tutti perché non scrive nulla
 - Il controllo giornaliero delle 17:00 allinea anche il sito costruttivo delle commesse che ne sono ancora sprovviste (prima lo faceva solo il comando manuale `sync_business_central`)
 
 ### Fixed

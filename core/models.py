@@ -107,6 +107,13 @@ class User(AbstractUser):
         blank=True,
         related_name="utenti",
     )
+    trasmittal_interno_writer = models.BooleanField(
+        db_column="TrasmittalInternoWriter",
+        default=False,
+        verbose_name="Può scrivere sul trasmittal interno",
+        help_text="Indipendente dal permesso generale: chi non è spuntato qui vede il "
+        "trasmittal interno ma non può modificarlo (destinazioni, emissione, annullo, retry).",
+    )
 
     class Meta:
         managed = True

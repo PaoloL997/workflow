@@ -38,7 +38,7 @@ from .models import (
     User,
     valida_immagine_firma,
 )
-from .permissions import api_write_required
+from .permissions import api_write_required, trasmittal_interno_write_required
 from .services.bc_sync import BusinessCentralNonDisponibile
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.bc_sync import sincronizza_commesse
@@ -980,7 +980,7 @@ def trasmittal_interno_destinazioni_api(request, job):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def documento_destinazioni_api(request, job, pk):
     try:
@@ -1002,7 +1002,7 @@ def documento_destinazioni_api(request, job, pk):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
     try:
@@ -1083,7 +1083,7 @@ def trasmittal_interno_anteprima_api(request, job):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_anteprima_pdf_api(request, job):
     try:
@@ -1106,7 +1106,7 @@ def trasmittal_interno_anteprima_pdf_api(request, job):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_emetti_api(request, job):
     try:
@@ -1160,7 +1160,7 @@ def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_annulla_api(request, job, trasmittal_id):
     """Annulla l'ultimo trasmittal interno emesso per la commessa in quel giorno."""
@@ -1178,7 +1178,7 @@ def trasmittal_interno_annulla_api(request, job, trasmittal_id):
 
 
 @api_login_required
-@api_write_required
+@trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
     """Riprova un solo passo (pdf/dcc/email) di una lettera già creata.

@@ -1767,7 +1767,11 @@ class TrasmittalInternoDestinazioniViewTests(TestCase):
         )
 
         self.writer = User.objects.create_user(
-            "tidv_writer", "tidv-writer@b.it", "pw", permesso=Permesso.WRITING
+            "tidv_writer",
+            "tidv-writer@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
         )
         self.reader = User.objects.create_user(
             "tidv_reader", "tidv-reader@b.it", "pw", permesso=Permesso.READING
@@ -2099,7 +2103,11 @@ class TrasmittalInternoLetteraTests(TestCase):
         )
 
         self.writer = User.objects.create_user(
-            "til_writer", "til-writer@b.it", "pw", permesso=Permesso.WRITING
+            "til_writer",
+            "til-writer@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
         )
         self.reader = User.objects.create_user(
             "til_reader", "til-reader@b.it", "pw", permesso=Permesso.READING
@@ -2356,7 +2364,11 @@ class TrasmittalInternoEmissioneApiTests(TestCase):
         (base / f"{self.doc_ok.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-fake")
 
         self.writer = User.objects.create_user(
-            "tinp_writer", "tinp-writer@b.it", "pw", permesso=Permesso.WRITING
+            "tinp_writer",
+            "tinp-writer@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
         )
         self.reader = User.objects.create_user(
             "tinp_reader", "tinp-reader@b.it", "pw", permesso=Permesso.READING
@@ -2550,7 +2562,11 @@ class AnnullaTrasmittalInternoTests(TestCase):
         (base / f"{self.doc2.vendor_doc} Rev A.pdf").write_bytes(b"%PDF-2")
 
         self.writer = User.objects.create_user(
-            "ann_writer", "ann-writer@b.it", "pw", permesso=Permesso.WRITING
+            "ann_writer",
+            "ann-writer@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
         )
         self.reader = User.objects.create_user(
             "ann_reader", "ann-reader@b.it", "pw", permesso=Permesso.READING
@@ -2827,7 +2843,11 @@ class TrasmittalInternoEndToEndTests(TestCase):
         )
 
         self.writer = User.objects.create_user(
-            "e2e_writer", "e2e-writer@b.it", "pw", permesso=Permesso.WRITING
+            "e2e_writer",
+            "e2e-writer@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
         )
         self.client.force_login(self.writer)
 
@@ -3217,6 +3237,87 @@ class TrasmittalInternoEndToEndTests(TestCase):
 
         rifatto = self._emetti([self._riga(self.doc_b, cliente=False)]).json()
         self.assertTrue(rifatto["nome"].endswith("_E1"))  # progressivo liberato, non E2
+
+
+class TrasmittalInternoPermessoRistrettoTests(TestCase):
+    """La scrittura del trasmittal interno è riservata a chi ha il flag
+
+    ``User.trasmittal_interno_writer`` (impostabile da admin), indipendentemente
+    dal permesso generale (ADMIN/WRITING/READING): un admin "qualunque" senza
+    il flag non può scrivere, un utente con il flag può anche se il suo
+    permesso generale è solo READING. La pagina resta visibile a tutti.
+    """
+
+    def setUp(self):
+        self.client = Client()
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
+        self.testata = Testata.objects.create(job="99090", sito_costruttivo=self.bg)
+        self.doc = Documento.objects.create(
+            testata=self.testata, vendor_doc="99090-ALFA", reparto=self.reparto_ut.nome
+        )
+
+        # Permesso generale ADMIN, ma senza il flag: deve essere bloccato.
+        self.admin_non_autorizzato = User.objects.create_user(
+            "trp_admin", "trp-admin@b.it", "pw", permesso=Permesso.ADMIN
+        )
+        # Permesso generale READING, ma con il flag: deve poter scrivere.
+        self.autorizzato_reading = User.objects.create_user(
+            "trp_autorizzato",
+            "trp-autorizzato@b.it",
+            "pw",
+            permesso=Permesso.READING,
+            trasmittal_interno_writer=True,
+        )
+
+    def _url(self, path):
+        return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
+
+    def test_admin_generico_non_autorizzato_riceve_403_su_destinazioni_documento(self):
+        self.client.force_login(self.admin_non_autorizzato)
+
+        risposta = self.client.post(
+            self._url(f"documenti/{self.doc.pk}/destinazioni/"),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc.destinazioni.all()), [])
+
+    def test_admin_generico_non_autorizzato_riceve_403_su_destinazioni_bulk(self):
+        self.client.force_login(self.admin_non_autorizzato)
+
+        risposta = self.client.post(
+            self._url("stabilimenti/1/destinazioni/"),
+            data=json.dumps({"documento_ids": [self.doc.pk], "attiva": True}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertEqual(list(self.doc.destinazioni.all()), [])
+
+    def test_utente_autorizzato_con_solo_permesso_reading_puo_scrivere(self):
+        self.client.force_login(self.autorizzato_reading)
+
+        risposta = self.client.post(
+            self._url(f"documenti/{self.doc.pk}/destinazioni/"),
+            data=json.dumps({"codici_bc": [1]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200, risposta.content)
+        self.assertEqual(
+            list(self.doc.destinazioni.values_list("stabilimento__codice_bc", flat=True)), [1]
+        )
+
+    def test_pagina_trasmittal_interno_resta_visibile_a_chi_non_puo_scrivere(self):
+        self.client.force_login(self.admin_non_autorizzato)
+
+        risposta = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "Trasmittal interno")
 
 
 class FileserverIntegrationTest(TestCase):

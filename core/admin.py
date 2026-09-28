@@ -56,18 +56,19 @@ class CustomUserAdmin(UserAdmin):
     )
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Profilo", {"fields": ("email", "ruolo", "reparto", "stabilimento")}),
-        ("Permessi", {"fields": ("permesso",)}),
+        ("Permessi", {"fields": ("permesso", "trasmittal_interno_writer")}),
     )
     list_display = (
         "username",
         "email",
         "permesso",
+        "trasmittal_interno_writer",
         "ruolo",
         "reparto",
         "stabilimento",
         "is_active",
     )
-    list_filter = ("permesso", "is_active", "reparto", "stabilimento")
+    list_filter = ("permesso", "trasmittal_interno_writer", "is_active", "reparto", "stabilimento")
     search_fields = ("username", "email", "ruolo")
     readonly_fields = ("is_staff",)
 
@@ -80,7 +81,9 @@ class CustomUserAdmin(UserAdmin):
                     fieldsets.append((title, {**options, "fields": fields}))
             else:
                 fieldsets.append((title, options))
-        fieldsets.append(("Permessi app", {"fields": ("permesso", "is_staff")}))
+        fieldsets.append(
+            ("Permessi app", {"fields": ("permesso", "trasmittal_interno_writer", "is_staff")})
+        )
         return tuple(fieldsets)
 
     def get_form(self, request, obj=None, **kwargs):
