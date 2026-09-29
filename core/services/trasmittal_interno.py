@@ -4,6 +4,7 @@ import logging
 import re
 import shutil
 from datetime import datetime, timedelta
+from email.utils import formataddr
 from pathlib import Path
 
 from django.conf import settings
@@ -782,13 +783,17 @@ def anteprima_destinatari(testata, documenti):
     return _costruisci_destinatari(testata, documenti, siti_coinvolti(documenti))
 
 
-def anteprima_trasmittal(testata, righe_payload):
+def anteprima_trasmittal(testata, righe_payload, utente=None):
     """Anteprima di una lettera: riepilogo righe, destinatari risolti, ruoli mancanti.
 
     Non persiste nulla. Solleva ``ValueError`` se il payload non è valido
     (vedi ``_prepara_righe``): stesso controllo che varrà alla creazione
     vera, così l'anteprima non promette una lettera che poi la conferma
     rifiuterebbe.
+
+    ``utente`` è chi sta compilando la lettera: se dato, l'anteprima riporta
+    in ``mittente`` l'indirizzo da cui partirà davvero l'email (vedi
+    ``mittente_trasmittal``), così chi emette lo vede prima di confermare.
     """
     righe = _prepara_righe(testata, righe_payload)
     documenti = [riga["documento"] for riga in righe]
@@ -822,6 +827,7 @@ def anteprima_trasmittal(testata, righe_payload):
         ],
         "destinatari": anteprima_destinatari(testata, documenti),
         "ruoli_mancanti": ruoli_persona_mancanti(testata),
+        "mittente": mittente_trasmittal(utente) if utente is not None else None,
     }
 
 
@@ -986,6 +992,29 @@ def _corpo_email_trasmittal_html(trasmittal, percorso):
     )
 
 
+def mittente_trasmittal(utente):
+    """Mittente dell'email di un trasmittal interno: chi ha emesso la lettera.
+
+    Non ``settings.DEFAULT_FROM_EMAIL``: la lettera la compila, la emette e
+    la firma una persona, quindi deve arrivare dal suo indirizzo — chi la
+    riceve vede chi gliel'ha mandata e risponde a lui, non alla casella
+    generica configurata nelle impostazioni dell'applicazione.
+
+    Args:
+        utente: Chi ha emesso la lettera (``TransmittalInterno.creato_da``).
+
+    Returns:
+        ``"Nome Completo <email>"`` dell'utente, oppure
+        ``settings.DEFAULT_FROM_EMAIL`` se non ha un'email registrata: senza
+        un indirizzo valido l'invio verrebbe rifiutato, meglio la casella
+        generica che nessun mittente.
+    """
+    email = (getattr(utente, "email", "") or "").strip()
+    if not email:
+        return settings.DEFAULT_FROM_EMAIL
+    return formataddr((utente.nome_completo, email))
+
+
 def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     """Invia via email il trasmittal interno ai destinatari TO/CC registrati.
 
@@ -995,13 +1024,23 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     percorso di salvataggio, promemoria di firma — non un avviso generico
     che rimanda all'allegato.
 
+    Il mittente è chi ha emesso la lettera (``trasmittal.creato_da``, vedi
+    ``mittente_trasmittal``), non l'indirizzo impostato in
+    ``DEFAULT_FROM_EMAIL``. Vale anche quando l'invio viene ritentato da
+    un'altra persona: il mittente resta chi ha emesso la lettera, che è
+    l'unico indirizzo coerente con quanto scritto sul modulo. Lo stesso
+    indirizzo è messo anche in ``Reply-To``, così le risposte arrivano a lui
+    anche se il server di posta riscrive il ``From`` con la casella
+    autenticata.
+
     Args:
         pdf_bytes: bytes del PDF da allegare; se omesso, generato al volo
             (un passo in più — preferire passare quello già generato da
             ``salva_pdf`` quando disponibile).
 
     Returns:
-        Dict ``{"to": [...], "cc": [...]}`` con gli indirizzi usati.
+        Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
+        indirizzi usati.
 
     Raises:
         ValueError: nessun destinatario in TO.
@@ -1037,17 +1076,19 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
         body_html = f"<p><strong>{escape(avviso_test)}</strong></p>{body_html}"
         invio_to, invio_cc = [test_redirect], []
 
+    mittente = mittente_trasmittal(trasmittal.creato_da)
     email = EmailMultiAlternatives(
         subject=subject,
         body=body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=mittente,
         to=invio_to,
         cc=invio_cc,
+        reply_to=[mittente],
     )
     email.attach_alternative(body_html, "text/html")
     email.attach(f"{trasmittal.nome}.pdf", pdf_bytes, "application/pdf")
     email.send(fail_silently=False)
-    return {"to": to, "cc": cc}
+    return {"to": to, "cc": cc, "mittente": mittente}
 
 
 def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None, destinatari=None):
@@ -1108,7 +1149,13 @@ def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None
         risultato["email"] = {"ok": True, "errore": None, **esito_email}
     except Exception as exc:
         logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
-        risultato["email"] = {"ok": False, "errore": str(exc), "to": [], "cc": []}
+        risultato["email"] = {
+            "ok": False,
+            "errore": str(exc),
+            "to": [],
+            "cc": [],
+            "mittente": mittente_trasmittal(trasmittal.creato_da),
+        }
 
     return risultato
 

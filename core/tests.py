@@ -138,6 +138,8 @@ from .services.trasmittal_interno import (
     data_impegno,
     imposta_destinazioni,
     indirizzi_per_siti,
+    invia_email_trasmittal,
+    mittente_trasmittal,
     prepara_per_dcc,
     prossimo_progressivo,
     salva_pdf,
@@ -2513,6 +2515,113 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertTrue(corpo["dcc"]["ok"])
         self.assertEqual(len(mail.outbox), 0)
 
+    # -- mittente: chi ha compilato ed emesso la lettera --
+
+    def _pdf_finto(self):
+        """Sostituisce la generazione del PDF nel flusso di emissione.
+
+        Il rendering vero non c'entra con il mittente dell'email e dipende dai
+        font di sistema (``src.pdf._register_unicode_font``): sostituirlo tiene
+        questi test sul solo passo di invio.
+        """
+        return patch("src.pdf.genera_trasmittal_interno_pdf", return_value=b"%PDF-1.4 finto")
+
+    def test_email_inviata_dall_indirizzo_di_chi_ha_emesso_la_lettera(self):
+        from django.conf import settings
+
+        self.client.force_login(self.writer)
+
+        with self._pdf_finto():
+            risposta = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 200)
+        atteso = f"{self.writer.nome_completo} <{self.writer.email}>"
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].from_email, atteso)
+        # Non l'indirizzo generico delle impostazioni: la lettera arriva da chi
+        # l'ha compilata ed emessa, ed è a lui che si risponde.
+        self.assertNotEqual(mail.outbox[0].from_email, settings.DEFAULT_FROM_EMAIL)
+        self.assertEqual(mail.outbox[0].reply_to, [atteso])
+        self.assertEqual(risposta.json()["email"]["mittente"], atteso)
+
+    def test_anteprima_riporta_il_mittente_di_chi_sta_compilando(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("anteprima/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(
+            risposta.json()["mittente"],
+            f"{self.writer.nome_completo} <{self.writer.email}>",
+        )
+
+    def test_retry_email_parte_dal_mittente_di_chi_ha_emesso_non_di_chi_riprova(self):
+        self.client.force_login(self.writer)
+        with (
+            self._pdf_finto(),
+            patch(
+                "django.core.mail.EmailMessage.send",
+                side_effect=Exception("SMTP non raggiungibile"),
+            ),
+        ):
+            esito = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            ).json()
+        self.assertFalse(esito["email"]["ok"])
+
+        altro_writer = User.objects.create_user(
+            "til_writer2",
+            "til-writer2@b.it",
+            "pw",
+            permesso=Permesso.WRITING,
+            trasmittal_interno_writer=True,
+        )
+        self.client.force_login(altro_writer)
+        with self._pdf_finto():
+            risposta = self.client.post(
+                self._url(f"lettere/{esito['trasmittal_id']}/retry/"),
+                data=json.dumps({"step": "email"}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 200)
+        atteso = f"{self.writer.nome_completo} <{self.writer.email}>"
+        self.assertTrue(risposta.json()["esito"]["ok"])
+        self.assertEqual(risposta.json()["esito"]["mittente"], atteso)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].from_email, atteso)
+
+    def test_esito_email_fallita_riporta_comunque_il_mittente(self):
+        self.client.force_login(self.writer)
+
+        with (
+            self._pdf_finto(),
+            patch(
+                "django.core.mail.EmailMessage.send",
+                side_effect=Exception("SMTP non raggiungibile"),
+            ),
+        ):
+            esito = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            ).json()
+
+        self.assertFalse(esito["email"]["ok"])
+        self.assertEqual(
+            esito["email"]["mittente"], f"{self.writer.nome_completo} <{self.writer.email}>"
+        )
+
     # -- elenco lettere emesse --
 
     def test_elenco_lettere_emesse_in_ordine(self):
@@ -2532,6 +2641,84 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(lettere[1]["nome"], "99070_" + timezone.localdate().isoformat() + "_E1")
         self.assertEqual(lettere[0]["n_documenti"], 1)
         self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
+
+
+class MittenteEmailTrasmittalInternoTests(TestCase):
+    """mittente_trasmittal: l'email parte da chi ha compilato ed emesso la lettera."""
+
+    def setUp(self):
+        media = tempfile.TemporaryDirectory()
+        self.addCleanup(media.cleanup)
+        impostazioni = override_settings(MEDIA_ROOT=media.name)
+        impostazioni.enable()
+        self.addCleanup(impostazioni.disable)
+
+        self.jobs_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self.jobs_root.cleanup)
+        jobs_patcher = override_settings(FILESERVER_JOBS_PATH=self.jobs_root.name)
+        jobs_patcher.enable()
+        self.addCleanup(jobs_patcher.disable)
+
+        self.emittente = User.objects.create_user(
+            "mittente_ti", "anna.bianchi@b.it", "pw", first_name="Anna", last_name="Bianchi"
+        )
+
+    def _trasmittal(self, utente):
+        testata = Testata.objects.create(job="99095")
+        documento = Documento.objects.create(testata=testata, vendor_doc="99095-ALFA")
+        data = date(2026, 9, 14)
+        trasmittal = TransmittalInterno.objects.create(
+            testata=testata,
+            data=data,
+            progressivo=1,
+            nome=componi_nome(testata, data, 1),
+            creato_da=utente,
+        )
+        RigaTransmittalInterno.objects.create(
+            trasmittal=trasmittal, documento=documento, revisione="0", posizione=1
+        )
+        trasmittal.destinatari.create(email="dest@b.it", tipo="to", origine="manuale")
+        return trasmittal
+
+    # Il PDF si passa già generato — la via consigliata da invia_email_trasmittal
+    # quando salva_pdf l'ha appena prodotto — così questi test restano sul
+    # mittente e non sul rendering, che qui non è in discussione.
+    PDF_FINTO = b"%PDF-1.4 allegato"
+
+    def test_mittente_e_nome_completo_e_email_dell_utente(self):
+        self.assertEqual(mittente_trasmittal(self.emittente), "Anna Bianchi <anna.bianchi@b.it>")
+
+    def test_mittente_senza_nome_e_cognome_usa_lo_username(self):
+        utente = User.objects.create_user("rverdi", "rverdi@b.it", "pw")
+
+        self.assertEqual(mittente_trasmittal(utente), "rverdi <rverdi@b.it>")
+
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <noreply@b.it>")
+    def test_utente_senza_email_ricade_sull_indirizzo_delle_impostazioni(self):
+        senza_email = User.objects.create_user("senza_email", "", "pw")
+
+        self.assertEqual(mittente_trasmittal(senza_email), "Workflow <noreply@b.it>")
+
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <noreply@b.it>")
+    def test_invio_usa_il_mittente_dell_emittente_non_quello_di_default(self):
+        trasmittal = self._trasmittal(self.emittente)
+
+        esito = invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        self.assertEqual(esito["mittente"], "Anna Bianchi <anna.bianchi@b.it>")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].from_email, "Anna Bianchi <anna.bianchi@b.it>")
+        self.assertEqual(mail.outbox[0].reply_to, ["Anna Bianchi <anna.bianchi@b.it>"])
+
+    @override_settings(TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT="prove@b.it")
+    def test_redirect_di_test_cambia_i_destinatari_ma_non_il_mittente(self):
+        trasmittal = self._trasmittal(self.emittente)
+
+        esito = invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        self.assertEqual(esito["to"], ["dest@b.it"])  # gli indirizzi reali, nell'esito
+        self.assertEqual(mail.outbox[0].to, ["prove@b.it"])  # il reindirizzamento di test
+        self.assertEqual(mail.outbox[0].from_email, "Anna Bianchi <anna.bianchi@b.it>")
 
 
 class TrasmittalInternoEmissioneApiTests(TestCase):
