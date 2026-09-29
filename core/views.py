@@ -126,6 +126,7 @@ from .services.trasmittal_interno import (
     imposta_destinazioni_ut,
     indirizzi_per_siti,
     invia_email_trasmittal,
+    mittente_trasmittal,
     percorso_pdf_lettera,
     prepara_per_dcc,
     salva_pdf,
@@ -1075,7 +1076,7 @@ def trasmittal_interno_anteprima_api(request, job):
     except (json.JSONDecodeError, ValueError):
         return JsonResponse({"error": "JSON non valido."}, status=400)
     try:
-        anteprima = anteprima_trasmittal(testata, data.get("righe") or [])
+        anteprima = anteprima_trasmittal(testata, data.get("righe") or [], request.user)
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
     anteprima["sigle_stabilimento"] = _sigle_stabilimento_per_email(anteprima["righe"])
@@ -1186,9 +1187,13 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
     Stessa logica di orchestrazione per-passo già usata dentro
     ``emetti_trasmittal_interno`` — qui applicata a un singolo passo, sulle
     stesse funzioni di servizio pubbliche, nessuna logica nuova nei servizi.
+
+    Il passo "email" riparte a nome di chi ha emesso la lettera, non di chi
+    preme Riprova (vedi ``invia_email_trasmittal``): da qui ``creato_da`` è
+    precaricato insieme alla testata.
     """
     try:
-        trasmittal = TransmittalInterno.objects.select_related("testata").get(
+        trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
             pk=trasmittal_id, testata__job=job
         )
     except TransmittalInterno.DoesNotExist:
@@ -1232,7 +1237,13 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
             esito = {"ok": True, "errore": None, **esito_email}
         except Exception as exc:
             logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
-            esito = {"ok": False, "errore": str(exc), "to": [], "cc": []}
+            esito = {
+                "ok": False,
+                "errore": str(exc),
+                "to": [],
+                "cc": [],
+                "mittente": mittente_trasmittal(trasmittal.creato_da),
+            }
 
     return JsonResponse({"ok": True, "step": step, "esito": esito})
 
