@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 import openpyxl
 import pandas as pd
 from django.apps import apps as django_apps
+from django.contrib import admin
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
@@ -16,7 +17,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import Client, SimpleTestCase, TestCase, override_settings
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
@@ -1356,6 +1357,51 @@ class ImportDestinazioniUtTests(TestCase):
 
         self.assertEqual(report_tutte["controllate"], 1)
         self.assertEqual(report_tutte["con_file"], 1)
+
+
+class TransmittalInternoAdminTests(TestCase):
+    """Admin di TransmittalInterno: sola lettura, ma un superuser può eliminare
+    (per pulire dati di test/errore non coperti dal tasto Annulla dell'app)."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="99095")
+        self.superuser = User.objects.create_superuser(
+            "ti_admin_super", "ti_admin_super@example.com", "pw"
+        )
+        self.staff_normale = User.objects.create_user(
+            "ti_admin_staff", "ti_admin_staff@example.com", "pw", permesso=Permesso.ADMIN
+        )
+        self.trasmittal = TransmittalInterno.objects.create(
+            testata=self.testata,
+            data=date(2026, 1, 1),
+            progressivo=1,
+            nome="99095_2026-01-01_E1",
+            creato_da=self.superuser,
+        )
+        self.model_admin = admin.site._registry[TransmittalInterno]
+        self.factory = RequestFactory()
+
+    def _request(self, user):
+        request = self.factory.get("/admin/core/transmittalinterno/")
+        request.user = user
+        return request
+
+    def test_superuser_puo_eliminare(self):
+        self.assertTrue(
+            self.model_admin.has_delete_permission(self._request(self.superuser), self.trasmittal)
+        )
+
+    def test_staff_senza_permesso_esplicito_non_puo_eliminare(self):
+        self.assertFalse(
+            self.model_admin.has_delete_permission(
+                self._request(self.staff_normale), self.trasmittal
+            )
+        )
+
+    def test_aggiunta_e_modifica_restano_bloccate_anche_per_superuser(self):
+        request = self._request(self.superuser)
+        self.assertFalse(self.model_admin.has_add_permission(request))
+        self.assertFalse(self.model_admin.has_change_permission(request, self.trasmittal))
 
 
 class TrasmittalInternoArchivioTests(TestCase):

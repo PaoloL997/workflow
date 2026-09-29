@@ -385,7 +385,18 @@ class DestinatarioTransmittalInternoInline(_SolaLetturaInline, admin.TabularInli
 
 @admin.register(TransmittalInterno)
 class TransmittalInternoAdmin(admin.ModelAdmin):
-    """Sola lettura: l'archivio si scrive da ``crea_trasmittal_interno``, non da qui."""
+    """Sola lettura, cancellabile: l'archivio si scrive da ``crea_trasmittal_interno``,
+    non da qui, ma un superuser può eliminare una lettera per pulire dati di
+    test o errori — es. non è "l'ultima del giorno" e quindi il tasto Annulla
+    dell'app non la copre.
+
+    Eliminare qui cancella solo il record (e a cascata le sue righe/i suoi
+    destinatari): non tocca il PDF già scritto su Z:\\JOBS, l'eventuale
+    cartella DCC "DA SPEDIRE" preparata, né richiama un'email già inviata.
+    Il progressivo di quel giorno per la commessa resta "bucato" (il
+    successivo riparte comunque da max+1, senza collisioni): per l'uso
+    normale resta preferibile il tasto Annulla nell'app.
+    """
 
     list_display = ("nome", "testata", "data", "progressivo", "creato_da", "creato_il")
     list_filter = ("data",)
@@ -397,7 +408,4 @@ class TransmittalInternoAdmin(admin.ModelAdmin):
         return False
 
     def has_change_permission(self, request, obj=None):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
         return False
