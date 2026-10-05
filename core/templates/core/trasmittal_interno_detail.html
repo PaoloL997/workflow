@@ -926,9 +926,7 @@
   window.chiudiInfoFirme = function () {
     document.getElementById('info-firme-modal').classList.remove('open');
   };
-  document.getElementById('info-firme-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiInfoFirme();
-  });
+  bindBackdropClose(document.getElementById('info-firme-modal'), chiudiInfoFirme);
 
   /* ── Theme toggle ── */
   (function () {
@@ -1154,9 +1152,7 @@
     chiudiSitiDropdown();
     document.getElementById('nuova-modal').classList.remove('open');
   };
-  document.getElementById('nuova-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiNuovaLettera();
-  });
+  bindBackdropClose(document.getElementById('nuova-modal'), chiudiNuovaLettera);
 
   window.vaiAllaCompilazione = function () {
     if (!requireWriteTI()) return;
@@ -1501,9 +1497,7 @@
     chiudiSitiDropdown();
     document.getElementById('componi-modal').classList.remove('open');
   };
-  document.getElementById('componi-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiComponi();
-  });
+  bindBackdropClose(document.getElementById('componi-modal'), chiudiComponi);
 
   /* ── Siti coinvolti: modifica per singolo documento (in "Componi lettera") ── */
   window.apriSitiDropdownComponi = function (id, boxEl) {
@@ -1572,9 +1566,7 @@
       document.getElementById('componi-modal').classList.add('open');
     }
   };
-  document.getElementById('conferma-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiConferma();
-  });
+  bindBackdropClose(document.getElementById('conferma-modal'), chiudiConferma);
 
   function chipLabel(d) {
     if (d.origine === 'stabilimento') {
@@ -1963,9 +1955,7 @@
     chiudiSitiDropdown();
     document.getElementById('destinazioni-modal').classList.remove('open');
   };
-  document.getElementById('destinazioni-modal').addEventListener('click', function (e) {
-    if (e.target === this) chiudiDestinazioni();
-  });
+  bindBackdropClose(document.getElementById('destinazioni-modal'), chiudiDestinazioni);
 
   /* ── init ── */
   caricaStorico();

@@ -1160,9 +1160,7 @@
   document.getElementById('btn-nuova').addEventListener('click', openModal);
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  overlay.addEventListener('click', function (e) {
-    if (e.target === overlay) closeModal();
-  });
+  bindBackdropClose(overlay, closeModal);
 
   document.querySelectorAll('.tipo-pill').forEach(function (p) {
     p.addEventListener('click', function () {

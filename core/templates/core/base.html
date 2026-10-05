@@ -622,6 +622,23 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
     }
+
+    /* Chiude un modale al click sul backdrop, senza scattare per errore quando
+       l'utente seleziona/copia del testo in un campo e il rilascio del mouse
+       (mouseup) finisce sul backdrop: in quel caso il click generato dal
+       browser ha target il backdrop pur non essendo un vero click "fuori".
+       Richiede che ANCHE il mousedown sia partito dal backdrop stesso. */
+    function bindBackdropClose(backdropEl, closeFn) {
+      if (!backdropEl) return;
+      var mousedownSulBackdrop = false;
+      backdropEl.addEventListener('mousedown', function (e) {
+        mousedownSulBackdrop = (e.target === backdropEl);
+      });
+      backdropEl.addEventListener('click', function (e) {
+        if (mousedownSulBackdrop && e.target === backdropEl) closeFn();
+        mousedownSulBackdrop = false;
+      });
+    }
   </script>
   <div id="permission-toast" class="permission-toast" role="alert" aria-live="assertive"></div>
   {% block content %}{% endblock %}
@@ -773,9 +790,7 @@
       apriCommessaDaRicerca(e.target.value);
     });
 
-    document.getElementById('spotlight-overlay').addEventListener('click', e => {
-      if (e.target === e.currentTarget) closeSpotlight();
-    });
+    bindBackdropClose(document.getElementById('spotlight-overlay'), closeSpotlight);
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') closeSpotlight();

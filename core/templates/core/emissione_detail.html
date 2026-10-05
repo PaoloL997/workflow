@@ -978,7 +978,7 @@
 
   window.apriModalAddr   = function() { document.getElementById('addr-modal').classList.add('open'); };
   window.chiudiModalAddr = function() { document.getElementById('addr-modal').classList.remove('open'); };
-  document.getElementById('addr-modal').addEventListener('click', function(e) { if (e.target === this) chiudiModalAddr(); });
+  bindBackdropClose(document.getElementById('addr-modal'), chiudiModalAddr);
 
   function selAddrIds() { return _addrs.filter(function(a) { return a.sel; }).map(function(a) { return a.id; }); }
 
@@ -1105,7 +1105,7 @@
     apriPdfOptsModal();
   };
   window.chiudiConferma = function() { document.getElementById('conf-modal').classList.remove('open'); };
-  document.getElementById('conf-modal').addEventListener('click', function(e) { if (e.target === this) chiudiConferma(); });
+  bindBackdropClose(document.getElementById('conf-modal'), chiudiConferma);
 
   /* ── storico transmittal ── */
   function storicoUrl(path) {
@@ -1181,9 +1181,7 @@
   window.chiudiStoricoTrasmittal = function() {
     document.getElementById('storico-modal').classList.remove('open');
   };
-  document.getElementById('storico-modal').addEventListener('click', function(e) {
-    if (e.target === this) chiudiStoricoTrasmittal();
-  });
+  bindBackdropClose(document.getElementById('storico-modal'), chiudiStoricoTrasmittal);
 
   window.apriAnteprimaTrasmittal = function(id) {
     var serveUrl = storicoUrl(id + '/file/');
@@ -1227,7 +1225,7 @@
     });
   });
   window.chiudiPdfOpts = function() { document.getElementById('pdf-opts-modal').classList.remove('open'); };
-  document.getElementById('pdf-opts-modal').addEventListener('click', function(e) { if (e.target === this) chiudiPdfOpts(); });
+  bindBackdropClose(document.getElementById('pdf-opts-modal'), chiudiPdfOpts);
 
   window.confermaPdfOpts = function() {
     if (!requireWrite()) return;

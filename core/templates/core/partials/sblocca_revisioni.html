@@ -343,8 +343,8 @@
   btn.addEventListener('click', openListModal);
   document.getElementById('sbloc-modal-close').addEventListener('click', closeListModal);
   document.getElementById('sbloc-confirm-close').addEventListener('click', closeConfirm);
-  backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeListModal(); });
-  confirmBackdrop.addEventListener('click', function (e) { if (e.target === confirmBackdrop) closeConfirm(); });
+  bindBackdropClose(backdrop, closeListModal);
+  bindBackdropClose(confirmBackdrop, closeConfirm);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
       if (confirmBackdrop.classList.contains('show')) closeConfirm();

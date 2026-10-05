@@ -768,9 +768,9 @@
 
   banner.addEventListener('click', openAnomalieModal);
   document.getElementById('anom-modal-close').addEventListener('click', closeAnomalieModal);
-  backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeAnomalieModal(); });
+  bindBackdropClose(backdrop, closeAnomalieModal);
   document.getElementById('anom-resolve-close').addEventListener('click', closeResolveModal);
-  resolveBackdrop.addEventListener('click', function (e) { if (e.target === resolveBackdrop) closeResolveModal(); });
+  bindBackdropClose(resolveBackdrop, closeResolveModal);
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (resolveBackdrop.classList.contains('show')) {

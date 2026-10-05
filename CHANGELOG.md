@@ -18,6 +18,7 @@
 ### Fixed
 
 - Import commessa da Access: il campo Requisition ("Bid no.") passa da 100 a 300 caratteri. Alcune commesse hanno in Access una Requisition più lunga del vecchio limite (es. due bid concatenate) e l'importazione falliva con un errore generico di troncamento
+- Tutti i modali dell'app (aggiungi/modifica documento, componi lettera, anomalie, destinazioni, ricerca commessa e altri — una ventina di punti in 12 pagine) non si chiudono più da soli quando si seleziona del testo in un campo per copiarlo e il rilascio del mouse finisce di poco fuori dal bordo del campo. Il controllo "click fuori per chiudere" ora richiede che anche il clic sia partito dallo sfondo, non solo che sia terminato lì
 
 ## [0.1.5] - 2026-09-24
 

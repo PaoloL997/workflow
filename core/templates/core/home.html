@@ -1710,9 +1710,7 @@
   });
 
   // Close modal clicking outside
-  document.getElementById('modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeModal();
-  });
+  bindBackdropClose(document.getElementById('modal-overlay'), closeModal);
 
   /* ──────────────────────────────────────────────
      Modal: Version / changelog
@@ -1731,9 +1729,7 @@
 
   document.getElementById('version-badge').addEventListener('click', openVersionModal);
   document.getElementById('version-modal-close').addEventListener('click', closeVersionModal);
-  document.getElementById('version-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeVersionModal();
-  });
+  bindBackdropClose(document.getElementById('version-modal-overlay'), closeVersionModal);
 
   // Submit form with Enter on last input
   document.getElementById('form-commessa').addEventListener('keydown', e => {

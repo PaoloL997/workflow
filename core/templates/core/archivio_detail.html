@@ -1053,9 +1053,7 @@
   window.saveAddr       = saveAddr;
   window.deleteAddr     = deleteAddr;
 
-  document.getElementById('addr-modal-overlay').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeAddrModal();
-  });
+  bindBackdropClose(document.getElementById('addr-modal-overlay'), closeAddrModal);
 
   loadIndirizzi();
 })();

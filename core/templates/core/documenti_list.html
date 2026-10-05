@@ -1722,7 +1722,7 @@
   function closeFileChoiceModal() { modalFileChoice.classList.remove('show'); }
 
   document.getElementById('modal-filechoice-close').addEventListener('click', closeFileChoiceModal);
-  modalFileChoice.addEventListener('click', function(e){ if (e.target === modalFileChoice) closeFileChoiceModal(); });
+  bindBackdropClose(modalFileChoice, closeFileChoiceModal);
 
   /* ── Modal: file browser ── */
   var COMMESSA_FOLDER = "{{ commessa_folder|escapejs }}";
@@ -1811,7 +1811,7 @@
 
   document.getElementById('modal-filebrowser-close').addEventListener('click', closeFileBrowserModal);
   document.getElementById('modal-filebrowser-cancel').addEventListener('click', closeFileBrowserModal);
-  modalFileBrowser.addEventListener('click', function(e){ if (e.target === modalFileBrowser) closeFileBrowserModal(); });
+  bindBackdropClose(modalFileBrowser, closeFileBrowserModal);
 
   document.getElementById('modal-filebrowser-save').addEventListener('click', function() {
     if (!requireWrite()) return;
@@ -2021,7 +2021,7 @@
 
   document.getElementById('modal-modello-close').addEventListener('click', closeModelloModal);
   document.getElementById('modal-modello-cancel').addEventListener('click', closeModelloModal);
-  modalModello.addEventListener('click', function(e){ if (e.target === modalModello) closeModelloModal(); });
+  bindBackdropClose(modalModello, closeModelloModal);
   modelloGeneraBtn.addEventListener('click', generaDaModello);
 
   function openEditModalById(id) {
@@ -2114,7 +2114,7 @@
 
   document.getElementById('modal-close').addEventListener('click', closeModal);
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  backdrop.addEventListener('click', function(e){ if (e.target === backdrop) closeModal(); });
+  bindBackdropClose(backdrop, closeModal);
 
   /* ── Import Excel ── */
   var importBackdrop = document.getElementById('modal-import-backdrop');
@@ -2188,7 +2188,7 @@
 
   document.getElementById('modal-import-close').addEventListener('click', closeImportModal);
   document.getElementById('modal-import-cancel').addEventListener('click', closeImportModal);
-  importBackdrop.addEventListener('click', function(e){ if (e.target === importBackdrop) closeImportModal(); });
+  bindBackdropClose(importBackdrop, closeImportModal);
 
   /* ── Export ── */
   document.getElementById('btn-export').addEventListener('click', function(){

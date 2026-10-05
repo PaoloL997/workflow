@@ -2023,9 +2023,7 @@
     document.getElementById('del-modal-overlay').classList.remove('open');
   }
 
-  document.getElementById('del-modal-overlay').addEventListener('click', function (e) {
-    if (e.target === e.currentTarget) closeDeleteModal();
-  });
+  bindBackdropClose(document.getElementById('del-modal-overlay'), closeDeleteModal);
 
   window.openDeleteModal  = openDeleteModal;
   window.closeDeleteModal = closeDeleteModal;

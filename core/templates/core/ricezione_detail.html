@@ -1112,9 +1112,7 @@
   };
 
   /* Close modal on backdrop click */
-  document.getElementById('modal-overlay').addEventListener('click', function(e) {
-    if (e.target === this) closeModal();
-  });
+  bindBackdropClose(document.getElementById('modal-overlay'), closeModal);
 
   /* Close on Escape */
   document.addEventListener('keydown', function(e) {

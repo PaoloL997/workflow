@@ -2797,7 +2797,7 @@
   function closeFileChoiceModal() { modalFileChoice.classList.remove('show'); }
 
   document.getElementById('modal-filechoice-close').addEventListener('click', closeFileChoiceModal);
-  modalFileChoice.addEventListener('click', function (e) { if (e.target === modalFileChoice) closeFileChoiceModal(); });
+  bindBackdropClose(modalFileChoice, closeFileChoiceModal);
 
   /* ── Modal: file browser ── */
   const modalFileBrowser = document.getElementById('modal-filebrowser-backdrop');
@@ -2872,7 +2872,7 @@
 
   document.getElementById('modal-filebrowser-close').addEventListener('click', closeFileBrowserModal);
   document.getElementById('modal-filebrowser-cancel').addEventListener('click', closeFileBrowserModal);
-  modalFileBrowser.addEventListener('click', function (e) { if (e.target === modalFileBrowser) closeFileBrowserModal(); });
+  bindBackdropClose(modalFileBrowser, closeFileBrowserModal);
 
   document.getElementById('modal-filebrowser-save').addEventListener('click', function () {
     if (!requireWrite()) return;
