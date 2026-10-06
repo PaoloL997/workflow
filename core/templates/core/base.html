@@ -571,7 +571,7 @@
       const n = Number(String(value).trim());
       return Number.isInteger(n) ? n : null;
     }
-    /* Sequenza letta da un {{ ...|json_script }} della pagina; [] se assente. */
+    /* Sequenza letta dal tag json_script della pagina con quell'id; [] se assente. */
     function revSequenzaDaPagina(id) {
       try {
         const el = document.getElementById(id);

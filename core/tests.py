@@ -6142,6 +6142,14 @@ class RevisioneLabelExportTests(TestCase):
                 self.assertContains(response, "function formatRevLabel(rev, revLetFlag, revSeq)")
                 self.assertContains(response, "REV_LET_FLAG = true")
                 self.assertContains(response, 'id="rev-seq-pagina"')
+                self._assert_helper_revisione_integri(response)
+
+    def _assert_helper_revisione_integri(self, response):
+        """Lo script degli helper in base.html non è spezzato da un </script> interno."""
+        html = response.content.decode()
+        inizio = html.index("function revNumeroInLettera")
+        fine = html.index("function bindBackdropClose")
+        self.assertNotIn("</script>", html[inizio:fine])
 
     def test_export_emissione_xlsx_usa_la_lettera(self):
         import openpyxl
@@ -8899,6 +8907,7 @@ class RevisioniPersonalizzateArchivioTests(TestCase):
         self.assertContains(response, 'value="1, 2, D"')
         self.assertContains(response, 'value="personalizzata" checked')
         self.assertNotContains(response, 'id="arch-rev-let"')
+        RevisioneLabelExportTests._assert_helper_revisione_integri(self, response)
 
 
 def _dai_firma(utente, nome="firme/prova.png"):
