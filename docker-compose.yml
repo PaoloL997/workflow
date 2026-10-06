@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     network_mode: host
     command: ["/entrypoint.sh", "gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8004", "--workers", "3", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
+    depends_on:
+      # Che il bucket risponda lo controlla entrypoint.sh prima di avviare l'app.
+      - storage
     env_file:
       - .env
     environment:
@@ -13,8 +16,11 @@ services:
       FILESERVER_JOBS_PATH: ${FILESERVER_JOBS_PATH:-/app/fileserver}
       USE_X_FORWARDED_HOST: "True"
       USE_X_FORWARDED_PROTO: ${USE_X_FORWARDED_PROTO:-False}
+      # `web` è in rete host: raggiunge Garage sulla porta pubblicata in locale.
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://127.0.0.1:3900}
     volumes:
       - static_data:/app/staticfiles
+      # Solo come sorgente della copia dei vecchi file su S3 (entrypoint.sh).
       - media_data:/app/media
       - logs_data:/app/logs
       - ${FILESERVER_HOST_PATH}:${FILESERVER_JOBS_PATH:-/app/fileserver}:ro
@@ -32,9 +38,36 @@ services:
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - static_data:/static:ro
-      - media_data:/media:ro
+
+  # Garage (S3) per foto profilo e firme. Bucket privato, pubblicato solo su
+  # 127.0.0.1: lo usa `web`, i browser no (le immagini le serve l'app).
+  storage:
+    image: dxflrs/garage:v2.3.0
+    restart: unless-stopped
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?Imposta GARAGE_RPC_SECRET nel file .env}
+      GARAGE_DEFAULT_ACCESS_KEY: ${S3_ACCESS_KEY:?Imposta S3_ACCESS_KEY nel file .env}
+      GARAGE_DEFAULT_SECRET_KEY: ${S3_SECRET_KEY:?Imposta S3_SECRET_KEY nel file .env}
+      GARAGE_DEFAULT_BUCKET: ${S3_BUCKET:?Imposta S3_BUCKET nel file .env}
+    ports:
+      # Cambiando la porta va cambiato anche S3_ENDPOINT_URL.
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - ./deploy/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    healthcheck:
+      # Immagine senza shell né curl: si usa il binario di Garage.
+      test: ["CMD", "/garage", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
 volumes:
   static_data:
   media_data:
   logs_data:
+  garage_meta:
+  garage_data:

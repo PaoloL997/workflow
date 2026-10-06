@@ -52,7 +52,23 @@ FILESERVER_HOST_PATH=/mnt/jobs
 FILESERVER_JOBS_PATH=/app/fileserver
 ```
 
-4. Avvia lo stack:
+4. Configura in `.env` lo storage S3 (Garage) per foto profilo e firme. Genera le
+   credenziali una volta sola e non cambiarle più:
+
+```bash
+echo "S3_ACCESS_KEY=GK$(openssl rand -hex 16)"
+echo "S3_SECRET_KEY=$(openssl rand -hex 32)"
+echo "GARAGE_RPC_SECRET=$(openssl rand -hex 32)"
+```
+
+```env
+S3_BUCKET=workflow-media
+S3_ACCESS_KEY=GK...
+S3_SECRET_KEY=...
+GARAGE_RPC_SECRET=...
+```
+
+5. Avvia lo stack:
 
 ```bash
 docker compose up --build -d
@@ -64,7 +80,57 @@ L'applicazione sara' disponibile su `http://IP_DEL_SERVER:8000/` e l'admin su
 Servizi inclusi nello stack:
 
 - `web`: Django + Gunicorn
-- `nginx`: reverse proxy e pubblicazione di static/media
+- `nginx`: reverse proxy e pubblicazione dei file statici
+- `storage`: [Garage](https://garagehq.deuxfleurs.fr/), storage S3 per foto profilo e firme
+
+### Storage S3 (Garage)
+
+Foto profilo e firme degli utenti stanno nel bucket `S3_BUCKET` del servizio `storage`.
+Il bucket è privato e Garage ascolta solo su `127.0.0.1:3900`: le immagini le serve
+l'applicazione, solo agli utenti loggati. All'avvio Garage crea da solo chiave e bucket
+dalle variabili del `.env`.
+
+**Primo avvio su un'installazione esistente.** Dopo aver aggiunto le variabili S3 al `.env`
+e lanciato `docker compose up --build -d`, il container `web` copia nel bucket le foto e
+le firme già caricate (volume `media_data`), mantenendo gli stessi nomi. La copia è
+idempotente e viene ripetuta a ogni avvio finché il volume non viene tolto. Per
+controllare o rilanciarla a mano:
+
+```bash
+docker compose logs web | grep "File media"
+docker compose exec web python manage.py copia_media_su_storage --dry-run
+docker compose exec web python manage.py copia_media_su_storage
+```
+
+**Verifica.**
+
+```bash
+docker compose exec storage /garage status
+docker compose exec storage /garage bucket info workflow-media
+```
+
+**Backup.** I dati sono nei volumi `<progetto>_garage_meta` e `<progetto>_garage_data`
+(nomi esatti con `docker volume ls`). Per una copia coerente fermare il servizio:
+
+```bash
+docker compose stop storage
+docker run --rm -v <progetto>_garage_meta:/meta -v <progetto>_garage_data:/data \
+  -v "$PWD/backups":/backup alpine tar czf /backup/garage-$(date +%F).tgz /meta /data
+docker compose start storage
+```
+
+**Cambio delle credenziali.**
+
+```bash
+docker compose exec storage /garage key create workflow-nuova
+docker compose exec storage /garage bucket allow --read --write --key workflow-nuova workflow-media
+# aggiorna S3_ACCESS_KEY/S3_SECRET_KEY nel .env con quelle stampate, poi:
+docker compose up -d
+docker compose exec storage /garage key delete <vecchia-chiave> --yes
+```
+
+**Attenzione:** non rinominare mai `S3_BUCKET`. Garage creerebbe un bucket nuovo e vuoto,
+e l'applicazione non troverebbe più le immagini già caricate.
 
 Per aggiornare l'applicazione:
 
@@ -125,6 +191,9 @@ Restart-Service WorkflowWaitress
 
 **Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
 recycle del pool IIS).
+
+**Foto profilo e firme:** su Windows non serve lo storage S3. Lasciando `S3_BUCKET` vuoto
+restano nella cartella `media\` del progetto e le serve l'applicazione stessa.
 
 ### Rollback a wfastcgi
 

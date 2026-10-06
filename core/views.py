@@ -7,7 +7,7 @@ import openpyxl
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
@@ -90,6 +90,12 @@ from .services.commesse import (
 from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
+from .services.media import (
+    ERRORI_STORAGE,
+    StorageNonDisponibile,
+    elimina_file,
+    risposta_immagine,
+)
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -1101,6 +1107,8 @@ def trasmittal_interno_anteprima_pdf_api(request, job):
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+    except StorageNonDisponibile as exc:
+        return JsonResponse({"error": str(exc)}, status=503)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="anteprima_trasmittal_interno.pdf"'
     return response
@@ -2726,22 +2734,37 @@ def profilo_view(request):
                 user.ruolo = ruolo
                 user.reparto = reparto
 
+                # I file sostituiti si cancellano solo dopo il salvataggio: se lo
+                # storage non risponde, la vecchia immagine resta al suo posto.
+                da_eliminare = []
                 avatar_file = request.FILES.get("avatar")
                 if avatar_file:
-                    if user.avatar:
-                        user.avatar.delete(save=False)
+                    da_eliminare.append(user.avatar.name)
                     user.avatar = avatar_file
 
                 if firma_file:
-                    if user.firma:
-                        user.firma.delete(save=False)
+                    da_eliminare.append(user.firma.name)
                     user.firma = firma_file
                 elif request.POST.get("rimuovi_firma") and user.firma:
-                    user.firma.delete(save=False)
+                    da_eliminare.append(user.firma.name)
                     user.firma = None
 
-                user.save()
-                return redirect("home")
+                try:
+                    # Atomico: un errore dello storage annulla solo questo
+                    # salvataggio, poi l'utente si rilegge dal database.
+                    with transaction.atomic():
+                        user.save()
+                except ERRORI_STORAGE:
+                    logger.warning("Salvataggio del profilo di %s fallito.", user, exc_info=True)
+                    user.refresh_from_db()
+                    errors["avatar" if avatar_file else "firma"] = (
+                        "Impossibile salvare l'immagine: archivio non raggiungibile, riprova."
+                    )
+                else:
+                    # Mai il file appena salvato, anche se ha ripreso il nome del
+                    # vecchio (succede se il vecchio mancava già dallo storage).
+                    elimina_file(set(da_eliminare) - {user.avatar.name, user.firma.name})
+                    return redirect("home")
 
     reparti = list_reparti()
     return render(
@@ -2764,16 +2787,24 @@ def firma_utente_view(request, pk):
     del file (vedi il template del profilo), quindi una nuova immagine non
     resta in cache.
     """
-    utente = User.objects.filter(pk=pk).first()
-    if utente is None or not utente.firma:
+    utente = User.objects.filter(pk=pk).only("firma").first()
+    if utente is None:
         raise Http404
-    try:
-        file = utente.firma.open("rb")
-    except FileNotFoundError:
-        raise Http404 from None
-    risposta = FileResponse(file)
-    risposta["Cache-Control"] = "private, no-cache"
-    return risposta
+    return risposta_immagine(utente.firma, cache_control="private, no-cache")
+
+
+@login_required
+def avatar_utente_view(request, pk):
+    """La foto profilo di un utente, per chi è autenticato.
+
+    Come per la firma: il bucket S3 è privato e la cartella media è servita da
+    Django solo in sviluppo. L'URL (``User.url_avatar``) cambia a ogni nuovo
+    caricamento, quindi il browser può tenerla in cache.
+    """
+    utente = User.objects.filter(pk=pk).only("avatar").first()
+    if utente is None:
+        raise Http404
+    return risposta_immagine(utente.avatar, cache_control="private, max-age=86400")
 
 
 # ── API: Anomalie revisioni ───────────────────────────────────────────────────

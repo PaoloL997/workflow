@@ -13,6 +13,7 @@ from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
 from core.models import FirmatarioStabilimento, RuoloFirmatarioStabilimento, Stabilimento
+from core.services.media import leggi_bytes
 from core.services.revisione_label import format_revisione_label
 from core.services.situazione_cella_vendor import colore_cella_vendor
 from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
@@ -838,14 +839,13 @@ def _build_note_libere(pdf, note):
 
 
 def _leggi_firma_bytes(utente):
-    """Signature image bytes for ``utente``, or None if absent/unreadable."""
-    if not utente.firma:
-        return None
-    try:
-        with utente.firma.open("rb") as file:
-            return file.read()
-    except (FileNotFoundError, OSError):
-        return None
+    """Signature image bytes for ``utente``, or None if there is none.
+
+    A missing file leaves the signature box empty; an unreachable storage
+    raises ``StorageNonDisponibile``, so the letter is not issued silently
+    without signatures (the PDF step fails and can be retried).
+    """
+    return leggi_bytes(utente.firma)
 
 
 def _firmatari_per_ruolo(siti, ruolo):

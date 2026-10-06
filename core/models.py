@@ -1,6 +1,9 @@
+from urllib.parse import quote
+
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.urls import reverse
 
 
 class Stabilimento(models.Model):
@@ -127,6 +130,18 @@ class User(AbstractUser):
     @property
     def nome_completo(self):
         return self.get_full_name() or self.username
+
+    @property
+    def url_avatar(self):
+        """URL della foto profilo servita dall'app, o ``None`` se non c'è.
+
+        Il bucket S3 è privato, quindi non si usa ``avatar.url``. Il nome del
+        file nell'URL cambia a ogni nuovo caricamento: la cache del browser
+        non resta indietro.
+        """
+        if not self.avatar:
+            return None
+        return f"{reverse('avatar_utente', args=[self.pk])}?v={quote(self.avatar.name)}"
 
     @property
     def can_write(self):

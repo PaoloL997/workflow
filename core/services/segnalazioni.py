@@ -45,12 +45,8 @@ def _iniziale(user):
 
 
 def _avatar_url(user):
-    if user is None or not getattr(user, "avatar", None):
-        return None
-    try:
-        return user.avatar.url
-    except ValueError:
-        return None
+    # Servita dall'app: lo storage S3 è privato (vedi User.url_avatar).
+    return user.url_avatar if user is not None else None
 
 
 def serialize_commento(c):

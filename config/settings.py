@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -26,6 +27,56 @@ def env_list(name: str, default: list[str]) -> list[str]:
     if value is None:
         return default
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def storage_media_da_env() -> dict:
+    """Storage dei file caricati dagli utenti (foto profilo e firme).
+
+    Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (Garage nel docker
+    compose, vedi README); senza, restano nella cartella MEDIA_ROOT come in
+    sviluppo e sul server Windows/IIS. Il bucket è privato: le immagini le
+    serve l'app agli utenti loggati, i browser non parlano mai con lo storage.
+    """
+    bucket = os.environ.get("S3_BUCKET", "").strip()
+    if not bucket:
+        return {"BACKEND": "django.core.files.storage.FileSystemStorage"}
+    access_key = os.environ.get("S3_ACCESS_KEY", "").strip()
+    secret_key = os.environ.get("S3_SECRET_KEY", "").strip()
+    if not access_key or not secret_key:
+        raise ImproperlyConfigured("S3_BUCKET è impostato ma mancano S3_ACCESS_KEY/S3_SECRET_KEY.")
+
+    from botocore.config import Config
+
+    return {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": bucket,
+            "endpoint_url": os.environ.get("S3_ENDPOINT_URL", "").strip() or None,
+            "access_key": access_key,
+            "secret_key": secret_key,
+            # Deve coincidere con s3_region di deploy/garage.toml (firma SigV4).
+            "region_name": os.environ.get("S3_REGION", "").strip() or "garage",
+            # Due utenti che caricano "firma.png" non devono sovrascriversi a
+            # vicenda: come su disco, un nome già usato riceve un suffisso.
+            "file_overwrite": False,
+            "default_acl": None,
+            "querystring_auth": True,
+            # Con client_config le OPTIONS addressing_style/signature_version
+            # vengono ignorate da django-storages: vanno messe qui.
+            "client_config": Config(
+                s3={"addressing_style": "path"},
+                signature_version="s3v4",
+                # Storage giù: meglio un errore subito che un worker appeso.
+                connect_timeout=3,
+                read_timeout=10,
+                retries={"max_attempts": 2, "mode": "standard"},
+                # I checksum di default di boto3 recente non sono supportati da
+                # tutti gli S3 compatibili: solo dove l'API li richiede.
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
+        },
+    }
 
 
 # Quick-start development settings - unsuitable for production
@@ -210,10 +261,16 @@ SHORT_DATETIME_FORMAT = "j M Y H:i"
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+STORAGES = {
+    "default": storage_media_da_env(),
+    # Lo storage effettivo degli statici da Django 5.1 in poi: la vecchia
+    # STATICFILES_STORAGE (whitenoise manifest) era già ignorata (vedi TECH-DEBT).
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 FILESERVER_JOBS_PATH = os.environ.get("FILESERVER_JOBS_PATH", r"Z:\JOBS")
 

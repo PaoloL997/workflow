@@ -383,8 +383,8 @@
           <!-- Avatar upload (sub-form, auto-submit on change) -->
           <label class="avatar-ring" for="avatar-upload" title="Cambia foto profilo">
             <div class="avatar-circle">
-              {% if user.avatar %}
-                <img src="{{ user.avatar.url }}" alt="Foto profilo">
+              {% if user.url_avatar %}
+                <img src="{{ user.url_avatar }}" alt="Foto profilo">
               {% else %}
                 <span class="avatar-initial-big">{{ user.first_name|slice:":1"|default:user.username|slice:":1" }}</span>
               {% endif %}
@@ -396,7 +396,8 @@
               </svg>
             </div>
           </label>
-          <input type="file" id="avatar-upload" name="avatar" accept="image/*" class="avatar-upload-input">
+          <input type="file" id="avatar-upload" name="avatar" accept="image/png,image/jpeg,image/gif,image/webp" class="avatar-upload-input">
+          {% if errors.avatar %}<span class="field-error" role="alert">{{ errors.avatar }}</span>{% endif %}
 
           <div class="profile-name">{{ user.get_full_name|default:user.username }}</div>
           <div class="profile-username">@{{ user.username }}</div>

@@ -8,14 +8,18 @@ from unittest.mock import Mock, patch
 
 import openpyxl
 import pandas as pd
+from botocore.exceptions import EndpointConnectionError
 from django.apps import apps as django_apps
+from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.core import mail
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.files.storage import FileSystemStorage, InMemoryStorage, default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction
 from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
@@ -86,6 +90,7 @@ from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.export_grezzo import resolve_tabelle as resolve_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
+from .services.media import StorageNonDisponibile, copia_media_su_storage
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.organizzazione_commesse import (
     _dividi_nomi,
@@ -1695,11 +1700,7 @@ class TrasmittalInternoPdfTests(TestCase):
     """Generazione del PDF del trasmittal interno (form MQ 7.5-04)."""
 
     def setUp(self):
-        media = tempfile.TemporaryDirectory()
-        self.addCleanup(media.cleanup)
-        impostazioni = override_settings(MEDIA_ROOT=media.name)
-        impostazioni.enable()
-        self.addCleanup(impostazioni.disable)
+        _media_temporanea(self)
 
         self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
         self.pd = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
@@ -1791,6 +1792,22 @@ class TrasmittalInternoPdfTests(TestCase):
         self.assertIn("NO", tabella)
         self.assertIn("ABC", tabella)
 
+    def test_firma_assente_dallo_storage_lascia_il_riquadro_vuoto(self):
+        from src.pdf import _leggi_firma_bytes
+
+        _dai_firma(self.qualita, "firme/sparita.png")
+
+        self.assertIsNone(_leggi_firma_bytes(self.qualita))
+
+    def test_storage_irraggiungibile_non_emette_un_pdf_senza_firme(self):
+        from src.pdf import genera_trasmittal_interno_pdf
+
+        with (
+            patch.object(FileSystemStorage, "open", side_effect=_storage_irraggiungibile()),
+            self.assertRaises(StorageNonDisponibile),
+        ):
+            genera_trasmittal_interno_pdf(self.trasmittal)
+
     def test_firmatario_senza_immagine_non_solleva_eccezioni(self):
         from src.pdf import genera_trasmittal_interno_pdf
 
@@ -1804,11 +1821,7 @@ class SalvaPdfTrasmittalInternoTests(TestCase):
     """salva_pdf: scrittura sul fileserver, sempre dentro la cartella JOBS."""
 
     def setUp(self):
-        media = tempfile.TemporaryDirectory()
-        self.addCleanup(media.cleanup)
-        impostazioni = override_settings(MEDIA_ROOT=media.name)
-        impostazioni.enable()
-        self.addCleanup(impostazioni.disable)
+        _media_temporanea(self)
 
         self.jobs_root = tempfile.TemporaryDirectory()
         self.addCleanup(self.jobs_root.cleanup)
@@ -2397,6 +2410,19 @@ class TrasmittalInternoLetteraTests(TestCase):
 
     # -- anteprima --
 
+    def test_anteprima_pdf_con_storage_irraggiungibile_risponde_503(self):
+        self.client.force_login(self.writer)
+
+        with patch("core.views.anteprima_pdf_bytes", side_effect=StorageNonDisponibile()):
+            risposta = self.client.post(
+                self._url("anteprima/pdf/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 503)
+        self.assertIn("non raggiungibile", risposta.json()["error"])
+
     def test_anteprima_mostra_destinatari_risolti_con_origine(self):
         self.client.force_login(self.reader)
 
@@ -2667,11 +2693,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     """mittente_trasmittal: l'email parte da chi ha compilato ed emesso la lettera."""
 
     def setUp(self):
-        media = tempfile.TemporaryDirectory()
-        self.addCleanup(media.cleanup)
-        impostazioni = override_settings(MEDIA_ROOT=media.name)
-        impostazioni.enable()
-        self.addCleanup(impostazioni.disable)
+        _media_temporanea(self)
 
         self.jobs_root = tempfile.TemporaryDirectory()
         self.addCleanup(self.jobs_root.cleanup)
@@ -8910,6 +8932,32 @@ class RevisioniPersonalizzateArchivioTests(TestCase):
         RevisioneLabelExportTests._assert_helper_revisione_integri(self, response)
 
 
+def _media_temporanea(test):
+    """Cartella media temporanea su disco per un test che salva file.
+
+    Sostituisce anche lo storage: se il .env configura S3, i test non lo
+    toccano mai. ``staticfiles`` va ripetuto perché STORAGES si sostituisce
+    per intero.
+    """
+    media = tempfile.TemporaryDirectory()
+    test.addCleanup(media.cleanup)
+    impostazioni = override_settings(
+        MEDIA_ROOT=media.name,
+        STORAGES={
+            **settings.STORAGES,
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        },
+    )
+    impostazioni.enable()
+    test.addCleanup(impostazioni.disable)
+    return media.name
+
+
+def _storage_irraggiungibile():
+    """Lo storage che non risponde, come uno S3 spento."""
+    return EndpointConnectionError(endpoint_url="http://127.0.0.1:3900")
+
+
 def _dai_firma(utente, nome="firme/prova.png"):
     """L'utente con un'immagine di firma.
 
@@ -8934,11 +8982,7 @@ class FirmaUtenteTests(TestCase):
     """Validatore dell'immagine di firma e upload/rimozione dal profilo."""
 
     def setUp(self):
-        media = tempfile.TemporaryDirectory()
-        self.addCleanup(media.cleanup)
-        impostazioni = override_settings(MEDIA_ROOT=media.name)
-        impostazioni.enable()
-        self.addCleanup(impostazioni.disable)
+        _media_temporanea(self)
 
         self.client = Client()
         self.writer = User.objects.create_user(
@@ -9013,6 +9057,282 @@ class FirmaUtenteTests(TestCase):
         pagina = self.client.get("/profilo/").content.decode()
         self.assertIn("Nessuna immagine di firma caricata.", pagina)
         self.assertNotIn("firma digitale", pagina.lower())
+
+    def test_rimuovere_o_sostituire_la_firma_cancella_il_file_vecchio(self):
+        self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+        self.writer.refresh_from_db()
+        prima = self.writer.firma.name
+
+        self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+        self.writer.refresh_from_db()
+        seconda = self.writer.firma.name
+
+        # Stesso nome caricato: il nuovo file ne prende un altro, il vecchio sparisce.
+        self.assertNotEqual(prima, seconda)
+        self.assertFalse(default_storage.exists(prima))
+        self.assertTrue(default_storage.exists(seconda))
+
+        self._profilo(rimuovi_firma="1")
+        self.assertFalse(default_storage.exists(seconda))
+
+    def test_la_vista_della_firma_serve_l_immagine_solo_agli_utenti_loggati(self):
+        self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+        url = f"/utenti/{self.writer.pk}/firma/"
+
+        risposta = self.client.get(url)
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta["Content-Type"], "image/png")
+        self.assertEqual(risposta["Cache-Control"], "private, no-cache")
+        self.assertEqual(b"".join(risposta.streaming_content), _png())
+
+        self.assertEqual(Client().get(url).status_code, 302)
+        senza_firma = User.objects.create_user("senza_firma", "senza-firma@b.it", "pw")
+        self.assertEqual(self.client.get(f"/utenti/{senza_firma.pk}/firma/").status_code, 404)
+
+    def test_storage_irraggiungibile_al_salvataggio_lascia_la_firma_di_prima(self):
+        with patch.object(FileSystemStorage, "_save", side_effect=OSError("disco pieno")):
+            risposta = self._profilo(firma=SimpleUploadedFile("firma.png", _png(), "image/png"))
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "archivio non raggiungibile")
+        self.writer.refresh_from_db()
+        self.assertEqual(self.writer.firma.name, "firme/prova.png")
+
+
+class AvatarUtenteTests(TestCase):
+    """Foto profilo: servita dall'app, sostituita senza perdere quella vecchia."""
+
+    def setUp(self):
+        _media_temporanea(self)
+        self.client = Client()
+        self.utente = User.objects.create_user(
+            "avatar_utente", "avatar-utente@b.it", "pw", first_name="Anna", last_name="Neri"
+        )
+        self.client.force_login(self.utente)
+
+    def _carica(self, nome="foto.png", contenuto=None):
+        return self.client.post(
+            "/profilo/",
+            {
+                "action": "update_profile",
+                "first_name": "Anna",
+                "last_name": "Neri",
+                "email": self.utente.email,
+                "avatar": SimpleUploadedFile(nome, contenuto or _png(), "image/png"),
+            },
+        )
+
+    def test_l_avatar_si_vede_solo_da_utenti_loggati(self):
+        self._carica()
+        self.utente.refresh_from_db()
+        url = self.utente.url_avatar
+        self.assertTrue(url.startswith(f"/utenti/{self.utente.pk}/avatar/?v=avatars/"))
+
+        risposta = self.client.get(url)
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta["Content-Type"], "image/png")
+        self.assertIn("private", risposta["Cache-Control"])
+        self.assertEqual(risposta["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(b"".join(risposta.streaming_content), _png())
+        self.assertEqual(Client().get(url).status_code, 302)
+
+    def test_404_senza_avatar_o_con_file_mancante(self):
+        self.assertEqual(self.client.get(f"/utenti/{self.utente.pk}/avatar/").status_code, 404)
+        self.assertEqual(self.client.get("/utenti/999999/avatar/").status_code, 404)
+
+        self.utente.avatar = "avatars/sparito.png"
+        self.utente.save(update_fields=["avatar"])
+        self.assertEqual(self.client.get(f"/utenti/{self.utente.pk}/avatar/").status_code, 404)
+
+    def test_un_file_che_non_e_un_immagine_non_viene_servito(self):
+        for nome in ("pagina.html", "disegno.svg"):
+            with self.subTest(nome=nome):
+                self.utente.avatar = SimpleUploadedFile(nome, b"<script>alert(1)</script>")
+                self.utente.save()
+
+                risposta = self.client.get(f"/utenti/{self.utente.pk}/avatar/")
+
+                self.assertEqual(risposta.status_code, 404)
+
+    def test_storage_irraggiungibile_risponde_503(self):
+        self._carica()
+
+        with patch.object(FileSystemStorage, "open", side_effect=_storage_irraggiungibile()):
+            risposta = self.client.get(f"/utenti/{self.utente.pk}/avatar/")
+
+        self.assertEqual(risposta.status_code, 503)
+
+    def test_le_pagine_usano_l_url_dell_app(self):
+        self._carica()
+
+        pagina = self.client.get("/profilo/").content.decode()
+
+        self.assertIn(f"/utenti/{self.utente.pk}/avatar/?v=avatars/", pagina)
+        self.assertNotIn("/media/avatars/", pagina)
+
+    def test_nuovo_avatar_cancella_il_vecchio_dopo_il_salvataggio(self):
+        self._carica()
+        self.utente.refresh_from_db()
+        prima = self.utente.avatar.name
+
+        self._carica()
+        self.utente.refresh_from_db()
+
+        self.assertNotEqual(self.utente.avatar.name, prima)
+        self.assertFalse(default_storage.exists(prima))
+        self.assertTrue(default_storage.exists(self.utente.avatar.name))
+
+    def test_storage_irraggiungibile_al_salvataggio_lascia_l_avatar_di_prima(self):
+        self._carica()
+        self.utente.refresh_from_db()
+        prima = self.utente.avatar.name
+
+        with patch.object(FileSystemStorage, "_save", side_effect=OSError("disco pieno")):
+            risposta = self._carica()
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertContains(risposta, "archivio non raggiungibile")
+        self.utente.refresh_from_db()
+        self.assertEqual(self.utente.avatar.name, prima)
+        self.assertTrue(default_storage.exists(prima))
+
+    def test_segnalazioni_usano_l_url_dell_app(self):
+        from core.services.segnalazioni import _avatar_url
+
+        self.utente.avatar = "avatars/a b.png"
+        self.utente.save(update_fields=["avatar"])
+
+        self.assertEqual(
+            _avatar_url(self.utente), f"/utenti/{self.utente.pk}/avatar/?v=avatars/a%20b.png"
+        )
+        self.assertIsNone(_avatar_url(None))
+
+    def test_admin_linka_la_firma_tramite_l_app(self):
+        admin_utente = User.objects.create_superuser("media_admin", "media-admin@b.it", "pw")
+        _dai_firma(self.utente)
+        self.client.force_login(admin_utente)
+
+        pagina = self.client.get(f"/admin/core/user/{self.utente.pk}/change/")
+
+        self.assertEqual(pagina.status_code, 200)
+        self.assertContains(pagina, f'href="/utenti/{self.utente.pk}/firma/"')
+
+
+class CopiaMediaSuStorageTests(TestCase):
+    """Copia di foto profilo e firme dalla cartella media allo storage S3."""
+
+    def setUp(self):
+        self.con_file = User.objects.create_user("copia_uno", "copia-uno@b.it", "pw")
+        self.con_file.avatar = "avatars/a.png"
+        self.con_file.firma = "firme/f.png"
+        self.con_file.save()
+        self.senza_file = User.objects.create_user("copia_due", "copia-due@b.it", "pw")
+        self.senza_file.firma = "firme/manca.png"
+        self.senza_file.save()
+        User.objects.create_user("copia_tre", "copia-tre@b.it", "pw")
+
+        self.sorgente = InMemoryStorage()
+        for nome in ("avatars/a.png", "firme/f.png", "avatars/orfano.png"):
+            self.sorgente.save(nome, io.BytesIO(nome.encode()))
+        self.destinazione = InMemoryStorage()
+
+    def test_copia_i_file_in_uso_con_lo_stesso_nome(self):
+        report = copia_media_su_storage(self.sorgente, self.destinazione)
+
+        self.assertEqual(report.copiati, ["avatars/a.png", "firme/f.png"])
+        self.assertEqual(report.mancanti, [("firme/manca.png", ["copia_due"])])
+        with self.destinazione.open("firme/f.png") as file:
+            self.assertEqual(file.read(), b"firme/f.png")
+        # Un file che nessuno usa più non viene ricopiato.
+        self.assertFalse(self.destinazione.exists("avatars/orfano.png"))
+
+    def test_si_puo_rilanciare(self):
+        copia_media_su_storage(self.sorgente, self.destinazione)
+
+        report = copia_media_su_storage(self.sorgente, self.destinazione)
+
+        self.assertEqual(report.copiati, [])
+        self.assertEqual(report.gia_presenti, ["avatars/a.png", "firme/f.png"])
+
+    def test_dry_run_non_scrive_nulla(self):
+        report = copia_media_su_storage(self.sorgente, self.destinazione, dry_run=True)
+
+        self.assertEqual(report.da_copiare, ["avatars/a.png", "firme/f.png"])
+        self.assertFalse(self.destinazione.exists("avatars/a.png"))
+
+    def test_comando_copia_nello_storage_configurato(self):
+        cartella = tempfile.TemporaryDirectory()
+        self.addCleanup(cartella.cleanup)
+        (Path(cartella.name) / "avatars").mkdir()
+        (Path(cartella.name) / "avatars" / "a.png").write_bytes(b"png")
+        uscita = io.StringIO()
+
+        with override_settings(
+            STORAGES={
+                **settings.STORAGES,
+                "default": {"BACKEND": "django.core.files.storage.InMemoryStorage"},
+            }
+        ):
+            call_command(
+                "copia_media_su_storage",
+                sorgente=cartella.name,
+                stdout=uscita,
+                stderr=io.StringIO(),
+            )
+            self.assertTrue(default_storage.exists("avatars/a.png"))
+
+        self.assertIn("1 copiati", uscita.getvalue())
+        self.assertIn("2 mancanti", uscita.getvalue())
+
+    def test_comando_rifiuta_di_copiare_la_cartella_su_se_stessa(self):
+        media = _media_temporanea(self)
+
+        with self.assertRaises(CommandError):
+            call_command("copia_media_su_storage", sorgente=media, stdout=io.StringIO())
+
+
+class StorageMediaDaEnvTests(SimpleTestCase):
+    """Scelta dello storage dei file caricati in base al .env."""
+
+    def _con_env(self, **valori):
+        from config.settings import storage_media_da_env
+
+        chiavi = ("S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY", "S3_ENDPOINT_URL", "S3_REGION")
+        with patch.dict("os.environ", {k: "" for k in chiavi}):
+            import os
+
+            os.environ.update(valori)
+            return storage_media_da_env()
+
+    def test_senza_bucket_resta_la_cartella_locale(self):
+        self.assertEqual(self._con_env()["BACKEND"], "django.core.files.storage.FileSystemStorage")
+
+    def test_con_bucket_usa_s3_path_style_senza_sovrascrivere(self):
+        from storages.backends.s3 import S3Storage
+
+        config = self._con_env(
+            S3_BUCKET="workflow-media",
+            S3_ACCESS_KEY="GK0123",
+            S3_SECRET_KEY="segreto",
+            S3_ENDPOINT_URL="http://127.0.0.1:3900",
+        )
+
+        self.assertEqual(config["BACKEND"], "storages.backends.s3.S3Storage")
+        opzioni = config["OPTIONS"]
+        self.assertEqual(opzioni["bucket_name"], "workflow-media")
+        self.assertEqual(opzioni["endpoint_url"], "http://127.0.0.1:3900")
+        self.assertEqual(opzioni["region_name"], "garage")
+        self.assertEqual(opzioni["client_config"].s3, {"addressing_style": "path"})
+        self.assertEqual(opzioni["client_config"].signature_version, "s3v4")
+        # Il backend si costruisce con queste opzioni senza collegarsi a niente.
+        storage = S3Storage(**opzioni)
+        self.assertFalse(storage.file_overwrite)
+        self.assertIsNone(storage.default_acl)
+
+    def test_bucket_senza_chiavi_e_un_errore_di_configurazione(self):
+        with self.assertRaises(ImproperlyConfigured):
+            self._con_env(S3_BUCKET="workflow-media")
 
 
 class TitoloPaginaCommessaTests(SimpleTestCase):

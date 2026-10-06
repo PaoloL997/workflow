@@ -4,6 +4,7 @@
 
 ### Added
 
+- Docker: nuovo servizio **storage** ([Garage](https://garagehq.deuxfleurs.fr/), compatibile S3) per le foto profilo e le firme degli utenti, attivato dalle variabili `S3_*` nel `.env` (vedi README). Il bucket è privato e raggiungibile solo dal server. Al primo avvio le foto e le firme già caricate vengono copiate nel bucket con lo stesso nome; il comando `python manage.py copia_media_su_storage` (con `--dry-run`) fa la stessa copia a mano. Senza `S3_BUCKET` (sviluppo, Windows/IIS) i file restano nella cartella `media`
 - Informazioni archivio: nuova sezione **Revisioni**, sotto gli indirizzi di consegna, per scegliere come si indicano le revisioni dei documenti: **Numero** (0, 1, 2…), **Lettera** (A, B, C…) oppure **Personalizzata**, con una sequenza di etichette scritta a mano separata da virgole (es. `1,2,3,D,E,F,4,5,6`). La prima etichetta è la prima revisione; oltre l'ultima la sequenza prosegue da sola dall'ultima etichetta (6 → 7, F → G). Un'anteprima mostra le revisioni prima di salvare. Come per le lettere, cambia solo come la revisione si legge — schermate, Excel, PDF, trasmittal — non i dati salvati
 - Informazioni archivio: pulsante **Aggiorna da BC** accanto ad "Aggiornamenti da Business Central" per lanciare a mano il confronto con Business Central sulla singola commessa, senza aspettare il controllo giornaliero delle 17:00. Funziona anche sulle commesse già chiuse
 - Informazioni archivio: nuovo campo **Sito costruttivo**, con la lista degli stabilimenti che hanno un codice sito Business Central. Serve a sbloccare il trasmittal interno quando Business Central non ha (o non ha ancora) il dato: fino ad ora l'unico modo per impostarlo era l'admin di Django
@@ -11,6 +12,7 @@
 
 ### Changed
 
+- Foto profilo e firme le serve l'applicazione, solo a utenti loggati, invece di un indirizzo `/media/` pubblico. Sostituendo una foto o una firma, quella vecchia viene cancellata solo dopo aver salvato la nuova: se lo storage non risponde resta quella di prima e il profilo mostra un errore. Se lo storage non risponde mentre si genera il PDF del trasmittal interno, il passo PDF fallisce in modo visibile (con **Riprova**) invece di emettere la lettera senza firme
 - Informazioni archivio: il toggle **Revisioni con lettera** esce da *Tempi di revisione* e diventa una delle tre scelte della nuova sezione **Revisioni**. Nella pagina della commessa il riquadro dell'archivio mostra *Revisioni: Numero / Lettera / Personalizzata* al posto di *Revisioni con lettere: Sì/No*
 - Trasmittal interno: l'email della lettera parte dall'indirizzo di chi l'ha compilata ed emessa (nome e cognome più email dell'utente), non più dalla casella generica impostata nelle impostazioni dell'applicazione. Chi riceve vede da chi arriva e risponde direttamente a lui: lo stesso indirizzo è anche in *Rispondi a*. Vale anche quando si usa **Riprova** sul passo Email — il mittente resta chi ha emesso la lettera, non chi preme il pulsante. Il pannello di conferma prima dell'invio e l'esito dell'emissione mostrano l'indirizzo da cui l'email parte. Se un utente non ha un'email registrata si ricade sull'indirizzo generico, così l'invio non fallisce
 - Admin di Django: un superuser può eliminare una lettera di trasmittal interno (prima l'admin era di sola lettura). Serve per pulire dati di test o errore che il tasto **Annulla** dell'app non copre (funziona solo sull'ultima lettera emessa in un giorno). Eliminare qui non tocca il PDF su Z:\JOBS, l'eventuale cartella DCC preparata né un'email già inviata: per l'uso normale resta preferibile Annulla
@@ -19,6 +21,8 @@
 
 ### Fixed
 
+- Le firme degli utenti non sono più scaricabili da chiunque conosca l'indirizzo `/media/firme/...` (installazione Docker)
+- Sul server Windows/IIS le foto profilo non si vedevano (l'indirizzo `/media/` rispondeva 404): ora si vedono
 - Import commessa da Access: il campo Requisition ("Bid no.") passa da 100 a 300 caratteri. Alcune commesse hanno in Access una Requisition più lunga del vecchio limite (es. due bid concatenate) e l'importazione falliva con un errore generico di troncamento
 - Tutti i modali dell'app (aggiungi/modifica documento, componi lettera, anomalie, destinazioni, ricerca commessa e altri — una ventina di punti in 12 pagine) non si chiudono più da soli quando si seleziona del testo in un campo per copiarlo e il rilascio del mouse finisce di poco fuori dal bordo del campo. Il controllo "click fuori per chiudere" ora richiede che anche il clic sia partito dallo sfondo, non solo che sia terminato lì
 
