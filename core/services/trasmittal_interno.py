@@ -947,13 +947,12 @@ def _corpo_email_trasmittal(trasmittal, percorso):
     """
     note = (trasmittal.note or "").strip()
     return (
-        f"Trasmittal interno {trasmittal.nome} — commessa {trasmittal.testata.job}.\n\n"
+        f"{_intestazione_email(trasmittal)}\n\n"
         + (f"Note:\n{note}\n\n" if note else "")
         + f"{_tabella_testo_righe(trasmittal)}\n\n"
         f"Salvato in: {percorso}\n\n"
         "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
-        "cartacee avvenuta.\n\n"
-        f"{_firma_email(trasmittal.creato_da)}"
+        "cartacee avvenuta."
     )
 
 
@@ -996,37 +995,32 @@ def _corpo_email_trasmittal_html(trasmittal, percorso):
     note = (trasmittal.note or "").strip()
     note_html = "<br>".join(escape(riga) for riga in note.splitlines())
     return (
-        f"<p>Trasmittal interno {escape(trasmittal.nome)} — commessa {escape(trasmittal.testata.job)}.</p>"
+        f"<p>{escape(_intestazione_email(trasmittal))}</p>"
         + (f"<p><strong>Note:</strong><br>{note_html}</p>" if note else "")
         + f"{_tabella_html_righe(trasmittal)}"
         f"<p>Salvato in: {escape(str(percorso))}</p>"
         "<p>Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
         "cartacee avvenuta.</p>"
-        f"<p>{escape(_firma_email(trasmittal.creato_da))}</p>"
     )
 
 
-def mittente_trasmittal(utente):
-    """Mittente dell'email di un trasmittal interno.
+def mittente_trasmittal(utente=None):
+    """Mittente dell'email di un trasmittal interno: la casella dell'applicazione.
 
-    L'indirizzo è la casella dell'applicazione (``DEFAULT_FROM_EMAIL``): il
-    server di posta lascia spedire solo con la casella con cui l'app si
-    autentica, un altro indirizzo viene rifiutato (``550 5.7.0
-    Authentication rejected``). Il nome mostrato è però quello di chi ha
-    emesso la lettera, così chi la riceve vede subito da chi arriva; le
-    risposte vanno a lui (``_indirizzo_utente`` in ``Reply-To``).
+    Solo l'indirizzo di ``DEFAULT_FROM_EMAIL`` (un eventuale nome nel .env si
+    ignora): il server di posta lascia spedire solo con la casella con cui
+    l'app si autentica, un altro indirizzo viene rifiutato (``550 5.7.0
+    Authentication rejected``). Chi ha emesso la lettera compare nel testo
+    dell'email (``_intestazione_email``), riceve le risposte e una copia.
 
     Args:
-        utente: Chi ha emesso la lettera (``TransmittalInterno.creato_da``).
+        utente: Chi ha emesso la lettera; non cambia il mittente, resta per
+            le chiamate esistenti.
 
     Returns:
-        ``"Nome Cognome (Workflow) <casella dell'app>"``.
+        L'indirizzo della casella, es. ``"workflow@brembanarolle.com"``.
     """
-    etichetta, indirizzo = parseaddr(settings.DEFAULT_FROM_EMAIL)
-    nome = (getattr(utente, "nome_completo", "") or "").strip()
-    if not nome:
-        return settings.DEFAULT_FROM_EMAIL
-    return formataddr((f"{nome} ({etichetta or 'Workflow'})", indirizzo))
+    return parseaddr(settings.DEFAULT_FROM_EMAIL)[1] or settings.DEFAULT_FROM_EMAIL
 
 
 def _indirizzo_utente(utente):
@@ -1035,14 +1029,19 @@ def _indirizzo_utente(utente):
     return formataddr((utente.nome_completo, email)) if email else None
 
 
-def _firma_email(utente):
-    """Chiusura dell'email: chi l'ha inviata, anche se il client mostra solo l'indirizzo."""
-    indirizzo = (getattr(utente, "email", "") or "").strip()
-    nome = getattr(utente, "nome_completo", "") or ""
+def _intestazione_email(trasmittal):
+    """Prima riga dell'email: lettera, commessa e chi l'ha emessa.
+
+    Il mittente è la casella dell'applicazione, quindi chi scrive si legge qui.
+    """
+    utente = trasmittal.creato_da
+    emesso_da = utente.nome_completo
+    email = (getattr(utente, "email", "") or "").strip()
+    if email:
+        emesso_da = f"{emesso_da} ({email})"
     return (
-        f"Inviata da {nome} ({indirizzo}) con Workflow."
-        if indirizzo
-        else (f"Inviata da {nome} con Workflow.")
+        f"Trasmittal interno {trasmittal.nome} — commessa {trasmittal.testata.job} "
+        f"— emesso da {emesso_da}."
     )
 
 
@@ -1055,10 +1054,10 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     percorso di salvataggio, promemoria di firma — non un avviso generico
     che rimanda all'allegato.
 
-    L'email parte dalla casella dell'applicazione col nome di chi ha emesso
-    la lettera (``trasmittal.creato_da``, vedi ``mittente_trasmittal``); il
-    suo indirizzo va in ``Reply-To`` e in copia, così le risposte arrivano a
-    lui e gliene resta un esemplare. Vale anche quando l'invio viene
+    L'email parte dalla casella dell'applicazione (``mittente_trasmittal``);
+    chi ha emesso la lettera (``trasmittal.creato_da``) è scritto nella prima
+    riga del testo, e il suo indirizzo va in ``Reply-To`` e in copia, così le
+    risposte arrivano a lui e gliene resta un esemplare. Vale anche quando l'invio viene
     ritentato da un'altra persona: conta chi ha emesso la lettera, che è
     quanto scritto sul modulo.
 
