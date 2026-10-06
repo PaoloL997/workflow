@@ -82,71 +82,65 @@ Restart-Service WorkflowWaitress
 **Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
 recycle del pool IIS).
 
-### Storage S3 per foto profilo e firme (Garage con Docker)
+### Storage S3 per foto profilo e firme (SeaweedFS)
 
-Foto profilo e firme degli utenti stanno su [Garage](https://garagehq.deuxfleurs.fr/), uno
-storage compatibile S3 che gira in Docker sulla stessa macchina (`docker-compose.yml`, unico
-servizio `storage`). Il bucket è privato e Garage ascolta solo su `127.0.0.1:3900`: le
-immagini le serve l'applicazione, solo agli utenti loggati. Senza `S3_BUCKET` nel `.env`
-(per esempio in sviluppo) i file restano nella cartella `media\` del progetto.
+Foto profilo e firme degli utenti stanno su [SeaweedFS](https://github.com/seaweedfs/seaweedfs),
+uno storage compatibile S3 che gira come servizio Windows (`WorkflowStorage`, con NSSM come
+`WorkflowWaitress`) sulla stessa macchina. Ascolta solo su `127.0.0.1` (porte 3900-3903): il
+bucket è privato e le immagini le serve l'applicazione, solo agli utenti loggati. Senza
+`S3_BUCKET` nel `.env` (per esempio in sviluppo) i file restano nella cartella `media\`.
 
-Docker deve eseguire **container Linux**: `docker info --format "{{.OSType}}"` deve rispondere
-`linux`. Con Docker Desktop attiva l'avvio automatico: se Docker non è partito, foto e firme
-non si vedono e il PDF del trasmittal interno fallisce (con **Riprova**) finché non riparte.
-
-**Prima attivazione**, dalla root del progetto in PowerShell:
+**Prima installazione**, dalla root del progetto in PowerShell come **Administrator**:
 
 ```powershell
-# 1. Credenziali: generale una volta sola e non cambiarle più
-poetry run python -c "import secrets;print('S3_ACCESS_KEY=GK'+secrets.token_hex(16));print('S3_SECRET_KEY='+secrets.token_hex(32));print('GARAGE_RPC_SECRET='+secrets.token_hex(32))"
+# 1. Scarica windows_amd64.zip da https://github.com/seaweedfs/seaweedfs/releases
+#    (provato con la 4.48) ed estrai weed.exe in C:\SeaweedFS\weed.exe
+
+# 2. Credenziali: generale una volta sola
+poetry run python -c "import secrets;print('S3_ACCESS_KEY='+secrets.token_hex(10));print('S3_SECRET_KEY='+secrets.token_hex(32))"
 ```
 
 ```env
 # .env — aggiungere
 S3_BUCKET=workflow-media
-S3_ACCESS_KEY=GK...
+S3_ACCESS_KEY=...
 S3_SECRET_KEY=...
-GARAGE_RPC_SECRET=...
+S3_ENDPOINT_URL=http://127.0.0.1:3900
 ```
 
 ```powershell
-# 2. Avvio di Garage: crea da solo chiave e bucket
-docker compose up -d
-docker compose exec storage /garage bucket info workflow-media
+# 3. Servizio WorkflowStorage + bucket (dati in C:\SeaweedFS\data; -DryRun per un'anteprima)
+powershell -ExecutionPolicy Bypass -File .\deploy\install-seaweedfs-service.ps1
 
-# 3. L'app legge il nuovo .env
+# 4. L'app legge il nuovo .env
 Restart-Service WorkflowWaitress
 
-# 4. Copia nel bucket delle foto e firme già caricate (stessi nomi, rilanciabile)
+# 5. Copia nel bucket delle foto e firme già caricate (stessi nomi, rilanciabile)
 poetry run python manage.py copia_media_su_storage --dry-run
 poetry run python manage.py copia_media_su_storage
 ```
 
-La cartella `media\` non serve più dopo la copia, ma conviene tenerla finché non si è
-verificato che foto e firme si vedono tutte.
+Percorsi e porte si cambiano con i parametri dello script (`-WeedPath`, `-DataDir`, `-S3Port`;
+con un'altra porta va aggiornato anche `S3_ENDPOINT_URL`). La cartella `media\` non serve più
+dopo la copia, ma conviene tenerla finché non si è verificato che foto e firme si vedono tutte.
 
-**Backup.** I dati sono nei volumi Docker `workflow_garage_meta` e `workflow_garage_data`
-(nomi esatti con `docker volume ls`). Per una copia coerente fermare il servizio:
+Se il servizio è fermo, foto e firme non si vedono e il PDF del trasmittal interno fallisce
+(con **Riprova**) finché non riparte; log in `logs\seaweedfs-service.log`.
 
-```powershell
-docker compose stop storage
-docker run --rm -v workflow_garage_meta:/meta -v workflow_garage_data:/data -v "${PWD}\backups:/backup" alpine tar czf "/backup/garage-$(Get-Date -Format yyyy-MM-dd).tgz" /meta /data
-docker compose start storage
-```
-
-**Cambio delle credenziali.**
+**Backup.** Tutto (dati e metadati) è nella cartella dati. Per una copia coerente:
 
 ```powershell
-docker compose exec storage /garage key create workflow-nuova
-docker compose exec storage /garage bucket allow --read --write --key workflow-nuova workflow-media
-# aggiorna S3_ACCESS_KEY/S3_SECRET_KEY nel .env con quelle stampate, poi:
-docker compose up -d
-Restart-Service WorkflowWaitress
-docker compose exec storage /garage key delete <vecchia-chiave> --yes
+Stop-Service WorkflowStorage
+Compress-Archive C:\SeaweedFS\data "C:\Backup\seaweedfs-$(Get-Date -Format yyyy-MM-dd).zip"
+Start-Service WorkflowStorage
 ```
 
-**Attenzione:** non rinominare mai `S3_BUCKET`. Garage creerebbe un bucket nuovo e vuoto,
-e l'applicazione non troverebbe più le immagini già caricate.
+**Cambio delle credenziali.** Aggiorna `S3_ACCESS_KEY`/`S3_SECRET_KEY` nel `.env`, rilancia lo
+script (reinstalla il servizio con le nuove chiavi, i dati restano) e poi
+`Restart-Service WorkflowWaitress`.
+
+**Attenzione:** non rinominare `S3_BUCKET`: l'applicazione cercherebbe le immagini in un bucket
+nuovo e vuoto.
 
 ### Rollback a wfastcgi
 
@@ -167,6 +161,7 @@ Script in `deploy/`:
 | `web.config` | Template IIS → proxy a `127.0.0.1:8000` |
 | `rollback-wfastcgi.ps1` | Ripristina web.config wfastcgi |
 | `iis-workflow-pool.ps1` | AlwaysRunning / idle timeout |
+| `install-seaweedfs-service.ps1` | Servizio `WorkflowStorage` (SeaweedFS, S3 per foto e firme) |
 
 ## Allineamento giornaliero con Business Central
 

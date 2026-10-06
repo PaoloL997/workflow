@@ -9,8 +9,8 @@ thread che si sveglia a intervalli regolari e verifica se è il momento.
 Come si tiene una sola esecuzione al giorno:
 
 - lo stato sta in database (``EsecuzioneSchedulata``), non in memoria, così
-  sopravvive ai riavvii ed è condiviso fra i processi (in Docker il sito gira
-  con più worker gunicorn, ognuno con il proprio thread);
+  sopravvive ai riavvii ed è condiviso fra i processi (con più processi
+  dell'applicazione ognuno ha il proprio thread);
 - il turno si prenota con ``select_for_update(skip_locked=True)``: chi arriva
   secondo trova la riga occupata ed esce subito;
 - la prenotazione viene scritta *prima* di eseguire, e la sync — che dura

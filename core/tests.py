@@ -9342,13 +9342,18 @@ class StorageMediaDaEnvTests(SimpleTestCase):
         opzioni = config["OPTIONS"]
         self.assertEqual(opzioni["bucket_name"], "workflow-media")
         self.assertEqual(opzioni["endpoint_url"], "http://127.0.0.1:3900")
-        self.assertEqual(opzioni["region_name"], "garage")
+        self.assertEqual(opzioni["region_name"], "us-east-1")
         self.assertEqual(opzioni["client_config"].s3, {"addressing_style": "path"})
         self.assertEqual(opzioni["client_config"].signature_version, "s3v4")
         # Il backend si costruisce con queste opzioni senza collegarsi a niente.
         storage = S3Storage(**opzioni)
         self.assertFalse(storage.file_overwrite)
         self.assertIsNone(storage.default_acl)
+
+    def test_senza_endpoint_usa_seaweedfs_in_locale(self):
+        config = self._con_env(S3_BUCKET="b", S3_ACCESS_KEY="k", S3_SECRET_KEY="s")
+
+        self.assertEqual(config["OPTIONS"]["endpoint_url"], "http://127.0.0.1:3900")
 
     def test_bucket_senza_chiavi_e_un_errore_di_configurazione(self):
         with self.assertRaises(ImproperlyConfigured):

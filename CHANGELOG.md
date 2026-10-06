@@ -4,7 +4,7 @@
 
 ### Added
 
-- Foto profilo e firme degli utenti su uno storage compatibile S3 ([Garage](https://garagehq.deuxfleurs.fr/)) in Docker sulla macchina del server: `docker-compose.yml` ora contiene solo questo servizio. Si attiva con le variabili `S3_*` nel `.env` (vedi README); il bucket è privato e raggiungibile solo dal server. Il comando `python manage.py copia_media_su_storage` (con `--dry-run`) copia nel bucket le foto e le firme già caricate, con lo stesso nome. Senza `S3_BUCKET` (sviluppo) i file restano nella cartella `media`
+- Foto profilo e firme degli utenti su uno storage compatibile S3 ([SeaweedFS](https://github.com/seaweedfs/seaweedfs)) che gira come servizio Windows (`WorkflowStorage`) sul server, installato con `deploy\install-seaweedfs-service.ps1`. Si attiva con le variabili `S3_*` nel `.env` (vedi README); il bucket è privato e raggiungibile solo dal server. Il comando `python manage.py copia_media_su_storage` (con `--dry-run`) copia nel bucket le foto e le firme già caricate, con lo stesso nome. Senza `S3_BUCKET` (sviluppo) i file restano nella cartella `media`
 - Informazioni archivio: nuova sezione **Revisioni**, sotto gli indirizzi di consegna, per scegliere come si indicano le revisioni dei documenti: **Numero** (0, 1, 2…), **Lettera** (A, B, C…) oppure **Personalizzata**, con una sequenza di etichette scritta a mano separata da virgole (es. `1,2,3,D,E,F,4,5,6`). La prima etichetta è la prima revisione; oltre l'ultima la sequenza prosegue da sola dall'ultima etichetta (6 → 7, F → G). Un'anteprima mostra le revisioni prima di salvare. Come per le lettere, cambia solo come la revisione si legge — schermate, Excel, PDF, trasmittal — non i dati salvati
 - Informazioni archivio: pulsante **Aggiorna da BC** accanto ad "Aggiornamenti da Business Central" per lanciare a mano il confronto con Business Central sulla singola commessa, senza aspettare il controllo giornaliero delle 17:00. Funziona anche sulle commesse già chiuse
 - Informazioni archivio: nuovo campo **Sito costruttivo**, con la lista degli stabilimenti che hanno un codice sito Business Central. Serve a sbloccare il trasmittal interno quando Business Central non ha (o non ha ancora) il dato: fino ad ora l'unico modo per impostarlo era l'admin di Django
@@ -12,7 +12,7 @@
 
 ### Changed
 
-- Foto profilo e firme le serve l'applicazione, solo a utenti loggati. Sostituendo una foto o una firma, quella vecchia viene cancellata solo dopo aver salvato la nuova: se lo storage non risponde resta quella di prima e il profilo mostra un errore. Se lo storage non risponde mentre si genera il PDF del trasmittal interno, il passo PDF fallisce in modo visibile (con **Riprova**) invece di emettere la lettera senza firme. Dopo un errore dello storage, per 30 secondi foto e firme rispondono subito con un errore invece di riprovare: se Docker non è partito l'app non rallenta
+- Foto profilo e firme le serve l'applicazione, solo a utenti loggati. Sostituendo una foto o una firma, quella vecchia viene cancellata solo dopo aver salvato la nuova: se lo storage non risponde resta quella di prima e il profilo mostra un errore. Se lo storage non risponde mentre si genera il PDF del trasmittal interno, il passo PDF fallisce in modo visibile (con **Riprova**) invece di emettere la lettera senza firme. Dopo un errore dello storage, per 30 secondi foto e firme rispondono subito con un errore invece di riprovare: se il servizio è fermo l'app non rallenta
 - Informazioni archivio: il toggle **Revisioni con lettera** esce da *Tempi di revisione* e diventa una delle tre scelte della nuova sezione **Revisioni**. Nella pagina della commessa il riquadro dell'archivio mostra *Revisioni: Numero / Lettera / Personalizzata* al posto di *Revisioni con lettere: Sì/No*
 - Trasmittal interno: l'email della lettera parte dall'indirizzo di chi l'ha compilata ed emessa (nome e cognome più email dell'utente), non più dalla casella generica impostata nelle impostazioni dell'applicazione. Chi riceve vede da chi arriva e risponde direttamente a lui: lo stesso indirizzo è anche in *Rispondi a*. Vale anche quando si usa **Riprova** sul passo Email — il mittente resta chi ha emesso la lettera, non chi preme il pulsante. Il pannello di conferma prima dell'invio e l'esito dell'emissione mostrano l'indirizzo da cui l'email parte. Se un utente non ha un'email registrata si ricade sull'indirizzo generico, così l'invio non fallisce
 - Admin di Django: un superuser può eliminare una lettera di trasmittal interno (prima l'admin era di sola lettura). Serve per pulire dati di test o errore che il tasto **Annulla** dell'app non copre (funziona solo sull'ultima lettera emessa in un giorno). Eliminare qui non tocca il PDF su Z:\JOBS, l'eventuale cartella DCC preparata né un'email già inviata: per l'uso normale resta preferibile Annulla
@@ -21,7 +21,7 @@
 
 ### Removed
 
-- Deploy Docker dell'applicazione pensato per Ubuntu Server (Dockerfile, entrypoint, servizi `web` e `nginx`, dipendenza gunicorn): non era usato, l'applicazione gira su Windows con IIS + Waitress
+- Deploy Docker dell'applicazione pensato per Ubuntu Server (Dockerfile, docker-compose.yml, entrypoint, nginx, dipendenza gunicorn): non era usato, l'applicazione gira su Windows con IIS + Waitress
 
 ### Fixed
 

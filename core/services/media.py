@@ -1,7 +1,7 @@
 """File caricati dagli utenti (foto profilo e firme) e il loro storage.
 
-Lo storage è quello di default di Django: il bucket S3 di Garage sul server
-(docker-compose.yml), una cartella in sviluppo (vedi
+Lo storage è quello di default di Django: il bucket S3 di SeaweedFS sul
+server (deploy/install-seaweedfs-service.ps1), una cartella in sviluppo (vedi
 ``config.settings.storage_media_da_env``). Il bucket è privato, quindi le
 immagini le serve sempre l'app (``risposta_immagine``) e mai un URL diretto.
 """
@@ -29,7 +29,7 @@ TIPI_IMMAGINE = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 # Dopo un errore lo storage si considera giù per questo tempo: le richieste
 # successive rispondono subito invece di riprovare. Su Windows una porta locale
-# chiusa (Docker non partito) rifiuta la connessione con secondi di ritardo, e
+# chiusa (servizio fermo) rifiuta la connessione con secondi di ritardo, e
 # ogni foto profilo terrebbe occupato un thread di Waitress.
 PAUSA_DOPO_ERRORE_SECONDI = 30
 _storage_giu_fino = 0.0

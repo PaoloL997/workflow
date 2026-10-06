@@ -32,10 +32,11 @@ def env_list(name: str, default: list[str]) -> list[str]:
 def storage_media_da_env() -> dict:
     """Storage dei file caricati dagli utenti (foto profilo e firme).
 
-    Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (Garage in Docker
-    accanto all'app sul server, vedi README); senza, restano nella cartella
-    MEDIA_ROOT, come in sviluppo. Il bucket è privato: le immagini le serve
-    l'app agli utenti loggati, i browser non parlano mai con lo storage.
+    Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (SeaweedFS,
+    servizio Windows accanto all'app sul server, vedi README); senza, restano
+    nella cartella MEDIA_ROOT, come in sviluppo. Il bucket è privato: le
+    immagini le serve l'app agli utenti loggati, i browser non parlano mai con
+    lo storage.
     """
     bucket = os.environ.get("S3_BUCKET", "").strip()
     if not bucket:
@@ -51,11 +52,13 @@ def storage_media_da_env() -> dict:
         "BACKEND": "storages.backends.s3.S3Storage",
         "OPTIONS": {
             "bucket_name": bucket,
-            "endpoint_url": os.environ.get("S3_ENDPOINT_URL", "").strip() or None,
+            # Dove ascolta SeaweedFS (deploy/install-seaweedfs-service.ps1).
+            "endpoint_url": os.environ.get("S3_ENDPOINT_URL", "").strip()
+            or "http://127.0.0.1:3900",
             "access_key": access_key,
             "secret_key": secret_key,
-            # Deve coincidere con s3_region di deploy/garage.toml (firma SigV4).
-            "region_name": os.environ.get("S3_REGION", "").strip() or "garage",
+            # Entra nella firma SigV4; SeaweedFS accetta qualsiasi regione.
+            "region_name": os.environ.get("S3_REGION", "").strip() or "us-east-1",
             # Due utenti che caricano "firma.png" non devono sovrascriversi a
             # vicenda: come su disco, un nome già usato riceve un suffisso.
             "file_overwrite": False,
