@@ -1208,7 +1208,7 @@
         <textarea id="f-remarks" placeholder="Note libere…"></textarea>
       </div>
       <div class="fg">
-        <label for="f-dis-plan-date-rev0">Data invio prevista (Rev. {% if testata.rev_let_flag %}A{% else %}0{% endif %})</label>
+        <label for="f-dis-plan-date-rev0">Data invio prevista (Rev. {{ testata.etichetta_prima_revisione }})</label>
         <input type="date" id="f-dis-plan-date-rev0">
       </div>
     </div>
@@ -1355,12 +1355,14 @@
   </div>
 </div>
 
+{{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
 <script>
 (function () {
   'use strict';
 
   var JOB = '{{ testata.job|escapejs }}';
   var REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
+  var REV_SEQ = revSequenzaDaPagina('rev-seq-pagina');
   var CSRF_COOKIE = 'workflow_csrftoken';
 
   /* ── Theme toggle ── */
@@ -1583,8 +1585,8 @@
     }
     strip.innerHTML = '';
     revs.forEach(function(r, i) {
-      /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
-      var label = 'Rev. ' + (window.formatRevLabel(r, REV_LET_FLAG) || '—');
+      /* Numero, lettera o sequenza dell'archivio (helper globale in base.html) */
+      var label = 'Rev. ' + (window.formatRevLabel(r, REV_LET_FLAG, REV_SEQ) || '—');
       var cls = 'doc-rev-mini' + (i === revs.length - 1 ? ' doc-rev-mini--latest' : '');
       var btn = document.createElement('button');
       btn.type = 'button';

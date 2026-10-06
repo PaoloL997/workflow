@@ -1413,7 +1413,7 @@
         </button>
       </div>
 
-      {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=anomalie_count anomalie_banner_layout="full" rev_let_flag=testata.rev_let_flag %}
+      {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=anomalie_count anomalie_banner_layout="full" rev_let_flag=testata.rev_let_flag rev_sequenza=testata.rev_sequenza %}
     </header>
 
     <!-- ── Gauge stato ── -->
@@ -1492,14 +1492,14 @@
                 </div>
               </div>
 
-              <!-- Revisioni con lettera -->
-              <div class="archivio-preview-item">
+              <!-- Revisioni: numero, lettera o sequenza personalizzata -->
+              <div class="archivio-preview-item"{% if testata.rev_sequenza %} title="{{ testata.rev_sequenza|join:', ' }}"{% endif %}>
                 <div class="archivio-preview-icon color-orange" style="font-size:18px;font-weight:700;font-family:-apple-system,sans-serif;letter-spacing:-0.02em;">
                   A
                 </div>
-                <span class="archivio-preview-label">Revisioni con lettere</span>
+                <span class="archivio-preview-label">Revisioni</span>
                 <div class="archivio-preview-value">
-                  {% if testata.rev_let_flag %}Sì{% else %}No{% endif %}
+                  {% if testata.rev_modalita == "personalizzata" %}Personalizzata{% elif testata.rev_modalita == "lettera" %}Lettera{% else %}Numero{% endif %}
                 </div>
               </div>
 

@@ -541,9 +541,12 @@
       return formatDate(iso);
     }
 
-    /* ── Revisione: lettera o numero secondo il flag di archivio ──
-       Stessa regola del server (core/services/revisione_label.py): flag attivo
-       → sempre lettera (A, B, C…), flag spento → sempre numero (0, 1, 2…). */
+    /* ── Revisione: numero, lettera o sequenza personalizzata dell'archivio ──
+       Stessa regola del server (core/services/revisione_label.py), da tenere
+       allineata: sequenza personalizzata non vuota → la revisione N mostra
+       l'N-esima etichetta (oltre la fine prosegue dall'ultima: 6 → 7, F → G);
+       altrimenti flag attivo → sempre lettera (A, B, C…), flag spento →
+       sempre numero (0, 1, 2…). */
     function revNumeroInLettera(revNo) {
       let n = revNumeroIntero(revNo);
       if (n === null || n < 0) return '';
@@ -568,9 +571,48 @@
       const n = Number(String(value).trim());
       return Number.isInteger(n) ? n : null;
     }
-    function formatRevLabel(rev, revLetFlag) {
+    /* Sequenza letta da un {{ ...|json_script }} della pagina; [] se assente. */
+    function revSequenzaDaPagina(id) {
+      try {
+        const el = document.getElementById(id);
+        return revSequenzaValida(el ? JSON.parse(el.textContent) : []);
+      } catch (_) {
+        return [];
+      }
+    }
+    function revSequenzaValida(seq) {
+      if (!Array.isArray(seq)) return [];
+      return seq.map(v => String(v ?? '').trim()).filter(v => v !== '');
+    }
+    function revIndiceInSequenza(etichetta, seq) {
+      const chiave = String(etichetta ?? '').trim().toUpperCase();
+      if (!chiave) return null;
+      const i = seq.findIndex(v => v.toUpperCase() === chiave);
+      return i < 0 ? null : i;
+    }
+    function revEtichettaOltreSequenza(ultima, passi) {
+      let m = /^(.*?)([0-9]+)$/.exec(ultima);
+      if (m) return m[1] + String(parseInt(m[2], 10) + passi).padStart(m[2].length, '0');
+      m = /^(.*?)([A-Za-z]+)$/.exec(ultima);
+      if (m) {
+        const seguito = revNumeroInLettera(revLetteraInNumero(m[2]) + passi);
+        return m[1] + (m[2] === m[2].toLowerCase() ? seguito.toLowerCase() : seguito);
+      }
+      return null;
+    }
+    function revEtichettaDaSequenza(numero, seq) {
+      if (numero < seq.length) return seq[numero];
+      return revEtichettaOltreSequenza(seq[seq.length - 1], numero - seq.length + 1) ?? String(numero);
+    }
+    function formatRevLabel(rev, revLetFlag, revSeq) {
       if (!rev) return '';
       const lettera = String(rev.rev_let ?? '').trim();
+      const seq = revSequenzaValida(revSeq);
+      if (seq.length) {
+        const numero = revNumeroIntero(rev.rev_no) ?? revIndiceInSequenza(lettera, seq);
+        if (numero === null) return lettera;
+        return numero < 0 ? '' : revEtichettaDaSequenza(numero, seq);
+      }
       if (revLetFlag) {
         if (lettera && revLetteraInNumero(lettera) !== null) return lettera.toUpperCase();
         return revNumeroInLettera(lettera !== '' ? lettera : rev.rev_no);

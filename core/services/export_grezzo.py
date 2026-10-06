@@ -117,13 +117,16 @@ def list_tabelle():
 
 
 def _cell(value):
-    """Excel-ready value: naive datetimes, everything else untouched."""
+    """Excel-ready value: naive datetimes, lists comma-joined, everything else untouched."""
     if isinstance(value, datetime):
         if timezone.is_aware(value):
             value = timezone.localtime(value)
         return value.replace(tzinfo=None)
     if value is None or isinstance(value, date | bool | int | float | str):
         return value
+    if isinstance(value, list | tuple):
+        # Es. la sequenza revisioni personalizzata: "1,2,3,D", non "['1', '2', ...]".
+        return ",".join(str(v) for v in value)
     return str(value)
 
 

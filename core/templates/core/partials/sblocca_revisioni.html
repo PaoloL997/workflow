@@ -1,4 +1,4 @@
-{# Pulsante + modal sblocco revisioni. Richiede: job, rev_let_flag (opzionale) #}
+{# Pulsante + modal sblocco revisioni. Richiede: job, rev_let_flag e rev_sequenza (opzionali) #}
 <style>
   #sbloc-btn {
     flex-shrink: 0;
@@ -160,12 +160,14 @@
   </div>
 </div>
 
+{{ rev_sequenza|json_script:"rev-seq-sblocca" }}
 <script>
 (function () {
   'use strict';
 
   const JOB = '{{ job|escapejs }}';
   const REV_LET_FLAG = {{ rev_let_flag|default_if_none:False|yesno:"true,false" }};
+  const REV_SEQ = revSequenzaDaPagina('rev-seq-sblocca');
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
 
   const btn = document.getElementById('sbloc-btn');
@@ -179,8 +181,8 @@
 
   if (!btn || !backdrop || !confirmBackdrop) return;
 
-  /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
-  const formatRevLabel = (item) => window.formatRevLabel(item, REV_LET_FLAG);
+  /* Numero, lettera o sequenza dell'archivio (helper globale in base.html) */
+  const formatRevLabel = (item) => window.formatRevLabel(item, REV_LET_FLAG, REV_SEQ);
 
   let _items = [];
   let _pending = null;

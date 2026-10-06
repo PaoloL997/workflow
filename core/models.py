@@ -243,6 +243,14 @@ class Testata(models.Model):
         help_text="Giorni a nostra disposizione per emettere/revisionare un documento.",
     )
     rev_let_flag = models.BooleanField(db_column="RevLetFlag", default=False)
+    # Etichette delle revisioni in ordine, la prima è la revisione iniziale
+    # (es. ["1", "2", "3", "D"]). Se non è vuota vince su rev_let_flag, che in
+    # quel caso deve essere spento (vedi clean e core.services.revisione_label).
+    rev_sequenza = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name="Sequenza revisioni personalizzata",
+    )
     # Letto da Business Central (NBT_BRL Location Code, vedi
     # src.erp.business_central.get_commessa_codice_sito) alla creazione della
     # commessa e dal sync giornaliero, solo se ancora vuoto: un valore già
@@ -265,16 +273,41 @@ class Testata(models.Model):
         verbose_name_plural = "Archivi commessa"
 
     def clean(self):
+        from .services.revisione_label import valida_sequenza_revisioni
+
         super().clean()
+        errori = {}
         if self.sito_costruttivo_id and self.sito_costruttivo.codice_bc is None:
-            raise ValidationError(
-                {
-                    "sito_costruttivo": (
-                        "Lo stabilimento selezionato non ha un codice sito: non può "
-                        "essere il sito costruttivo di una commessa."
-                    )
-                }
+            errori["sito_costruttivo"] = (
+                "Lo stabilimento selezionato non ha un codice sito: non può "
+                "essere il sito costruttivo di una commessa."
             )
+        try:
+            self.rev_sequenza = valida_sequenza_revisioni(self.rev_sequenza)
+        except ValueError as exc:
+            errori["rev_sequenza"] = str(exc)
+        else:
+            if self.rev_sequenza and self.rev_let_flag:
+                errori["rev_sequenza"] = (
+                    "Scegli le revisioni con lettera oppure una sequenza "
+                    "personalizzata, non entrambe."
+                )
+        if errori:
+            raise ValidationError(errori)
+
+    @property
+    def rev_modalita(self):
+        """Come vengono mostrate le revisioni: numero, lettera o personalizzata."""
+        if self.rev_sequenza:
+            return "personalizzata"
+        return "lettera" if self.rev_let_flag else "numero"
+
+    @property
+    def etichetta_prima_revisione(self):
+        """Etichetta della revisione iniziale (rev_no 0): «0», «A» o la prima della sequenza."""
+        from .services.revisione_label import etichetta_revisione
+
+        return etichetta_revisione(0, self.rev_let_flag, self.rev_sequenza)
 
     def __str__(self):
         return self.job
@@ -844,11 +877,12 @@ class Revisione(models.Model):
         ordering = ["rev_no"]
 
     def etichetta(self):
-        """Lettera o numero della revisione, secondo il flag della testata."""
+        """Etichetta della revisione: numero, lettera o sequenza della testata."""
         from .services.revisione_label import format_revisione_label
 
+        testata = self.documento.testata
         return format_revisione_label(
-            self.rev_no, self.rev_let, self.documento.testata.rev_let_flag
+            self.rev_no, self.rev_let, testata.rev_let_flag, testata.rev_sequenza
         )
 
     def __str__(self):

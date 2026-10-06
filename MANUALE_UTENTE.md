@@ -45,7 +45,7 @@ Workflow consente di:
 |----------|-------------|
 | **Commessa (Job)** | Identificativo univoco del progetto (es. `25056`) |
 | **Documento** | Singolo documento tecnico/commerciale della commessa |
-| **Revisione** | Iterazione di un documento (Rev. 0, 1, 2… oppure con lettera A, B, C…) |
+| **Revisione** | Iterazione di un documento (Rev. 0, 1, 2…, con lettera A, B, C… oppure con una sequenza personalizzata dell'archivio) |
 | **Stato interno** | Fase di lavorazione interna (da iniziare → inviato al cliente → ricevuto) |
 | **Risposta cliente** | Esito della revisione da parte del cliente (Approved, Commented, ecc.) |
 | **Trasmittal** | Lettera di accompagnamento PDF inviata al cliente con i documenti |
@@ -200,7 +200,7 @@ Clicca **Visualizza tutte** sotto i pulsanti principali per aprire l'elenco comp
    - **Termini consegna** — es. DDP, FCA
 3. Clicca **Crea commessa**.
 
-> **Suggerimento ERP:** quando digiti il Job (almeno 3 caratteri), l'app interroga automaticamente Business Central e, se trova la commessa, compila i campi Cliente, PO, Descrizione e Data consegna. Compare l'indicatore ✓ *Trovata* o *Non trovata in ERP*. Se in seguito quei dati cambiano in Business Central, il controllo giornaliero riallinea la commessa (vedi [6.3](#63-aggiornamenti-da-business-central)).
+> **Suggerimento ERP:** quando digiti il Job (almeno 3 caratteri), l'app interroga automaticamente Business Central e, se trova la commessa, compila i campi Cliente, PO, Descrizione e Data consegna. Compare l'indicatore ✓ *Trovata* o *Non trovata in ERP*. Se in seguito quei dati cambiano in Business Central, il controllo giornaliero riallinea la commessa (vedi [6.4](#64-aggiornamenti-da-business-central)).
 
 ### 4.3 Importare una commessa dal vecchio sistema (Report/Access)
 
@@ -274,19 +274,13 @@ Questa sezione configura i parametri che governano il calcolo automatico delle d
 |-------|-------------|---------|
 | **Revisione cliente** | Giorni concessi al cliente per rispondere | All'emissione: `Data ricezione prevista = Data emissione + giorni cliente` |
 | **Revisione interna** | Giorni a disposizione di B&R per emettere la revisione successiva | Alla ricezione con nuova rev.: `Data invio prevista = Data ricezione + giorni interni` |
-| **Revisioni con lettera** | Usa lettere alfabetiche (A, B, C…) invece del solo numero | Decide come si legge la revisione in tutta l'applicazione |
 
 **Procedura:**
 
 1. Inserisci i valori nei campi numerici.
-2. Attiva/disattiva il toggle **Revisioni con lettera** se necessario.
-3. Clicca **Salva modifiche**.
+2. Clicca **Salva modifiche**.
 
-#### Come viene mostrata la revisione
-
-Questo toggle è l'unica cosa che decide come si legge la revisione: con il flag **attivo** si vede sempre la lettera (A, B, C…), con il flag **spento** si vede sempre il numero (0, 1, 2…). Vale per ogni schermata (elenco documenti, situazione documenti in entrambe le viste comprese le intestazioni di colonna, emissione, ricezione, sblocco e anomalie revisioni) e per ogni stampa o export (Excel, PDF, trasmittal).
-
-Numero e lettera sono due modi di scrivere lo stesso dato (`0 = A`, `1 = B`, … `25 = Z`, `26 = AA`): se sulla revisione manca il valore richiesto, viene ricavato dall'altro. Cambiare il toggle non modifica quindi i dati, solo la loro lettura.
+Come vengono indicate le revisioni (numero, lettera o sequenza personalizzata) si sceglie nella sezione **Revisioni** (§6.3).
 
 ### 6.2 Indirizzi di consegna
 
@@ -308,7 +302,37 @@ Gli indirizzi vengono usati nella generazione del PDF trasmittal.
 - Clicca **Modifica** sulla riga dell'indirizzo, aggiorna i campi e salva.
 - Clicca **Elimina** per rimuoverlo (con conferma implicita).
 
-### 6.3 Aggiornamenti da Business Central
+### 6.3 Revisioni
+
+La sezione, sotto gli indirizzi di consegna, decide come si legge la revisione in tutta l'applicazione. Le scelte sono tre:
+
+| Scelta | Revisioni | Esempio |
+|--------|-----------|---------|
+| **Numero** | Sempre il numero, partendo da 0 | 0, 1, 2, 3… |
+| **Lettera** | Sempre la lettera, partendo da A | A, B, C, D… |
+| **Personalizzata** | Le etichette scritte nel campo **Sequenza**, nell'ordine dato | 1, 2, 3, D, E, F, 4, 5, 6 |
+
+**Procedura:**
+
+1. Scegli **Numero**, **Lettera** o **Personalizzata**.
+2. Con **Personalizzata**, scrivi nel campo **Sequenza** le etichette separate da virgole (es. `1,2,3,D,E,F,4,5,6`). Sotto compare l'anteprima delle revisioni.
+3. Clicca **Salva revisioni**.
+
+Regole della sequenza personalizzata:
+
+- la **prima** etichetta è la prima revisione del documento (quella che con i numeri sarebbe la Rev. 0), la seconda la successiva e così via;
+- oltre l'ultima etichetta la sequenza **prosegue da sola** partendo dall'ultima: se finisce con un numero continua con i numeri (`…, 5, 6` → 7, 8…), se finisce con una lettera continua con le lettere (`…, E, F` → G, H…);
+- ogni etichetta è lunga al massimo 10 caratteri, non può essere vuota né ripetuta (maiuscole e minuscole contano come uguali).
+
+Scegliendo **Numero** o **Lettera** e salvando, la sequenza personalizzata viene cancellata.
+
+#### Come viene mostrata la revisione
+
+Questa scelta è l'unica cosa che decide come si legge la revisione. Vale per ogni schermata (elenco documenti, situazione documenti in entrambe le viste comprese le intestazioni di colonna, emissione, ricezione, trasmittal interno, sblocco e anomalie revisioni) e per ogni stampa o export (Excel, PDF, trasmittal).
+
+Sotto, ogni revisione resta un numero progressivo. Numero e lettera sono due modi di scrivere lo stesso dato (`0 = A`, `1 = B`, … `25 = Z`, `26 = AA`): se sulla revisione manca il valore richiesto, viene ricavato dall'altro. Con la sequenza personalizzata conta solo il numero progressivo, e la lettera eventualmente salvata sulla revisione viene ignorata. Cambiare la scelta non modifica quindi i dati, solo la loro lettura: i PDF già emessi e le lettere di trasmittal interno già create mantengono la revisione con cui sono state prodotte.
+
+### 6.4 Aggiornamenti da Business Central
 
 Ogni giorno alle **17:00** il sistema riconfronta con **Business Central** i dati che l'ERP aveva precompilato alla creazione della commessa — **Cliente**, **PO cliente**, **Descrizione** e **Data consegna** — e aggiorna la commessa se in BC sono cambiati.
 
@@ -588,7 +612,7 @@ Usa i pulsanti **Verticale** / **Orizzontale** nella toolbar.
 - Item, B&R Doc, Client Doc No, Client Doc Class
 - Titolo, Reparto
 - Penale, Pagamento
-- Rev. (numero/lettera)
+- Rev. (numero, lettera o sequenza personalizzata)
 - Inv. previsto / Inv. effettivo
 - Ric. previsto / Ric. effettivo
 - **Stato interno** (badge colorato)
@@ -768,7 +792,7 @@ Questo è il ciclo tipico di vita di un documento:
 |-------|-------------|
 | **Rev. No** | Numero revisione (0, 1, 2…) |
 | **Rev. Let** | Lettera revisione (A, B, C…) |
-| | Quale dei due si vede a schermo e nelle stampe dipende solo dal flag **Revisioni con lettera** in archivio (§6.1); se il valore manca viene ricavato dall'altro |
+| | Come si vede la revisione a schermo e nelle stampe dipende solo dalla sezione **Revisioni** in archivio (§6.3): numero, lettera o sequenza personalizzata; se il valore manca viene ricavato dall'altro |
 | **Inv. previsto** | Data pianificata di invio al cliente |
 | **Inv. effettivo** | Data effettiva di invio |
 | **Ric. previsto** | Data entro cui ci si aspetta la risposta |
@@ -816,7 +840,7 @@ Quando crei una nuova commessa e digiti il Job, l'app interroga **Business Centr
 
 ### I dati presi da Business Central restano aggiornati?
 
-Sì: ogni giorno alle 17:00 il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.3](#63-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
+Sì: ogni giorno alle 17:00 il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.4](#64-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
 
 ### Come importo dati dal vecchio database Access?
 

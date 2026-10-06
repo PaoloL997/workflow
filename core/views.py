@@ -39,9 +39,8 @@ from .models import (
     valida_immagine_firma,
 )
 from .permissions import api_write_required, trasmittal_interno_write_required
-from .services.bc_sync import BusinessCentralNonDisponibile
+from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
-from .services.bc_sync import sincronizza_commesse
 from .services.commesse import (
     close_commessa,
     create_commessa,
@@ -861,11 +860,12 @@ def _trasmittal_documents(testata, doc_ids):
                 "contractor_doc_no": doc.contractor_doc_no or "",
                 "doc_title": doc.doc_title or "",
                 "rev_no": rev.rev_no if rev else "",
-                # Lettera o numero secondo il flag di archivio (vedi revisione_label).
+                # Numero, lettera o sequenza dell'archivio (vedi revisione_label).
                 "rev_label": format_revisione_label(
                     rev.rev_no if rev else None,
                     rev.rev_let if rev else "",
                     testata.rev_let_flag,
+                    testata.rev_sequenza,
                 )
                 if rev
                 else "",
@@ -1910,6 +1910,7 @@ def _export_situazione_verticale_xlsx(job, payload):
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
+    rev_sequenza = payload.get("rev_sequenza") or []
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1969,7 +1970,9 @@ def _export_situazione_verticale_xlsx(job, payload):
     def _rev_label(rev):
         if not rev:
             return ""
-        return format_revisione_label(rev.get("rev_no"), rev.get("rev_let"), rev_let_flag)
+        return format_revisione_label(
+            rev.get("rev_no"), rev.get("rev_let"), rev_let_flag, rev_sequenza
+        )
 
     def _int_status_label(rev):
         # Match UI getIntStatusMeta: effective status, empty → "Da inviare"
@@ -2061,6 +2064,7 @@ def _export_situazione_orizzontale_xlsx(job, payload):
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
+    rev_sequenza = payload.get("rev_sequenza") or []
 
     revs_list = []
     for d in docs:
@@ -2085,7 +2089,8 @@ def _export_situazione_orizzontale_xlsx(job, payload):
         _style_xlsx_header_cell(ws.cell(row=2, column=col_idx))
 
     groups = [("Planning", _SITUAZIONE_PLAN_SUB)] + [
-        (_rev_group_label(revs_list, r, rev_let_flag), rev_sub) for r in range(max_revs)
+        (_rev_group_label(revs_list, r, rev_let_flag, rev_sequenza), rev_sub)
+        for r in range(max_revs)
     ]
     start = len(fixed) + 1
     for group_label, subs in groups:
@@ -2187,6 +2192,7 @@ def export_situazione(request, job):
         documenti=payload.get("documenti") or [],
         revisioni_by_doc=payload.get("revisioni_by_doc") or {},
         rev_let_flag=bool(payload.get("rev_let_flag")),
+        rev_sequenza=payload.get("rev_sequenza") or [],
         vista=vista,
     )
     today = _date.today()

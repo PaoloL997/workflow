@@ -1200,8 +1200,8 @@
       </button>
       <div class="sit-filter-summary" id="sit-filter-summary"></div>
       <div class="filter-bar-end">
-        {% include "core/partials/sblocca_revisioni.html" with job=testata.job rev_let_flag=testata.rev_let_flag %}
-        {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" rev_let_flag=testata.rev_let_flag %}
+        {% include "core/partials/sblocca_revisioni.html" with job=testata.job rev_let_flag=testata.rev_let_flag rev_sequenza=testata.rev_sequenza %}
+        {% include "core/partials/anomalie_revisioni.html" with job=testata.job anomalie_count=0 anomalie_banner_layout="compact" rev_let_flag=testata.rev_let_flag rev_sequenza=testata.rev_sequenza %}
         <div class="view-toggle" role="group" aria-label="Tipo di visualizzazione">
           <button class="view-btn" id="btn-vert" onclick="setVista('verticale')">Verticale</button>
           <button class="view-btn active" id="btn-horiz" onclick="setVista('orizzontale')">Orizzontale</button>
@@ -1305,6 +1305,7 @@
 })();
 </script>
 
+{{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
 <script>
 /* ── Situazione documenti ── */
 (function () {
@@ -1313,6 +1314,7 @@
   const JOB = "{{ testata.job }}";
   const COMMESSA_FOLDER = "{{ commessa_folder|escapejs }}";
   let REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
+  let REV_SEQ = revSequenzaDaPagina('rev-seq-pagina');
 
   const STATI_LABEL = {
     da_iniziare:       'Da iniziare',
@@ -1715,9 +1717,9 @@
     return String(value == null ? '' : value).toLowerCase().trim();
   }
 
-  /* Lettera o numero secondo il flag di archivio (helper globale in base.html) */
+  /* Numero, lettera o sequenza dell'archivio (helper globale in base.html) */
   function formatRevLabel(r) {
-    return window.formatRevLabel(r, REV_LET_FLAG);
+    return window.formatRevLabel(r, REV_LET_FLAG, REV_SEQ);
   }
 
   function getColumnFilterValue(row, key) {
@@ -2126,6 +2128,9 @@
       const data = await res.json();
       if (typeof data.rev_let_flag === 'boolean') {
         REV_LET_FLAG = data.rev_let_flag;
+      }
+      if (Array.isArray(data.rev_sequenza)) {
+        REV_SEQ = revSequenzaValida(data.rev_sequenza);
       }
       SENT_CELL = mergeStateCell(SENT_CELL, data.inviato_cell);
       DA_INVIARE_CELL = mergeStateCell(DA_INVIARE_CELL, data.da_inviare_cell);

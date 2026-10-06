@@ -96,6 +96,11 @@ from .services.organizzazione_commesse import (
     risolvi_persone_libere,
     trova_utente_per_cognome,
 )
+from .services.recipients_import import (
+    importa_destinazioni_commessa,
+    importa_destinazioni_tutte_le_commesse,
+    leggi_recipients_data,
+)
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
@@ -108,6 +113,8 @@ from .services.revisione_label import (
     format_revisione_label,
     lettera_a_numero,
     numero_a_lettera,
+    numero_revisione,
+    valida_sequenza_revisioni,
 )
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
 from .services.revisioni_cleanup import drop_orphan_revisioni, find_orphan_indices
@@ -127,11 +134,6 @@ from .services.stato_esterno_colori import (
     rgb_to_hex,
 )
 from .services.stato_esterno_legenda import legenda_default, legenda_stati_esterni
-from .services.recipients_import import (
-    importa_destinazioni_commessa,
-    importa_destinazioni_tutte_le_commesse,
-    leggi_recipients_data,
-)
 from .services.trasmittal_interno import (
     componi_nome,
     crea_trasmittal_interno,
@@ -1335,10 +1337,15 @@ class ImportDestinazioniUtTests(TestCase):
 
         with patch(
             "core.services.recipients_import.importa_destinazioni_commessa",
-            side_effect=[RuntimeError("condivisione irraggiungibile"), {
-                "trovato": True, "precompilati": ["99071-01-GAMMA"],
-                "gia_impostati": 0, "non_trovati": [],
-            }],
+            side_effect=[
+                RuntimeError("condivisione irraggiungibile"),
+                {
+                    "trovato": True,
+                    "precompilati": ["99071-01-GAMMA"],
+                    "gia_impostati": 0,
+                    "non_trovati": [],
+                },
+            ],
         ):
             report = importa_destinazioni_tutte_le_commesse(jobs=["99070", "99071"])
 
@@ -2374,6 +2381,19 @@ class TrasmittalInternoLetteraTests(TestCase):
         voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
         self.assertTrue(voce["selezionabile"])
         self.assertEqual(voce["motivo"], "")
+
+    def test_selezione_revisione_corrente_con_sequenza_personalizzata(self):
+        self.testata.rev_sequenza = ["P", "Q"]
+        self.testata.save(update_fields=["rev_sequenza"])
+        Revisione.objects.create(documento=self.doc_ok, rev_no=1)
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
+        self.assertEqual(voce["revisione_corrente"], "Q")
+        # Lo stepper parte dal numero: dall'etichetta sola non si ricaverebbe.
+        self.assertEqual(voce["revisione_corrente_numero"], 1)
 
     # -- anteprima --
 
@@ -5850,6 +5870,65 @@ class RevisioneEtichettaTests(SimpleTestCase):
         self.assertEqual(format_revisione_label(None, "AA", False), "26")
         self.assertEqual(format_revisione_label(None, "", False), "")
 
+    SEQUENZA = ["1", "2", "3", "D", "E", "F", "4", "5", "6"]
+
+    def test_sequenza_personalizzata_parte_dalla_prima_revisione(self):
+        etichette = [format_revisione_label(n, "", False, self.SEQUENZA) for n in range(9)]
+        self.assertEqual(etichette, self.SEQUENZA)
+
+    def test_oltre_la_sequenza_prosegue_dall_ultima_etichetta(self):
+        self.assertEqual(format_revisione_label(9, "", False, self.SEQUENZA), "7")
+        self.assertEqual(format_revisione_label(11, "", False, self.SEQUENZA), "9")
+        casi = [
+            (["0", "A", "B"], 3, "C"),
+            (["A", "Z"], 2, "AA"),
+            (["a", "b"], 2, "c"),
+            (["R08", "R09"], 2, "R10"),
+            (["1A"], 1, "1B"),
+            # Ultima etichetta che non finisce né con numeri né con lettere.
+            (["A-"], 2, "2"),
+        ]
+        for sequenza, rev_no, atteso in casi:
+            with self.subTest(sequenza=sequenza, rev_no=rev_no):
+                self.assertEqual(format_revisione_label(rev_no, "", False, sequenza), atteso)
+
+    def test_sequenza_vince_sul_flag_e_ignora_la_lettera_salvata(self):
+        self.assertEqual(format_revisione_label(1, "", True, ["x", "y"]), "y")
+        self.assertEqual(format_revisione_label(1, "Z", False, self.SEQUENZA), "2")
+
+    def test_sequenza_senza_numero_usa_l_etichetta_salvata(self):
+        self.assertEqual(format_revisione_label(None, "e", False, ["d", "E"]), "E")
+        self.assertEqual(format_revisione_label(None, "X", False, self.SEQUENZA), "X")
+        self.assertEqual(format_revisione_label(None, "", False, self.SEQUENZA), "")
+
+    def test_sequenza_vuota_lascia_numero_e_lettera(self):
+        self.assertEqual(format_revisione_label(2, "", True, []), "C")
+        self.assertEqual(format_revisione_label(2, "", False, None), "2")
+
+    def test_numero_revisione_segue_l_etichetta_mostrata(self):
+        self.assertEqual(numero_revisione(1, "C", True), 2)
+        self.assertEqual(numero_revisione(1, "C", False), 1)
+        self.assertEqual(numero_revisione(None, "D", False, self.SEQUENZA), 3)
+        self.assertIsNone(numero_revisione(None, "X", False, self.SEQUENZA))
+
+    def test_validazione_della_sequenza(self):
+        self.assertEqual(valida_sequenza_revisioni(" 1, 2 ,D "), ["1", "2", "D"])
+        self.assertEqual(valida_sequenza_revisioni([1, "b"]), ["1", "b"])
+        self.assertEqual(valida_sequenza_revisioni(None), [])
+        self.assertEqual(valida_sequenza_revisioni("  "), [])
+        for valore in (
+            ["1", "1"],
+            ["a", "A"],
+            ["1", ""],
+            "1,2,",
+            ["12345678901"],
+            ["1,2"],
+            [True],
+            {"a": 1},
+        ):
+            with self.subTest(valore=valore), self.assertRaises(ValueError):
+                valida_sequenza_revisioni(valore)
+
 
 class RevisioneLabelDisplayTests(TestCase):
     """Revision display depends on Testata.rev_let_flag, not on rev_let alone."""
@@ -5904,6 +5983,16 @@ class RevisioneLabelDisplayTests(TestCase):
         self.assertEqual(str(rev_lettera), "Rev B")
         self.assertEqual(rev_numero.etichetta(), "1")
         self.assertEqual(str(rev_numero), "Rev 1")
+
+    def test_sequenza_personalizzata_in_elenco_situazione_e_str(self):
+        t = Testata.objects.create(job="REVSEQ1", rev_sequenza=["1", "2", "D"])
+        doc = Documento.objects.create(testata=t, vendor_doc="REVSEQ1-01")
+        Revisione.objects.create(documento=doc, rev_no=1, rev_let="B")
+        rev = Revisione.objects.create(documento=doc, rev_no=2, rev_let="")
+
+        self.assertEqual(list_documenti("REVSEQ1")[0]["latest_rev_display"], "D")
+        self.assertEqual(list_situazione("REVSEQ1")["rev_sequenza"], ["1", "2", "D"])
+        self.assertEqual(str(rev), "Rev D")
 
 
 class RevisioneLabelExportTests(TestCase):
@@ -5979,6 +6068,11 @@ class RevisioneLabelExportTests(TestCase):
         # Posizione senza revisioni: l'etichetta resta coerente col flag.
         self.assertEqual(_rev_group_label([[]], 2, True), "Rev. C")
         self.assertEqual(_rev_group_label([[]], 2, False), "Rev. 2")
+        # ...e con la sequenza personalizzata, anche oltre la sua fine.
+        sequenza = ["1", "2", "D"]
+        self.assertEqual(_rev_group_label(revs, 1, False, sequenza), "Rev. 2")
+        self.assertEqual(_rev_group_label([[]], 2, True, sequenza), "Rev. D")
+        self.assertEqual(_rev_group_label([[]], 4, False, sequenza), "Rev. F")
 
     def test_righe_pdf_verticale_seguono_il_flag(self):
         from src.pdf import _situazione_verticale_flat_rows
@@ -5989,6 +6083,38 @@ class RevisioneLabelExportTests(TestCase):
         self.assertEqual([r["rev_label"] for r in righe], ["B"])
         righe_numero = _situazione_verticale_flat_rows(documenti, rev_map, False)
         self.assertEqual([r["rev_label"] for r in righe_numero], ["1"])
+        righe_sequenza = _situazione_verticale_flat_rows(documenti, rev_map, False, ["X", "Y"])
+        self.assertEqual([r["rev_label"] for r in righe_sequenza], ["Y"])
+
+    def _usa_sequenza(self, sequenza):
+        self.testata.rev_let_flag = False
+        self.testata.rev_sequenza = sequenza
+        self.testata.save(update_fields=["rev_let_flag", "rev_sequenza"])
+
+    def test_export_xlsx_usa_la_sequenza_personalizzata(self):
+        self._usa_sequenza(["P0", "P1"])
+
+        self.assertEqual(self._colonna_rev(), ["P1"])
+        self.assertEqual(self._gruppi_rev_orizzontale(), ["Rev. P1"])
+
+    def test_export_pdf_situazione_con_sequenza_personalizzata(self):
+        self._usa_sequenza(["P0", "P1"])
+
+        for vista in ("orizzontale", "verticale"):
+            with self.subTest(vista=vista):
+                response = self.client.get(
+                    f"/api/commesse/{self.testata.job}/situazione/export/?vista={vista}"
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_trasmittal_usa_la_sequenza_personalizzata(self):
+        from core.views import _trasmittal_documents
+
+        self._usa_sequenza(["1", "2"])
+
+        documents = _trasmittal_documents(self.testata, [self.doc.pk])
+        self.assertEqual(documents[0]["rev_label"], "2")
 
     def test_documenti_del_trasmittal_portano_la_revisione_giusta(self):
         from core.views import _trasmittal_documents
@@ -6013,8 +6139,9 @@ class RevisioneLabelExportTests(TestCase):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, "function formatRevLabel(rev, revLetFlag)")
+                self.assertContains(response, "function formatRevLabel(rev, revLetFlag, revSeq)")
                 self.assertContains(response, "REV_LET_FLAG = true")
+                self.assertContains(response, 'id="rev-seq-pagina"')
 
     def test_export_emissione_xlsx_usa_la_lettera(self):
         import openpyxl
@@ -6944,6 +7071,7 @@ class ScaricaDatiGrezziTestCase(TestCase):
         aware = timezone.make_aware(datetime(2026, 3, 15, 8, 30))
         self.assertEqual(_cella_grezza(aware), timezone.localtime(aware).replace(tzinfo=None))
         self.assertIsNone(_cella_grezza(aware).tzinfo)
+        self.assertEqual(_cella_grezza(["1", "2", "D"]), "1,2,D")
 
     # ── Errori ───────────────────────────────────────────────────────────────
 
@@ -8521,9 +8649,7 @@ class SchedulerBusinessCentralTests(TestCase):
 
     def test_precompila_anche_le_destinazioni_ut(self):
         self._sync_finta()
-        sync_destinazioni = self._sync_destinazioni_finta(
-            controllate=5, con_file=2, precompilati=7
-        )
+        sync_destinazioni = self._sync_destinazioni_finta(controllate=5, con_file=2, precompilati=7)
         adesso = self._momento(self.oggi, 17, 1)
 
         self.assertTrue(scheduler.esegui_se_dovuto(adesso=adesso))
@@ -8695,6 +8821,84 @@ class ArchivioSitoCostruttivoManualeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.testata.refresh_from_db()
         self.assertIsNone(self.testata.sito_costruttivo_id)
+
+
+class RevisioniPersonalizzateArchivioTests(TestCase):
+    """Informazioni archivio → Revisioni: numero, lettera o sequenza personalizzata."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="26020")
+        self.writer = User.objects.create_user(
+            "writer_rev", "writer_rev@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.client = Client()
+        self.client.force_login(self.writer)
+
+    def _put(self, **dati):
+        return self.client.put(
+            f"/api/commesse/{self.testata.job}/", data=dati, content_type="application/json"
+        )
+
+    def test_salva_la_sequenza_ripulita(self):
+        response = self._put(rev_let_flag=False, rev_sequenza=[" 1", "2 ", "D"])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["rev_sequenza"], ["1", "2", "D"])
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.rev_sequenza, ["1", "2", "D"])
+        self.assertEqual(self.testata.rev_modalita, "personalizzata")
+
+    def test_lettera_e_sequenza_insieme_rifiutate(self):
+        response = self._put(rev_let_flag=True, rev_sequenza=["1", "2"])
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("rev_sequenza", response.json()["error"])
+        self.testata.refresh_from_db()
+        self.assertFalse(self.testata.rev_let_flag)
+        self.assertEqual(self.testata.rev_sequenza, [])
+
+    def test_etichette_ripetute_rifiutate(self):
+        response = self._put(rev_sequenza=["1", "D", "d"])
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("ripetuta", response.json()["error"]["rev_sequenza"][0])
+
+    def test_passare_alle_lettere_azzera_la_sequenza(self):
+        self.testata.rev_sequenza = ["1", "2"]
+        self.testata.save(update_fields=["rev_sequenza"])
+
+        response = self._put(rev_let_flag=True, rev_sequenza=[])
+
+        self.assertEqual(response.status_code, 200)
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.rev_modalita, "lettera")
+
+    def test_salvare_i_tempi_non_tocca_le_revisioni(self):
+        self.testata.rev_sequenza = ["1", "2"]
+        self.testata.save(update_fields=["rev_sequenza"])
+
+        response = self._put(time_cli_doc_rev=10)
+
+        self.assertEqual(response.status_code, 200)
+        self.testata.refresh_from_db()
+        self.assertEqual(self.testata.rev_sequenza, ["1", "2"])
+
+    def test_modalita(self):
+        self.assertEqual(Testata(job="X").rev_modalita, "numero")
+        self.assertEqual(Testata(job="X", rev_let_flag=True).rev_modalita, "lettera")
+        self.assertEqual(Testata(job="X", rev_sequenza=["1"]).rev_modalita, "personalizzata")
+        self.assertEqual(Testata(job="X", rev_sequenza=["1"]).etichetta_prima_revisione, "1")
+
+    def test_la_pagina_mostra_la_sezione_revisioni(self):
+        self.testata.rev_sequenza = ["1", "2", "D"]
+        self.testata.save(update_fields=["rev_sequenza"])
+
+        response = self.client.get(f"/commesse/{self.testata.job}/archivio/")
+
+        self.assertContains(response, 'id="arch-rev-seq"')
+        self.assertContains(response, 'value="1, 2, D"')
+        self.assertContains(response, 'value="personalizzata" checked')
+        self.assertNotContains(response, 'id="arch-rev-let"')
 
 
 def _dai_firma(utente, nome="firme/prova.png"):

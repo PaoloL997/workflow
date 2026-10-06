@@ -881,6 +881,7 @@
   </svg>
 </button>
 
+{{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
 <script>
 (function () {
   'use strict';
@@ -888,6 +889,7 @@
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
   const REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
+  const REV_SEQ = revSequenzaDaPagina('rev-seq-pagina');
   // Scrittura riservata a chi ha User.trasmittal_interno_writer (spuntabile da admin):
   // indipendente dal permesso generale USER_CAN_WRITE.
   const TI_CAN_WRITE = {{ trasmittal_interno_can_write|yesno:"true,false" }};
@@ -1166,17 +1168,21 @@
   var _righeComponi = [];
   var rowState = {};
 
-  function offsetRange(baseNumero) {
-    return { min: Math.max(-2, -baseNumero), max: 2 };
+  function offsetRange(stato) {
+    // Revisione di cui il server non ha ricavato il numero (dati storici
+    // incoerenti): la si propone com'è, senza poterla cambiare.
+    if (stato.bloccato) return { min: 0, max: 0 };
+    return { min: Math.max(-2, -stato.baseNumero), max: 2 };
   }
 
   function revisioneLabel(stato) {
-    var n = stato.baseNumero + stato.offset;
-    return REV_LET_FLAG ? revNumeroInLettera(n) : String(n);
+    // Offset 0 = esattamente l'etichetta mostrata per la revisione corrente.
+    if (stato.offset === 0) return stato.etichettaBase;
+    return formatRevLabel({ rev_no: stato.baseNumero + stato.offset }, REV_LET_FLAG, REV_SEQ);
   }
 
   function stepperHtmlComponi(id, stato) {
-    var range = offsetRange(stato.baseNumero);
+    var range = offsetRange(stato);
     var meno = stato.offset <= range.min ? ' disabled' : '';
     var piu = stato.offset >= range.max ? ' disabled' : '';
     return '<div class="ti-stepper">'
@@ -1380,7 +1386,7 @@
   window.steppaRevisione = function (id, delta) {
     var stato = rowState[id];
     if (!stato) return;
-    var range = offsetRange(stato.baseNumero);
+    var range = offsetRange(stato);
     var next = stato.offset + delta;
     if (next < range.min || next > range.max) return;
     stato.offset = next;
@@ -1469,10 +1475,13 @@
     _righeComponi = docs;
     rowState = {};
     docs.forEach(function (d) {
-      var baseNumero = REV_LET_FLAG ? revLetteraInNumero(d.revisione_corrente) : revNumeroIntero(d.revisione_corrente);
-      if (baseNumero === null || baseNumero === undefined) baseNumero = 0;
+      // Numero progressivo calcolato dal server: l'etichetta da sola non basta
+      // a ricavarlo con una sequenza personalizzata.
+      var baseNumero = revNumeroIntero(d.revisione_corrente_numero);
       rowState[d.id] = {
-        baseNumero: baseNumero,
+        baseNumero: baseNumero === null ? 0 : baseNumero,
+        bloccato: baseNumero === null,
+        etichettaBase: d.revisione_corrente || '',
         offset: 0,
         copie: 1,
         tpi: false,

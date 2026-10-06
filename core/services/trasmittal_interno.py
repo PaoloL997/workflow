@@ -33,7 +33,7 @@ from ..models import (
     TransmittalInterno,
 )
 from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
-from .revisione_label import format_revisione_label
+from .revisione_label import format_revisione_label, numero_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -660,6 +660,8 @@ def elenco_selezione_ut(testata):
         - ``id``, ``vendor_doc``, ``doc_title``
         - ``revisione_corrente``: etichetta della revisione più recente
           ("" se nessuna)
+        - ``revisione_corrente_numero``: suo numero progressivo, base dello
+          stepper revisione (``None`` se nessuna o non ricavabile)
         - ``file_modificato_il``: ISO datetime del file risolto, o ``None``
         - ``siti``: destinazioni cartacee salvate (INVOLVED SITES), lista di
           dict ``{"sigla", "nome", "codice_bc"}``
@@ -696,6 +698,7 @@ def elenco_selezione_ut(testata):
             "vendor_doc": documento.vendor_doc,
             "doc_title": documento.doc_title,
             "revisione_corrente": "",
+            "revisione_corrente_numero": None,
             "file_modificato_il": None,
             "siti": [_serializza_sito(d.stabilimento) for d in documento.destinazioni.all()],
             "selezionabile": False,
@@ -707,8 +710,12 @@ def elenco_selezione_ut(testata):
             voce["motivo"] = "Nessuna revisione registrata."
             risultato.append(voce)
             continue
+        formato = (testata.rev_let_flag, testata.rev_sequenza)
         voce["revisione_corrente"] = format_revisione_label(
-            latest_rev.rev_no, latest_rev.rev_let, testata.rev_let_flag
+            latest_rev.rev_no, latest_rev.rev_let, *formato
+        )
+        voce["revisione_corrente_numero"] = numero_revisione(
+            latest_rev.rev_no, latest_rev.rev_let, *formato
         )
         trovati = _cerca_in_indice(indice_cartella, documento.vendor_doc)
         if len(trovati) != 1:

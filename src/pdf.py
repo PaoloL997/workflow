@@ -1215,17 +1215,19 @@ def _is_date_overdue(iso) -> bool:
     return d < date.today()
 
 
-def _rev_group_label(revs_by_index: list, rev_idx: int, rev_let_flag: bool) -> str:
+def _rev_group_label(
+    revs_by_index: list, rev_idx: int, rev_let_flag: bool, rev_sequenza=None
+) -> str:
     for revs in revs_by_index:
         if rev_idx < len(revs):
             rev = revs[rev_idx]
             label = format_revisione_label(
-                rev.get("rev_no"), rev.get("rev_let") or "", rev_let_flag
+                rev.get("rev_no"), rev.get("rev_let") or "", rev_let_flag, rev_sequenza
             )
             if label:
                 return f"Rev. {label}"
-    # Nessuna revisione a questa posizione: si usa comunque lettera o numero.
-    return f"Rev. {format_revisione_label(rev_idx, '', rev_let_flag)}"
+    # Nessuna revisione a questa posizione: si usa comunque l'etichetta dell'archivio.
+    return f"Rev. {format_revisione_label(rev_idx, '', rev_let_flag, rev_sequenza)}"
 
 
 def _revs_for_doc(revisioni_by_doc: dict, doc_id) -> list:
@@ -1743,6 +1745,7 @@ def _situazione_table_meta(
     revisioni_by_doc: dict,
     rev_let_flag: bool,
     page_w_mm: float,
+    rev_sequenza=None,
 ) -> dict:
     """Build column layout meta for the situazione export table."""
     docs = sorted(list(documenti or []), key=_vendor_doc_sort_key)
@@ -1760,7 +1763,9 @@ def _situazione_table_meta(
     band_w = table_w
     band_x0 = max(_TABLE_MARGIN_MM, (page_w_mm - band_w) / 2)
     table_x0 = band_x0
-    rev_labels = [_rev_group_label(revs_list, i, rev_let_flag) for i in range(max_revs)]
+    rev_labels = [
+        _rev_group_label(revs_list, i, rev_let_flag, rev_sequenza) for i in range(max_revs)
+    ]
     vendor_col_idx = next(
         (i for i, col in enumerate(active_fixed) if col["key"] == "vendor_doc"),
         None,
@@ -1786,9 +1791,10 @@ def _build_situazione_table(
     documenti: list,
     revisioni_by_doc: dict,
     rev_let_flag: bool,
+    rev_sequenza=None,
 ) -> None:
     """Prepare table meta and draw data rows (headers come from FPDF.header)."""
-    meta = _situazione_table_meta(documenti, revisioni_by_doc, rev_let_flag, pdf.w)
+    meta = _situazione_table_meta(documenti, revisioni_by_doc, rev_let_flag, pdf.w, rev_sequenza)
     pdf._sit_table_meta = meta
 
     docs = meta["docs"]
@@ -1860,6 +1866,7 @@ def _situazione_verticale_flat_rows(
     documenti: list,
     revisioni_by_doc: dict,
     rev_let_flag: bool,
+    rev_sequenza=None,
 ) -> list:
     """One flat row per revision (same shape as the verticale UI table)."""
     rows = []
@@ -1888,6 +1895,7 @@ def _situazione_verticale_flat_rows(
                             rev.get("rev_no"),
                             rev.get("rev_let") or "",
                             rev_let_flag,
+                            rev_sequenza,
                         )
                         if rev
                         else ""
@@ -1939,6 +1947,7 @@ def genera_situazione_documenti_pdf(
     rev_let_flag=False,
     vista="orizzontale",
     status_legend=None,
+    rev_sequenza=None,
 ):
     """
     Generate a Situazione documenti PDF (Document Status header + table).
@@ -1950,6 +1959,8 @@ def genera_situazione_documenti_pdf(
         documenti: list of serialized documenti (from list_situazione).
         revisioni_by_doc: map documento_id -> list of serialized revisioni.
         rev_let_flag: whether revision headers use letters.
+        rev_sequenza: custom revision labels of the archive; when not empty
+            they win over ``rev_let_flag``.
         vista: 'orizzontale' | 'verticale' — selects table layout.
         status_legend: STATUS legend rows; defaults to the client responses
             configured by the admin (letters, names and colors).
@@ -1962,7 +1973,7 @@ def genera_situazione_documenti_pdf(
     legend = legenda_stati_esterni() if status_legend is None else list(status_legend)
 
     if vista == "verticale":
-        rows = _situazione_verticale_flat_rows(docs, rev_map, bool(rev_let_flag))
+        rows = _situazione_verticale_flat_rows(docs, rev_map, bool(rev_let_flag), rev_sequenza)
         return genera_planned_docs_pdf(
             testata or {},
             rows,
@@ -1982,7 +1993,7 @@ def genera_situazione_documenti_pdf(
     page_w_mm = _situazione_page_width_mm(max_revs, active_fixed)
     pdf = SituazioneDocumentiPDF(page_width_mm=page_w_mm)
 
-    meta = _situazione_table_meta(docs, rev_map, bool(rev_let_flag), page_w_mm)
+    meta = _situazione_table_meta(docs, rev_map, bool(rev_let_flag), page_w_mm, rev_sequenza)
     # Header left/right = shared band with the table (STATUS grows when table is wide).
     band_x0 = meta["band_x0"]
     band_w = meta["band_w"]
@@ -1996,7 +2007,7 @@ def genera_situazione_documenti_pdf(
     pdf._sit_header_right_pt = (band_x0 + band_w) / _PT
 
     pdf.add_page()  # draws Document Status + column headers via header()
-    _build_situazione_table(pdf, docs, rev_map, bool(rev_let_flag))
+    _build_situazione_table(pdf, docs, rev_map, bool(rev_let_flag), rev_sequenza)
     return bytes(pdf.output())
 
 

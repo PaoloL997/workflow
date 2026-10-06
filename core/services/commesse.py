@@ -54,6 +54,7 @@ def serialize_testata(t, pinned=None):
         "time_cli_doc_rev": t.time_cli_doc_rev,
         "time_ven_doc_rev": t.time_ven_doc_rev,
         "rev_let_flag": t.rev_let_flag,
+        "rev_sequenza": list(t.rev_sequenza or []),
     }
     if pinned is not None:
         data["pinned"] = bool(pinned)
@@ -338,6 +339,7 @@ _TESTATA_FIELDS = {
     "time_cli_doc_rev",
     "time_ven_doc_rev",
     "rev_let_flag",
+    "rev_sequenza",
     "sito_costruttivo_id",
 }
 
@@ -381,7 +383,7 @@ def list_reparti():
 
 
 # ── Documento CRUD ───────────────────────────────────────────────────────────────────────────────
-def serialize_documento(d, reparto_acronimi=None, rev_let_flag=None):
+def serialize_documento(d, reparto_acronimi=None, testata=None):
     label_map = dict(STATI_INTERNI_CHOICES)
     latest_rev = d.revisioni.select_related("ext_status").order_by("-rev_no", "-pk").first()
     rev0 = d.revisioni.filter(rev_no=0).first()
@@ -391,8 +393,8 @@ def serialize_documento(d, reparto_acronimi=None, rev_let_flag=None):
     latest_int_status_label = (
         label_map.get(latest_int_status, latest_int_status) if latest_int_status else ""
     )
-    if rev_let_flag is None:
-        rev_let_flag = d.testata.rev_let_flag
+    # La testata si passa per non rileggerla documento per documento.
+    testata = testata or d.testata
     reparto_acronimo = ""
     if d.reparto:
         if reparto_acronimi is not None:
@@ -444,7 +446,12 @@ def serialize_documento(d, reparto_acronimi=None, rev_let_flag=None):
         if (latest_rev and latest_rev.rec_act_date)
         else None,
         "latest_rev_display": (
-            format_revisione_label(latest_rev.rev_no, latest_rev.rev_let, rev_let_flag)
+            format_revisione_label(
+                latest_rev.rev_no,
+                latest_rev.rev_let,
+                testata.rev_let_flag,
+                testata.rev_sequenza,
+            )
             if latest_rev
             else "—"
         )
@@ -461,7 +468,7 @@ def list_documenti(job):
             queryset=Revisione.objects.select_related("ext_status").order_by("rev_no"),
         )
     ).order_by("pk")
-    return [serialize_documento(d, reparto_acronimi, rev_let_flag=t.rev_let_flag) for d in docs]
+    return [serialize_documento(d, reparto_acronimi, testata=t) for d in docs]
 
 
 def revisioni_by_doc_for_job(job: str) -> dict[int, list[dict]]:
@@ -484,6 +491,7 @@ def list_situazione(job: str) -> dict:
         "documenti": list_documenti(job),
         "revisioni_by_doc": revisioni_by_doc_for_job(job),
         "rev_let_flag": t.rev_let_flag,
+        "rev_sequenza": list(t.rev_sequenza or []),
         # Colori della cella B&R Doc quando sull'ultima revisione non c'è ancora
         # una risposta del cliente (vista orizzontale e sua legenda).
         "inviato_cell": {
