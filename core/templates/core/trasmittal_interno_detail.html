@@ -585,6 +585,16 @@
     border-color: var(--color-accent);
   }
   .storico-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  /* PDF assente dal fileserver: la data resta, ma non è un link. */
+  .storico-date-chip.storico-date-chip--assente,
+  .storico-date-chip.storico-date-chip--assente:hover {
+    background: transparent;
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+    border-style: dashed;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
   .storico-annulla {
     display: inline-flex;
     align-items: center;
@@ -968,7 +978,9 @@
       }
       list.innerHTML = lettere.map(function (l) {
         var actions = '<div class="storico-row-actions">'
-          + '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>';
+          + (l.pdf_presente === false
+            ? '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true" title="PDF non trovato sul fileserver">' + escHtml(l.data) + '</span>'
+            : '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>');
         if (l.annullabile && TI_CAN_WRITE) {
           actions += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>';
         }

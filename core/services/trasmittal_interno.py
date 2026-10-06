@@ -1216,10 +1216,14 @@ def elenco_trasmittal_interni(testata):
     giorno lo è (il progressivo riparte ogni giorno, quindi più di una
     lettera può essere "l'ultima del suo giorno" se la commessa ha lettere
     emesse in giorni diversi).
+
+    ``pdf_presente`` dice se il PDF è sul fileserver (``None`` se la cartella
+    non si può leggere): senza file il link non porterebbe a niente.
     """
     lettere = list(
         testata.trasmittal_interni.select_related("creato_da").order_by("-data", "-progressivo")
     )
+    pdf_sul_fileserver = _pdf_nella_cartella(testata.job)
     giorni_visti = set()
     risultato = []
     for t in lettere:
@@ -1233,9 +1237,31 @@ def elenco_trasmittal_interni(testata):
                 "n_documenti": t.righe.count(),
                 "creato_da": t.creato_da.nome_completo,
                 "annullabile": annullabile,
+                "pdf_presente": (
+                    None
+                    if pdf_sul_fileserver is None
+                    else f"{t.nome}.pdf".lower() in pdf_sul_fileserver
+                ),
             }
         )
     return risultato
+
+
+def _pdf_nella_cartella(job):
+    """Nomi (minuscoli) dei file nella cartella dei PDF delle lettere della commessa.
+
+    Una sola lettura della cartella per tutto l'elenco, non un controllo per
+    lettera sulla share di rete. ``None`` se la cartella non si può leggere:
+    in quel caso non si sa se i PDF ci sono.
+    """
+    cartella = _percorso_pdf_da(job, "x").parent
+    try:
+        if not cartella.is_dir():
+            return set()
+        return {f.name.lower() for f in cartella.iterdir()}
+    except OSError:
+        logger.warning("Cartella dei trasmittal interni %s non leggibile.", cartella, exc_info=True)
+        return None
 
 
 def annulla_trasmittal_interno(trasmittal, utente):

@@ -2719,6 +2719,28 @@ class TrasmittalInternoLetteraTests(TestCase):
 
     # -- elenco lettere emesse --
 
+    def test_elenco_segnala_le_lettere_senza_pdf_sul_fileserver(self):
+        from core.services.trasmittal_interno import percorso_pdf
+
+        self.client.force_login(self.writer)
+        with self._pdf_finto():
+            emessa = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+                content_type="application/json",
+            ).json()
+        lettera = TransmittalInterno.objects.get(pk=emessa["trasmittal_id"])
+
+        voce = self.client.get(self._url("lettere/")).json()["lettere"][0]
+        self.assertTrue(voce["pdf_presente"])
+
+        percorso_pdf(lettera).unlink()
+        voce = self.client.get(self._url("lettere/")).json()["lettere"][0]
+        self.assertFalse(voce["pdf_presente"])
+
+        pagina = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
+        self.assertContains(pagina, "l.pdf_presente === false")
+
     def test_elenco_lettere_emesse_in_ordine(self):
         self.client.force_login(self.writer)
         for _ in range(2):

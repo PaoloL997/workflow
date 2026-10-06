@@ -25,6 +25,7 @@
 
 ### Fixed
 
+- Trasmittal interno: nell'elenco delle lettere emesse, se il PDF di una lettera non è sul fileserver la data non è più un link (che portava a una pagina di errore): resta visibile ma grigia, con l'indicazione «PDF non trovato sul fileserver»
 - Scarica (dati grezzi): le colonne con le date sono in formato `gg/mm/aaaa` e abbastanza larghe da leggerle; prima Excel le mostrava come `2026-03-15` oppure `########` finché non si allargava la colonna. Restano date vere, quindi si ordinano e si filtrano come date
 - Sul server Windows/IIS le foto profilo non si vedevano (l'indirizzo `/media/` rispondeva 404): ora si vedono
 - Import commessa da Access: il campo Requisition ("Bid no.") passa da 100 a 300 caratteri. Alcune commesse hanno in Access una Requisition più lunga del vecchio limite (es. due bid concatenate) e l'importazione falliva con un errore generico di troncamento
