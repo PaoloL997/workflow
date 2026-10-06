@@ -2573,9 +2573,12 @@ class TrasmittalInternoLetteraTests(TestCase):
         """
         return patch("src.pdf.genera_trasmittal_interno_pdf", return_value=b"%PDF-1.4 finto")
 
-    def test_email_inviata_dall_indirizzo_di_chi_ha_emesso_la_lettera(self):
-        from django.conf import settings
+    # Il server di posta accetta solo la casella dell'app come mittente: l'email
+    # parte da lì col nome di chi ha emesso la lettera, che riceve risposte e copia.
+    MITTENTE_WRITER = '"til_writer (Workflow)" <workflow@b.it>'
 
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <workflow@b.it>")
+    def test_email_parte_dalla_casella_dell_app_col_nome_di_chi_ha_emesso_la_lettera(self):
         self.client.force_login(self.writer)
 
         with self._pdf_finto():
@@ -2586,15 +2589,16 @@ class TrasmittalInternoLetteraTests(TestCase):
             )
 
         self.assertEqual(risposta.status_code, 200)
-        atteso = f"{self.writer.nome_completo} <{self.writer.email}>"
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].from_email, atteso)
-        # Non l'indirizzo generico delle impostazioni: la lettera arriva da chi
-        # l'ha compilata ed emessa, ed è a lui che si risponde.
-        self.assertNotEqual(mail.outbox[0].from_email, settings.DEFAULT_FROM_EMAIL)
-        self.assertEqual(mail.outbox[0].reply_to, [atteso])
-        self.assertEqual(risposta.json()["email"]["mittente"], atteso)
+        inviata = mail.outbox[0]
+        self.assertEqual(inviata.from_email, self.MITTENTE_WRITER)
+        # Le risposte e una copia vanno a chi ha emesso la lettera.
+        self.assertEqual(inviata.reply_to, [f"til_writer <{self.writer.email}>"])
+        self.assertIn(self.writer.email, inviata.cc)
+        self.assertEqual(risposta.json()["email"]["mittente"], self.MITTENTE_WRITER)
+        self.assertIn(self.writer.email, risposta.json()["email"]["cc"])
 
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <workflow@b.it>")
     def test_anteprima_riporta_il_mittente_di_chi_sta_compilando(self):
         self.client.force_login(self.writer)
 
@@ -2605,11 +2609,9 @@ class TrasmittalInternoLetteraTests(TestCase):
         )
 
         self.assertEqual(risposta.status_code, 200)
-        self.assertEqual(
-            risposta.json()["mittente"],
-            f"{self.writer.nome_completo} <{self.writer.email}>",
-        )
+        self.assertEqual(risposta.json()["mittente"], self.MITTENTE_WRITER)
 
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <workflow@b.it>")
     def test_retry_email_parte_dal_mittente_di_chi_ha_emesso_non_di_chi_riprova(self):
         self.client.force_login(self.writer)
         with (
@@ -2642,12 +2644,14 @@ class TrasmittalInternoLetteraTests(TestCase):
             )
 
         self.assertEqual(risposta.status_code, 200)
-        atteso = f"{self.writer.nome_completo} <{self.writer.email}>"
         self.assertTrue(risposta.json()["esito"]["ok"])
-        self.assertEqual(risposta.json()["esito"]["mittente"], atteso)
+        self.assertEqual(risposta.json()["esito"]["mittente"], self.MITTENTE_WRITER)
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].from_email, atteso)
+        self.assertEqual(mail.outbox[0].from_email, self.MITTENTE_WRITER)
+        self.assertIn(self.writer.email, mail.outbox[0].cc)
+        self.assertNotIn(altro_writer.email, mail.outbox[0].cc)
 
+    @override_settings(DEFAULT_FROM_EMAIL="Workflow <workflow@b.it>")
     def test_esito_email_fallita_riporta_comunque_il_mittente(self):
         self.client.force_login(self.writer)
 
@@ -2665,9 +2669,7 @@ class TrasmittalInternoLetteraTests(TestCase):
             ).json()
 
         self.assertFalse(esito["email"]["ok"])
-        self.assertEqual(
-            esito["email"]["mittente"], f"{self.writer.nome_completo} <{self.writer.email}>"
-        )
+        self.assertEqual(esito["email"]["mittente"], self.MITTENTE_WRITER)
 
     # -- elenco lettere emesse --
 
@@ -2690,8 +2692,13 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(lettere[0]["creato_da"], self.writer.nome_completo)
 
 
+@override_settings(DEFAULT_FROM_EMAIL="Workflow <noreply@b.it>")
 class MittenteEmailTrasmittalInternoTests(TestCase):
-    """mittente_trasmittal: l'email parte da chi ha compilato ed emesso la lettera."""
+    """L'email parte dalla casella dell'app col nome di chi ha emesso la lettera.
+
+    Il server di posta rifiuta un mittente diverso dalla casella con cui l'app
+    si autentica (550 5.7.0 Authentication rejected).
+    """
 
     def setUp(self):
         _media_temporanea(self)
@@ -2728,30 +2735,65 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     # mittente e non sul rendering, che qui non è in discussione.
     PDF_FINTO = b"%PDF-1.4 allegato"
 
-    def test_mittente_e_nome_completo_e_email_dell_utente(self):
-        self.assertEqual(mittente_trasmittal(self.emittente), "Anna Bianchi <anna.bianchi@b.it>")
+    MITTENTE = '"Anna Bianchi (Workflow)" <noreply@b.it>'
+
+    def test_mittente_e_la_casella_dell_app_col_nome_dell_utente(self):
+        self.assertEqual(mittente_trasmittal(self.emittente), self.MITTENTE)
 
     def test_mittente_senza_nome_e_cognome_usa_lo_username(self):
         utente = User.objects.create_user("rverdi", "rverdi@b.it", "pw")
 
-        self.assertEqual(mittente_trasmittal(utente), "rverdi <rverdi@b.it>")
+        self.assertEqual(mittente_trasmittal(utente), '"rverdi (Workflow)" <noreply@b.it>')
 
-    @override_settings(DEFAULT_FROM_EMAIL="Workflow <noreply@b.it>")
-    def test_utente_senza_email_ricade_sull_indirizzo_delle_impostazioni(self):
-        senza_email = User.objects.create_user("senza_email", "", "pw")
-
-        self.assertEqual(mittente_trasmittal(senza_email), "Workflow <noreply@b.it>")
-
-    @override_settings(DEFAULT_FROM_EMAIL="Workflow <noreply@b.it>")
-    def test_invio_usa_il_mittente_dell_emittente_non_quello_di_default(self):
+    def test_invio_dalla_casella_dell_app_con_risposte_e_copia_a_chi_ha_emesso(self):
         trasmittal = self._trasmittal(self.emittente)
 
         esito = invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
 
-        self.assertEqual(esito["mittente"], "Anna Bianchi <anna.bianchi@b.it>")
+        self.assertEqual(esito["mittente"], self.MITTENTE)
+        self.assertEqual(esito["cc"], ["anna.bianchi@b.it"])
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(mail.outbox[0].from_email, "Anna Bianchi <anna.bianchi@b.it>")
-        self.assertEqual(mail.outbox[0].reply_to, ["Anna Bianchi <anna.bianchi@b.it>"])
+        inviata = mail.outbox[0]
+        self.assertEqual(inviata.from_email, self.MITTENTE)
+        self.assertEqual(inviata.reply_to, ["Anna Bianchi <anna.bianchi@b.it>"])
+        self.assertEqual(inviata.to, ["dest@b.it"])
+        self.assertEqual(inviata.cc, ["anna.bianchi@b.it"])
+        self.assertIn("Inviata da Anna Bianchi (anna.bianchi@b.it)", inviata.body)
+
+    def test_chi_ha_emesso_non_va_in_copia_due_volte(self):
+        trasmittal = self._trasmittal(self.emittente)
+        trasmittal.destinatari.create(email="Anna.Bianchi@b.it", tipo="cc", origine="manuale")
+
+        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        self.assertEqual(mail.outbox[0].cc, ["Anna.Bianchi@b.it"])
+
+    def test_utente_senza_email_niente_risposte_ne_copia(self):
+        senza_email = User.objects.create_user("senza_email", "", "pw")
+        trasmittal = self._trasmittal(senza_email)
+
+        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        self.assertEqual(mail.outbox[0].from_email, '"senza_email (Workflow)" <noreply@b.it>')
+        self.assertEqual(mail.outbox[0].reply_to, [])
+        self.assertEqual(mail.outbox[0].cc, [])
+
+    def test_le_note_della_lettera_sono_nel_testo_dell_email(self):
+        trasmittal = self._trasmittal(self.emittente)
+        trasmittal.note = "Consegnare entro venerdì.\nCopia per l'ufficio <qualità>."
+        trasmittal.save(update_fields=["note"])
+
+        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        inviata = mail.outbox[0]
+        self.assertIn(
+            "Note:\nConsegnare entro venerdì.\nCopia per l'ufficio <qualità>.", inviata.body
+        )
+        html = inviata.alternatives[0][0]
+        self.assertIn(
+            "Consegnare entro venerdì.<br>Copia per l&#x27;ufficio &lt;qualità&gt;.", html
+        )
+        self.assertIn("Inviata da Anna Bianchi (anna.bianchi@b.it) con Workflow.", html)
 
     @override_settings(TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT="prove@b.it")
     def test_redirect_di_test_cambia_i_destinatari_ma_non_il_mittente(self):
@@ -2761,7 +2803,8 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
 
         self.assertEqual(esito["to"], ["dest@b.it"])  # gli indirizzi reali, nell'esito
         self.assertEqual(mail.outbox[0].to, ["prove@b.it"])  # il reindirizzamento di test
-        self.assertEqual(mail.outbox[0].from_email, "Anna Bianchi <anna.bianchi@b.it>")
+        self.assertEqual(mail.outbox[0].cc, [])
+        self.assertEqual(mail.outbox[0].from_email, self.MITTENTE)
 
 
 class TrasmittalInternoEmissioneApiTests(TestCase):

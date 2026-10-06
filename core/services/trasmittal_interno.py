@@ -4,7 +4,7 @@ import logging
 import re
 import shutil
 from datetime import datetime, timedelta
-from email.utils import formataddr
+from email.utils import formataddr, parseaddr
 from pathlib import Path
 
 from django.conf import settings
@@ -945,12 +945,15 @@ def _corpo_email_trasmittal(trasmittal, percorso):
     proporzionale, che rompe l'allineamento. Per questo l'email include anche
     ``_corpo_email_trasmittal_html`` come alternativa ``text/html``.
     """
+    note = (trasmittal.note or "").strip()
     return (
         f"Trasmittal interno {trasmittal.nome} — commessa {trasmittal.testata.job}.\n\n"
-        f"{_tabella_testo_righe(trasmittal)}\n\n"
+        + (f"Note:\n{note}\n\n" if note else "")
+        + f"{_tabella_testo_righe(trasmittal)}\n\n"
         f"Salvato in: {percorso}\n\n"
         "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
-        "cartacee avvenuta."
+        "cartacee avvenuta.\n\n"
+        f"{_firma_email(trasmittal.creato_da)}"
     )
 
 
@@ -990,36 +993,57 @@ def _tabella_html_righe(trasmittal):
 def _corpo_email_trasmittal_html(trasmittal, percorso):
     """Versione HTML di ``_corpo_email_trasmittal``, allegata come alternativa
     ``text/html`` (vedi ``invia_email_trasmittal``)."""
+    note = (trasmittal.note or "").strip()
+    note_html = "<br>".join(escape(riga) for riga in note.splitlines())
     return (
         f"<p>Trasmittal interno {escape(trasmittal.nome)} — commessa {escape(trasmittal.testata.job)}.</p>"
-        f"{_tabella_html_righe(trasmittal)}"
+        + (f"<p><strong>Note:</strong><br>{note_html}</p>" if note else "")
+        + f"{_tabella_html_righe(trasmittal)}"
         f"<p>Salvato in: {escape(str(percorso))}</p>"
         "<p>Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
         "cartacee avvenuta.</p>"
+        f"<p>{escape(_firma_email(trasmittal.creato_da))}</p>"
     )
 
 
 def mittente_trasmittal(utente):
-    """Mittente dell'email di un trasmittal interno: chi ha emesso la lettera.
+    """Mittente dell'email di un trasmittal interno.
 
-    Non ``settings.DEFAULT_FROM_EMAIL``: la lettera la compila, la emette e
-    la firma una persona, quindi deve arrivare dal suo indirizzo — chi la
-    riceve vede chi gliel'ha mandata e risponde a lui, non alla casella
-    generica configurata nelle impostazioni dell'applicazione.
+    L'indirizzo è la casella dell'applicazione (``DEFAULT_FROM_EMAIL``): il
+    server di posta lascia spedire solo con la casella con cui l'app si
+    autentica, un altro indirizzo viene rifiutato (``550 5.7.0
+    Authentication rejected``). Il nome mostrato è però quello di chi ha
+    emesso la lettera, così chi la riceve vede subito da chi arriva; le
+    risposte vanno a lui (``_indirizzo_utente`` in ``Reply-To``).
 
     Args:
         utente: Chi ha emesso la lettera (``TransmittalInterno.creato_da``).
 
     Returns:
-        ``"Nome Completo <email>"`` dell'utente, oppure
-        ``settings.DEFAULT_FROM_EMAIL`` se non ha un'email registrata: senza
-        un indirizzo valido l'invio verrebbe rifiutato, meglio la casella
-        generica che nessun mittente.
+        ``"Nome Cognome (Workflow) <casella dell'app>"``.
     """
-    email = (getattr(utente, "email", "") or "").strip()
-    if not email:
+    etichetta, indirizzo = parseaddr(settings.DEFAULT_FROM_EMAIL)
+    nome = (getattr(utente, "nome_completo", "") or "").strip()
+    if not nome:
         return settings.DEFAULT_FROM_EMAIL
-    return formataddr((utente.nome_completo, email))
+    return formataddr((f"{nome} ({etichetta or 'Workflow'})", indirizzo))
+
+
+def _indirizzo_utente(utente):
+    """``"Nome Cognome <email>"`` dell'utente, o ``None`` se non ha un'email."""
+    email = (getattr(utente, "email", "") or "").strip()
+    return formataddr((utente.nome_completo, email)) if email else None
+
+
+def _firma_email(utente):
+    """Chiusura dell'email: chi l'ha inviata, anche se il client mostra solo l'indirizzo."""
+    indirizzo = (getattr(utente, "email", "") or "").strip()
+    nome = getattr(utente, "nome_completo", "") or ""
+    return (
+        f"Inviata da {nome} ({indirizzo}) con Workflow."
+        if indirizzo
+        else (f"Inviata da {nome} con Workflow.")
+    )
 
 
 def invia_email_trasmittal(trasmittal, pdf_bytes=None):
@@ -1031,14 +1055,12 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     percorso di salvataggio, promemoria di firma — non un avviso generico
     che rimanda all'allegato.
 
-    Il mittente è chi ha emesso la lettera (``trasmittal.creato_da``, vedi
-    ``mittente_trasmittal``), non l'indirizzo impostato in
-    ``DEFAULT_FROM_EMAIL``. Vale anche quando l'invio viene ritentato da
-    un'altra persona: il mittente resta chi ha emesso la lettera, che è
-    l'unico indirizzo coerente con quanto scritto sul modulo. Lo stesso
-    indirizzo è messo anche in ``Reply-To``, così le risposte arrivano a lui
-    anche se il server di posta riscrive il ``From`` con la casella
-    autenticata.
+    L'email parte dalla casella dell'applicazione col nome di chi ha emesso
+    la lettera (``trasmittal.creato_da``, vedi ``mittente_trasmittal``); il
+    suo indirizzo va in ``Reply-To`` e in copia, così le risposte arrivano a
+    lui e gliene resta un esemplare. Vale anche quando l'invio viene
+    ritentato da un'altra persona: conta chi ha emesso la lettera, che è
+    quanto scritto sul modulo.
 
     Args:
         pdf_bytes: bytes del PDF da allegare; se omesso, generato al volo
@@ -1047,7 +1069,7 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
 
     Returns:
         Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
-        indirizzi usati.
+        indirizzi usati (``cc`` comprende chi ha emesso la lettera).
 
     Raises:
         ValueError: nessun destinatario in TO.
@@ -1064,6 +1086,10 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     )
     if not to:
         raise ValueError("Nessun destinatario in TO: impossibile inviare l'email.")
+    # Chi ha emesso la lettera in copia, se non è già fra i destinatari.
+    emittente = (getattr(trasmittal.creato_da, "email", "") or "").strip()
+    if emittente and emittente.lower() not in {e.lower() for e in to + cc}:
+        cc.append(emittente)
 
     if pdf_bytes is None:
         from src.pdf import genera_trasmittal_interno_pdf
@@ -1084,13 +1110,14 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
         invio_to, invio_cc = [test_redirect], []
 
     mittente = mittente_trasmittal(trasmittal.creato_da)
+    rispondi_a = _indirizzo_utente(trasmittal.creato_da)
     email = EmailMultiAlternatives(
         subject=subject,
         body=body,
         from_email=mittente,
         to=invio_to,
         cc=invio_cc,
-        reply_to=[mittente],
+        reply_to=[rispondi_a] if rispondi_a else None,
     )
     email.attach_alternative(body_html, "text/html")
     email.attach(f"{trasmittal.nome}.pdf", pdf_bytes, "application/pdf")

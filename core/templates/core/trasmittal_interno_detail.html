@@ -1658,7 +1658,7 @@
           ? '<li>I documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC).</li>'
           : '<li>Nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC.</li>')
       + '<li>Un\'email viene inviata ai destinatari qui sotto, col PDF allegato'
-      + (anteprima.mittente ? ', dal tuo indirizzo <strong>' + escHtml(anteprima.mittente) + '</strong>' : '')
+      + (anteprima.mittente ? ', a tuo nome (<strong>' + escHtml(anteprima.mittente) + '</strong>), con te in copia e le risposte a te' : '')
       + '.</li>'
       + '</ul></div>';
 
