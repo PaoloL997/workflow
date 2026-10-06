@@ -1,13 +1,14 @@
 """File caricati dagli utenti (foto profilo e firme) e il loro storage.
 
-Lo storage è quello di default di Django: una cartella in sviluppo e su
-Windows/IIS, il bucket S3 di Garage nel docker compose (vedi
+Lo storage è quello di default di Django: il bucket S3 di Garage sul server
+(docker-compose.yml), una cartella in sviluppo (vedi
 ``config.settings.storage_media_da_env``). Il bucket è privato, quindi le
 immagini le serve sempre l'app (``risposta_immagine``) e mai un URL diretto.
 """
 
 import logging
 import mimetypes
+import time
 from dataclasses import dataclass, field
 
 from botocore.exceptions import BotoCoreError, ClientError
@@ -24,6 +25,23 @@ ERRORI_STORAGE = (OSError, BotoCoreError, ClientError)
 # Solo questi tipi vengono serviti: un file .html o .svg caricato come foto
 # profilo non deve mai arrivare al browser come pagina dell'app.
 TIPI_IMMAGINE = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
+
+
+# Dopo un errore lo storage si considera giù per questo tempo: le richieste
+# successive rispondono subito invece di riprovare. Su Windows una porta locale
+# chiusa (Docker non partito) rifiuta la connessione con secondi di ritardo, e
+# ogni foto profilo terrebbe occupato un thread di Waitress.
+PAUSA_DOPO_ERRORE_SECONDI = 30
+_storage_giu_fino = 0.0
+
+
+def _storage_in_pausa() -> bool:
+    return time.monotonic() < _storage_giu_fino
+
+
+def _segna_storage_giu():
+    global _storage_giu_fino
+    _storage_giu_fino = time.monotonic() + PAUSA_DOPO_ERRORE_SECONDI
 
 
 class StorageNonDisponibile(RuntimeError):
@@ -43,6 +61,8 @@ def leggi_bytes(campo) -> bytes | None:
     """
     if not campo:
         return None
+    if _storage_in_pausa():
+        raise StorageNonDisponibile()
     try:
         with campo.open("rb") as file:
             return file.read()
@@ -50,6 +70,7 @@ def leggi_bytes(campo) -> bytes | None:
         logger.warning("File %s registrato ma assente dallo storage.", campo.name)
         return None
     except ERRORI_STORAGE as exc:
+        _segna_storage_giu()
         logger.warning("Storage non raggiungibile leggendo %s.", campo.name, exc_info=True)
         raise StorageNonDisponibile() from exc
 
@@ -58,18 +79,21 @@ def risposta_immagine(campo, *, cache_control):
     """Risposta HTTP con l'immagine di un ``FileField``.
 
     404 se non c'è, se manca dallo storage o se il nome non è di un'immagine;
-    503 se lo storage non risponde.
+    503 se lo storage non risponde (subito, se ha appena dato errore).
     """
     if not campo:
         raise Http404
     tipo, _ = mimetypes.guess_type(campo.name)
     if tipo not in TIPI_IMMAGINE:
         raise Http404
+    if _storage_in_pausa():
+        return HttpResponse(status=503)
     try:
         file = campo.open("rb")
     except FileNotFoundError:
         raise Http404 from None
     except ERRORI_STORAGE:
+        _segna_storage_giu()
         logger.warning("Immagine %s non leggibile dallo storage.", campo.name, exc_info=True)
         return HttpResponse(status=503)
     risposta = FileResponse(file, content_type=tipo)

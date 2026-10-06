@@ -32,10 +32,10 @@ def env_list(name: str, default: list[str]) -> list[str]:
 def storage_media_da_env() -> dict:
     """Storage dei file caricati dagli utenti (foto profilo e firme).
 
-    Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (Garage nel docker
-    compose, vedi README); senza, restano nella cartella MEDIA_ROOT come in
-    sviluppo e sul server Windows/IIS. Il bucket è privato: le immagini le
-    serve l'app agli utenti loggati, i browser non parlano mai con lo storage.
+    Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (Garage in Docker
+    accanto all'app sul server, vedi README); senza, restano nella cartella
+    MEDIA_ROOT, come in sviluppo. Il bucket è privato: le immagini le serve
+    l'app agli utenti loggati, i browser non parlano mai con lo storage.
     """
     bucket = os.environ.get("S3_BUCKET", "").strip()
     if not bucket:

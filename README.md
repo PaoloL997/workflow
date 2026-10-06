@@ -29,116 +29,6 @@ python manage.py runserver
 
 Interfaccia admin disponibile su `http://localhost:8000/admin`.
 
-## Deploy con Docker su Ubuntu Server
-
-1. Copia il file di esempio e personalizza i valori:
-
-```bash
-cp .env.example .env
-```
-
-2. Configura in `.env` il PostgreSQL esterno. Nel tuo caso il formato e':
-
-```env
-DATABASE_URL=postgresql://brserver:PASSWORD_REALE@HOST_POSTGRESQL:5432/workflow
-```
-
-Se il database gira su un altro server della rete, sostituisci `HOST_POSTGRESQL` con IP o hostname reali.
-
-3. Monta sul server Ubuntu la share di rete che contiene le cartelle JOBS e imposta in `.env`:
-
-```env
-FILESERVER_HOST_PATH=/mnt/jobs
-FILESERVER_JOBS_PATH=/app/fileserver
-```
-
-4. Configura in `.env` lo storage S3 (Garage) per foto profilo e firme. Genera le
-   credenziali una volta sola e non cambiarle più:
-
-```bash
-echo "S3_ACCESS_KEY=GK$(openssl rand -hex 16)"
-echo "S3_SECRET_KEY=$(openssl rand -hex 32)"
-echo "GARAGE_RPC_SECRET=$(openssl rand -hex 32)"
-```
-
-```env
-S3_BUCKET=workflow-media
-S3_ACCESS_KEY=GK...
-S3_SECRET_KEY=...
-GARAGE_RPC_SECRET=...
-```
-
-5. Avvia lo stack:
-
-```bash
-docker compose up --build -d
-```
-
-L'applicazione sara' disponibile su `http://IP_DEL_SERVER:8000/` e l'admin su
-`http://IP_DEL_SERVER:8000/admin/`.
-
-Servizi inclusi nello stack:
-
-- `web`: Django + Gunicorn
-- `nginx`: reverse proxy e pubblicazione dei file statici
-- `storage`: [Garage](https://garagehq.deuxfleurs.fr/), storage S3 per foto profilo e firme
-
-### Storage S3 (Garage)
-
-Foto profilo e firme degli utenti stanno nel bucket `S3_BUCKET` del servizio `storage`.
-Il bucket è privato e Garage ascolta solo su `127.0.0.1:3900`: le immagini le serve
-l'applicazione, solo agli utenti loggati. All'avvio Garage crea da solo chiave e bucket
-dalle variabili del `.env`.
-
-**Primo avvio su un'installazione esistente.** Dopo aver aggiunto le variabili S3 al `.env`
-e lanciato `docker compose up --build -d`, il container `web` copia nel bucket le foto e
-le firme già caricate (volume `media_data`), mantenendo gli stessi nomi. La copia è
-idempotente e viene ripetuta a ogni avvio finché il volume non viene tolto. Per
-controllare o rilanciarla a mano:
-
-```bash
-docker compose logs web | grep "File media"
-docker compose exec web python manage.py copia_media_su_storage --dry-run
-docker compose exec web python manage.py copia_media_su_storage
-```
-
-**Verifica.**
-
-```bash
-docker compose exec storage /garage status
-docker compose exec storage /garage bucket info workflow-media
-```
-
-**Backup.** I dati sono nei volumi `<progetto>_garage_meta` e `<progetto>_garage_data`
-(nomi esatti con `docker volume ls`). Per una copia coerente fermare il servizio:
-
-```bash
-docker compose stop storage
-docker run --rm -v <progetto>_garage_meta:/meta -v <progetto>_garage_data:/data \
-  -v "$PWD/backups":/backup alpine tar czf /backup/garage-$(date +%F).tgz /meta /data
-docker compose start storage
-```
-
-**Cambio delle credenziali.**
-
-```bash
-docker compose exec storage /garage key create workflow-nuova
-docker compose exec storage /garage bucket allow --read --write --key workflow-nuova workflow-media
-# aggiorna S3_ACCESS_KEY/S3_SECRET_KEY nel .env con quelle stampate, poi:
-docker compose up -d
-docker compose exec storage /garage key delete <vecchia-chiave> --yes
-```
-
-**Attenzione:** non rinominare mai `S3_BUCKET`. Garage creerebbe un bucket nuovo e vuoto,
-e l'applicazione non troverebbe più le immagini già caricate.
-
-Per aggiornare l'applicazione:
-
-```bash
-git pull
-docker compose up --build -d
-```
-
 ## Deploy su Windows Server (IIS + Waitress)
 
 Produzione consigliata: **IIS** come front door HTTP e **Waitress** come server WSGI persistente
@@ -192,8 +82,71 @@ Restart-Service WorkflowWaitress
 **Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
 recycle del pool IIS).
 
-**Foto profilo e firme:** su Windows non serve lo storage S3. Lasciando `S3_BUCKET` vuoto
-restano nella cartella `media\` del progetto e le serve l'applicazione stessa.
+### Storage S3 per foto profilo e firme (Garage con Docker)
+
+Foto profilo e firme degli utenti stanno su [Garage](https://garagehq.deuxfleurs.fr/), uno
+storage compatibile S3 che gira in Docker sulla stessa macchina (`docker-compose.yml`, unico
+servizio `storage`). Il bucket è privato e Garage ascolta solo su `127.0.0.1:3900`: le
+immagini le serve l'applicazione, solo agli utenti loggati. Senza `S3_BUCKET` nel `.env`
+(per esempio in sviluppo) i file restano nella cartella `media\` del progetto.
+
+Docker deve eseguire **container Linux**: `docker info --format "{{.OSType}}"` deve rispondere
+`linux`. Con Docker Desktop attiva l'avvio automatico: se Docker non è partito, foto e firme
+non si vedono e il PDF del trasmittal interno fallisce (con **Riprova**) finché non riparte.
+
+**Prima attivazione**, dalla root del progetto in PowerShell:
+
+```powershell
+# 1. Credenziali: generale una volta sola e non cambiarle più
+poetry run python -c "import secrets;print('S3_ACCESS_KEY=GK'+secrets.token_hex(16));print('S3_SECRET_KEY='+secrets.token_hex(32));print('GARAGE_RPC_SECRET='+secrets.token_hex(32))"
+```
+
+```env
+# .env — aggiungere
+S3_BUCKET=workflow-media
+S3_ACCESS_KEY=GK...
+S3_SECRET_KEY=...
+GARAGE_RPC_SECRET=...
+```
+
+```powershell
+# 2. Avvio di Garage: crea da solo chiave e bucket
+docker compose up -d
+docker compose exec storage /garage bucket info workflow-media
+
+# 3. L'app legge il nuovo .env
+Restart-Service WorkflowWaitress
+
+# 4. Copia nel bucket delle foto e firme già caricate (stessi nomi, rilanciabile)
+poetry run python manage.py copia_media_su_storage --dry-run
+poetry run python manage.py copia_media_su_storage
+```
+
+La cartella `media\` non serve più dopo la copia, ma conviene tenerla finché non si è
+verificato che foto e firme si vedono tutte.
+
+**Backup.** I dati sono nei volumi Docker `workflow_garage_meta` e `workflow_garage_data`
+(nomi esatti con `docker volume ls`). Per una copia coerente fermare il servizio:
+
+```powershell
+docker compose stop storage
+docker run --rm -v workflow_garage_meta:/meta -v workflow_garage_data:/data -v "${PWD}\backups:/backup" alpine tar czf "/backup/garage-$(Get-Date -Format yyyy-MM-dd).tgz" /meta /data
+docker compose start storage
+```
+
+**Cambio delle credenziali.**
+
+```powershell
+docker compose exec storage /garage key create workflow-nuova
+docker compose exec storage /garage bucket allow --read --write --key workflow-nuova workflow-media
+# aggiorna S3_ACCESS_KEY/S3_SECRET_KEY nel .env con quelle stampate, poi:
+docker compose up -d
+Restart-Service WorkflowWaitress
+docker compose exec storage /garage key delete <vecchia-chiave> --yes
+```
+
+**Attenzione:** non rinominare mai `S3_BUCKET`. Garage creerebbe un bucket nuovo e vuoto,
+e l'applicazione non troverebbe più le immagini già caricate.
 
 ### Rollback a wfastcgi
 
@@ -235,7 +188,7 @@ BC_SYNC_INTERVALLO_SECONDI=300  # ogni quanto il thread controlla se è ora
 
 Dettagli utili:
 
-- **Una sola esecuzione al giorno**, anche con più worker (`gunicorn --workers 3`): il turno si
+- **Una sola esecuzione al giorno**, anche con più processi dell'applicazione: il turno si
   prenota su una riga PostgreSQL con `SELECT ... FOR UPDATE SKIP LOCKED`, gli altri processi escono
   subito.
 - **Recupero**: se il server era spento alle 17:00, la sincronizzazione parte al primo controllo
@@ -259,8 +212,7 @@ python manage.py sync_business_central --tutte
 
 Un valore vuoto in Business Central non sovrascrive mai un dato già inserito nel sistema.
 
-Le modifiche a `BC_SYNC_*` richiedono un riavvio: `Restart-Service WorkflowWaitress` su Windows,
-`docker compose up -d` con Docker.
+Le modifiche a `BC_SYNC_*` richiedono un riavvio: `Restart-Service WorkflowWaitress`.
 
 ## Database
 
@@ -269,7 +221,7 @@ PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non commit
 Con database esterno, verifica anche sul server PostgreSQL:
 
 - `listen_addresses` abiliti connessioni dalla rete aziendale
-- `pg_hba.conf` consenta l'IP del server Ubuntu
+- `pg_hba.conf` consenta l'IP del server dell'applicazione
 - firewall aperto sulla porta `5432` solo per la LAN necessaria
 
 ## Struttura

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage, default_storage
 from django.core.management.base import BaseCommand, CommandError
 
-from core.services.media import copia_media_su_storage
+from core.services.media import ERRORI_STORAGE, copia_media_su_storage
 
 
 def _forza_utf8(wrapper):
@@ -66,6 +66,8 @@ class Command(BaseCommand):
             )
         except RuntimeError as exc:
             raise CommandError(str(exc)) from exc
+        except ERRORI_STORAGE as exc:
+            raise CommandError(f"Storage non raggiungibile: {exc}") from exc
 
         for nome, utenti in report.mancanti:
             self.stderr.write(

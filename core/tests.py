@@ -59,6 +59,7 @@ from .models import (
     TransmittalInterno,
 )
 from .page_title import format_commessa_page_title
+from .services import media as media_service
 from .services import scheduler
 from .services.bc_sync import (
     BusinessCentralNonDisponibile,
@@ -8950,6 +8951,8 @@ def _media_temporanea(test):
     )
     impostazioni.enable()
     test.addCleanup(impostazioni.disable)
+    # Un test che simula lo storage giù non deve lasciarlo "in pausa" agli altri.
+    test.addCleanup(setattr, media_service, "_storage_giu_fino", 0.0)
     return media.name
 
 
@@ -9162,6 +9165,23 @@ class AvatarUtenteTests(TestCase):
             risposta = self.client.get(f"/utenti/{self.utente.pk}/avatar/")
 
         self.assertEqual(risposta.status_code, 503)
+
+    def test_dopo_un_errore_lo_storage_non_viene_richiamato_per_un_po(self):
+        self._carica()
+        with patch.object(FileSystemStorage, "open", side_effect=_storage_irraggiungibile()):
+            self.client.get(f"/utenti/{self.utente.pk}/avatar/")
+
+        # Lo storage è tornato, ma per la pausa non lo si interroga subito.
+        with patch.object(FileSystemStorage, "open") as apertura:
+            risposta = self.client.get(f"/utenti/{self.utente.pk}/avatar/")
+        self.assertEqual(risposta.status_code, 503)
+        apertura.assert_not_called()
+
+        # Finita la pausa la foto torna a vedersi.
+        media_service._storage_giu_fino = 0.0
+        risposta = self.client.get(f"/utenti/{self.utente.pk}/avatar/")
+        self.assertEqual(risposta.status_code, 200)
+        b"".join(risposta.streaming_content)
 
     def test_le_pagine_usano_l_url_dell_app(self):
         self._carica()
