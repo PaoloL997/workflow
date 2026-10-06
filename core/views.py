@@ -1133,6 +1133,7 @@ def trasmittal_interno_emetti_api(request, job):
             request.user,
             note=data.get("note", ""),
             destinatari=data.get("destinatari"),
+            messaggio=data.get("messaggio", ""),
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)

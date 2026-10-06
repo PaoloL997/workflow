@@ -434,6 +434,10 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
   }
   .ti-notes-wrap { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .ti-messaggio-wrap { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .ti-messaggio-wrap label { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
+  .ti-messaggio-wrap label span { font-weight: 400; }
+  textarea.ti-messaggio { resize: vertical; min-height: 72px; font-family: inherit; line-height: 1.4; }
   .ti-notes-wrap label { font-size: 12px; font-weight: 600; color: var(--color-text-secondary); }
   #componi-note-lista {
     display: flex;
@@ -1492,6 +1496,7 @@
       };
     });
     _noteLibere = ['', '', ''];
+    _messaggioEmail = '';
     renderNoteLibere();
     document.getElementById('componi-tbody').innerHTML = docs.map(function (d) {
       return rigaHtmlComponi(d, rowState[d.id]);
@@ -1532,6 +1537,8 @@
      Pannello di conferma: a chi va, poi esito emissione
   ══════════════════════════════════════════════════ */
   var _destinatariCorrenti = [];
+  // Messaggio facoltativo dell'email: sopravvive alle modifiche dei destinatari.
+  var _messaggioEmail = '';
   var _sigleStabilimento = {};
   var _ultimoEsito = null;
   var _esitoMostrato = false;
@@ -1676,6 +1683,12 @@
       + '<div class="ti-dest-add"><input type="email" id="dest-cc-input" class="ctrl-input" placeholder="Aggiungi email…">'
       + '<button type="button" class="btn-secondary" onclick="aggiungiDestinatario(\'cc\')">+</button></div></div>'
       + '</div>'
+      + '<div class="ti-messaggio-wrap">'
+      + '<label for="conferma-messaggio">Messaggio nell\'email <span>(facoltativo)</span></label>'
+      + '<textarea id="conferma-messaggio" class="ctrl-input ti-messaggio" rows="3" maxlength="2000"'
+      + ' placeholder="Indicazioni per i destinatari: compaiono nell\'email sopra la tabella dei documenti."'
+      + ' oninput="aggiornaMessaggioEmail(this.value)">' + escHtml(_messaggioEmail) + '</textarea>'
+      + '</div>'
       + '<div class="ti-conferma-riepilogo">' + nDoc + (nDoc === 1 ? ' documento' : ' documenti')
       + ' — ' + nDcc + ' in DCC · '
       + '<button type="button" class="ti-link-btn" onclick="scaricaAnteprimaPdf()">Anteprima PDF</button></div>';
@@ -1686,6 +1699,10 @@
       '<button type="button" class="btn-cancel" onclick="chiudiConferma()">Annulla</button>'
       + '<button type="button" class="btn-confirm" id="invia-btn" onclick="confermaEmissione()">Invia a ' + _destinatariCorrenti.length + ' destinatari</button>';
   }
+
+  window.aggiornaMessaggioEmail = function (valore) {
+    _messaggioEmail = valore;
+  };
 
   window.scaricaAnteprimaPdf = async function () {
     try {
@@ -1724,6 +1741,7 @@
           righe: righePayload(),
           note: noteLettera(),
           destinatari: _destinatariCorrenti,
+          messaggio: _messaggioEmail.trim(),
         }),
       });
       const body = await r.json().catch(function () { return {}; });

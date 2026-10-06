@@ -2599,6 +2599,51 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(risposta.json()["email"]["mittente"], self.MITTENTE_WRITER)
         self.assertIn(self.writer.email, risposta.json()["email"]["cc"])
 
+    def test_messaggio_scritto_prima_dell_invio_finisce_nell_email_e_resta_per_riprova(self):
+        self.client.force_login(self.writer)
+        with self._pdf_finto():
+            risposta = self.client.post(
+                self._url("emetti/"),
+                data=json.dumps(
+                    {"righe": [self._riga(self.doc_ok)], "messaggio": "  Ritirare in reception.  "}
+                ),
+                content_type="application/json",
+            )
+
+        self.assertEqual(risposta.status_code, 200)
+        lettera = TransmittalInterno.objects.get(pk=risposta.json()["trasmittal_id"])
+        self.assertEqual(lettera.messaggio_email, "Ritirare in reception.")
+        self.assertIn("Ritirare in reception.", mail.outbox[0].body)
+
+        with self._pdf_finto():
+            self.client.post(
+                self._url(f"lettere/{lettera.pk}/retry/"),
+                data=json.dumps({"step": "email"}),
+                content_type="application/json",
+            )
+        self.assertIn("Ritirare in reception.", mail.outbox[1].body)
+
+    def test_messaggio_troppo_lungo_non_crea_la_lettera(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)], "messaggio": "x" * 2001}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("2000 caratteri", risposta.json()["error"])
+        self.assertFalse(TransmittalInterno.objects.filter(testata=self.testata).exists())
+
+    def test_il_pannello_di_conferma_ha_il_campo_messaggio(self):
+        self.client.force_login(self.writer)
+
+        pagina = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
+
+        self.assertContains(pagina, "Messaggio nell")
+        self.assertContains(pagina, "messaggio: _messaggioEmail.trim()")
+
     @override_settings(DEFAULT_FROM_EMAIL="Workflow <workflow@b.it>")
     def test_anteprima_riporta_il_mittente_di_chi_sta_compilando(self):
         self.client.force_login(self.writer)
@@ -2786,22 +2831,33 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         self.assertEqual(mail.outbox[0].cc, [])
         self.assertIn("— emesso da senza_email.", mail.outbox[0].body)
 
-    def test_le_note_della_lettera_sono_nel_testo_dell_email(self):
+    def test_il_messaggio_e_nell_email_sopra_la_tabella_le_note_no(self):
         trasmittal = self._trasmittal(self.emittente)
-        trasmittal.note = "Consegnare entro venerdì.\nCopia per l'ufficio <qualità>."
-        trasmittal.save(update_fields=["note"])
+        trasmittal.messaggio_email = "Consegnare entro venerdì.\nCopia per l'ufficio <qualità>."
+        trasmittal.note = "Nota del modulo"
+        trasmittal.save(update_fields=["messaggio_email", "note"])
 
         invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
 
         inviata = mail.outbox[0]
         self.assertIn(
-            "Note:\nConsegnare entro venerdì.\nCopia per l'ufficio <qualità>.", inviata.body
+            "anna.bianchi@b.it).\n\nConsegnare entro venerdì.\nCopia per l'ufficio <qualità>.\n\nB&R",
+            inviata.body,
         )
+        # Le note restano nel PDF del modulo.
+        self.assertNotIn("Nota del modulo", inviata.body)
         html = inviata.alternatives[0][0]
         self.assertIn(
-            "Consegnare entro venerdì.<br>Copia per l&#x27;ufficio &lt;qualità&gt;.", html
+            "<p>Consegnare entro venerdì.<br>Copia per l&#x27;ufficio &lt;qualità&gt;.</p>", html
         )
         self.assertIn("— emesso da Anna Bianchi (anna.bianchi@b.it).", html)
+
+    def test_senza_messaggio_nessun_paragrafo_vuoto(self):
+        trasmittal = self._trasmittal(self.emittente)
+
+        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+
+        self.assertIn("(anna.bianchi@b.it).\n\nB&R DOC. No.", mail.outbox[0].body)
 
     @override_settings(TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT="prove@b.it")
     def test_redirect_di_test_cambia_i_destinatari_ma_non_il_mittente(self):

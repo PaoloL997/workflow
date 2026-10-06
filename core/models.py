@@ -709,6 +709,9 @@ class TransmittalInterno(models.Model):
     )
     creato_il = models.DateTimeField(auto_now_add=True)
     note = models.TextField(blank=True)
+    # Testo facoltativo scritto prima dell'invio: va solo nell'email (le note
+    # stanno nel PDF del modulo). Salvato qui perché Riprova lo rimandi uguale.
+    messaggio_email = models.TextField(blank=True, verbose_name="Messaggio dell'email")
 
     class Meta:
         managed = True

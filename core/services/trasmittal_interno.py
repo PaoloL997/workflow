@@ -945,10 +945,10 @@ def _corpo_email_trasmittal(trasmittal, percorso):
     proporzionale, che rompe l'allineamento. Per questo l'email include anche
     ``_corpo_email_trasmittal_html`` come alternativa ``text/html``.
     """
-    note = (trasmittal.note or "").strip()
+    messaggio = (trasmittal.messaggio_email or "").strip()
     return (
         f"{_intestazione_email(trasmittal)}\n\n"
-        + (f"Note:\n{note}\n\n" if note else "")
+        + (f"{messaggio}\n\n" if messaggio else "")
         + f"{_tabella_testo_righe(trasmittal)}\n\n"
         f"Salvato in: {percorso}\n\n"
         "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
@@ -992,11 +992,11 @@ def _tabella_html_righe(trasmittal):
 def _corpo_email_trasmittal_html(trasmittal, percorso):
     """Versione HTML di ``_corpo_email_trasmittal``, allegata come alternativa
     ``text/html`` (vedi ``invia_email_trasmittal``)."""
-    note = (trasmittal.note or "").strip()
-    note_html = "<br>".join(escape(riga) for riga in note.splitlines())
+    messaggio = (trasmittal.messaggio_email or "").strip()
+    messaggio_html = "<br>".join(escape(riga) for riga in messaggio.splitlines())
     return (
         f"<p>{escape(_intestazione_email(trasmittal))}</p>"
-        + (f"<p><strong>Note:</strong><br>{note_html}</p>" if note else "")
+        + (f"<p>{messaggio_html}</p>" if messaggio else "")
         + f"{_tabella_html_righe(trasmittal)}"
         f"<p>Salvato in: {escape(str(percorso))}</p>"
         "<p>Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
@@ -1124,13 +1124,19 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     return {"to": to, "cc": cc, "mittente": mittente}
 
 
-def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None, destinatari=None):
+MAX_MESSAGGIO_EMAIL = 2000
+
+
+def emetti_trasmittal_interno(
+    testata, righe_payload, utente, note="", data=None, destinatari=None, messaggio=""
+):
     """Crea, archivia e distribuisce una lettera di trasmittal interno.
 
     Un'unica operazione: crea il trasmittal (con i destinatari auto-risolti,
     sostituiti da ``destinatari`` se dato — la conferma dell'anteprima,
     eventualmente modificata dall'utente), salva il PDF sul fileserver,
-    prepara la cartella DCC, invia l'email.
+    prepara la cartella DCC, invia l'email. ``messaggio`` è il testo
+    facoltativo scritto prima dell'invio: va nell'email, sopra la tabella.
 
     Solo la creazione (righe + destinatari) è atomica e può far fallire tutta
     l'operazione: senza una lettera valida non c'è nulla da archiviare o
@@ -1140,16 +1146,25 @@ def emetti_trasmittal_interno(testata, righe_payload, utente, note="", data=None
     lasciare la lettera "a metà" senza dirlo.
 
     Raises:
-        ValueError: selezione non valida (vedi ``_prepara_righe``) o
-            destinatari non validi (vedi ``sostituisci_destinatari``) — in
-            questi casi non viene creata nessuna lettera.
+        ValueError: selezione non valida (vedi ``_prepara_righe``),
+            destinatari non validi (vedi ``sostituisci_destinatari``) o
+            messaggio troppo lungo — in questi casi non viene creata nessuna
+            lettera.
 
     Returns:
         Dict con ``trasmittal_id``, ``nome`` e, per ciascuno di
         ``pdf``/``dcc``/``email``, ``{"ok": bool, "errore": str | None, ...}``.
     """
+    messaggio = str(messaggio or "").strip()
+    if len(messaggio) > MAX_MESSAGGIO_EMAIL:
+        raise ValueError(
+            f"Il messaggio dell'email può avere al massimo {MAX_MESSAGGIO_EMAIL} caratteri."
+        )
     righe = _prepara_righe(testata, righe_payload)
     trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
+    if messaggio:
+        trasmittal.messaggio_email = messaggio
+        trasmittal.save(update_fields=["messaggio_email"])
     if destinatari is not None:
         sostituisci_destinatari(trasmittal, destinatari)
 
