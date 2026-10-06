@@ -1,8 +1,8 @@
 """Raw per-job data export: one Excel sheet per database table.
 
-Sheets hold the tables essentially as stored (model column names, no formatting
-beyond the bold header row); only the revisions sheet joins in the identifiers
-of its document and the letter of the client answer.
+Sheets hold the tables essentially as stored (model column names, bold header
+row, dates as Excel dates in dd/mm/yyyy); only the revisions sheet joins in the
+identifiers of its document and the letter of the client answer.
 """
 
 from collections.abc import Callable
@@ -110,6 +110,9 @@ TABELLE = (
 
 TABELLE_BY_KEY = {t.key: t for t in TABELLE}
 
+FORMATO_DATA = "DD/MM/YYYY"
+FORMATO_DATA_ORA = "DD/MM/YYYY HH:MM"
+
 
 def list_tabelle():
     """The exportable tables, in display order."""
@@ -180,5 +183,30 @@ def build_workbook(job, keys):
             cell.font = header_font
         for row in tabella.rows(job):
             ws.append(row)
+        _formatta_date(ws)
 
     return wb
+
+
+def _formatta_date(ws):
+    """Date in formato italiano e colonne abbastanza larghe da mostrarle.
+
+    Le celle restano date vere (Excel le ordina e filtra come date); con la
+    larghezza predefinita della colonna (~8 caratteri) Excel le mostrerebbe
+    come ``########``.
+    """
+    for colonna in ws.iter_cols(min_row=2):
+        date_ = [cella for cella in colonna if isinstance(cella.value, date)]
+        if not date_:
+            continue
+        con_ora = False
+        for cella in date_:
+            if isinstance(cella.value, datetime):
+                cella.number_format = FORMATO_DATA_ORA
+                con_ora = True
+            else:
+                cella.number_format = FORMATO_DATA
+        intestazione = str(ws.cell(row=1, column=colonna[0].column).value or "")
+        ws.column_dimensions[colonna[0].column_letter].width = max(
+            17 if con_ora else 12, len(intestazione) + 2
+        )

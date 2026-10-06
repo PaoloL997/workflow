@@ -7150,6 +7150,12 @@ class ScaricaDatiGrezziTestCase(TestCase):
             dict(zip(revisioni[0], revisioni[1]))["dis_plan_date"],
             datetime(2026, 3, 15),
         )
+        # Formato italiano e colonna abbastanza larga, altrimenti Excel mostra ########.
+        ws = wb["Revisioni"]
+        colonna = revisioni[0].index("dis_plan_date") + 1
+        self.assertEqual(ws.cell(row=2, column=colonna).number_format, "DD/MM/YYYY")
+        lettera = ws.cell(row=1, column=colonna).column_letter
+        self.assertGreaterEqual(ws.column_dimensions[lettera].width, 12)
         aware = timezone.make_aware(datetime(2026, 3, 15, 8, 30))
         self.assertEqual(_cella_grezza(aware), timezone.localtime(aware).replace(tzinfo=None))
         self.assertIsNone(_cella_grezza(aware).tzinfo)
