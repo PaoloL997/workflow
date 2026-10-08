@@ -807,6 +807,7 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
     PE = "pe", "PE"
     QCI = "qci", "QCI"
     EXPORT = "export", "Export"
+    DEFAULT = "default", "Default"
     MANUALE = "manuale", "Manuale"
 
 
@@ -846,6 +847,36 @@ class DestinatarioTransmittalInterno(models.Model):
 
     def __str__(self):
         return f"{self.trasmittal_id}: {self.email} ({self.tipo})"
+
+
+class IndirizzoDefaultTrasmittalInterno(models.Model):
+    """Indirizzo email sempre incluso nei destinatari del trasmittal interno.
+
+    Se attivo, si aggiunge a ogni lettera indipendentemente da stabilimento,
+    PM/PE/QCI o tipo di documento — vedi
+    ``core.services.trasmittal_interno._costruisci_destinatari``. Gestito da
+    qui (admin), non dal codice.
+    """
+
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
+    attivo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = True
+        db_table = "indirizzi_default_trasmittal_interno"
+        verbose_name = "Indirizzo default trasmittal interno"
+        verbose_name_plural = "Indirizzi default trasmittal interno"
+        ordering = ["tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email", "tipo"],
+                name="uniq_indirizzo_default_trasmittal_interno",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):

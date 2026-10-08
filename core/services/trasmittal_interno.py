@@ -20,6 +20,7 @@ from ..models import (
     DestinatarioTransmittalInterno,
     DestinazioneDocumento,
     Documento,
+    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
@@ -92,6 +93,23 @@ def indirizzi_per_siti(codici_bc):
             cc.append(email)
 
     cc = [email for email in cc if email.strip().lower() not in visti_to]
+    return {"to": to, "cc": cc}
+
+
+def indirizzi_default():
+    """Email TO/CC sempre incluse nel trasmittal interno, gestite da admin.
+
+    Vedi ``IndirizzoDefaultTrasmittalInterno``. Solo gli indirizzi attivi;
+    nessuno configurato dà ``{"to": [], "cc": []}``.
+
+    Returns:
+        ``{"to": [...], "cc": [...]}``.
+    """
+    indirizzi = IndirizzoDefaultTrasmittalInterno.objects.filter(attivo=True).values_list(
+        "email", "tipo"
+    )
+    to = [email for email, tipo in indirizzi if tipo == TipoDestinatarioTransmittalInterno.TO]
+    cc = [email for email, tipo in indirizzi if tipo == TipoDestinatarioTransmittalInterno.CC]
     return {"to": to, "cc": cc}
 
 
@@ -271,7 +289,9 @@ def _costruisci_destinatari(testata, documenti, siti):
     1. indirizzi di stabilimento dei siti coinvolti (TO/CC da anagrafica);
     2. PM della commessa → TO;
     3. PE e QCI della commessa → CC;
-    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC.
+    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC;
+    5. indirizzi default attivi (``IndirizzoDefaultTrasmittalInterno``, TO/CC
+       da admin) — su ogni lettera, a prescindere da sito o documenti.
 
     Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
     commessa non è un errore: contribuisce semplicemente zero indirizzi.
@@ -322,6 +342,16 @@ def _costruisci_destinatari(testata, documenti, siti):
                 OrigineDestinatarioTransmittalInterno.EXPORT,
             )
         )
+
+    default = indirizzi_default()
+    voci += [
+        (email, TipoDestinatarioTransmittalInterno.TO, OrigineDestinatarioTransmittalInterno.DEFAULT)
+        for email in default["to"]
+    ]
+    voci += [
+        (email, TipoDestinatarioTransmittalInterno.CC, OrigineDestinatarioTransmittalInterno.DEFAULT)
+        for email in default["cc"]
+    ]
 
     return _deduplica_destinatari(voci)
 

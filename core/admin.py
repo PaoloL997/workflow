@@ -12,6 +12,7 @@ from .models import (
     Documento,
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
+    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     ModelloDocumento,
     Notifica,
@@ -372,6 +373,14 @@ class AggiornamentoBCAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+
+@admin.register(IndirizzoDefaultTrasmittalInterno)
+class IndirizzoDefaultTrasmittalInternoAdmin(admin.ModelAdmin):
+    list_display = ("email", "tipo", "attivo")
+    list_editable = ("attivo",)
+    list_filter = ("tipo", "attivo")
+    search_fields = ("email",)
 
 
 @admin.register(FirmatarioStabilimento)
