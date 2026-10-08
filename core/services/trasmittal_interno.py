@@ -96,20 +96,43 @@ def indirizzi_per_siti(codici_bc):
     return {"to": to, "cc": cc}
 
 
-def indirizzi_default():
-    """Email TO/CC sempre incluse nel trasmittal interno, gestite da admin.
+def indirizzi_default_per_siti(codici_bc):
+    """Email TO/CC "sempre in copia" attive per un elenco di siti, gestite da admin.
 
-    Vedi ``IndirizzoDefaultTrasmittalInterno``. Solo gli indirizzi attivi;
-    nessuno configurato dà ``{"to": [], "cc": []}``.
+    Come ``indirizzi_per_siti``, ma da ``IndirizzoDefaultTrasmittalInterno``
+    (indirizzi aggiuntivi per stabilimento, es. la casella qualità del sito,
+    tenuti separati dall'anagrafica TO/CC "operativa" di
+    ``IndirizzoStabilimento``).
+
+    Args:
+        codici_bc: Iterable di codici sito Business Central (``Stabilimento.codice_bc``).
 
     Returns:
-        ``{"to": [...], "cc": [...]}``.
+        ``{"to": [...], "cc": [...]}``, liste di email senza duplicati
+        (confronto case-insensitive) e senza sovrapposizioni, come
+        ``indirizzi_per_siti``.
     """
-    indirizzi = IndirizzoDefaultTrasmittalInterno.objects.filter(attivo=True).values_list(
-        "email", "tipo"
-    )
-    to = [email for email, tipo in indirizzi if tipo == TipoDestinatarioTransmittalInterno.TO]
-    cc = [email for email, tipo in indirizzi if tipo == TipoDestinatarioTransmittalInterno.CC]
+    codici = list(codici_bc or [])
+    if not codici:
+        return {"to": [], "cc": []}
+
+    indirizzi = IndirizzoDefaultTrasmittalInterno.objects.filter(
+        stabilimento__codice_bc__in=codici, attivo=True
+    ).values_list("email", "tipo")
+
+    to, cc = [], []
+    visti_to, visti_cc = set(), set()
+    for email, tipo in indirizzi:
+        chiave = email.strip().lower()
+        if tipo == TipoDestinatarioTransmittalInterno.TO:
+            if chiave not in visti_to:
+                visti_to.add(chiave)
+                to.append(email)
+        elif chiave not in visti_cc:
+            visti_cc.add(chiave)
+            cc.append(email)
+
+    cc = [email for email in cc if email.strip().lower() not in visti_to]
     return {"to": to, "cc": cc}
 
 
@@ -290,8 +313,9 @@ def _costruisci_destinatari(testata, documenti, siti):
     2. PM della commessa → TO;
     3. PE e QCI della commessa → CC;
     4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC;
-    5. indirizzi default attivi (``IndirizzoDefaultTrasmittalInterno``, TO/CC
-       da admin) — su ogni lettera, a prescindere da sito o documenti.
+    5. indirizzi default attivi dei siti coinvolti
+       (``IndirizzoDefaultTrasmittalInterno``, TO/CC da admin, per
+       stabilimento) — stesso ambito del punto 1, lista separata.
 
     Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
     commessa non è un errore: contribuisce semplicemente zero indirizzi.
@@ -343,7 +367,7 @@ def _costruisci_destinatari(testata, documenti, siti):
             )
         )
 
-    default = indirizzi_default()
+    default = indirizzi_default_per_siti([s.codice_bc for s in siti])
     voci += [
         (email, TipoDestinatarioTransmittalInterno.TO, OrigineDestinatarioTransmittalInterno.DEFAULT)
         for email in default["to"]

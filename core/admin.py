@@ -39,11 +39,19 @@ class IndirizzoStabilimentoInline(admin.TabularInline):
     fields = ("email", "tipo", "attivo")
 
 
+class IndirizzoDefaultTrasmittalInternoInline(admin.TabularInline):
+    model = IndirizzoDefaultTrasmittalInterno
+    extra = 0
+    fields = ("email", "tipo", "attivo")
+    verbose_name = "Indirizzo default trasmittal interno"
+    verbose_name_plural = "Indirizzi default trasmittal interno (sempre in copia per questo sito)"
+
+
 @admin.register(Stabilimento)
 class StabilimentoAdmin(admin.ModelAdmin):
     list_display = ("id", "nome", "sigla", "codice_bc")
     search_fields = ("nome", "sigla")
-    inlines = [IndirizzoStabilimentoInline]
+    inlines = [IndirizzoStabilimentoInline, IndirizzoDefaultTrasmittalInternoInline]
 
 
 @admin.register(Reparto)
@@ -373,14 +381,6 @@ class AggiornamentoBCAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
-
-
-@admin.register(IndirizzoDefaultTrasmittalInterno)
-class IndirizzoDefaultTrasmittalInternoAdmin(admin.ModelAdmin):
-    list_display = ("email", "tipo", "attivo")
-    list_editable = ("attivo",)
-    list_filter = ("tipo", "attivo")
-    search_fields = ("email",)
 
 
 @admin.register(FirmatarioStabilimento)

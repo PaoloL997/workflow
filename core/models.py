@@ -850,14 +850,20 @@ class DestinatarioTransmittalInterno(models.Model):
 
 
 class IndirizzoDefaultTrasmittalInterno(models.Model):
-    """Indirizzo email sempre incluso nei destinatari del trasmittal interno.
+    """Indirizzo email sempre incluso nei destinatari del trasmittal interno
+    quando il suo stabilimento è tra i siti coinvolti nella lettera.
 
-    Se attivo, si aggiunge a ogni lettera indipendentemente da stabilimento,
-    PM/PE/QCI o tipo di documento — vedi
+    Si aggiunge, se attivo, ai TO/CC già risolti da ``IndirizzoStabilimento``
+    per lo stesso stabilimento — vedi
     ``core.services.trasmittal_interno._costruisci_destinatari``. Gestito da
     qui (admin), non dal codice.
     """
 
+    stabilimento = models.ForeignKey(
+        Stabilimento,
+        on_delete=models.CASCADE,
+        related_name="indirizzi_default_trasmittal",
+    )
     email = models.EmailField()
     tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
     attivo = models.BooleanField(default=True)
@@ -867,16 +873,16 @@ class IndirizzoDefaultTrasmittalInterno(models.Model):
         db_table = "indirizzi_default_trasmittal_interno"
         verbose_name = "Indirizzo default trasmittal interno"
         verbose_name_plural = "Indirizzi default trasmittal interno"
-        ordering = ["tipo", "email"]
+        ordering = ["stabilimento", "tipo", "email"]
         constraints = [
             models.UniqueConstraint(
-                fields=["email", "tipo"],
+                fields=["stabilimento", "email", "tipo"],
                 name="uniq_indirizzo_default_trasmittal_interno",
             ),
         ]
 
     def __str__(self):
-        return f"{self.email} ({self.tipo})"
+        return f"{self.stabilimento_id}: {self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):

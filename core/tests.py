@@ -147,7 +147,7 @@ from .services.trasmittal_interno import (
     crea_trasmittal_interno,
     data_impegno,
     imposta_destinazioni,
-    indirizzi_default,
+    indirizzi_default_per_siti,
     indirizzi_per_siti,
     invia_email_trasmittal,
     mittente_trasmittal,
@@ -1155,31 +1155,44 @@ class IndirizziPerSitiTests(TestCase):
         self.assertEqual(risultato["to"], ["attivo@b.it"])
 
 
-class IndirizziDefaultTests(TestCase):
-    """indirizzi_default: TO/CC sempre inclusi, gestiti da admin (IndirizzoDefaultTrasmittalInterno)."""
+class IndirizziDefaultPerSitiTests(TestCase):
+    """indirizzi_default_per_siti: TO/CC "sempre in copia" per stabilimento, da admin."""
 
-    def test_nessun_indirizzo_configurato(self):
-        self.assertEqual(indirizzi_default(), {"to": [], "cc": []})
+    def setUp(self):
+        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", codice_bc=1)
+        self.albignasego = Stabilimento.objects.create(nome="Albignasego", codice_bc=2)
 
-    def test_to_e_cc_attivi(self):
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            email="to@b.it", tipo=TipoDestinatarioTransmittalInterno.TO
-        )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            email="cc@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+    def _indirizzo(self, stabilimento, email, tipo, attivo=True):
+        return IndirizzoDefaultTrasmittalInterno.objects.create(
+            stabilimento=stabilimento, email=email, tipo=tipo, attivo=attivo
         )
 
-        self.assertEqual(indirizzi_default(), {"to": ["to@b.it"], "cc": ["cc@b.it"]})
+    def test_input_vuoto(self):
+        self._indirizzo(self.valbrembo, "a@b.it", TipoDestinatarioTransmittalInterno.TO)
+
+        self.assertEqual(indirizzi_default_per_siti([]), {"to": [], "cc": []})
+        self.assertEqual(indirizzi_default_per_siti(None), {"to": [], "cc": []})
+
+    def test_sito_senza_indirizzi_default_configurati(self):
+        self.assertEqual(indirizzi_default_per_siti([1]), {"to": [], "cc": []})
+
+    def test_solo_il_sito_coinvolto_contribuisce(self):
+        self._indirizzo(self.valbrembo, "bg@b.it", TipoDestinatarioTransmittalInterno.CC)
+        self._indirizzo(self.albignasego, "pd@b.it", TipoDestinatarioTransmittalInterno.CC)
+
+        risultato = indirizzi_default_per_siti([1])
+
+        self.assertEqual(risultato, {"to": [], "cc": ["bg@b.it"]})
 
     def test_indirizzo_inattivo_escluso(self):
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            email="attivo@b.it", tipo=TipoDestinatarioTransmittalInterno.TO
-        )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            email="inattivo@b.it", tipo=TipoDestinatarioTransmittalInterno.TO, attivo=False
+        self._indirizzo(self.valbrembo, "attivo@b.it", TipoDestinatarioTransmittalInterno.TO)
+        self._indirizzo(
+            self.valbrembo, "inattivo@b.it", TipoDestinatarioTransmittalInterno.TO, attivo=False
         )
 
-        self.assertEqual(indirizzi_default(), {"to": ["attivo@b.it"], "cc": []})
+        risultato = indirizzi_default_per_siti([1])
+
+        self.assertEqual(risultato["to"], ["attivo@b.it"])
 
 
 class DestinazioneDocumentoTests(TestCase):
@@ -1707,23 +1720,31 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
         self.assertEqual(destinatari.count(("bg@b.it", "to")), 1)
         self.assertNotIn(("bg@b.it", "cc"), destinatari)
 
-    def test_indirizzi_default_attivi_aggiunti_a_ogni_lettera(self):
+    def test_indirizzi_default_del_sito_coinvolto_aggiunti_alla_lettera(self):
+        altro_sito = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
         IndirizzoDefaultTrasmittalInterno.objects.create(
-            email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+            stabilimento=self.bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
         )
         IndirizzoDefaultTrasmittalInterno.objects.create(
+            stabilimento=self.bg,
             email="disattivato@b.it",
             tipo=TipoDestinatarioTransmittalInterno.CC,
             attivo=False,
+        )
+        # Default di un sito non coinvolto nella lettera: non deve comparire.
+        IndirizzoDefaultTrasmittalInterno.objects.create(
+            stabilimento=altro_sito,
+            email="altro_sito@b.it",
+            tipo=TipoDestinatarioTransmittalInterno.CC,
         )
 
         trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
 
         destinatari = set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+        email_presenti = trasmittal.destinatari.values_list("email", flat=True)
         self.assertIn(("qualita@b.it", "cc", "default"), destinatari)
-        self.assertNotIn(
-            "disattivato@b.it", trasmittal.destinatari.values_list("email", flat=True)
-        )
+        self.assertNotIn("disattivato@b.it", email_presenti)
+        self.assertNotIn("altro_sito@b.it", email_presenti)
 
 
 class DataImpegnoTests(SimpleTestCase):
