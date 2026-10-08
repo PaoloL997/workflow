@@ -3779,7 +3779,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
         atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {esito['nome']}"
         self.assertEqual(mail.outbox[0].subject, atteso)
 
-    def test_17_corpo_email_contiene_le_righe_il_percorso_e_il_promemoria_firma(self):
+    def test_17_corpo_email_contiene_le_righe_e_il_percorso(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox), 1)
         corpo = mail.outbox[0].body
@@ -3789,7 +3789,6 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertIn("YES", corpo)  # CLIENT di doc_a/doc_c
         self.assertIn("NO", corpo)  # CLIENT di doc_b
         self.assertIn(esito["pdf"]["percorso"], corpo)
-        self.assertIn("firmat", corpo.lower())
 
     # ── Punto 17: destinatari modificati in anteprima → usati e registrati ──
 

@@ -990,8 +990,7 @@ def _corpo_email_trasmittal(trasmittal, percorso):
 
     Include la tabella delle righe (stesse colonne del PDF, così il
     destinatario sa cosa gli è stato trasmesso senza dover aprire
-    l'allegato), il percorso completo dove il PDF è salvato sul fileserver
-    e il promemoria che il modulo va firmato a distribuzione avvenuta.
+    l'allegato) e il percorso completo dove il PDF è salvato sul fileserver.
 
     Versione testo semplice: fa da corpo per i client senza HTML e da
     fallback, ma si allinea per colonna solo con un font monospace — molti
@@ -1004,9 +1003,7 @@ def _corpo_email_trasmittal(trasmittal, percorso):
         f"{_intestazione_email(trasmittal)}\n\n"
         + (f"{messaggio}\n\n" if messaggio else "")
         + f"{_tabella_testo_righe(trasmittal)}\n\n"
-        f"Salvato in: {percorso}\n\n"
-        "Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
-        "cartacee avvenuta."
+        f"Salvato in: {percorso}"
     )
 
 
@@ -1053,8 +1050,6 @@ def _corpo_email_trasmittal_html(trasmittal, percorso):
         + (f"<p>{messaggio_html}</p>" if messaggio else "")
         + f"{_tabella_html_righe(trasmittal)}"
         f"<p>Salvato in: {escape(str(percorso))}</p>"
-        "<p>Il modulo va firmato (Produzione e Qualità) a distribuzione delle copie "
-        "cartacee avvenuta.</p>"
     )
 
 
