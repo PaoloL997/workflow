@@ -210,7 +210,10 @@ PASSWORD_RESET_TIMEOUT = 86400  # 24 ore
 # Email
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
 if EMAIL_HOST:
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    # config.email_backend.EmailBackend, non quello di Django: valida TLS con
+    # il bundle CA di certifi invece che con lo store certificati di Windows
+    # (vuoto per l'account dell'app pool IIS) — vedi quel modulo.
+    EMAIL_BACKEND = "config.email_backend.EmailBackend"
     EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
     # Porta 465 → SSL; porta 587 → STARTTLS. Non abilitare entrambi.
     EMAIL_USE_SSL = env_bool("EMAIL_USE_SSL", False)
