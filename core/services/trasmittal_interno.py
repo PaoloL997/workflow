@@ -1099,14 +1099,16 @@ def _intestazione_email(trasmittal):
     )
 
 
-def invia_email_trasmittal(trasmittal, pdf_bytes=None):
+def invia_email_trasmittal(trasmittal):
     """Invia via email il trasmittal interno ai destinatari TO/CC registrati.
 
     Oggetto e corpo replicano il vecchio strumento: l'oggetto porta il
     riferimento al modulo del sistema qualità (non è decorativo, identifica
     il documento), il corpo è la lettera stessa per chi la riceve — righe,
-    percorso di salvataggio, promemoria di firma — non un avviso generico
-    che rimanda all'allegato.
+    percorso di salvataggio, promemoria di firma. Il PDF non è allegato: il
+    corpo riporta già il percorso dove è salvato sul fileserver (lo stesso
+    link che l'allegato duplicherebbe), e niente PDF da generare o
+    trasportare per ogni destinatario.
 
     L'email parte dalla casella dell'applicazione (``mittente_trasmittal``);
     chi ha emesso la lettera (``trasmittal.creato_da``) è scritto nella prima
@@ -1114,11 +1116,6 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     risposte arrivano a lui e gliene resta un esemplare. Vale anche quando l'invio viene
     ritentato da un'altra persona: conta chi ha emesso la lettera, che è
     quanto scritto sul modulo.
-
-    Args:
-        pdf_bytes: bytes del PDF da allegare; se omesso, generato al volo
-            (un passo in più — preferire passare quello già generato da
-            ``salva_pdf`` quando disponibile).
 
     Returns:
         Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
@@ -1144,11 +1141,6 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
     if emittente and emittente.lower() not in {e.lower() for e in to + cc}:
         cc.append(emittente)
 
-    if pdf_bytes is None:
-        from src.pdf import genera_trasmittal_interno_pdf
-
-        pdf_bytes = genera_trasmittal_interno_pdf(trasmittal)
-
     percorso = percorso_pdf(trasmittal)
     subject = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}"
     body = _corpo_email_trasmittal(trasmittal, percorso)
@@ -1173,7 +1165,6 @@ def invia_email_trasmittal(trasmittal, pdf_bytes=None):
         reply_to=[rispondi_a] if rispondi_a else None,
     )
     email.attach_alternative(body_html, "text/html")
-    email.attach(f"{trasmittal.nome}.pdf", pdf_bytes, "application/pdf")
     email.send(fail_silently=False)
     return {"to": to, "cc": cc, "mittente": mittente}
 
@@ -1224,10 +1215,8 @@ def emetti_trasmittal_interno(
 
     risultato = {"trasmittal_id": trasmittal.pk, "nome": trasmittal.nome}
 
-    pdf_bytes = None
     try:
         percorso = salva_pdf(trasmittal)
-        pdf_bytes = percorso.read_bytes()
         risultato["pdf"] = {"ok": True, "errore": None, "percorso": str(percorso)}
     except Exception as exc:
         logger.exception('Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome)
@@ -1247,7 +1236,7 @@ def emetti_trasmittal_interno(
         }
 
     try:
-        esito_email = invia_email_trasmittal(trasmittal, pdf_bytes=pdf_bytes)
+        esito_email = invia_email_trasmittal(trasmittal)
         risultato["email"] = {"ok": True, "errore": None, **esito_email}
     except Exception as exc:
         logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)

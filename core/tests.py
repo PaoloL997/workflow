@@ -2570,7 +2570,8 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(TransmittalInterno.objects.filter(testata=self.testata).count(), 1)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["bg@b.it", "til-pm@b.it"])
-        self.assertEqual(len(mail.outbox[0].attachments), 1)
+        # Il PDF non è allegato: il corpo riporta già il percorso sul fileserver.
+        self.assertEqual(len(mail.outbox[0].attachments), 0)
 
     def test_destinatari_modificati_in_anteprima_sono_quelli_usati_e_registrati(self):
         self.client.force_login(self.writer)
@@ -2867,11 +2868,6 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         trasmittal.destinatari.create(email="dest@b.it", tipo="to", origine="manuale")
         return trasmittal
 
-    # Il PDF si passa già generato — la via consigliata da invia_email_trasmittal
-    # quando salva_pdf l'ha appena prodotto — così questi test restano sul
-    # mittente e non sul rendering, che qui non è in discussione.
-    PDF_FINTO = b"%PDF-1.4 allegato"
-
     MITTENTE = "noreply@b.it"
 
     def test_mittente_e_solo_l_indirizzo_della_casella_dell_app(self):
@@ -2885,7 +2881,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_invio_dalla_casella_dell_app_con_risposte_e_copia_a_chi_ha_emesso(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        esito = invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        esito = invia_email_trasmittal(trasmittal)
 
         self.assertEqual(esito["mittente"], self.MITTENTE)
         self.assertEqual(esito["cc"], ["anna.bianchi@b.it"])
@@ -2907,7 +2903,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         trasmittal = self._trasmittal(self.emittente)
         trasmittal.destinatari.create(email="Anna.Bianchi@b.it", tipo="cc", origine="manuale")
 
-        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        invia_email_trasmittal(trasmittal)
 
         self.assertEqual(mail.outbox[0].cc, ["Anna.Bianchi@b.it"])
 
@@ -2915,7 +2911,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         senza_email = User.objects.create_user("senza_email", "", "pw")
         trasmittal = self._trasmittal(senza_email)
 
-        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        invia_email_trasmittal(trasmittal)
 
         self.assertEqual(mail.outbox[0].from_email, "noreply@b.it")
         self.assertEqual(mail.outbox[0].reply_to, [])
@@ -2928,7 +2924,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         trasmittal.note = "Nota del modulo"
         trasmittal.save(update_fields=["messaggio_email", "note"])
 
-        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        invia_email_trasmittal(trasmittal)
 
         inviata = mail.outbox[0]
         self.assertIn(
@@ -2946,7 +2942,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_senza_messaggio_nessun_paragrafo_vuoto(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        invia_email_trasmittal(trasmittal)
 
         self.assertIn("(anna.bianchi@b.it).\n\nB&R DOC. No.", mail.outbox[0].body)
 
@@ -2954,7 +2950,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_redirect_di_test_cambia_i_destinatari_ma_non_il_mittente(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        esito = invia_email_trasmittal(trasmittal, pdf_bytes=self.PDF_FINTO)
+        esito = invia_email_trasmittal(trasmittal)
 
         self.assertEqual(esito["to"], ["dest@b.it"])  # gli indirizzi reali, nell'esito
         self.assertEqual(mail.outbox[0].to, ["prove@b.it"])  # il reindirizzamento di test
@@ -3809,15 +3805,12 @@ class TrasmittalInternoEndToEndTests(TestCase):
         registrati = list(trasmittal.destinatari.values_list("email", "tipo"))
         self.assertEqual(registrati, [("destinatario.scelto@brembanarolle.com", "to")])
 
-    # ── Punto 18: il PDF è allegato ──────────────────────────────────────────
+    # ── Punto 18: il PDF non è allegato, solo linkato nel corpo ─────────────
 
-    def test_19_pdf_allegato_alla_email(self):
+    def test_19_pdf_non_allegato_alla_email(self):
         esito = self._emetti(self._righe_abcd()).json()
-        self.assertEqual(len(mail.outbox[0].attachments), 1)
-        nome_allegato, contenuto, mimetype = mail.outbox[0].attachments[0]
-        self.assertEqual(nome_allegato, f"{esito['nome']}.pdf")
-        self.assertEqual(mimetype, "application/pdf")
-        self.assertTrue(contenuto.startswith(b"%PDF"))
+        self.assertEqual(len(mail.outbox[0].attachments), 0)
+        self.assertIn(esito["pdf"]["percorso"], mail.outbox[0].body)
 
     # ── Punto 13: DOC-B (CLIENT NO) non in DCC; DOC-A/DOC-C sì ──────────────
 
