@@ -102,7 +102,6 @@ from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
     audit_commessa_summary,
-    classifica_revisione,
     ignora_anomalie_revisione,
     serialize_anomalie_gruppi,
 )
@@ -375,8 +374,6 @@ def commessa_detail_view(request, job):
 
 @login_required
 def documenti_list_view(request, job):
-    from django.http import Http404
-
     from .services.fileserver import get_jobs_root
 
     try:
@@ -768,13 +765,6 @@ def documento_api_detail(request, pk):
 
 
 # ── API: Reparti ────────────────────────────────────────────────────────────────────
-
-
-@api_login_required
-@require_http_methods(["GET"])
-def reparti_api(request):
-    reparti = list_reparti()
-    return JsonResponse({"reparti": [{"nome": r} for r in reparti]})
 
 
 # ── API: Stati Interni / Esterni ─────────────────────────────────────────────
@@ -2890,33 +2880,6 @@ def commessa_anomalie_api(request, job):
 @api_login_required
 @api_write_required
 @require_http_methods(["POST"])
-def commessa_anomalie_risolvi_api(request, job):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
-
-    revisione_id = data.get("revisione_id")
-    bucket = (data.get("bucket") or "").strip()
-    if not revisione_id or not bucket:
-        return JsonResponse({"error": "Specificare revisione_id e bucket."}, status=400)
-
-    try:
-        get_commessa(job)
-        result = classifica_revisione(job, int(revisione_id), bucket, data)
-        summary = audit_commessa_summary(job)
-        return JsonResponse({"ok": True, **result, "anomalie_count": summary["count"]})
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    except Revisione.DoesNotExist:
-        return JsonResponse({"error": "Revisione non trovata."}, status=404)
-    except ValueError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
-
-
-@api_login_required
-@api_write_required
-@require_http_methods(["POST"])
 def commessa_anomalie_ignora_api(request, job):
     try:
         data = json.loads(request.body)
@@ -2979,13 +2942,7 @@ def commessa_revisione_sblocca_api(request, job):
         return JsonResponse({"error": str(exc)}, status=400)
 
 
-# ── HTML: Import from old Access database ────────────────────────────────────
-
-
-@login_required
-@require_http_methods(["GET"])
-def import_from_old_view(request):
-    return render(request, "core/import_from_old.html")
+# ── API: Import from old Access database (modale nella home) ─────────────────
 
 
 @api_login_required

@@ -55,5 +55,3 @@ def legenda_stati_esterni() -> list:
     if not voci:
         return legenda_default()
     return [voci[lettera] for lettera in sorted(voci)]
-
-

@@ -1,95 +1,41 @@
-# Django Web App — Coding Instructions
+# Project Guidelines
 
-## Project overview
+## Project
+- This is a Python Django application.
+- Use Poetry for dependency management and running project commands.
+- Follow the existing project structure and conventions.
+- Do not introduce new dependencies unless they are clearly necessary.
 
-This is a Django web application for managing industrial activities and resources across multiple plants. It uses PostgreSQL as the database and Django's built-in ORM and admin panel.
+## Dependencies
+- Manage dependencies through Poetry.
+- Do not manually modify dependency versions without a clear reason.
+- Do not use pip to modify the project's dependency state.
 
-## Stack
+## Django
+- Follow existing Django conventions and patterns.
+- Keep changes focused and avoid unnecessary architectural changes.
+- Do not modify database schemas or migrations unless required by the task.
+- When changing models, ensure the corresponding migrations are handled appropriately.
 
-- **Backend**: Django
-- **Database**: PostgreSQL via psycopg2
-- **ORM**: Django ORM
-- **Environment**: python-dotenv
+## Testing and validation
+- Inspect the repository to identify the existing test, lint, formatting, and type-checking commands.
+- Run the relevant validation commands before considering a change complete.
+- Do not invent new tooling unless explicitly requested.
 
-## Project structure
+## Git
+- Keep changes small and focused.
+- Do not modify unrelated files.
+- Do not commit directly to the main/master branch.
+- Create a dedicated branch for changes.
+- Do not merge pull requests.
 
-```
-progetto/
-├── .env
-├── manage.py
-├── config/
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── core/
-│   ├── models.py
-│   ├── views.py
-│   ├── urls.py
-│   ├── admin.py
-│   └── templates/
-└── code_template/   ← REFERENCE ONLY, not part of the project
-```
+## Technical debt
+When working in an area of the codebase, look for small, concrete technical-debt issues as part of normal implementation and review. If you discover an issue that is:
+- Clearly scoped and independently actionable;
+- Low-risk enough for a focused PR;
+- Described with an affected area, concrete problem, and desired outcome;
+add it to TECH-DEBT.md unless it is fixed in the current PR.
 
-> **`code_template/`** contains legacy code (SQLite SQL, old VBA/Access logic) used only as reference to understand the original data structures when designing the new Django solution. Do not treat anything in `code_template/` as current implementation — never import from it or replicate it directly.
+Do not add broad refactors, speculative concerns, product ideas, or items that require significant investigation. Create a ticket instead for cross-cutting, risky, or large work, then link to that ticket from TECH-DEBT.md if useful.
 
-## Database
-
-PostgreSQL database named `gestione_attivita`. Connection credentials are stored in `.env` and loaded via `python-dotenv` in `settings.py`. Never hardcode credentials.
-
-```env
-DB_PASSWORD=your_password
-```
-
-### Tables
-
-- `stabilimenti` — plants/locations
-- `responsabili` — responsible persons, linked to a plant
-- `attivita` — activities, linked to a responsible and a plant. Unique constraint on `(commessa, progressivo)`
-- `mandrini`, `tastatori`, `maschere`, `teste`, `generatori` — resources, each linked to a plant. Primary key is a string (e.g. `M1`) engraved on the physical component
-
-## Code style
-
-- Follow PEP8
-- Use snake_case for variables, functions, and file names
-- Use PascalCase for class names
-- Keep views thin — business logic goes in separate service functions or model methods
-- Never put raw SQL in views — use the Django ORM
-- All strings must be in Italian (UI, labels, error messages). Code and comments in English
-
-## Models
-
-- All models live in `core/models.py`
-- Resource models (`Mandrino`, `Tastatore`, `Maschera`, `Testa`, `Generatore`) use `CharField` as primary key — never auto-increment
-- Foreign keys to `Stabilimento` use `on_delete=models.RESTRICT`
-- Foreign key from `Responsabile` to `Stabilimento` uses `on_delete=models.SET_NULL, null=True`
-- `Attivita.data_reale_inizio` and `Attivita.data_reale_fine` are always nullable
-
-## Migrations
-
-- Always run `python manage.py makemigrations` and `python manage.py migrate` after changing models
-- Never edit migration files manually
-- Since tables already exist in the database, use `managed = False` in models or run `inspectdb` to reflect existing tables
-
-## Django admin
-
-- Register all models in `core/admin.py`
-- Use `list_display`, `list_filter`, and `search_fields` for all models
-- The admin panel is the primary management interface — keep it clean and usable
-
-## Environment
-
-- Load `.env` at the top of `settings.py` with `load_dotenv()`
-- Never commit `.env` to version control
-- Always add `.env` to `.gitignore`
-
-## Running the project
-
-```bash
-python manage.py runserver
-```
-
-## Running tests
-
-```bash
-python manage.py test
-```
+Check if there are already open PRs that address the issue before picking it up.

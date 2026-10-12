@@ -668,39 +668,6 @@ def ruoli_persona_mancanti(testata):
     ]
 
 
-def stato_file_documento_ut(documento):
-    """Se il file corrente del documento UT è risolvibile sul fileserver.
-
-    Stessa logica semplificata di ``prepara_per_dcc``: nella cartella base
-    del reparto, per nome (``trova_file``). Zero o più corrispondenze non è
-    risolvibile — stessa regola, stesso esito di quando la lettera arriverà
-    davvero alla preparazione DCC, senza sorprese a quel punto.
-
-    Per un singolo documento: ogni chiamata riscansiona la cartella. Per un
-    elenco di documenti dello stesso reparto, usare ``elenco_selezione_ut``
-    (che scansiona una volta sola) invece di chiamare questa in un ciclo.
-
-    Returns:
-        Dict ``{"trovato": bool, "modificato_il": datetime | None}``.
-    """
-    reparto = Reparto.objects.filter(nome=documento.reparto).first()
-    if not reparto or not reparto.acronimo:
-        return {"trovato": False, "modificato_il": None}
-    trovati = trova_file(
-        get_base_path(documento.testata.job, reparto.acronimo), documento.vendor_doc
-    )
-    if len(trovati) != 1:
-        return {"trovato": False, "modificato_il": None}
-    try:
-        mtime = Path(trovati[0]["percorso"]).stat().st_mtime
-    except OSError:
-        return {"trovato": True, "modificato_il": None}
-    return {
-        "trovato": True,
-        "modificato_il": datetime.fromtimestamp(mtime, tz=timezone.get_current_timezone()),
-    }
-
-
 def _cerca_in_indice(indice, vendor_doc):
     """Stessa regola di corrispondenza di ``trova_file``, su un elenco già scansionato."""
     needle = vendor_doc.lower()

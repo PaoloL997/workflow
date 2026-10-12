@@ -1,8 +1,6 @@
 from functools import wraps
 
-from django.contrib import messages
 from django.http import JsonResponse
-from django.shortcuts import redirect
 
 from .models import Permesso
 
@@ -42,22 +40,11 @@ def trasmittal_interno_write_required(view_func):
             request.user
         ):
             return JsonResponse(
-                {"error": "Permesso negato: solo alcuni utenti possono modificare il trasmittal interno."},
+                {
+                    "error": "Permesso negato: solo alcuni utenti possono modificare il trasmittal interno."
+                },
                 status=403,
             )
-        return view_func(request, *args, **kwargs)
-
-    return wrapper
-
-
-def write_required(view_func):
-    """Decorator that blocks HTML views for users without write permission."""
-
-    @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        if not user_can_write(request.user):
-            messages.error(request, "Non hai i permessi per eseguire questa operazione.")
-            return redirect("home")
         return view_func(request, *args, **kwargs)
 
     return wrapper

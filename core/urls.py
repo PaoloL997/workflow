@@ -71,11 +71,6 @@ urlpatterns = [
         name="commessa_anomalie_api",
     ),
     path(
-        "api/commesse/<str:job>/anomalie/risolvi/",
-        views.commessa_anomalie_risolvi_api,
-        name="commessa_anomalie_risolvi_api",
-    ),
-    path(
         "api/commesse/<str:job>/anomalie/ignora/",
         views.commessa_anomalie_ignora_api,
         name="commessa_anomalie_ignora_api",
@@ -167,8 +162,6 @@ urlpatterns = [
         name="genera_documenti_da_modelli_api",
     ),
     path("api/documenti/<int:pk>/", views.documento_api_detail, name="documento_api_detail"),
-    # API — Reparti (read-only, from User.reparto)
-    path("api/reparti/", views.reparti_api, name="reparti_api"),
     path("api/cartelle-modelli/", views.cartelle_modelli_api, name="cartelle_modelli_api"),
     # API — Stati (interni read-only, esterni CRUD)
     path("api/stati-interni/", views.stati_interni_api, name="stati_interni_api"),
@@ -258,8 +251,7 @@ urlpatterns = [
         name="revisione_file_link_api",
     ),
     path("api/fileserver/browse/", views.fileserver_browse_api, name="fileserver_browse_api"),
-    # HTML + API — Import from old Access DB
-    path("import-from-old/", views.import_from_old_view, name="import_from_old"),
+    # API — Import from old Access DB (modale nella home)
     path("api/import-from-old/", views.import_from_old_api, name="import_from_old_api"),
     # HTML + API — Segnalazioni
     path("segnalazioni/", views.segnalazioni_view, name="segnalazioni"),

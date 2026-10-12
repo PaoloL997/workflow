@@ -684,8 +684,6 @@ def _clean_documento_fields(data):
 
 def list_stati_interni():
     """Return hardcoded internal status choices."""
-    from ..models import STATI_INTERNI_CHOICES
-
     return [{"id": k, "nome": v} for k, v in STATI_INTERNI_CHOICES]
 
 
@@ -740,8 +738,6 @@ def delete_stato_esterno(pk):
 def serialize_revisione(r):
     int_status_label = ""
     if r.int_status:
-        from ..models import STATI_INTERNI_CHOICES
-
         label_map = dict(STATI_INTERNI_CHOICES)
         int_status_label = label_map.get(r.int_status, r.int_status)
     # ``int_status_eff`` è lo stato da mostrare: quello salvato se c'è, altrimenti

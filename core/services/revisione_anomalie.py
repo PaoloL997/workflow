@@ -244,11 +244,6 @@ def serialize_anomalie_gruppi(job: str, anomalies: list[AnomaliaRevisione]) -> l
     return result
 
 
-def revisione_is_latest(rev: Revisione) -> bool:
-    latest = ultima_revisione_per_documento_id(rev.documento_id)
-    return latest is not None and latest.pk == rev.pk
-
-
 def bucket_to_fields(
     rev: Revisione, bucket: str, *, time_cli: int | None, data: dict | None = None
 ) -> dict:
@@ -324,20 +319,6 @@ def classifica_revisione(
     fields = bucket_to_fields(rev, bucket, time_cli=testata.time_cli_doc_rev, data=data)
     r = update_revisione(revisione_id, fields)
     return {"revisione": serialize_revisione(r)}
-
-
-def risolvi_anomalia(job: str, revisione_id: int, azione: str, data: dict | None = None) -> dict:
-    """Deprecated: use classifica_revisione with bucket."""
-    bucket_map = {
-        "azzera_int_status": "da_emettere",
-        "calcola_rec_plan": "da_ricevere",
-        "registra_ricezione": "conclusi",
-        "sync_int_status_ricevuto": "conclusi",
-    }
-    bucket = bucket_map.get(azione)
-    if not bucket:
-        raise ValueError(f'Azione "{azione}" non riconosciuta.')
-    return classifica_revisione(job, revisione_id, bucket, data)
 
 
 def ignora_anomalie_revisione(job: str, revisione_id: int) -> dict:

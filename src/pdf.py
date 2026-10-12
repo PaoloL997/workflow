@@ -1205,16 +1205,6 @@ def _planned_dates_for_latest_rev(revs: list) -> dict:
     return {"planned_send": None, "planned_receipt": None}
 
 
-def _is_date_overdue(iso) -> bool:
-    if not iso:
-        return False
-    try:
-        d = date.fromisoformat(str(iso)[:10])
-    except ValueError:
-        return False
-    return d < date.today()
-
-
 def _rev_group_label(
     revs_by_index: list, rev_idx: int, rev_let_flag: bool, rev_sequenza=None
 ) -> str:
@@ -1809,9 +1799,6 @@ def _build_situazione_table(
     # If we somehow have no page yet, add one (triggers header).
     if pdf.page_no() == 0:
         pdf.add_page()
-    elif pdf.get_y() < _pt(_HEADER_BOTTOM_PT):
-        # Header was drawn; ensure we sit below it + column headers.
-        pass
 
     row_h = 5.2
     bottom_limit = _A3_LANDSCAPE_H - _TABLE_MARGIN_MM

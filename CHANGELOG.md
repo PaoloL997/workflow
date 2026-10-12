@@ -21,6 +21,8 @@
 
 ### Removed
 
+- Pagina `/import-from-old/`: era raggiungibile solo scrivendo l'indirizzo e faceva la stessa cosa del modale **Importa da Report** nella Home, che resta
+- Lo script `Access/clean_revisioni.py` diventa il comando `python manage.py pulisci_revisioni_access --file <Revisioni.xlsx>` (opzioni `--dry-run`, `--from-access`), con la stessa logica
 - Deploy Docker dell'applicazione pensato per Ubuntu Server (Dockerfile, docker-compose.yml, entrypoint, nginx, dipendenza gunicorn): non era usato, l'applicazione gira su Windows con IIS + Waitress
 
 ### Fixed

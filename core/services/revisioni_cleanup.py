@@ -43,9 +43,7 @@ def normalize_revisioni_vendor_doc(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy with VendorDoc trimmed (fixes trailing spaces in Access)."""
     out = df.copy()
     if "VendorDoc" in out.columns:
-        out["VendorDoc"] = out["VendorDoc"].apply(
-            lambda v: str(v).strip() if not _is_na(v) else v
-        )
+        out["VendorDoc"] = out["VendorDoc"].apply(lambda v: str(v).strip() if not _is_na(v) else v)
     return out
 
 
@@ -98,9 +96,7 @@ def find_orphan_indices(
             continue
         penultimate = grp_sorted.iloc[-2]
         ultimate = grp_sorted.iloc[-1]
-        if _penultimate_non_prevede_nuova_rev(penultimate, codes) and _only_dis_plan_date(
-            ultimate
-        ):
+        if _penultimate_non_prevede_nuova_rev(penultimate, codes) and _only_dis_plan_date(ultimate):
             orphans.add(ultimate.name)
 
     return orphans
