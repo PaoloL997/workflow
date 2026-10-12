@@ -81,7 +81,7 @@ class SegnalazioniTestCase(TestCase):
         self.assertContains(res, "Top 10 per voti")
         self.assertContains(res, "Nuove funzionalità")
         self.assertContains(res, "Segnalazioni")
-        self.assertContains(res, "Solo aperti")
+        self.assertNotContains(res, "Solo aperti")
         self.assertContains(res, "Post chiusi")
 
     def test_home_contains_prompt_link(self):
@@ -211,7 +211,7 @@ class SegnalazioniTestCase(TestCase):
 
         self.client.force_login(self.reader)
         titles = [s["titolo"] for s in self.client.get("/api/segnalazioni/").json()["segnalazioni"]]
-        self.assertEqual(titles, ["Alto", "Basso", "Chiuso alto"])
+        self.assertEqual(titles, ["Alto", "Basso"])
 
     def test_filter_by_tipo(self):
         self._create(self.reader, tipo="feature", titolo="Feat")
@@ -227,6 +227,8 @@ class SegnalazioniTestCase(TestCase):
         closed_pk = self._create(self.reader, titolo="Chiuso").json()["data"]["id"]
         self._post(f"/api/segnalazioni/{closed_pk}/chiudi/", {}, user=self.admin)
         self.client.force_login(self.reader)
+        default = self.client.get("/api/segnalazioni/").json()["segnalazioni"]
+        self.assertEqual([s["titolo"] for s in default], ["Aperto"])
         aperti = self.client.get("/api/segnalazioni/?stato=aperto").json()["segnalazioni"]
         self.assertEqual([s["titolo"] for s in aperti], ["Aperto"])
         chiusi = self.client.get("/api/segnalazioni/?stato=chiuso").json()["segnalazioni"]
@@ -285,11 +287,12 @@ class SegnalazioniTestCase(TestCase):
         self.client.force_login(self.reader)
         top = self.client.get("/api/segnalazioni/?top=10").json()["segnalazioni"]
         self.assertEqual(len(top), 10)
-        self.assertEqual([s["titolo"] for s in top[:3]], ["Chiuso top", "Alto", "Medio"])
+        self.assertEqual([s["titolo"] for s in top[:2]], ["Alto", "Medio"])
+        self.assertNotIn("Chiuso top", [s["titolo"] for s in top])
         self.assertNotIn("Zero", [s["titolo"] for s in top])
 
     def test_list_ordered_by_created_at_desc(self):
-        """L'elenco è cronologico (le più recenti in cima), i voti non contano."""
+        """L'elenco è cronologico (le più recenti in cima), i voti non contano, i chiusi non compaiono."""
         votata = Segnalazione.objects.create(
             autore=self.reader,
             tipo=TipoSegnalazione.FEATURE,
@@ -317,10 +320,7 @@ class SegnalazioniTestCase(TestCase):
 
         self.client.force_login(self.reader)
         titoli = [s["titolo"] for s in self.client.get("/api/segnalazioni/").json()["segnalazioni"]]
-        self.assertEqual(
-            titoli,
-            ["Recente senza voti", "Vecchia ma votata", "Chiusa recentissima"],
-        )
+        self.assertEqual(titoli, ["Recente senza voti", "Vecchia ma votata"])
 
     def test_invalid_list_params(self):
         self.client.force_login(self.reader)

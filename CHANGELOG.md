@@ -12,6 +12,7 @@
 
 ### Changed
 
+- Proposte e segnalazioni: i post chiusi non compaiono più di default, né in **Tutti i post** né negli altri filtri (I miei post, Top 10, per tipo). Si vedono solo con il filtro **Post chiusi**; il filtro **Solo aperti**, diventato superfluo, è stato tolto
 - Proposte e segnalazioni: il sottotitolo della pagina spiega che le proposte con almeno 10 voti positivi vengono prese in carico per l'implementazione, per favorire il confronto tra gli stabilimenti e trovare soluzioni condivise
 - Configurazione: con `DEBUG=False` la `SECRET_KEY` nel `.env` è obbligatoria, l'app non parte senza (prima usava in silenzio una chiave di comodo). I destinatari delle richieste di eliminazione commessa si impostano nel `.env` (`COMMESSA_DELETE_REQUEST_RECIPIENTS`) invece che nel codice
 - Statici (CSS, loghi): in produzione passano da WhiteNoise con nome hashato e versione compressa, quindi il browser li tiene in cache a lungo e li ricarica da solo a ogni aggiornamento. Dopo `git pull` va lanciato `python manage.py collectstatic --noinput` (vedi README)

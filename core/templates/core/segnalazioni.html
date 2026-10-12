@@ -218,7 +218,6 @@
 
   .filter-dot.feature { background: var(--color-accent); }
   .filter-dot.problema { background: var(--color-danger); }
-  .filter-dot.aperto { background: var(--color-success); }
   .filter-dot.chiuso { background: var(--color-text-secondary); opacity: 0.55; }
 
   .filter-check {
@@ -787,11 +786,6 @@
 
         <div class="filter-sep" role="separator"></div>
 
-        <button type="button" class="filter-item" data-filter="aperto">
-          <span class="filter-dot aperto" aria-hidden="true"></span>
-          Solo aperti
-          <svg class="filter-check" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-        </button>
         <button type="button" class="filter-item" data-filter="chiuso">
           <span class="filter-dot chiuso" aria-hidden="true"></span>
           Post chiusi
@@ -852,7 +846,6 @@
     top: '?top=10',
     feature: '?tipo=feature',
     problema: '?tipo=problema',
-    aperto: '?stato=aperto',
     chiuso: '?stato=chiuso',
   };
 

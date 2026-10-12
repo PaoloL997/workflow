@@ -1,4 +1,4 @@
-from django.db.models import Case, Count, IntegerField, Prefetch, Q, Sum, Value, When
+from django.db.models import Count, IntegerField, Prefetch, Q, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -104,11 +104,6 @@ def _annotated_qs():
             score=Coalesce(Sum("voti__valore"), Value(0), output_field=IntegerField()),
             up=Count("voti", filter=Q(voti__valore=1)),
             down=Count("voti", filter=Q(voti__valore=-1)),
-            is_closed=Case(
-                When(stato=StatoSegnalazione.CHIUSO, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            ),
         )
     )
 
@@ -141,6 +136,11 @@ def get_segnalazione(pk, user):
 
 
 def list_segnalazioni(user, tipo=None, stato=None, mine=False, top=None):
+    """Elenca le segnalazioni visibili all'utente.
+
+    Senza ``stato`` i thread chiusi restano fuori: si vedono solo chiedendo
+    esplicitamente ``stato="chiuso"``.
+    """
     qs = _annotated_qs()
     if tipo:
         if tipo not in TIPO_VALUES:
@@ -150,6 +150,8 @@ def list_segnalazioni(user, tipo=None, stato=None, mine=False, top=None):
         if stato not in STATO_VALUES:
             raise ValueError("Stato non valido.")
         qs = qs.filter(stato=stato)
+    else:
+        qs = qs.exclude(stato=StatoSegnalazione.CHIUSO)
     if mine:
         qs = qs.filter(autore=user)
     if top is not None:
@@ -161,9 +163,9 @@ def list_segnalazioni(user, tipo=None, stato=None, mine=False, top=None):
             raise ValueError("Parametro top non valido.")
         rows = list(qs.order_by("-score", "-created_at")[:top])
     else:
-        # Elenco cronologico: le più recenti in cima, le chiuse in fondo.
+        # Elenco cronologico: le più recenti in cima.
         # Per le più votate c'è già il filtro "Top 10 per voti".
-        rows = list(qs.order_by("is_closed", "-created_at", "-id"))
+        rows = list(qs.order_by("-created_at", "-id"))
     miei = _miei_voti(user, [s.pk for s in rows])
     return [_serialize_annotated(s, miei) for s in rows]
 
