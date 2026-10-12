@@ -159,6 +159,8 @@ Script in `deploy/`:
 | `install-waitress-service.ps1` | Registra servizio `WorkflowWaitress` |
 | `iis-waitress-proxy.ps1` | Abilita ARR reverse proxy |
 | `web.config` | Template IIS → proxy a `127.0.0.1:8000` |
+| `migrate-to-waitress.ps1` | Migrazione completa wfastcgi → Waitress in un colpo solo (da Administrator) |
+| `run-migrate-elevated.ps1` | Lancia `migrate-to-waitress.ps1` in una finestra elevata (prompt UAC) |
 | `rollback-wfastcgi.ps1` | Ripristina web.config wfastcgi |
 | `iis-workflow-pool.ps1` | AlwaysRunning / idle timeout |
 | `install-seaweedfs-service.ps1` | Servizio `WorkflowStorage` (SeaweedFS, S3 per foto e firme) |

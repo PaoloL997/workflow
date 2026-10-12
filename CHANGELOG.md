@@ -25,6 +25,8 @@
 
 ### Fixed
 
+- Deploy: gli script in `deploy\` (PowerShell, `web.config`) erano salvati in UTF-16 senza BOM, quindi PowerShell non riusciva a leggerli né a eseguirli; ora sono in UTF-8. Rimosso `migrate-to-waitress.cmd`, che puntava a un percorso personale e duplicava `run-migrate-elevated.ps1`
+- `poetry install` falliva su una macchina pulita perché `poetry.lock` non era più allineato a `pyproject.toml`; lock rigenerato, Pillow dichiarata esplicitamente (prima arrivava solo come dipendenza indiretta di fpdf2) e progetto marcato `package-mode = false`
 - Trasmittal interno: nell'elenco delle lettere emesse, se il PDF di una lettera non è sul fileserver la data non è più un link (che portava a una pagina di errore): resta visibile ma grigia, con l'indicazione «PDF non trovato sul fileserver»
 - Scarica (dati grezzi): le colonne con le date sono in formato `gg/mm/aaaa` e abbastanza larghe da leggerle; prima Excel le mostrava come `2026-03-15` oppure `########` finché non si allargava la colonna. Restano date vere, quindi si ordinano e si filtrano come date
 - Sul server Windows/IIS le foto profilo non si vedevano (l'indirizzo `/media/` rispondeva 404): ora si vedono
