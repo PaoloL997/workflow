@@ -12,6 +12,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -155,6 +156,72 @@ def api_login_required(view_func):
     return wrapper
 
 
+def _errore(messaggio, status=400):
+    """Risposta JSON di errore nel formato usato da tutte le API: ``{"error": ...}``."""
+    return JsonResponse({"error": messaggio}, status=status)
+
+
+def _json_body(request, vuoto=None):
+    """Il body della richiesta decodificato; ``None`` se non è JSON valido.
+
+    Con ``vuoto`` un body assente vale quel valore (es. ``{}``) invece di
+    essere un errore.
+    """
+    if not request.body and vuoto is not None:
+        return vuoto
+    try:
+        return json.loads(request.body)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
+def _messaggio_validazione(exc):
+    """I messaggi di una ``ValidationError`` in una riga, senza le parentesi di ``str(exc)``."""
+    return " ".join(exc.messages)
+
+
+def _data_per_nome_file():
+    """``gg_mm_aaaa`` di oggi, nel fuso locale, per i nomi dei file esportati."""
+    oggi = timezone.localdate()
+    return f"{oggi.day:02d}_{oggi.month:02d}_{oggi.year}"
+
+
+def con_commessa(view_func):
+    """Risolve ``job`` nella ``Testata`` e la passa alla vista come ``testata``.
+
+    Per le API: 404 JSON se la commessa non esiste. Va messo subito sopra la
+    ``def``, dopo i controlli di login e permesso.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, job, *args, **kwargs):
+        try:
+            testata = get_commessa(job)
+        except Testata.DoesNotExist:
+            return _errore("Commessa non trovata.", 404)
+        return view_func(request, job, *args, testata=testata, **kwargs)
+
+    return wrapper
+
+
+def con_commessa_pagina(view_func):
+    """Come ``con_commessa`` per le pagine HTML: ``Http404`` se la commessa non esiste."""
+
+    @wraps(view_func)
+    def wrapper(request, job, *args, **kwargs):
+        try:
+            testata = get_commessa(job)
+        except Testata.DoesNotExist:
+            raise Http404
+        return view_func(request, job, *args, testata=testata, **kwargs)
+
+    return wrapper
+
+
+# Stati interni di una revisione già emessa (inviata al cliente o rientrata).
+STATI_EMESSI = frozenset({"inviato_al_cliente", "ricevuto"})
+
+
 # ── HTML: Auth ───────────────────────────────────────────────────────────────
 
 
@@ -265,16 +332,12 @@ def commesse_list_view(request):
 
 
 @login_required
-def commessa_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def commessa_detail_view(request, job, testata):
     archivio_completo = (
         testata.time_cli_doc_rev is not None and testata.time_ven_doc_rev is not None
     )
     indirizzi_all = list_indirizzi(job)
-    STATI_EMESSI = ("inviato_al_cliente", "ricevuto")
     documenti_all = list_documenti(job) if archivio_completo else []
     anomalie_count = audit_commessa_summary(job)["count"]
     emissione_count = sum(1 for d in documenti_all if d["latest_int_status"] not in STATI_EMESSI)
@@ -282,9 +345,7 @@ def commessa_detail_view(request, job):
         1 for d in documenti_all if d["latest_int_status"] == "inviato_al_cliente"
     )
     situazione_totale = len(documenti_all)
-    situazione_emessi = sum(
-        1 for d in documenti_all if d["latest_int_status"] in ("inviato_al_cliente", "ricevuto")
-    )
+    situazione_emessi = sum(1 for d in documenti_all if d["latest_int_status"] in STATI_EMESSI)
     situazione_ricevuti = sum(1 for d in documenti_all if d["latest_int_status"] == "ricevuto")
     # Documenti preview: first 4, assign cycling color class
     _TILE_COLORS = ["tile-c0", "tile-c1", "tile-c2", "tile-c3", "tile-c4"]
@@ -373,13 +434,10 @@ def commessa_detail_view(request, job):
 
 
 @login_required
-def documenti_list_view(request, job):
+@con_commessa_pagina
+def documenti_list_view(request, job, testata):
     from .services.fileserver import get_jobs_root
 
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
     reparti = list_reparti()
     commessa_folder = str(get_jobs_root() / job)
     return render(
@@ -394,19 +452,14 @@ def documenti_list_view(request, job):
 
 
 @login_required
-def archivio_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def archivio_detail_view(request, job, testata):
     return render(
         request,
         "core/archivio_detail.html",
         {
             "testata": testata,
-            "stabilimenti_costruttivi": Stabilimento.objects.filter(
-                codice_bc__isnull=False
-            ).order_by("nome"),
+            "stabilimenti_costruttivi": stabilimenti_costruttivi(),
             "aggiornamenti_bc": list_aggiornamenti_bc(job, limit=10),
         },
     )
@@ -415,11 +468,8 @@ def archivio_detail_view(request, job):
 @api_login_required
 @api_write_required
 @require_http_methods(["POST"])
-def archivio_bc_sync_api(request, job):
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def archivio_bc_sync_api(request, job, testata):
 
     try:
         report = sincronizza_commesse(jobs=[job], includi_chiuse=True)
@@ -443,29 +493,20 @@ def archivio_bc_sync_api(request, job):
 
 
 @login_required
-def emissione_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def emissione_detail_view(request, job, testata):
     return render(request, "core/emissione_detail.html", {"testata": testata})
 
 
 @login_required
-def ricezione_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def ricezione_detail_view(request, job, testata):
     return render(request, "core/ricezione_detail.html", {"testata": testata})
 
 
 @login_required
-def situazione_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def situazione_detail_view(request, job, testata):
     from .services.fileserver import get_jobs_root
 
     commessa_folder = str(get_jobs_root() / job)
@@ -477,11 +518,8 @@ def situazione_detail_view(request, job):
 
 
 @login_required
-def trasmittal_interno_detail_view(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
+@con_commessa_pagina
+def trasmittal_interno_detail_view(request, job, testata):
     if testata.sito_costruttivo_id is None:
         return HttpResponseForbidden("Completa prima il sito costruttivo della commessa.")
     return render(request, "core/trasmittal_interno_detail.html", {"testata": testata})
@@ -504,10 +542,9 @@ def commesse_api(request):
             return JsonResponse({"commesse": list_home_commesse(request.user)})
         q = request.GET.get("q", "").strip() or None
         return JsonResponse({"commesse": list_commesse(q, user=request.user)})
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         t = create_commessa(data)
         return JsonResponse({"ok": True, "data": serialize_testata(t)}, status=201)
@@ -544,10 +581,9 @@ def commessa_api_detail(request, job):
             logger.warning('Commessa "%s" non trovata nel database locale.', job)
             return JsonResponse({"error": "Commessa non trovata."}, status=404)
     if request.method == "PUT":
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        data = _json_body(request)
+        if data is None:
+            return _errore("JSON non valido.")
         try:
             t = update_commessa(job, data)
             return JsonResponse({"ok": True, "data": serialize_testata(t)})
@@ -634,10 +670,9 @@ def utenti_cerca_api(request):
 @api_write_required
 @require_http_methods(["POST"])
 def persona_commessa_risolvi_api(request, pk):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     utente_id = data.get("utente_id")
     if not utente_id:
         return JsonResponse({"error": "Parametro utente_id mancante."}, status=400)
@@ -662,17 +697,16 @@ def indirizzi_api(request, job):
             return JsonResponse({"indirizzi": list_indirizzi(job)})
         except Testata.DoesNotExist:
             return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         i = create_indirizzo(job, data)
         return JsonResponse({"ok": True, "data": serialize_indirizzo(i)}, status=201)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
     except ValidationError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+        return _errore(_messaggio_validazione(exc))
 
 
 @api_login_required
@@ -680,17 +714,16 @@ def indirizzi_api(request, job):
 @require_http_methods(["PATCH", "DELETE"])
 def indirizzo_api_detail(request, pk):
     if request.method == "PATCH":
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        data = _json_body(request)
+        if data is None:
+            return _errore("JSON non valido.")
         try:
             i = update_indirizzo(pk, data)
             return JsonResponse({"ok": True, "data": serialize_indirizzo(i)})
         except IndirSped.DoesNotExist:
             return JsonResponse({"error": "Indirizzo non trovato."}, status=404)
         except ValidationError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
+            return _errore(_messaggio_validazione(exc))
     try:
         delete_indirizzo(pk)
         return JsonResponse({"ok": True})
@@ -713,17 +746,16 @@ def documenti_api(request, job):
             return JsonResponse(payload)
         except Testata.DoesNotExist:
             return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         d = create_documento(job, data)
         return JsonResponse({"ok": True, "data": serialize_documento(d)}, status=201)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
     except ValidationError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+        return _errore(_messaggio_validazione(exc))
 
 
 @api_login_required
@@ -746,17 +778,16 @@ def documento_api_detail(request, pk):
         except Documento.DoesNotExist:
             return JsonResponse({"error": "Documento non trovato."}, status=404)
     if request.method == "PATCH":
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        data = _json_body(request)
+        if data is None:
+            return _errore("JSON non valido.")
         try:
             d = update_documento(pk, data)
             return JsonResponse({"ok": True, "data": serialize_documento(d)})
         except Documento.DoesNotExist:
             return JsonResponse({"error": "Documento non trovato."}, status=404)
         except ValidationError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
+            return _errore(_messaggio_validazione(exc))
     try:
         delete_documento(pk)
         return JsonResponse({"ok": True})
@@ -782,10 +813,9 @@ def stati_interni_api(request):
 def stati_esterni_api(request):
     if request.method == "GET":
         return JsonResponse({"stati": list_stati_esterni()})
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         s = create_stato_esterno(data)
         return JsonResponse(
@@ -812,10 +842,9 @@ def stati_esterni_api(request):
 @require_http_methods(["PATCH", "DELETE"])
 def stato_esterno_api_detail(request, pk):
     if request.method == "PATCH":
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        data = _json_body(request)
+        if data is None:
+            return _errore("JSON non valido.")
         try:
             s = update_stato_esterno(pk, data)
             return JsonResponse(
@@ -943,10 +972,9 @@ def _generate_trasmittal_pdf_bytes(request, testata, data, date_str, doc_ids):
 @api_write_required
 @require_http_methods(["POST"])
 def emissione_api(request):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     doc_ids = data.get("doc_ids", [])
     dis_act_date = data.get("dis_act_date", "")
     if not doc_ids or not dis_act_date:
@@ -1011,11 +1039,8 @@ def stabilimenti_api(request):
 
 @api_login_required
 @require_http_methods(["GET"])
-def trasmittal_interno_destinazioni_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def trasmittal_interno_destinazioni_api(request, job, testata):
     return JsonResponse(
         {
             "stabilimenti": [
@@ -1030,15 +1055,11 @@ def trasmittal_interno_destinazioni_api(request, job):
 @api_login_required
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
-def documento_destinazioni_api(request, job, pk):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+@con_commessa
+def documento_destinazioni_api(request, job, pk, testata):
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     codici_bc = data.get("codici_bc")
     if not isinstance(codici_bc, list) or not all(isinstance(c, int) for c in codici_bc):
         return JsonResponse({"error": "codici_bc deve essere una lista di interi."}, status=400)
@@ -1052,15 +1073,11 @@ def documento_destinazioni_api(request, job, pk):
 @api_login_required
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
-def stabilimento_destinazioni_bulk_api(request, job, codice_bc):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+@con_commessa
+def stabilimento_destinazioni_bulk_api(request, job, codice_bc, testata):
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     documento_ids = data.get("documento_ids")
     attiva = data.get("attiva")
     if not isinstance(documento_ids, list) or not isinstance(attiva, bool):
@@ -1102,26 +1119,19 @@ def _sigle_stabilimento_per_email(righe):
 
 @api_login_required
 @require_http_methods(["GET"])
-def trasmittal_interno_selezione_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def trasmittal_interno_selezione_api(request, job, testata):
     return JsonResponse({"documenti": elenco_selezione_ut(testata)})
 
 
 @api_login_required
 @require_http_methods(["POST"])
-def trasmittal_interno_anteprima_api(request, job):
+@con_commessa
+def trasmittal_interno_anteprima_api(request, job, testata):
     """Anteprima di una lettera: pura computazione, nessuna scrittura — accessibile in sola lettura."""
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         anteprima = anteprima_trasmittal(testata, data.get("righe") or [], request.user)
     except ValueError as exc:
@@ -1133,15 +1143,11 @@ def trasmittal_interno_anteprima_api(request, job):
 @api_login_required
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
-def trasmittal_interno_anteprima_pdf_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+@con_commessa
+def trasmittal_interno_anteprima_pdf_api(request, job, testata):
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         pdf_bytes = anteprima_pdf_bytes(
             testata, data.get("righe") or [], request.user, note=data.get("note", "")
@@ -1158,15 +1164,11 @@ def trasmittal_interno_anteprima_pdf_api(request, job):
 @api_login_required
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
-def trasmittal_interno_emetti_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+@con_commessa
+def trasmittal_interno_emetti_api(request, job, testata):
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         risultato = emetti_trasmittal_interno(
             testata,
@@ -1183,11 +1185,8 @@ def trasmittal_interno_emetti_api(request, job):
 
 @api_login_required
 @require_http_methods(["GET"])
-def trasmittal_interno_lettere_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def trasmittal_interno_lettere_api(request, job, testata):
     return JsonResponse({"lettere": elenco_trasmittal_interni(testata)})
 
 
@@ -1248,10 +1247,9 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
         )
     except TransmittalInterno.DoesNotExist:
         return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
 
     step = data.get("step")
     if step not in ("pdf", "dcc", "email"):
@@ -1305,10 +1303,9 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
 @api_write_required
 @require_http_methods(["POST"])
 def trasmittal_pdf_api(request):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
 
     doc_ids = data.get("doc_ids", [])
     date_str = data.get("date", "")
@@ -1344,7 +1341,8 @@ def trasmittal_pdf_api(request):
 @api_login_required
 @api_write_required
 @require_http_methods(["GET", "POST"])
-def trasmittal_storico_api(request, job):
+@con_commessa
+def trasmittal_storico_api(request, job, testata):
     """List issued transmittals for a job from the database table.
 
     In GET si legge (e si popola la tabella dalla cartella solo se è vuota);
@@ -1359,10 +1357,6 @@ def trasmittal_storico_api(request, job):
         trasmittal_in_da_spedire,
     )
 
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
     forza = request.method == "POST"
     try:
         sync_trasmittal_da_cartella(job, solo_se_vuota=not forza)
@@ -1382,14 +1376,11 @@ def trasmittal_storico_api(request, job):
 
 @api_login_required
 @require_http_methods(["GET"])
-def trasmittal_prossimo_api(request, job):
+@con_commessa
+def trasmittal_prossimo_api(request, job, testata):
     """Return the next transmittal number/code and destination path for a job."""
     from .services.trasmittal_archivio import percorso_previsto, prossimo_numero
 
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
     try:
         numero = prossimo_numero(job)
     except Exception as e:
@@ -1402,14 +1393,11 @@ def trasmittal_prossimo_api(request, job):
 @api_login_required
 @api_write_required
 @require_http_methods(["POST"])
-def trasmittal_annulla_api(request, job, trasmittal_id):
+@con_commessa
+def trasmittal_annulla_api(request, job, trasmittal_id, testata):
     """Undo the latest app-issued transmittal for a job."""
     from .services.trasmittal_archivio import TrasmittalAnnullaError, annulla_trasmittal
 
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
     try:
         annulla_trasmittal(job, trasmittal_id)
     except Testata.DoesNotExist:
@@ -1426,14 +1414,11 @@ def trasmittal_annulla_api(request, job, trasmittal_id):
 
 @login_required
 @require_http_methods(["GET"])
-def trasmittal_file_serve(request, job, trasmittal_id):
+@con_commessa_pagina
+def trasmittal_file_serve(request, job, trasmittal_id, testata):
     """Serve a transmittal PDF from the archive (same pipeline as revision files)."""
     from .services.trasmittal_archivio import percorso_trasmittal
 
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        raise Http404
     try:
         file_path = percorso_trasmittal(job, trasmittal_id)
     except PermissionError:
@@ -1457,10 +1442,9 @@ def trasmittal_file_serve(request, job, trasmittal_id):
 @api_write_required
 @require_http_methods(["POST"])
 def ricezione_api(request):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     entries = data.get("entries", [])
     crea_nuova_revisione = bool(data.get("crea_nuova_revisione", False))
     if not entries:
@@ -1484,17 +1468,16 @@ def revisioni_api(request, doc_pk):
             return JsonResponse({"revisioni": list_revisioni(doc_pk)})
         except Documento.DoesNotExist:
             return JsonResponse({"error": "Documento non trovato."}, status=404)
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
     try:
         r = create_revisione(doc_pk, data)
         return JsonResponse({"ok": True, "data": serialize_revisione(r)}, status=201)
     except Documento.DoesNotExist:
         return JsonResponse({"error": "Documento non trovato."}, status=404)
     except ValidationError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
+        return _errore(_messaggio_validazione(exc))
 
 
 @api_login_required
@@ -1502,17 +1485,16 @@ def revisioni_api(request, doc_pk):
 @require_http_methods(["PATCH", "DELETE"])
 def revisione_api_detail(request, pk):
     if request.method == "PATCH":
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        data = _json_body(request)
+        if data is None:
+            return _errore("JSON non valido.")
         try:
             r = update_revisione(pk, data)
             return JsonResponse({"ok": True, "data": serialize_revisione(r)})
         except Revisione.DoesNotExist:
             return JsonResponse({"error": "Revisione non trovata."}, status=404)
         except ValidationError as exc:
-            return JsonResponse({"error": str(exc)}, status=400)
+            return _errore(_messaggio_validazione(exc))
     try:
         delete_revisione(pk)
         return JsonResponse({"ok": True})
@@ -1596,8 +1578,6 @@ def export_documenti(request, job):
 
 # ── Export: Emissione / Ricezione ────────────────────────────────────────────
 
-
-_EMISSIONE_EXCLUDE_STATUSES = frozenset({"inviato_al_cliente", "ricevuto"})
 
 _XLSX_THIN = Border(
     left=Side(style="thin", color="B9B9B9"),
@@ -1890,12 +1870,11 @@ def export_emissione(request, job):
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
 
-    docs = [d for d in documenti if d.get("latest_int_status") not in _EMISSIONE_EXCLUDE_STATUSES]
+    docs = [d for d in documenti if d.get("latest_int_status") not in STATI_EMESSI]
     docs = _sort_docs_by_date(docs, "latest_dis_plan_date")
     fmt = _export_format(request, default="xlsx")
     safe_job = job.replace(" ", "_")
-    today = _date.today()
-    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    date_part = _data_per_nome_file()
     base_name = f"{safe_job}_to_be_issued_{date_part}"
     if fmt == "pdf":
         pdf_bytes = genera_planned_docs_pdf(
@@ -1931,8 +1910,7 @@ def export_ricezione(request, job):
     docs = _sort_docs_by_date(docs, "latest_rec_plan_date")
     fmt = _export_format(request, default="xlsx")
     safe_job = job.replace(" ", "_")
-    today = _date.today()
-    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    date_part = _data_per_nome_file()
     base_name = f"{safe_job}_to_be_received_{date_part}"
     if fmt == "pdf":
         pdf_bytes = genera_planned_docs_pdf(
@@ -2209,17 +2187,14 @@ def _export_situazione_orizzontale_xlsx(job, payload):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def export_situazione(request, job):
+@con_commessa
+def export_situazione(request, job, testata):
     """Export situazione documenti as PDF (with header) or Excel (no header).
 
     Con un filtro attivo la pagina manda in POST gli id dei documenti (e delle
     revisioni, nella vista verticale) rimasti a schermo: l'export contiene solo
     quelli.
     """
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
 
     vista = request.GET.get("vista", "orizzontale")
     if vista not in ("orizzontale", "verticale"):
@@ -2227,10 +2202,9 @@ def export_situazione(request, job):
 
     doc_ids = rev_ids = None
     if request.method == "POST":
-        try:
-            selezione = json.loads(request.body or b"{}")
-        except (json.JSONDecodeError, ValueError):
-            return JsonResponse({"error": "JSON non valido."}, status=400)
+        selezione = _json_body(request, vuoto={})
+        if selezione is None:
+            return _errore("JSON non valido.")
         if not isinstance(selezione, dict):
             return JsonResponse({"error": "JSON non valido."}, status=400)
         doc_ids = selezione.get("doc_ids")
@@ -2251,8 +2225,7 @@ def export_situazione(request, job):
         rev_sequenza=payload.get("rev_sequenza") or [],
         vista=vista,
     )
-    today = _date.today()
-    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    date_part = _data_per_nome_file()
     safe_job = job.replace(" ", "_")
     filename = f"{safe_job}_document_status_{date_part}.pdf"
     return _pdf_response(pdf_bytes, filename)
@@ -2337,7 +2310,7 @@ def _parse_import_date(val):
     """Parse a date value from an Excel cell.
 
     Accepts openpyxl native date/datetime objects, ISO strings (YYYY-MM-DD),
-    and Italian-format strings (DD/MM/YYYY). Returns a date or None.
+    and Italian-format strings (DD/MM/YYYY). Returns ``(date | None, errore | None)``.
     """
     import datetime as _dt
 
@@ -2371,10 +2344,9 @@ def cartelle_modelli_api(request):
 @api_write_required
 @require_http_methods(["POST"])
 def genera_documenti_da_modelli_api(request, job):
-    try:
-        body = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    body = _json_body(request, vuoto={})
+    if body is None:
+        return _errore("JSON non valido.")
     cartella_id = body.get("cartella_id")
     if not cartella_id:
         return JsonResponse({"error": "Cartella modelli non specificata."}, status=400)
@@ -2860,11 +2832,8 @@ def avatar_utente_view(request, pk):
 
 @api_login_required
 @require_http_methods(["GET"])
-def commessa_anomalie_api(request, job):
-    try:
-        testata = get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def commessa_anomalie_api(request, job, testata):
     anomalies = audit_commessa(job)
     gruppi = serialize_anomalie_gruppi(job, anomalies)
     return JsonResponse(
@@ -2881,10 +2850,9 @@ def commessa_anomalie_api(request, job):
 @api_write_required
 @require_http_methods(["POST"])
 def commessa_anomalie_ignora_api(request, job):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
 
     revisione_id = data.get("revisione_id")
     if not revisione_id:
@@ -2907,11 +2875,8 @@ def commessa_anomalie_ignora_api(request, job):
 
 @api_login_required
 @require_http_methods(["GET"])
-def commessa_revisioni_sbloccabili_api(request, job):
-    try:
-        get_commessa(job)
-    except Testata.DoesNotExist:
-        return JsonResponse({"error": "Commessa non trovata."}, status=404)
+@con_commessa
+def commessa_revisioni_sbloccabili_api(request, job, testata):
     revisioni = list_revisioni_sbloccabili(job)
     return JsonResponse({"count": len(revisioni), "revisioni": revisioni})
 
@@ -2920,10 +2885,9 @@ def commessa_revisioni_sbloccabili_api(request, job):
 @api_write_required
 @require_http_methods(["POST"])
 def commessa_revisione_sblocca_api(request, job):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
 
     revisione_id = data.get("revisione_id")
     if not revisione_id:
@@ -2949,10 +2913,9 @@ def commessa_revisione_sblocca_api(request, job):
 @api_write_required
 @require_http_methods(["POST"])
 def import_from_old_api(request):
-    try:
-        data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
 
     job = (data.get("job") or "").strip()
     if not job:
@@ -2969,13 +2932,6 @@ def import_from_old_api(request):
 
 
 # ── HTML + API: Segnalazioni ─────────────────────────────────────────────────
-
-
-def _json_body(request):
-    try:
-        return json.loads(request.body)
-    except (json.JSONDecodeError, ValueError, TypeError):
-        return None
 
 
 @login_required
@@ -3010,7 +2966,7 @@ def segnalazioni_api(request):
 
     data = _json_body(request)
     if data is None:
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+        return _errore("JSON non valido.")
     try:
         item = create_segnalazione(
             request.user,
@@ -3028,7 +2984,7 @@ def segnalazioni_api(request):
 def segnalazione_voto_api(request, pk):
     data = _json_body(request)
     if data is None:
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+        return _errore("JSON non valido.")
     try:
         item = set_voto(request.user, pk, data.get("valore"))
         return JsonResponse({"ok": True, "data": item})
@@ -3043,7 +2999,7 @@ def segnalazione_voto_api(request, pk):
 def segnalazione_commenti_api(request, pk):
     data = _json_body(request)
     if data is None:
-        return JsonResponse({"error": "JSON non valido."}, status=400)
+        return _errore("JSON non valido.")
     try:
         item = create_commento(request.user, pk, data.get("testo"))
         return JsonResponse({"ok": True, "data": item}, status=201)
@@ -3127,7 +3083,6 @@ def export_dati_grezzi(request, job):
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
-    today = _date.today()
-    date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
+    date_part = _data_per_nome_file()
     filename = f"{job.replace(' ', '_')}_dati_grezzi_{date_part}.xlsx"
     return _xlsx_response(wb, filename)
