@@ -15,7 +15,6 @@ def assign_default_cartella(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("core", "0028_statoesterno_crea_nuova_rev"),
     ]

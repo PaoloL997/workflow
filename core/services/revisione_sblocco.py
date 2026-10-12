@@ -2,23 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date as date_type
-
 from django.db import transaction
 from django.db.models import Prefetch
 
+from ..date_fmt import parse_iso_date
 from ..models import Documento, Revisione
 from .commesse import serialize_revisione
 from .stato_esterno_colori import cell_colors
 from .ultima_revisione import ORDINE_CRESCENTE, chiave_ordinamento, ultima_revisione
-
-
-def _parse_optional_date(value) -> date_type | None:
-    if not value:
-        return None
-    if isinstance(value, date_type):
-        return value
-    return date_type.fromisoformat(str(value))
 
 
 def list_revisioni_sbloccabili(job: str) -> list[dict]:
@@ -76,7 +67,7 @@ def sblocca_revisione(job: str, revisione_id: int, dis_plan_date=None) -> dict:
     new_rev = Revisione.objects.create(
         documento=doc,
         rev_no=(rev.rev_no or 0) + 1,
-        dis_plan_date=_parse_optional_date(dis_plan_date),
+        dis_plan_date=parse_iso_date(dis_plan_date, strict=True),
         crea_nuova_rev=True,
     )
     return {

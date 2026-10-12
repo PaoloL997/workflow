@@ -74,19 +74,24 @@ def indirizzi_per_siti(codici_bc):
         tra i TO. Un elenco di codici vuoto, o senza corrispondenze, dà
         ``{"to": [], "cc": []}``.
     """
+    return _indirizzi_to_cc(IndirizzoStabilimento, TipoIndirizzoStabilimento.TO, codici_bc)
+
+
+def _indirizzi_to_cc(modello, tipo_to, codici_bc):
+    """TO/CC attivi di ``modello`` per i siti dati, deduplicati (vedi ``indirizzi_per_siti``)."""
     codici = list(codici_bc or [])
     if not codici:
         return {"to": [], "cc": []}
 
-    indirizzi = IndirizzoStabilimento.objects.filter(
-        stabilimento__codice_bc__in=codici, attivo=True
-    ).values_list("email", "tipo")
+    indirizzi = modello.objects.filter(stabilimento__codice_bc__in=codici, attivo=True).values_list(
+        "email", "tipo"
+    )
 
     to, cc = [], []
     visti_to, visti_cc = set(), set()
     for email, tipo in indirizzi:
         chiave = email.strip().lower()
-        if tipo == TipoIndirizzoStabilimento.TO:
+        if tipo == tipo_to:
             if chiave not in visti_to:
                 visti_to.add(chiave)
                 to.append(email)
@@ -114,28 +119,9 @@ def indirizzi_default_per_siti(codici_bc):
         (confronto case-insensitive) e senza sovrapposizioni, come
         ``indirizzi_per_siti``.
     """
-    codici = list(codici_bc or [])
-    if not codici:
-        return {"to": [], "cc": []}
-
-    indirizzi = IndirizzoDefaultTrasmittalInterno.objects.filter(
-        stabilimento__codice_bc__in=codici, attivo=True
-    ).values_list("email", "tipo")
-
-    to, cc = [], []
-    visti_to, visti_cc = set(), set()
-    for email, tipo in indirizzi:
-        chiave = email.strip().lower()
-        if tipo == TipoDestinatarioTransmittalInterno.TO:
-            if chiave not in visti_to:
-                visti_to.add(chiave)
-                to.append(email)
-        elif chiave not in visti_cc:
-            visti_cc.add(chiave)
-            cc.append(email)
-
-    cc = [email for email in cc if email.strip().lower() not in visti_to]
-    return {"to": to, "cc": cc}
+    return _indirizzi_to_cc(
+        IndirizzoDefaultTrasmittalInterno, TipoDestinatarioTransmittalInterno.TO, codici_bc
+    )
 
 
 def siti_del_documento(documento):
@@ -1345,7 +1331,7 @@ def annulla_trasmittal_interno(trasmittal, utente):
         nome = trasmittal.nome
         righe_cliente = list(trasmittal.righe.filter(cliente=True).select_related("documento"))
         pdf_path = percorso_pdf(trasmittal)
-        cartella_dcc = get_base_path(testata.job, "DCC") / "DA SPEDIRE" / nome
+        cartella_dcc = _percorso_dcc_da(testata.job, nome)
         trasmittal.delete()
 
     logger.info('Trasmittal interno "%s" annullato da %s.', nome, utente.get_username())

@@ -23,9 +23,9 @@ import logging
 import pandas as pd
 from django.db import transaction
 
-from ..date_fmt import format_display_date
+from ..date_fmt import format_display_date, parse_iso_date
 from ..models import AggiornamentoBC, Stabilimento, Testata
-from .commesse import _parse_date, fetch_from_bc
+from .commesse import fetch_from_bc
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +69,10 @@ def _normalizza(campo: str, valore):
         pass
     if campo.endswith("_date"):
         if isinstance(valore, str):
-            return _parse_date(valore.strip()[:10])
+            return parse_iso_date(valore.strip()[:10])
         if hasattr(valore, "date"):  # datetime / pandas.Timestamp
             return valore.date()
-        return _parse_date(valore)
+        return parse_iso_date(valore)
     testo = str(valore).strip()
     if not testo:
         return None

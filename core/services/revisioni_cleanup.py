@@ -9,18 +9,10 @@ An orphan is the *last* revision of a document when both are true:
 
 import pandas as pd
 
-# Access single-letter codes → human-readable name (mirrors import_old._STATUS_MAP).
-_STATUS_CODE_TO_NOME = {
-    "A": "Approved",
-    "I": "Commented - To be issued as Final",
-    "C": "Commented - To be resubmitted - Work can proceed",
-    "F": "Final - As Built",
-    "Z": "For Information",
-    "O": "Old",
-    "R": "Rejected - Work can not proceed",
-    "S": "Superseeded",
-}
-_NOME_TO_CODE = {v: k for k, v in _STATUS_CODE_TO_NOME.items()}
+from .stato_esterno_codes import STATUS_LETTER_MAP
+
+# Nome leggibile → codice Access a una lettera (unica fonte: stato_esterno_codes).
+_NOME_TO_CODE = {v: k for k, v in STATUS_LETTER_MAP.items()}
 
 # Fallback when StatoEsterno is not configured yet (tests / first install).
 _DEFAULT_NO_NUOVA_REV_CODES = frozenset({"A", "F", "Z"})

@@ -22,6 +22,25 @@ _MONTHS_SHORT = (
 )
 
 
+def parse_iso_date(value, *, strict: bool = False) -> date | None:
+    """Data da una stringa ISO (``YYYY-MM-DD``) o da una ``date``; ``None`` se vuoto.
+
+    Un valore malformato dà ``None`` (es. campi liberi di un payload) oppure,
+    con ``strict=True``, solleva ``ValueError`` (es. una data che l'utente ha
+    scritto a mano e che va rifiutata, non ignorata).
+    """
+    if not value:
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        if strict:
+            raise
+        return None
+
+
 def format_display_date(value) -> str:
     """Format a date/datetime/ISO string as ``d mon yyyy`` (e.g. ``10 jan 2026``)."""
     if value is None or value == "":

@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
+from ..date_fmt import parse_iso_date
 from .ultima_revisione import chiave_ordinamento, ultima_revisione_per_documento_id
 
 if TYPE_CHECKING:
@@ -56,16 +57,6 @@ BUCKET_LABELS = {
 
 def bucket_label(bucket: str) -> str:
     return BUCKET_LABELS.get(bucket, bucket)
-
-
-def _parse_optional_date(val):
-    from datetime import date as date_type
-
-    if not val:
-        return None
-    if isinstance(val, date_type):
-        return val
-    return date_type.fromisoformat(str(val))
 
 
 def audit_revisione(
@@ -260,7 +251,7 @@ def bucket_to_fields(
             "ext_status": None,
         }
     if bucket == "da_ricevere":
-        dis_act = _parse_optional_date(data.get("dis_act_date")) or rev.dis_act_date
+        dis_act = parse_iso_date(data.get("dis_act_date"), strict=True) or rev.dis_act_date
         if not dis_act:
             raise ValueError("Specificare la data di invio effettiva.")
         rec_plan = rev.rec_plan_date
@@ -274,13 +265,13 @@ def bucket_to_fields(
             "ext_status": None,
         }
     if bucket == "conclusi":
-        rec_act = _parse_optional_date(data.get("rec_act_date")) or rev.rec_act_date
+        rec_act = parse_iso_date(data.get("rec_act_date"), strict=True) or rev.rec_act_date
         if not rec_act:
             raise ValueError("Specificare la data di rientro effettiva.")
         ext_id = data.get("ext_status_id")
         if ext_id in ("", None):
             ext_id = rev.ext_status_id
-        dis_act = _parse_optional_date(data.get("dis_act_date")) or rev.dis_act_date
+        dis_act = parse_iso_date(data.get("dis_act_date"), strict=True) or rev.dis_act_date
         fields = {
             "int_status": "ricevuto",
             "rec_act_date": rec_act.isoformat(),

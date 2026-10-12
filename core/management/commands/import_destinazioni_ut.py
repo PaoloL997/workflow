@@ -2,20 +2,9 @@
 
 from django.core.management.base import BaseCommand
 
+from core.management.utf8 import forza_utf8
 from core.models import Testata
 from core.services.recipients_import import importa_destinazioni_tutte_le_commesse
-
-
-def _forza_utf8(wrapper):
-    """Porta lo stream su UTF-8 (vedi sync_business_central.py: stessa necessità)."""
-    stream = getattr(wrapper, "_out", wrapper)
-    reconfigure = getattr(stream, "reconfigure", None)
-    if reconfigure is None:
-        return
-    try:
-        reconfigure(encoding="utf-8", errors="replace")
-    except (OSError, ValueError):
-        pass
 
 
 class Command(BaseCommand):
@@ -45,8 +34,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _forza_utf8(self.stdout)
-        _forza_utf8(self.stderr)
+        forza_utf8(self.stdout)
+        forza_utf8(self.stderr)
 
         job = (options.get("job") or "").strip()
         jobs = None

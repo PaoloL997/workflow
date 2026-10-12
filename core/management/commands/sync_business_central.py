@@ -2,29 +2,13 @@
 
 from django.core.management.base import BaseCommand
 
+from core.management.utf8 import forza_utf8
 from core.models import Testata
 from core.services.bc_sync import (
     BusinessCentralNonDisponibile,
     sincronizza_commesse,
     sincronizza_sito_costruttivo,
 )
-
-
-def _forza_utf8(wrapper):
-    """Porta lo stream su UTF-8.
-
-    Su Windows la console è cp1252 e la freccia del report (→) fa abortire il
-    comando con UnicodeEncodeError, sia a video sia quando lo scheduler
-    redirige l'output su file.
-    """
-    stream = getattr(wrapper, "_out", wrapper)
-    reconfigure = getattr(stream, "reconfigure", None)
-    if reconfigure is None:
-        return
-    try:
-        reconfigure(encoding="utf-8", errors="replace")
-    except (OSError, ValueError):
-        pass
 
 
 class Command(BaseCommand):
@@ -55,8 +39,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _forza_utf8(self.stdout)
-        _forza_utf8(self.stderr)
+        forza_utf8(self.stdout)
+        forza_utf8(self.stderr)
 
         job = (options.get("job") or "").strip()
         jobs = None

@@ -8,6 +8,7 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.utils import timezone
 
+from ..date_fmt import parse_iso_date
 from ..models import (
     STATI_INTERNI_CHOICES,
     CartellaModelloDocumento,
@@ -366,18 +367,6 @@ def _clean_indirizzo_fields(data):
     return {k: v for k, v in data.items() if k in _INDIRIZZO_FIELDS}
 
 
-def _parse_date(value):
-    """Parse an ISO date string (YYYY-MM-DD) or return None for empty/null values."""
-    if not value:
-        return None
-    if isinstance(value, date_type):
-        return value
-    try:
-        return date_type.fromisoformat(str(value))
-    except ValueError:
-        return None
-
-
 # ── Reparto helpers ───────────────────────────────────────────────────────────
 
 
@@ -573,7 +562,7 @@ def create_documento(job, data):
     d.full_clean()
     d.save()
     rev0 = Revisione.objects.create(documento=d, rev_no=0)
-    dis_plan = _parse_date(data.get("dis_plan_date_rev0"))
+    dis_plan = parse_iso_date(data.get("dis_plan_date_rev0"))
     if dis_plan is not None:
         rev0.dis_plan_date = dis_plan
         rev0.save(update_fields=["dis_plan_date"])
@@ -591,7 +580,7 @@ def update_documento(pk, data):
     if d.reparto and not had_reparto and not d.revisioni.exists():
         Revisione.objects.create(documento=d, rev_no=0)
     if "dis_plan_date_rev0" in data:
-        dis_plan = _parse_date(data["dis_plan_date_rev0"])
+        dis_plan = parse_iso_date(data["dis_plan_date_rev0"])
         rev0 = revisione_zero(d)
         if rev0 is not None:
             rev0.dis_plan_date = dis_plan

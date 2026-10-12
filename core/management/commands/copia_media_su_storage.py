@@ -6,19 +6,8 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage, default_storage
 from django.core.management.base import BaseCommand, CommandError
 
+from core.management.utf8 import forza_utf8
 from core.services.media import ERRORI_STORAGE, copia_media_su_storage
-
-
-def _forza_utf8(wrapper):
-    """Porta lo stream su UTF-8 (vedi sync_business_central.py: stessa necessità)."""
-    stream = getattr(wrapper, "_out", wrapper)
-    reconfigure = getattr(stream, "reconfigure", None)
-    if reconfigure is None:
-        return
-    try:
-        reconfigure(encoding="utf-8", errors="replace")
-    except (OSError, ValueError):
-        pass
 
 
 class Command(BaseCommand):
@@ -43,8 +32,8 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        _forza_utf8(self.stdout)
-        _forza_utf8(self.stderr)
+        forza_utf8(self.stdout)
+        forza_utf8(self.stderr)
 
         cartella = Path(options["sorgente"] or settings.MEDIA_ROOT).resolve()
         if not cartella.is_dir():
