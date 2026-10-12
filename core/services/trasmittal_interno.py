@@ -35,7 +35,7 @@ from ..models import (
     TransmittalInterno,
 )
 from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
-from .revisione_label import format_revisione_label, numero_revisione
+from .revisione_label import MAX_LUNGHEZZA_ETICHETTA, format_revisione_label, numero_revisione
 from .ultima_revisione import ORDINE_DECRESCENTE, ultima_revisione
 
 logger = logging.getLogger(__name__)
@@ -830,6 +830,13 @@ def _prepara_righe(testata, righe_payload):
         revisione = str(voce.get("revisione") or "").strip()
         if not revisione:
             raise ValueError(f"{stato['vendor_doc']}: revisione mancante.")
+        if len(revisione) > MAX_LUNGHEZZA_ETICHETTA:
+            # Limite della colonna RigaTransmittalInterno.revisione: meglio un
+            # 400 chiaro qui che un errore del database a lettera già creata.
+            raise ValueError(
+                f"{stato['vendor_doc']}: la revisione «{revisione}» supera i "
+                f"{MAX_LUNGHEZZA_ETICHETTA} caratteri."
+            )
         tpi = bool(voce.get("tpi", False))
         tpi_destinatario = str(voce.get("tpi_destinatario") or "").strip()
         if tpi and not tpi_destinatario:

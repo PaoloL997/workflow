@@ -25,6 +25,10 @@
 
 ### Fixed
 
+- Logout solo con il pulsante (POST): un link o un'immagine su un'altra pagina non può più chiudere la sessione
+- Gestisci emissione, storico trasmittal: il pulsante di risincronizzazione dalla cartella è riservato a chi può scrivere (prima bastava un indirizzo in GET, anche per chi legge soltanto)
+- Trasmittal interno: un'etichetta di revisione più lunga di 10 caratteri dà un errore chiaro invece di un errore generico del server
+- Anomalie revisioni: la pagina non va più in errore se un documento ha sia revisioni con numero sia senza
 - Revisioni: "ultima revisione" di un documento si calcola ora con una regola sola in tutta l'applicazione (`core/services/ultima_revisione.py`). Una revisione senza numero (possibile dopo un import dal vecchio Access) non viene più scelta come ultima da emissione e ricezione, mentre sblocco e anomalie la consideravano revisione 0: lo stesso documento aveva due "ultime revisioni" diverse
 - Lista documenti, emissione, ricezione, situazione: l'elenco dei documenti di una commessa costa un numero fisso di query invece di due in più per ogni documento
 - Trasmittal interno: due emissioni simultanee sulla stessa commessa nello stesso giorno non vanno più in errore sul progressivo

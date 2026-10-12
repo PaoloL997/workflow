@@ -1136,7 +1136,10 @@
     if (hint) hint.hidden = true;
     body.innerHTML = '<p class="storico-empty">Caricamento&hellip;</p>';
     try {
-      const r = await fetch(storicoUrl('storico/') + (forza ? '?sync=1' : ''));
+      // La risincronizzazione dalla cartella scrive sul database: POST.
+      const r = await fetch(storicoUrl('storico/'), forza
+        ? { method: 'POST', headers: { 'X-CSRFToken': CSRF } }
+        : undefined);
       const data = await r.json().catch(function() { return {}; });
       if (hint) hint.hidden = !data.in_da_spedire;
       if (!r.ok) {

@@ -203,7 +203,10 @@ def login_view(request):
     return render(request, "core/login.html", {"error": error})
 
 
+@require_http_methods(["POST"])
 def logout_view(request):
+    # Solo POST (con CSRF): un <img src="/logout/"> su un'altra pagina non
+    # deve poter chiudere la sessione.
     logout(request)
     return redirect("login")
 
@@ -1349,9 +1352,15 @@ def trasmittal_pdf_api(request):
 
 
 @api_login_required
-@require_http_methods(["GET"])
+@api_write_required
+@require_http_methods(["GET", "POST"])
 def trasmittal_storico_api(request, job):
-    """List issued transmittals for a job from the database table."""
+    """List issued transmittals for a job from the database table.
+
+    In GET si legge (e si popola la tabella dalla cartella solo se è vuota);
+    la risincronizzazione forzata dalla cartella scrive righe e quindi è un
+    POST, riservato a chi può scrivere.
+    """
     from .services.trasmittal_archivio import (
         cartella_trasmittal_canonica,
         formato_nome_file,
@@ -1364,7 +1373,7 @@ def trasmittal_storico_api(request, job):
         get_commessa(job)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
-    forza = request.GET.get("sync") in ("1", "true", "yes")
+    forza = request.method == "POST"
     try:
         sync_trasmittal_da_cartella(job, solo_se_vuota=not forza)
         items = lista_storico(job)

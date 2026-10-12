@@ -234,12 +234,13 @@ def serialize_anomalie_gruppi(job: str, anomalies: list[AnomaliaRevisione]) -> l
             }
         )
 
-    result.sort(
-        key=lambda g: (
-            g["documento"]["vendor_doc"],
-            g["revisione"]["rev_no"] if g["revisione"] else 0,
-        )
-    )
+    def _chiave(g):
+        # rev_no può essere None: senza il flag il confronto None < int
+        # alzerebbe TypeError fra due revisioni dello stesso documento.
+        rev_no = g["revisione"]["rev_no"] if g["revisione"] else None
+        return (g["documento"]["vendor_doc"], rev_no is not None, rev_no or 0)
+
+    result.sort(key=_chiave)
     return result
 
 

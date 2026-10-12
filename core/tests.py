@@ -693,7 +693,8 @@ class TrasmittalStoricoApiTest(TestCase):
         folder = Path(self.tmp) / "25089" / "PROGETTO" / "DCC" / "DA SPEDIRE" / "TRANSMITTAL"
         folder.mkdir(parents=True)
         (folder / "Transmittal 25089-4.pdf").write_bytes(b"%PDF")
-        response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
+        # Tabella vuota: la lettura in GET la popola dalla cartella.
+        response = self.client.get("/api/commesse/25089/trasmittal/storico/")
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["in_da_spedire"])
@@ -707,10 +708,32 @@ class TrasmittalStoricoApiTest(TestCase):
             data_emissione="2020-01-01",
         )
         _write_trasmittal(self.tmp, "25089", 9)
-        response = self.client.get("/api/commesse/25089/trasmittal/storico/?sync=1")
+        # La risincronizzazione forzata scrive: è un POST riservato a chi scrive.
+        writer = User.objects.create_user(
+            "storico_writer", "storico-writer@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.client.force_login(writer)
+        response = self.client.post("/api/commesse/25089/trasmittal/storico/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual([i["id"] for i in response.json()["items"]], [9, 1])
         self.assertTrue(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
+
+    def test_storico_force_sync_negata_a_chi_legge_soltanto(self):
+        _write_trasmittal(self.tmp, "25089", 9)
+        Transmittal.objects.create(testata_id="25089", numero=1, data_emissione="2020-01-01")
+
+        response = self.client.post("/api/commesse/25089/trasmittal/storico/")
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Transmittal.objects.filter(testata_id="25089", numero=9).exists())
+        # In GET un lettore vede comunque l'elenco (senza risincronizzare).
+        self.assertEqual(
+            [
+                i["id"]
+                for i in self.client.get("/api/commesse/25089/trasmittal/storico/").json()["items"]
+            ],
+            [1],
+        )
 
     def test_storico_unknown_job(self):
         response = self.client.get("/api/commesse/NOPE/trasmittal/storico/")
@@ -2766,6 +2789,19 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertIn("non valido", risposta.json()["error"])
         self.assertFalse(TransmittalInterno.objects.filter(testata=self.testata).exists())
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_etichetta_di_revisione_troppo_lunga_e_un_400_non_un_500(self):
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, revisione="A" * 11)]}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("10 caratteri", risposta.json()["error"])
+        self.assertFalse(TransmittalInterno.objects.filter(testata=self.testata).exists())
 
     def test_il_pannello_di_conferma_ha_il_campo_messaggio(self):
         self.client.force_login(self.writer)
@@ -9940,3 +9976,22 @@ class FormatDisplayDateTests(SimpleTestCase):
 
         self.assertEqual(format_display_date(datetime(2026, 3, 14, 23, 30)), "14 mar 2026")
         self.assertEqual(format_display_date(date(2026, 1, 10)), "10 jan 2026")
+
+
+class LogoutTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.client.force_login(User.objects.create_user("logout_utente", "lo@b.it", "pw"))
+
+    def test_logout_in_post_chiude_la_sessione(self):
+        risposta = self.client.post("/logout/")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertEqual(self.client.get("/commesse/").status_code, 302)
+
+    def test_logout_in_get_non_chiude_la_sessione(self):
+        """Un <img src="/logout/"> su un'altra pagina non deve bastare."""
+        risposta = self.client.get("/logout/")
+
+        self.assertEqual(risposta.status_code, 405)
+        self.assertEqual(self.client.get("/commesse/").status_code, 200)

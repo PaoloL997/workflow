@@ -358,10 +358,10 @@ def _build_delivery_checkboxes(pdf, delivery_mode, brevi_manu_name):
             full_en = en_label
 
         pdf.set_xy(label_x, y)
-        pdf.cell(col_w - box_size - 2, line_h / 2, it_label, ln=False)
+        pdf.cell(col_w - box_size - 2, line_h / 2, it_label, new_x="RIGHT", new_y="TOP")
         pdf.set_xy(label_x, y + line_h / 2)
         pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "I", 7)
-        pdf.cell(col_w - box_size - 2, line_h / 2, full_en, ln=False)
+        pdf.cell(col_w - box_size - 2, line_h / 2, full_en, new_x="RIGHT", new_y="TOP")
         pdf.set_font(getattr(pdf, "_font_family", "Helvetica"), "", 8)
 
     pdf.ln(line_h + 4)
