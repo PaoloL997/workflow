@@ -6,6 +6,8 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING
 
+from .ultima_revisione import chiave_ordinamento, ultima_revisione_per_documento_id
+
 if TYPE_CHECKING:
     from ..models import Revisione
 
@@ -156,7 +158,7 @@ def audit_commessa(job: str) -> list[AnomaliaRevisione]:
     ).order_by("pk")
 
     for doc in documenti:
-        revs = sorted(doc.revisioni.all(), key=lambda r: (r.rev_no or 0, r.pk))
+        revs = sorted(doc.revisioni.all(), key=chiave_ordinamento)
         for rev in revs:
             if rev.ignora_anomalie:
                 continue
@@ -198,11 +200,7 @@ def serialize_anomalie_gruppi(job: str, anomalies: list[AnomaliaRevisione]) -> l
     latest_by_doc: dict[int, int | None] = {}
     for rev in rev_map.values():
         if rev.documento_id not in latest_by_doc:
-            latest = (
-                Revisione.objects.filter(documento_id=rev.documento_id)
-                .order_by("-rev_no", "-pk")
-                .first()
-            )
+            latest = ultima_revisione_per_documento_id(rev.documento_id)
             latest_by_doc[rev.documento_id] = latest.pk if latest else None
 
     result = []
@@ -246,11 +244,7 @@ def serialize_anomalie_gruppi(job: str, anomalies: list[AnomaliaRevisione]) -> l
 
 
 def revisione_is_latest(rev: Revisione) -> bool:
-    from ..models import Revisione
-
-    latest = (
-        Revisione.objects.filter(documento_id=rev.documento_id).order_by("-rev_no", "-pk").first()
-    )
+    latest = ultima_revisione_per_documento_id(rev.documento_id)
     return latest is not None and latest.pk == rev.pk
 
 

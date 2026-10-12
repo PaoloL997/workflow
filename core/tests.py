@@ -2,7 +2,7 @@ import io
 import json
 import sys
 import tempfile
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -73,6 +73,7 @@ from .services.bc_sync import (
 from .services.commesse import (
     MAX_PINNED_COMMESSE,
     create_commessa,
+    esegui_emissione,
     esegui_ricezione,
     fetch_from_bc,
     filtra_situazione,
@@ -5599,38 +5600,40 @@ class SituazioneApiTestCase(TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_export_situazione_pdf(self):
-        from datetime import date
+        """Il PDF della situazione: risposta, nome file e dati passati al generatore.
 
-        import fitz
+        Senza un parser PDF fra le dipendenze non si legge il testo del file:
+        si verifica invece cosa riceve ``genera_situazione_documenti_pdf``
+        (documenti e vista), lasciando il generatore vero a produrre il PDF.
+        """
+        from src.pdf import genera_situazione_documenti_pdf
 
         today = date.today()
         date_part = f"{today.day:02d}_{today.month:02d}_{today.year}"
 
-        response = self.client.get(f"/api/commesse/{self.job}/situazione/export/?vista=orizzontale")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/pdf")
-        self.assertIn(
-            f'filename="situazione_documenti_orizzontale_{date_part}.pdf"',
-            response["Content-Disposition"],
-        )
-        self.assertTrue(response.content.startswith(b"%PDF"))
+        for vista in ("orizzontale", "verticale"):
+            with (
+                self.subTest(vista=vista),
+                patch(
+                    "core.views.genera_situazione_documenti_pdf",
+                    wraps=genera_situazione_documenti_pdf,
+                ) as generatore,
+            ):
+                response = self.client.get(
+                    f"/api/commesse/{self.job}/situazione/export/?vista={vista}"
+                )
 
-        text = fitz.open(stream=response.content, filetype="pdf")[0].get_text()
-        self.assertIn("Vendor Document", text)
-        self.assertIn("Planning", text)
-        self.assertIn("Dispatch", text)
-        self.assertIn("25056-QMDBI", text)
-        self.assertNotIn("Client Doc No", text)
-        self.assertNotIn("Penalty", text)
-
-        response_v = self.client.get(f"/api/commesse/{self.job}/situazione/export/?vista=verticale")
-        self.assertEqual(response_v.status_code, 200)
-        self.assertIn(
-            f'filename="situazione_documenti_verticale_{date_part}.pdf"',
-            response_v["Content-Disposition"],
-        )
-        text_v = fitz.open(stream=response_v.content, filetype="pdf")[0].get_text()
-        self.assertIn("Vendor Document", text_v)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "application/pdf")
+                self.assertIn(
+                    f'filename="{self.job}_document_status_{date_part}.pdf"',
+                    response["Content-Disposition"],
+                )
+                self.assertTrue(response.content.startswith(b"%PDF"))
+                chiamata = generatore.call_args
+                self.assertEqual(chiamata.kwargs["vista"], vista)
+                vendor_docs = {d["vendor_doc"] for d in chiamata.kwargs["documenti"]}
+                self.assertIn("25056-QMDBI", vendor_docs)
 
     def test_export_situazione_pdf_hides_empty_fixed_columns(self):
         from src.pdf import _active_fixed_doc_columns
@@ -9852,3 +9855,88 @@ class AdminUtentiFieldsetsTests(TestCase):
         for url in ("/admin/core/user/add/", f"/admin/core/user/{self.superuser.pk}/change/"):
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
+
+
+class UltimaRevisioneTests(TestCase):
+    """Una regola sola per "ultima revisione", con ``rev_no`` NULL incluso.
+
+    PostgreSQL mette i NULL per primi in ordinamento decrescente: un
+    ``order_by("-rev_no")`` prendeva la revisione senza numero (import Access)
+    come ultima, mentre il codice in Python la trattava come revisione 0.
+    """
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="26100", time_cli_doc_rev=10)
+        self.doc = Documento.objects.create(testata=self.testata, vendor_doc="26100-A")
+        self.senza_numero = Revisione.objects.create(documento=self.doc, rev_no=None)
+        self.rev0 = Revisione.objects.create(documento=self.doc, rev_no=0)
+        self.rev1 = Revisione.objects.create(documento=self.doc, rev_no=1)
+
+    def test_la_revisione_senza_numero_non_e_mai_l_ultima(self):
+        from core.services.ultima_revisione import (
+            ultima_revisione,
+            ultima_revisione_per_documento_id,
+        )
+
+        self.assertEqual(ultima_revisione(self.doc), self.rev1)
+        self.assertEqual(ultima_revisione_per_documento_id(self.doc.pk), self.rev1)
+
+    def test_dal_prefetch_stessa_risposta_e_nessuna_query(self):
+        from core.services.ultima_revisione import revisione_zero, ultima_revisione
+
+        doc = Documento.objects.prefetch_related("revisioni").get(pk=self.doc.pk)
+
+        with self.assertNumQueries(0):
+            self.assertEqual(ultima_revisione(doc), self.rev1)
+            self.assertEqual(revisione_zero(doc), self.rev0)
+
+    def test_l_emissione_scrive_sull_ultima_revisione_vera(self):
+        esegui_emissione([self.doc.pk], "2026-09-02")
+
+        self.rev1.refresh_from_db()
+        self.senza_numero.refresh_from_db()
+        self.assertEqual(self.rev1.int_status, "inviato_al_cliente")
+        self.assertEqual(self.rev1.dis_act_date, date(2026, 9, 2))
+        self.assertIsNone(self.senza_numero.dis_act_date)
+
+    def test_sblocco_riconosce_l_ultima_revisione_vera(self):
+        risposta = StatoEsterno.objects.create(nome="Commented", lettera="C", colore="#f59b1d")
+        self.rev1.ext_status = risposta
+        self.rev1.save(update_fields=["ext_status"])
+
+        esito = sblocca_revisione(self.testata.job, self.rev1.pk)
+
+        self.assertEqual(esito["revisione"]["rev_no"], 2)
+        with self.assertRaises(ValueError):
+            sblocca_revisione(self.testata.job, self.senza_numero.pk)
+
+    def test_la_lista_documenti_costa_un_numero_fisso_di_query(self):
+        for n in range(2, 6):
+            doc = Documento.objects.create(testata=self.testata, vendor_doc=f"26100-{n}")
+            Revisione.objects.create(documento=doc, rev_no=0)
+            Revisione.objects.create(documento=doc, rev_no=1)
+
+        # Testata, acronimi reparto, documenti, revisioni (prefetch): 4 query
+        # per 5 documenti, non 2 in più per ciascuno.
+        with self.assertNumQueries(4):
+            documenti = list_documenti(self.testata.job)
+
+        self.assertEqual(len(documenti), 5)
+        self.assertEqual(documenti[0]["latest_rev_no"], 1)
+        self.assertEqual(documenti[0]["latest_rev_id"], self.rev1.pk)
+
+
+class FormatDisplayDateTests(SimpleTestCase):
+    def test_datetime_aware_si_legge_nel_fuso_locale(self):
+        from core.date_fmt import format_display_date
+
+        # 23:30 UTC del 14 marzo = 00:30 del 15 marzo a Roma.
+        self.assertEqual(
+            format_display_date(datetime(2026, 3, 14, 23, 30, tzinfo=UTC)), "15 mar 2026"
+        )
+
+    def test_datetime_naive_e_date_restano_come_sono(self):
+        from core.date_fmt import format_display_date
+
+        self.assertEqual(format_display_date(datetime(2026, 3, 14, 23, 30)), "14 mar 2026")
+        self.assertEqual(format_display_date(date(2026, 1, 10)), "10 jan 2026")

@@ -29,12 +29,14 @@ from ..models import (
     RigaTransmittalInterno,
     RuoloPersonaCommessa,
     Stabilimento,
+    Testata,
     TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
 from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
 from .revisione_label import format_revisione_label, numero_revisione
+from .ultima_revisione import ORDINE_DECRESCENTE, ultima_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -449,6 +451,10 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
     data = data or timezone.localdate()
 
     with transaction.atomic():
+        # Lock sulla commessa: due emissioni simultanee nello stesso giorno
+        # calcolerebbero lo stesso progressivo e la seconda fallirebbe sul
+        # vincolo di unicità (vedi anche trasmittal_archivio.emetti_e_archivia).
+        Testata.objects.select_for_update().get(pk=testata.pk)
         progressivo = prossimo_progressivo(testata, data)
         trasmittal = TransmittalInterno.objects.create(
             testata=testata,
@@ -733,7 +739,7 @@ def elenco_selezione_ut(testata):
     documenti = list(
         documenti_ut(testata)
         .prefetch_related(
-            Prefetch("revisioni", queryset=Revisione.objects.order_by("-rev_no", "-pk")),
+            Prefetch("revisioni", queryset=Revisione.objects.order_by(*ORDINE_DECRESCENTE)),
             Prefetch(
                 "destinazioni",
                 queryset=DestinazioneDocumento.objects.select_related("stabilimento").order_by(
@@ -766,8 +772,7 @@ def elenco_selezione_ut(testata):
             "selezionabile": False,
             "motivo": "",
         }
-        revisioni = list(documento.revisioni.all())
-        latest_rev = revisioni[0] if revisioni else None
+        latest_rev = ultima_revisione(documento)  # dal prefetch, nessuna query
         if latest_rev is None:
             voce["motivo"] = "Nessuna revisione registrata."
             risultato.append(voce)

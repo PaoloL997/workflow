@@ -139,6 +139,7 @@ from .services.trasmittal_interno import (
     salva_pdf,
     stabilimenti_costruttivi,
 )
+from .services.ultima_revisione import ultima_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -891,7 +892,7 @@ def _trasmittal_addresses(testata, addr_ids):
 def _trasmittal_documents(testata, doc_ids):
     documents = []
     for doc in Documento.objects.filter(pk__in=doc_ids, testata=testata).order_by("item_no"):
-        rev = doc.revisioni.order_by("-rev_no").first()
+        rev = ultima_revisione(doc)
         documents.append(
             {
                 "item_no": doc.item_no or "",

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
+from django.utils import timezone
+
 _MONTHS_SHORT = (
     "jan",
     "feb",
@@ -25,6 +27,10 @@ def format_display_date(value) -> str:
     if value is None or value == "":
         return ""
     if isinstance(value, datetime):
+        # Un datetime aware (es. ``created_at``, salvato in UTC) va letto nel
+        # fuso locale: alle 00:30 di Roma la data UTC è ancora quella di ieri.
+        if timezone.is_aware(value):
+            value = timezone.localtime(value)
         value = value.date()
     elif isinstance(value, str):
         try:

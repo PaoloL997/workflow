@@ -10,6 +10,7 @@ from django.db.models import Prefetch
 from ..models import Documento, Revisione
 from .commesse import serialize_revisione
 from .stato_esterno_colori import cell_colors
+from .ultima_revisione import ORDINE_CRESCENTE, chiave_ordinamento, ultima_revisione
 
 
 def _parse_optional_date(value) -> date_type | None:
@@ -25,7 +26,7 @@ def list_revisioni_sbloccabili(job: str) -> list[dict]:
     docs = Documento.objects.filter(testata_id=job).prefetch_related(
         Prefetch(
             "revisioni",
-            queryset=Revisione.objects.select_related("ext_status").order_by("rev_no", "pk"),
+            queryset=Revisione.objects.select_related("ext_status").order_by(*ORDINE_CRESCENTE),
         )
     )
     result: list[dict] = []
@@ -33,7 +34,7 @@ def list_revisioni_sbloccabili(job: str) -> list[dict]:
         revs = list(doc.revisioni.all())
         if not revs:
             continue
-        latest = max(revs, key=lambda r: (r.rev_no or 0, r.pk))
+        latest = max(revs, key=chiave_ordinamento)
         if not latest.ext_status_id:
             continue
         ext = latest.ext_status
@@ -66,7 +67,7 @@ def sblocca_revisione(job: str, revisione_id: int, dis_plan_date=None) -> dict:
     if doc.testata_id != job:
         raise ValueError("Revisione non appartiene a questa commessa.")
 
-    latest = doc.revisioni.order_by("-rev_no", "-pk").first()
+    latest = ultima_revisione(doc)
     if latest is None or latest.pk != rev.pk:
         raise ValueError("Non è l'ultima revisione del documento.")
     if not rev.ext_status_id:

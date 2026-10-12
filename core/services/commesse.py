@@ -6,6 +6,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Prefetch
+from django.utils import timezone
 
 from ..models import (
     STATI_INTERNI_CHOICES,
@@ -30,6 +31,7 @@ from .stato_interno import (
     stato_interno_effettivo_da_revisione,
     stato_interno_label,
 )
+from .ultima_revisione import ORDINE_CRESCENTE, revisione_zero, ultima_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -252,7 +254,9 @@ def close_commessa(job):
     t = Testata.objects.get(job=job)
     if t.actual_delivery_date is not None:
         raise ValueError("Commessa già chiusa.")
-    t.actual_delivery_date = date_type.today()
+    # Data locale (Europe/Rome), come tutto il resto dei servizi: date.today()
+    # segue l'orologio del sistema operativo del server.
+    t.actual_delivery_date = timezone.localdate()
     t.save(update_fields=["actual_delivery_date"])
     return t
 
@@ -385,8 +389,9 @@ def list_reparti():
 # ── Documento CRUD ───────────────────────────────────────────────────────────────────────────────
 def serialize_documento(d, reparto_acronimi=None, testata=None):
     label_map = dict(STATI_INTERNI_CHOICES)
-    latest_rev = d.revisioni.select_related("ext_status").order_by("-rev_no", "-pk").first()
-    rev0 = d.revisioni.filter(rev_no=0).first()
+    # Nessuna query se le revisioni sono già prefetchate (vedi list_documenti).
+    latest_rev = ultima_revisione(d)
+    rev0 = revisione_zero(d)
     # Stato interno dedotto quando quello salvato è vuoto: una revisione con la
     # risposta del cliente (o con le date effettive) non è più da emettere.
     latest_int_status = stato_interno_effettivo_da_revisione(latest_rev) if latest_rev else ""
@@ -462,10 +467,12 @@ def serialize_documento(d, reparto_acronimi=None, testata=None):
 def list_documenti(job):
     t = Testata.objects.get(job=job)
     reparto_acronimi = dict(Reparto.objects.values_list("nome", "acronimo"))
+    # Quattro query in tutto, qualunque sia il numero di documenti:
+    # serialize_documento legge ultima revisione e revisione 0 dal prefetch.
     docs = t.documenti.prefetch_related(
         Prefetch(
             "revisioni",
-            queryset=Revisione.objects.select_related("ext_status").order_by("rev_no"),
+            queryset=Revisione.objects.select_related("ext_status").order_by(*ORDINE_CRESCENTE),
         )
     ).order_by("pk")
     return [serialize_documento(d, reparto_acronimi, testata=t) for d in docs]
@@ -585,7 +592,7 @@ def update_documento(pk, data):
         Revisione.objects.create(documento=d, rev_no=0)
     if "dis_plan_date_rev0" in data:
         dis_plan = _parse_date(data["dis_plan_date_rev0"])
-        rev0 = d.revisioni.filter(rev_no=0).first()
+        rev0 = revisione_zero(d)
         if rev0 is not None:
             rev0.dis_plan_date = dis_plan
             rev0.save(update_fields=["dis_plan_date"])
@@ -774,7 +781,8 @@ def serialize_revisione(r):
 def list_revisioni(doc_pk):
     d = Documento.objects.get(pk=doc_pk)
     return [
-        serialize_revisione(r) for r in d.revisioni.select_related("ext_status").order_by("rev_no")
+        serialize_revisione(r)
+        for r in d.revisioni.select_related("ext_status").order_by(*ORDINE_CRESCENTE)
     ]
 
 
@@ -845,7 +853,7 @@ def esegui_emissione(doc_ids, dis_act_date):
 
     for doc_id in doc_ids:
         doc = Documento.objects.select_related("testata").get(pk=doc_id)
-        rev = doc.revisioni.order_by("-rev_no").first()
+        rev = ultima_revisione(doc)
         if rev is None:
             rev = Revisione.objects.create(documento=doc, rev_no=0)
 
@@ -900,7 +908,7 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
             raise ValueError(f"Risposta cliente non valida: {ext_status_id}.")
 
         doc = Documento.objects.select_related("testata").get(pk=doc_id)
-        rev = doc.revisioni.order_by("-rev_no").first()
+        rev = ultima_revisione(doc)
         if rev is None:
             continue
         # Una bozza rimasta in coda lato client può reinviare un doc_id già

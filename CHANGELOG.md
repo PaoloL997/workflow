@@ -25,6 +25,10 @@
 
 ### Fixed
 
+- Revisioni: "ultima revisione" di un documento si calcola ora con una regola sola in tutta l'applicazione (`core/services/ultima_revisione.py`). Una revisione senza numero (possibile dopo un import dal vecchio Access) non viene più scelta come ultima da emissione e ricezione, mentre sblocco e anomalie la consideravano revisione 0: lo stesso documento aveva due "ultime revisioni" diverse
+- Lista documenti, emissione, ricezione, situazione: l'elenco dei documenti di una commessa costa un numero fisso di query invece di due in più per ogni documento
+- Trasmittal interno: due emissioni simultanee sulla stessa commessa nello stesso giorno non vanno più in errore sul progressivo
+- Le date degli aggiornamenti da Business Central (e di ogni altro orario salvato) si mostrano nel fuso locale: fra mezzanotte e le 2 compariva il giorno prima. La chiusura commessa usa la data locale dell'applicazione invece dell'orologio del server
 - Login: il parametro `next` viene seguito solo se punta a una pagina di questo sito; un indirizzo verso un altro host (o vuoto) porta alla home invece di reindirizzare altrove o dare errore
 - Registrazione e cambio password dal profilo applicano le stesse regole del reset password (lunghezza minima, password troppo comuni, troppo simili ai dati dell'utente, solo numeri): prima bastavano 8 caratteri qualsiasi
 - Gestisci emissione: l'API rifiuta documenti che non appartengono alla commessa indicata; prima li emetteva comunque, marcando le loro revisioni come inviate sotto il numero di trasmittal di un'altra commessa
