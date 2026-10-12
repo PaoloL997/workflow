@@ -12,6 +12,8 @@
 
 ### Changed
 
+- Configurazione: con `DEBUG=False` la `SECRET_KEY` nel `.env` è obbligatoria, l'app non parte senza (prima usava in silenzio una chiave di comodo). I destinatari delle richieste di eliminazione commessa si impostano nel `.env` (`COMMESSA_DELETE_REQUEST_RECIPIENTS`) invece che nel codice
+- Statici (CSS, loghi): in produzione passano da WhiteNoise con nome hashato e versione compressa, quindi il browser li tiene in cache a lungo e li ricarica da solo a ogni aggiornamento. Dopo `git pull` va lanciato `python manage.py collectstatic --noinput` (vedi README)
 - Foto profilo e firme le serve l'applicazione, solo a utenti loggati. Sostituendo una foto o una firma, quella vecchia viene cancellata solo dopo aver salvato la nuova: se lo storage non risponde resta quella di prima e il profilo mostra un errore. Se lo storage non risponde mentre si genera il PDF del trasmittal interno, il passo PDF fallisce in modo visibile (con **Riprova**) invece di emettere la lettera senza firme. Dopo un errore dello storage, per 30 secondi foto e firme rispondono subito con un errore invece di riprovare: se il servizio è fermo l'app non rallenta
 - Informazioni archivio: il toggle **Revisioni con lettera** esce da *Tempi di revisione* e diventa una delle tre scelte della nuova sezione **Revisioni**. Nella pagina della commessa il riquadro dell'archivio mostra *Revisioni: Numero / Lettera / Personalizzata* al posto di *Revisioni con lettere: Sì/No*
 - Trasmittal interno: l'email della lettera parte sempre dalla casella dell'applicazione indicata nel `.env` (`DEFAULT_FROM_EMAIL`, solo l'indirizzo): il server di posta non permette di spedire con l'indirizzo di un altro utente. Chi l'ha compilata ed emessa è scritto nella prima riga del testo (*emesso da Nome Cognome (email)*), riceve le risposte (*Rispondi a*) e una copia. Prima dell'invio, nel pannello di conferma, si può scrivere un messaggio facoltativo per i destinatari: compare nell'email sopra la tabella dei documenti (le note restano nel PDF del modulo) e viene rimandato uguale con **Riprova**. Vale anche quando si usa **Riprova** sul passo Email: conta chi ha emesso la lettera, non chi preme il pulsante
@@ -27,6 +29,7 @@
 
 ### Fixed
 
+- Segnalazioni: le icone **Impostazioni** nella barra di navigazione e della luna nel pulsante del tema erano disegnate male (tracciato SVG corrotto, solo in quella pagina). Barra di navigazione e pulsante del tema sono ora un unico pezzo condiviso da tutte le pagine
 - Logout solo con il pulsante (POST): un link o un'immagine su un'altra pagina non può più chiudere la sessione
 - Gestisci emissione, storico trasmittal: il pulsante di risincronizzazione dalla cartella è riservato a chi può scrivere (prima bastava un indirizzo in GET, anche per chi legge soltanto)
 - Trasmittal interno: un'etichetta di revisione più lunga di 10 caratteri dà un errore chiaro invece di un errore generico del server

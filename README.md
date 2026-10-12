@@ -76,8 +76,15 @@ powershell -ExecutionPolicy Bypass -File .\deploy\iis-workflow-pool.ps1
 ```powershell
 git pull
 poetry install
+poetry run python manage.py migrate
+poetry run python manage.py collectstatic --noinput
 Restart-Service WorkflowWaitress
 ```
+
+`collectstatic` serve perché con `DEBUG=False` gli statici (CSS, loghi) passano da WhiteNoise con
+nome hashato e versione compressa, letti dalla cartella `staticfiles\`: senza, dopo un
+aggiornamento si continuerebbero a servire i file vecchi. Con `DEBUG=False` è obbligatoria anche
+`SECRET_KEY` nel `.env` (l'app non parte senza).
 
 **Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
 recycle del pool IIS).

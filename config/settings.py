@@ -85,13 +85,22 @@ def storage_media_da_env() -> dict:
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# In production, SECRET_KEY must be set in .env — never use the fallback below.
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-change-me-in-production")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 # In production: set DEBUG = False and SESSION_COOKIE_SECURE = True (if using HTTPS).
 DEBUG = env_bool("DEBUG", True)
+
+# SECURITY WARNING: keep the secret key used in production secret!
+# Con DEBUG=False la chiave deve stare nel .env: senza, l'app non parte, meglio
+# che girare in produzione con una chiave nota a tutti. In sviluppo basta il
+# valore di comodo qui sotto.
+SECRET_KEY = os.environ.get("SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "SECRET_KEY mancante nel .env: con DEBUG=False è obbligatoria "
+            "(vedi .env.example per generarne una)."
+        )
+    SECRET_KEY = "django-insecure-solo-per-sviluppo"
 
 ALLOWED_HOSTS = env_list(
     "ALLOWED_HOSTS",
@@ -236,10 +245,11 @@ TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
     "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", ""
 )
 
-# Destinatari per le richieste di eliminazione commessa (lista allargabile).
-COMMESSA_DELETE_REQUEST_RECIPIENTS = [
-    "plitta@brembanarolle.com",
-]
+# Destinatari delle richieste di eliminazione commessa (chi non è admin non
+# elimina: chiede). Lista separata da virgole nel .env, come gli altri indirizzi.
+COMMESSA_DELETE_REQUEST_RECIPIENTS = env_list(
+    "COMMESSA_DELETE_REQUEST_RECIPIENTS", ["plitta@brembanarolle.com"]
+)
 
 
 # Internationalization
@@ -273,10 +283,21 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 STORAGES = {
     "default": storage_media_da_env(),
-    # Lo storage effettivo degli statici da Django 5.1 in poi: la vecchia
-    # STATICFILES_STORAGE (whitenoise manifest) era già ignorata (vedi TECH-DEBT).
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    # In produzione (DEBUG=False) gli statici passano da WhiteNoise con nome
+    # hashato e versione compressa: cache lunga nel browser e file nuovi a ogni
+    # deploy. Richiede ``collectstatic`` dopo ogni ``git pull`` (vedi README);
+    # se il manifest manca si ricade sul nome semplice (config.staticfiles).
+    # In sviluppo i file li serve ``runserver`` così come sono.
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+        if DEBUG
+        else "config.staticfiles.StaticFilesStorage"
+    },
 }
+
+# Rete di sicurezza: se collectstatic non è stato lanciato, WhiteNoise serve
+# comunque gli statici dalle cartelle delle app (non compressi, senza hash).
+WHITENOISE_USE_FINDERS = True
 
 FILESERVER_JOBS_PATH = os.environ.get("FILESERVER_JOBS_PATH", r"Z:\JOBS")
 
