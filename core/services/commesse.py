@@ -867,11 +867,19 @@ def esegui_emissione(doc_ids, dis_act_date):
 # ── Ricezione ────────────────────────────────────────────────────────────────
 
 
+@transaction.atomic
 def esegui_ricezione(entries, crea_nuova_revisione=False):
     """
     entries: list of {doc_id, rec_act_date, ext_status_id, crea_nuova_revisione (optional)}
     crea_nuova_revisione: bool — global default, overridden per entry if specified.
     Returns list of updated/created revision dicts.
+
+    Tutto o niente: un errore su una voce (data malformata, risposta cliente
+    inesistente) annulla anche le voci già elaborate, così l'utente che vede
+    l'errore non si ritrova metà documenti già "ricevuti".
+
+    Raises:
+        ValueError: ``ext_status_id`` non corrisponde a nessuna risposta cliente.
     """
     result = []
     for entry in entries:
@@ -887,6 +895,9 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
             rec_act_date = date_type.fromisoformat(rec_act_date_raw)
         else:
             rec_act_date = rec_act_date_raw
+
+        if ext_status_id is not None and not StatoEsterno.objects.filter(pk=ext_status_id).exists():
+            raise ValueError(f"Risposta cliente non valida: {ext_status_id}.")
 
         doc = Documento.objects.select_related("testata").get(pk=doc_id)
         rev = doc.revisioni.order_by("-rev_no").first()

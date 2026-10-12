@@ -94,10 +94,11 @@ class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento", "firma")}),
     )
+    # I permessi dell'app li aggiunge get_fieldsets, anche nel form di creazione.
     add_fieldsets = UserAdmin.add_fieldsets + (
         ("Profilo", {"fields": ("email", "ruolo", "reparto", "stabilimento")}),
-        ("Permessi", {"fields": ("permesso", "trasmittal_interno_writer")}),
     )
+    CAMPI_PERMESSI_APP = ("permesso", "trasmittal_interno_writer", "is_staff")
     list_display = (
         "username",
         "email",
@@ -113,17 +114,18 @@ class CustomUserAdmin(UserAdmin):
     readonly_fields = ("is_staff",)
 
     def get_fieldsets(self, request, obj=None):
+        """Raggruppa i permessi dell'app in un fieldset proprio, senza doppioni.
+
+        ``is_staff`` va tolto dal fieldset dei permessi di Django: lo si
+        riconosce dai campi e non dal titolo, che è tradotto («Permessi» con
+        l'admin in italiano) e quindi non confrontabile con una stringa fissa.
+        """
         fieldsets = []
         for title, options in super().get_fieldsets(request, obj):
-            if title == "Permissions":
-                fields = tuple(f for f in options["fields"] if f != "is_staff")
-                if fields:
-                    fieldsets.append((title, {**options, "fields": fields}))
-            else:
-                fieldsets.append((title, options))
-        fieldsets.append(
-            ("Permessi app", {"fields": ("permesso", "trasmittal_interno_writer", "is_staff")})
-        )
+            fields = tuple(f for f in options["fields"] if f not in self.CAMPI_PERMESSI_APP)
+            if fields:
+                fieldsets.append((title, {**options, "fields": fields}))
+        fieldsets.append(("Permessi app", {"fields": self.CAMPI_PERMESSI_APP}))
         return tuple(fieldsets)
 
     def get_form(self, request, obj=None, **kwargs):

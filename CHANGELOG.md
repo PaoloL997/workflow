@@ -25,6 +25,12 @@
 
 ### Fixed
 
+- Login: il parametro `next` viene seguito solo se punta a una pagina di questo sito; un indirizzo verso un altro host (o vuoto) porta alla home invece di reindirizzare altrove o dare errore
+- Registrazione e cambio password dal profilo applicano le stesse regole del reset password (lunghezza minima, password troppo comuni, troppo simili ai dati dell'utente, solo numeri): prima bastavano 8 caratteri qualsiasi
+- Gestisci emissione: l'API rifiuta documenti che non appartengono alla commessa indicata; prima li emetteva comunque, marcando le loro revisioni come inviate sotto il numero di trasmittal di un'altra commessa
+- Gestisci ricezione: la registrazione è tutto o niente; prima un errore su una voce (es. risposta cliente inesistente) lasciava le voci precedenti già salvate come ricevute mentre a schermo compariva l'errore
+- Trasmittal interno: un destinatario non valido confermato in anteprima non lascia più nel database una lettera senza PDF, cartella DCC né email (che occupava anche il progressivo del giorno)
+- Admin di Django, scheda Utenti: `is_staff` non compare più due volte nel form di modifica e «Permesso»/«Può scrivere sul trasmittal interno» non compaiono più due volte in quello di creazione (il filtro sui fieldset confrontava un titolo in inglese con l'admin in italiano)
 - Deploy: gli script in `deploy\` (PowerShell, `web.config`) erano salvati in UTF-16 senza BOM, quindi PowerShell non riusciva a leggerli né a eseguirli; ora sono in UTF-8. Rimosso `migrate-to-waitress.cmd`, che puntava a un percorso personale e duplicava `run-migrate-elevated.ps1`
 - `poetry install` falliva su una macchina pulita perché `poetry.lock` non era più allineato a `pyproject.toml`; lock rigenerato, Pillow dichiarata esplicitamente (prima arrivava solo come dipendenza indiretta di fpdf2) e progetto marcato `package-mode = false`
 - Trasmittal interno: nell'elenco delle lettere emesse, se il PDF di una lettera non è sul fileserver la data non è più un link (che portava a una pagina di errore): resta visibile ma grigia, con l'indicazione «PDF non trovato sul fileserver»

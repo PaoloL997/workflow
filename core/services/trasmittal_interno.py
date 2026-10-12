@@ -369,11 +369,19 @@ def _costruisci_destinatari(testata, documenti, siti):
 
     default = indirizzi_default_per_siti([s.codice_bc for s in siti])
     voci += [
-        (email, TipoDestinatarioTransmittalInterno.TO, OrigineDestinatarioTransmittalInterno.DEFAULT)
+        (
+            email,
+            TipoDestinatarioTransmittalInterno.TO,
+            OrigineDestinatarioTransmittalInterno.DEFAULT,
+        )
         for email in default["to"]
     ]
     voci += [
-        (email, TipoDestinatarioTransmittalInterno.CC, OrigineDestinatarioTransmittalInterno.DEFAULT)
+        (
+            email,
+            TipoDestinatarioTransmittalInterno.CC,
+            OrigineDestinatarioTransmittalInterno.DEFAULT,
+        )
         for email in default["cc"]
     ]
 
@@ -1201,12 +1209,16 @@ def emetti_trasmittal_interno(
             f"Il messaggio dell'email può avere al massimo {MAX_MESSAGGIO_EMAIL} caratteri."
         )
     righe = _prepara_righe(testata, righe_payload)
-    trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
-    if messaggio:
-        trasmittal.messaggio_email = messaggio
-        trasmittal.save(update_fields=["messaggio_email"])
-    if destinatari is not None:
-        sostituisci_destinatari(trasmittal, destinatari)
+    # Un'unica transazione: se i destinatari confermati non passano la
+    # validazione, la lettera (e il suo progressivo del giorno) non deve
+    # restare nel database senza PDF, cartella DCC né email.
+    with transaction.atomic():
+        trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
+        if messaggio:
+            trasmittal.messaggio_email = messaggio
+            trasmittal.save(update_fields=["messaggio_email"])
+        if destinatari is not None:
+            sostituisci_destinatari(trasmittal, destinatari)
 
     risultato = {"trasmittal_id": trasmittal.pk, "nome": trasmittal.nome}
 

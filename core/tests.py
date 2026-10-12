@@ -915,6 +915,43 @@ class EmissioneArchiviaApiTest(TestCase):
         response = reader.post("/api/commesse/25089/trasmittal/1/annulla/")
         self.assertEqual(response.status_code, 403)
 
+    def test_emissione_rifiuta_documenti_di_un_altra_commessa(self):
+        """Il trasmittal nasce sulla commessa indicata: un documento di un'altra
+        commessa non va emesso (né la sua revisione marcata "inviata") sotto
+        il numero di trasmittal sbagliato."""
+        altra = Testata.objects.create(job="25090")
+        doc_altra = Documento.objects.create(testata=altra, vendor_doc="25090-A")
+        rev_altra = Revisione.objects.create(documento=doc_altra, rev_no=0)
+
+        response = self.client.post(
+            "/api/emissione/",
+            data=json.dumps(
+                {
+                    "doc_ids": [self.doc.pk, doc_altra.pk],
+                    "dis_act_date": "2026-09-02",
+                    "job": "25089",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("non appartengono alla commessa", response.json()["error"])
+        self.assertFalse(Transmittal.objects.exists())
+        rev_altra.refresh_from_db()
+        self.assertEqual(rev_altra.int_status, "")
+        self.assertIsNone(rev_altra.dis_act_date)
+
+    def test_emissione_rifiuta_doc_ids_non_numerici(self):
+        response = self.client.post(
+            "/api/emissione/",
+            data=json.dumps({"doc_ids": ["abc"], "dis_act_date": "2026-09-02", "job": "25089"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "doc_ids non validi.")
+
 
 class UserStabilimentoTest(TestCase):
     def test_stabilimento_optional(self):
@@ -2705,6 +2742,29 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(risposta.status_code, 400)
         self.assertIn("2000 caratteri", risposta.json()["error"])
         self.assertFalse(TransmittalInterno.objects.filter(testata=self.testata).exists())
+
+    def test_destinatario_non_valido_non_lascia_una_lettera_orfana(self):
+        """La lettera si crea prima della validazione dei destinatari confermati:
+        se questa fallisce, lettera e progressivo del giorno non devono restare
+        nel database (senza PDF, cartella DCC né email), altrimenti il
+        tentativo successivo produce una seconda lettera."""
+        self.client.force_login(self.writer)
+
+        risposta = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps(
+                {
+                    "righe": [self._riga(self.doc_ok)],
+                    "destinatari": [{"email": "non-una-email", "tipo": "to", "origine": "manuale"}],
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("non valido", risposta.json()["error"])
+        self.assertFalse(TransmittalInterno.objects.filter(testata=self.testata).exists())
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_il_pannello_di_conferma_ha_il_campo_messaggio(self):
         self.client.force_login(self.writer)
@@ -4526,6 +4586,27 @@ class EseguiRicezioneTests(TestCase):
         self.assertIsNone(nuova_rev.rec_act_date)
         self.assertIsNone(nuova_rev.ext_status_id)
         self.assertEqual(nuova_rev.int_status, "")
+
+    def test_errore_su_una_voce_annulla_anche_le_voci_precedenti(self):
+        """Tutto o niente: con una risposta cliente inesistente nella seconda
+        voce, la prima (valida) non deve restare salvata come "ricevuta"
+        mentre l'utente vede un errore."""
+        altro_doc = Documento.objects.create(testata=self.testata, vendor_doc="25089-01-516")
+        Revisione.objects.create(
+            documento=altro_doc,
+            rev_no=0,
+            dis_act_date="2026-08-26",
+            int_status="inviato_al_cliente",
+        )
+        voce_rotta = {**self._entry(), "doc_id": altro_doc.pk, "ext_status_id": 999999}
+
+        with self.assertRaises(ValueError):
+            esegui_ricezione([self._entry(), voce_rotta])
+
+        self.rev0.refresh_from_db()
+        self.assertIsNone(self.rev0.rec_act_date)
+        self.assertEqual(self.rev0.int_status, "inviato_al_cliente")
+        self.assertEqual(self.doc.revisioni.count(), 1)
 
 
 def _costruisci_xlsm_organizzazione(percorso, righe):
@@ -9617,3 +9698,157 @@ class TitoloPaginaCommessaViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "<title>Elenco Commesse</title>")
+
+
+class AccessoEPasswordTests(TestCase):
+    """Login: ``next`` solo verso questo sito; password con i validatori di Django."""
+
+    def setUp(self):
+        self.client = Client()
+        self.utente = User.objects.create_user(
+            "accesso_utente", "accesso@brembanarolle.com", "Pw-robusta-2026!"
+        )
+
+    def _login(self, query="", **extra):
+        return self.client.post(
+            f"/login/{query}",
+            {"username": "accesso_utente", "password": "Pw-robusta-2026!", **extra},
+        )
+
+    def test_next_verso_un_altro_host_viene_ignorato(self):
+        for next_url in ("https://altro.example/", "//altro.example/", "http://altro.example"):
+            with self.subTest(next=next_url):
+                self.client.logout()
+                risposta = self._login(f"?next={next_url}")
+
+                self.assertEqual(risposta.status_code, 302)
+                self.assertEqual(risposta["Location"], "/")
+
+    def test_next_interno_viene_rispettato(self):
+        risposta = self._login("?next=/commesse/")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertEqual(risposta["Location"], "/commesse/")
+
+    def test_next_nel_form_viene_rispettato(self):
+        risposta = self._login(next="/commesse/")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertEqual(risposta["Location"], "/commesse/")
+
+    def test_next_vuoto_porta_alla_home_senza_errori(self):
+        risposta = self._login("?next=")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertEqual(risposta["Location"], "/")
+
+    def _registra(self, password, username="nuovo_utente"):
+        return self.client.post(
+            "/register/",
+            {
+                "username": username,
+                "email": f"{username}@brembanarolle.com",
+                "first_name": "Nuovo",
+                "last_name": "Utente",
+                "password1": password,
+                "password2": password,
+            },
+        )
+
+    def test_registrazione_rifiuta_una_password_troppo_comune(self):
+        risposta = self._registra("password1")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertIsNotNone(risposta.context["error"])
+        self.assertFalse(User.objects.filter(username="nuovo_utente").exists())
+
+    def test_registrazione_rifiuta_una_password_uguale_allo_username(self):
+        risposta = self._registra("nuovo_utente", username="nuovo_utente")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertIsNotNone(risposta.context["error"])
+        self.assertFalse(User.objects.filter(username="nuovo_utente").exists())
+
+    def test_registrazione_rifiuta_ancora_una_password_corta(self):
+        risposta = self._registra("Ab1!xyz")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertIsNotNone(risposta.context["error"])
+        self.assertFalse(User.objects.filter(username="nuovo_utente").exists())
+
+    def test_registrazione_accetta_una_password_robusta(self):
+        risposta = self._registra("Fr4se-lunga-e-robusta")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertTrue(User.objects.filter(username="nuovo_utente").exists())
+
+    def _cambia_password(self, nuova):
+        self.client.force_login(self.utente)
+        return self.client.post(
+            "/profilo/",
+            {
+                "action": "change_password",
+                "old_password": "Pw-robusta-2026!",
+                "new_password1": nuova,
+                "new_password2": nuova,
+            },
+        )
+
+    def test_profilo_rifiuta_una_password_troppo_comune(self):
+        risposta = self._cambia_password("password1")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertIn("password", risposta.context["errors"])
+        self.utente.refresh_from_db()
+        self.assertTrue(self.utente.check_password("Pw-robusta-2026!"))
+
+    def test_profilo_accetta_una_password_robusta(self):
+        risposta = self._cambia_password("Altr4-frase-robusta")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta.context["success"], "password")
+        self.utente.refresh_from_db()
+        self.assertTrue(self.utente.check_password("Altr4-frase-robusta"))
+
+
+class AdminUtentiFieldsetsTests(TestCase):
+    """I permessi dell'app stanno in un solo fieldset, senza campi doppi.
+
+    Il filtro sul fieldset dei permessi di Django va fatto sui campi e non
+    sul titolo, che con l'admin in italiano è «Permessi» e non «Permissions»:
+    altrimenti ``is_staff`` compare due volte nel form di modifica e
+    ``permesso``/``trasmittal_interno_writer`` due volte in quello di creazione.
+    """
+
+    def setUp(self):
+        self.model_admin = admin.site._registry[User]
+        self.superuser = User.objects.create_superuser("fs_admin", "fs-admin@b.it", "pw")
+        self.request = RequestFactory().get("/admin/core/user/")
+        self.request.user = self.superuser
+
+    def _campi(self, obj):
+        campi = []
+        for _titolo, opzioni in self.model_admin.get_fieldsets(self.request, obj):
+            campi.extend(opzioni["fields"])
+        return campi
+
+    def test_form_di_modifica_senza_campi_doppi(self):
+        campi = self._campi(self.superuser)
+
+        self.assertEqual(len(campi), len(set(campi)), campi)
+        for campo in ("permesso", "trasmittal_interno_writer", "is_staff", "is_superuser"):
+            self.assertIn(campo, campi)
+
+    def test_form_di_creazione_senza_campi_doppi(self):
+        campi = self._campi(None)
+
+        self.assertEqual(len(campi), len(set(campi)), campi)
+        self.assertIn("permesso", campi)
+        self.assertIn("trasmittal_interno_writer", campi)
+
+    def test_pagine_admin_utente_si_aprono(self):
+        self.client.force_login(self.superuser)
+
+        for url in ("/admin/core/user/add/", f"/admin/core/user/{self.superuser.pk}/change/"):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 200)

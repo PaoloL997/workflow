@@ -6,11 +6,13 @@ from functools import wraps
 import openpyxl
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -156,6 +158,35 @@ def api_login_required(view_func):
 # ── HTML: Auth ───────────────────────────────────────────────────────────────
 
 
+def _destinazione_dopo_login(request):
+    """Dove mandare l'utente dopo il login: ``next`` solo se resta su questo sito.
+
+    Un ``next`` assoluto verso un altro host (``https://altro.example``,
+    ``//altro.example``) sarebbe un open redirect; uno vuoto manderebbe
+    ``redirect("")`` in errore. In entrambi i casi si torna alla home.
+    """
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return next_url
+    return "home"
+
+
+def _errore_password(password, user=None):
+    """Messaggio dei validatori di ``AUTH_PASSWORD_VALIDATORS``, ``None`` se la password va bene.
+
+    Registrazione e cambio password dal profilo devono applicare le stesse
+    regole del reset password (lunghezza minima, password troppo comuni o
+    troppo simili ai dati dell'utente), non un semplice controllo di lunghezza.
+    """
+    try:
+        validate_password(password, user=user)
+    except ValidationError as exc:
+        return " ".join(exc.messages)
+    return None
+
+
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("home")
@@ -166,7 +197,7 @@ def login_view(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect(request.GET.get("next", "home"))
+            return redirect(_destinazione_dopo_login(request))
         error = "Credenziali non valide. Riprova."
     return render(request, "core/login.html", {"error": error})
 
@@ -191,8 +222,11 @@ def register_view(request):
             error = "Username, email e password sono obbligatori."
         elif password1 != password2:
             error = "Le password non coincidono."
-        elif len(password1) < 8:
-            error = "La password deve essere di almeno 8 caratteri."
+        elif errore_pw := _errore_password(
+            password1,
+            User(username=username, email=email, first_name=first_name, last_name=last_name),
+        ):
+            error = errore_pw
         elif not email.lower().endswith("@brembanarolle.com"):
             error = "È necessario usare un'email con dominio @brembanarolle.com."
         elif User.objects.filter(username=username).exists():
@@ -923,6 +957,10 @@ def emissione_api(request):
     dis_act_date = data.get("dis_act_date", "")
     if not doc_ids or not dis_act_date:
         return JsonResponse({"error": "Specificare doc_ids e dis_act_date."}, status=400)
+    try:
+        doc_ids = [int(doc_id) for doc_id in doc_ids]
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "doc_ids non validi."}, status=400)
 
     job = (data.get("job") or "").strip()
     if not job:
@@ -937,6 +975,15 @@ def emissione_api(request):
         testata = Testata.objects.get(job=job)
     except Testata.DoesNotExist:
         return JsonResponse({"error": "Commessa non trovata."}, status=404)
+
+    # Il trasmittal nasce sulla commessa indicata: un documento di un'altra
+    # commessa verrebbe emesso (e la sua revisione marcata "inviata") sotto il
+    # numero di trasmittal sbagliato.
+    trovati = Documento.objects.filter(pk__in=doc_ids, testata=testata).count()
+    if trovati != len(set(doc_ids)):
+        return JsonResponse(
+            {"error": "Uno o più documenti non appartengono alla commessa."}, status=400
+        )
 
     from .services.trasmittal_archivio import emetti_e_archivia
 
@@ -2702,8 +2749,8 @@ def profilo_view(request):
                 errors["password"] = "Inserisci la nuova password."
             elif new_pw1 != new_pw2:
                 errors["password"] = "Le nuove password non coincidono."
-            elif len(new_pw1) < 8:
-                errors["password"] = "La password deve essere di almeno 8 caratteri."
+            elif errore_pw := _errore_password(new_pw1, user):
+                errors["password"] = errore_pw
             else:
                 user.set_password(new_pw1)
                 user.save()
