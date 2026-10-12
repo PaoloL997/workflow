@@ -343,7 +343,7 @@
   const JOB = '{{ job|escapejs }}';
   const REV_LET_FLAG = {{ rev_let_flag|default_if_none:False|yesno:"true,false" }};
   const REV_SEQ = revSequenzaDaPagina('rev-seq-anomalie');
-  const CSRF = document.cookie.match(/workflow_csrftoken=([^;]+)/)?.[1] ?? '';
+  const CSRF = window.CSRF_TOKEN || '';
   const HIGHLIGHT = new URLSearchParams(window.location.search).get('anomalie') === '1';
 
   const banner = document.getElementById('anom-banner');
