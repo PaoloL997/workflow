@@ -12,6 +12,7 @@
 
 ### Changed
 
+- Proposte e segnalazioni: il sottotitolo della pagina spiega che le proposte con almeno 10 voti positivi vengono prese in carico per l'implementazione, per favorire il confronto tra gli stabilimenti e trovare soluzioni condivise
 - Configurazione: con `DEBUG=False` la `SECRET_KEY` nel `.env` è obbligatoria, l'app non parte senza (prima usava in silenzio una chiave di comodo). I destinatari delle richieste di eliminazione commessa si impostano nel `.env` (`COMMESSA_DELETE_REQUEST_RECIPIENTS`) invece che nel codice
 - Statici (CSS, loghi): in produzione passano da WhiteNoise con nome hashato e versione compressa, quindi il browser li tiene in cache a lungo e li ricarica da solo a ogni aggiornamento. Dopo `git pull` va lanciato `python manage.py collectstatic --noinput` (vedi README)
 - Foto profilo e firme le serve l'applicazione, solo a utenti loggati. Sostituendo una foto o una firma, quella vecchia viene cancellata solo dopo aver salvato la nuova: se lo storage non risponde resta quella di prima e il profilo mostra un errore. Se lo storage non risponde mentre si genera il PDF del trasmittal interno, il passo PDF fallisce in modo visibile (con **Riprova**) invece di emettere la lettera senza firme. Dopo un errore dello storage, per 30 secondi foto e firme rispondono subito con un errore invece di riprovare: se il servizio è fermo l'app non rallenta
