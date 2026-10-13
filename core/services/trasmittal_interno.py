@@ -33,6 +33,7 @@ from ..models import (
     TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
     TransmittalInterno,
+    User,
 )
 from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
 from .revisione_label import MAX_LUNGHEZZA_ETICHETTA, format_revisione_label, numero_revisione
@@ -186,19 +187,29 @@ def documenti_ut(testata):
 def elenco_destinazioni_ut(testata):
     """Documenti UT della commessa con le destinazioni cartacee correnti.
 
+    Come ``elenco_selezione_ut``, la cartella UT sul fileserver è scansionata
+    una volta sola per ricavare l'ultima modifica del file di ogni documento.
+
     Returns:
-        Lista di dict ``{"id", "vendor_doc", "doc_title", "codici_bc"}``,
-        ordinata per ``vendor_doc``. ``codici_bc`` è la lista dei
-        ``Stabilimento.codice_bc`` attualmente destinatari del documento.
+        Lista di dict ``{"id", "vendor_doc", "doc_title", "file_modificato_il",
+        "codici_bc"}``, ordinata per ``vendor_doc``. ``codici_bc`` è la lista
+        dei ``Stabilimento.codice_bc`` attualmente destinatari del documento;
+        ``file_modificato_il`` l'ISO datetime del file risolto, o ``None``.
     """
-    documenti = (
+    documenti = list(
         documenti_ut(testata).prefetch_related("destinazioni__stabilimento").order_by("vendor_doc")
     )
+    if not documenti:
+        return []
+    indice_cartella = _indice_cartella_ut(testata)
     return [
         {
             "id": documento.pk,
             "vendor_doc": documento.vendor_doc,
             "doc_title": documento.doc_title,
+            "file_modificato_il": _data_modifica_iso(
+                _cerca_in_indice(indice_cartella, documento.vendor_doc)
+            ),
             "codici_bc": [
                 destinazione.stabilimento.codice_bc for destinazione in documento.destinazioni.all()
             ],
@@ -660,6 +671,27 @@ def _cerca_in_indice(indice, vendor_doc):
     return [f for f in indice if needle in f["nome"].lower()]
 
 
+def _indice_cartella_ut(testata):
+    """File della cartella UT della commessa sul fileserver, in una sola scansione."""
+    reparto = Reparto.objects.filter(acronimo="UT").first()
+    if not (reparto and reparto.acronimo):
+        return []
+    return elenca_cartella(get_base_path(testata.job, reparto.acronimo))
+
+
+def _data_modifica_iso(trovati):
+    """ISO datetime dell'ultima modifica del file, se ``trovati`` ne contiene esattamente uno.
+
+    Con nessun file o più file corrispondenti il documento non ha un file
+    risolto (stessa regola di ``elenco_selezione_ut``): ``None``.
+    """
+    if len(trovati) != 1 or not trovati[0]["mtime"]:
+        return None
+    return datetime.fromtimestamp(
+        trovati[0]["mtime"], tz=timezone.get_current_timezone()
+    ).isoformat()
+
+
 def elenco_selezione_ut(testata):
     """Documenti UT della commessa per la selezione della lettera trasmittal interno.
 
@@ -705,12 +737,7 @@ def elenco_selezione_ut(testata):
     if not documenti:
         return []
 
-    reparto = Reparto.objects.filter(acronimo="UT").first()
-    indice_cartella = (
-        elenca_cartella(get_base_path(testata.job, reparto.acronimo))
-        if reparto and reparto.acronimo
-        else []
-    )
+    indice_cartella = _indice_cartella_ut(testata)
 
     risultato = []
     for documento in documenti:
@@ -742,12 +769,7 @@ def elenco_selezione_ut(testata):
             voce["motivo"] = "Nessun file trovato sul fileserver."
             risultato.append(voce)
             continue
-        mtime = trovati[0]["mtime"]
-        voce["file_modificato_il"] = (
-            datetime.fromtimestamp(mtime, tz=timezone.get_current_timezone()).isoformat()
-            if mtime
-            else None
-        )
+        voce["file_modificato_il"] = _data_modifica_iso(trovati)
         voce["selezionabile"] = True
         risultato.append(voce)
     return risultato
@@ -924,6 +946,46 @@ def sostituisci_destinatari(trasmittal, destinatari_payload):
         DestinatarioTransmittalInterno.objects.bulk_create(
             DestinatarioTransmittalInterno(trasmittal=trasmittal, **d) for d in destinatari
         )
+
+
+def indirizzi_email_noti():
+    """Indirizzi email già presenti nell'applicazione, per l'autocompletamento in anteprima.
+
+    Unisce, in quest'ordine: gli utenti attivi, gli indirizzi attivi degli
+    stabilimenti, quelli di default del trasmittal interno e i destinatari
+    delle lettere già emesse (compresi quelli aggiunti a mano). Deduplica
+    senza distinguere maiuscole/minuscole, come ``_deduplica_destinatari``: a
+    parità di indirizzo resta la prima fonte, così un utente tiene il suo nome.
+
+    Returns:
+        Lista di dict ``{"email", "nome"}`` ordinata per email. ``nome`` è il
+        nome dell'utente, "Stabilimento <sigla>" o ``""``.
+    """
+    candidati = [
+        (utente.email, utente.nome_completo)
+        for utente in User.objects.filter(is_active=True).exclude(email="")
+    ]
+    for modello in (IndirizzoStabilimento, IndirizzoDefaultTrasmittalInterno):
+        candidati += [
+            (email, f"Stabilimento {sigla or nome}")
+            for email, sigla, nome in modello.objects.filter(attivo=True).values_list(
+                "email", "stabilimento__sigla", "stabilimento__nome"
+            )
+        ]
+    candidati += [
+        (email, "")
+        for email in DestinatarioTransmittalInterno.objects.order_by()
+        .values_list("email", flat=True)
+        .distinct()
+    ]
+
+    per_chiave = {}
+    for email, nome in candidati:
+        email = (email or "").strip()
+        chiave = email.lower()
+        if chiave and chiave not in per_chiave:
+            per_chiave[chiave] = {"email": email, "nome": nome}
+    return sorted(per_chiave.values(), key=lambda voce: voce["email"].lower())
 
 
 def _tabella_testo_righe(trasmittal):

@@ -212,6 +212,7 @@
     white-space: nowrap;
   }
   .ti-tbl th.col-doc { width: auto; }
+  .ti-tbl th.col-modifica { width: 1%; }
   .ti-tbl th.col-chk { width: 40px; text-align: center; }
   .ti-tbl tbody tr {
     border-bottom: 1px solid var(--color-border);
@@ -224,6 +225,7 @@
 
   .doc-code { font-weight: 700; font-size: 13px; color: var(--color-accent); letter-spacing: -0.01em; }
   .cell-title { font-size: 12px; color: var(--color-text-secondary); }
+  .cell-modifica { font-size: 12px; color: var(--color-text-secondary); opacity: 0.75; white-space: nowrap; }
   .cell-motivo {
     font-size: 11px;
     color: var(--color-danger);
@@ -673,6 +675,7 @@
   }
 
 </style>
+{% include "core/partials/doc_list_filter_styles.html" %}
 {% endblock %}
 
 {% block content %}
@@ -733,6 +736,7 @@
 
     <div class="ti-ctrl" style="margin-bottom:0;">
       <input type="search" class="ctrl-input" id="sel-search" style="max-width:280px;" placeholder="Cerca documento…" autocomplete="off">
+      <div class="list-filter-summary" id="sel-filter-summary"></div>
       {% if not user.can_write %}
         <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
       {% endif %}
@@ -740,15 +744,9 @@
 
     <div class="modal-body">
       <table class="ti-tbl">
-        <thead id="sel-thead">
-          <tr>
-            <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="sel-all" onchange="toggleTuttiSelezione(this.checked)"></div></th>
-            <th class="col-doc">Documento</th>
-            <th>Siti coinvolti</th>
-          </tr>
-        </thead>
+        <thead id="sel-thead"></thead>
         <tbody id="sel-tbody">
-          <tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
+          <tr><td colspan="5"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -809,6 +807,9 @@
 <!-- ── Siti coinvolti di un documento: stesso menu a tendina delle note ── -->
 <div class="ti-nota-dropdown" id="siti-dropdown"></div>
 
+<!-- ── Filtri per colonna degli elenchi documenti (come Gestisci emissione) ── -->
+{% include "core/partials/doc_list_filter_popover.html" %}
+
 <!-- ── A chi va: destinatari, conferma, esito emissione ── -->
 <div class="modal-overlay" id="conferma-modal" role="dialog" aria-modal="true" aria-labelledby="conferma-title">
   <div class="modal-box" style="max-width:640px;">
@@ -821,6 +822,8 @@
     </div>
   </div>
 </div>
+<!-- Indirizzi già presenti nell'applicazione: suggerimenti per i destinatari TO/CC -->
+<datalist id="email-suggerimenti"></datalist>
 
 <!-- ── Destinazioni: siti coinvolti per tutti i documenti UT ── -->
 <div class="modal-overlay" id="destinazioni-modal" role="dialog" aria-modal="true" aria-labelledby="destinazioni-title">
@@ -833,6 +836,7 @@
       <button type="button" class="btn-secondary" onclick="destBulkAssegnaSiti(true)">Aggiungi</button>
       <button type="button" class="btn-secondary" onclick="destBulkAssegnaSiti(false)">Rimuovi</button>
       <span class="status-msg" id="dest-bulk-status"></span>
+      <div class="list-filter-summary" id="dest-filter-summary"></div>
       {% if not user.can_write %}
         <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
       {% endif %}
@@ -840,15 +844,9 @@
 
     <div class="modal-body">
       <table class="ti-tbl">
-        <thead>
-          <tr>
-            <th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="dest-all" onchange="toggleTuttiDest(this.checked)"></div></th>
-            <th class="col-doc">Documento</th>
-            <th>Siti coinvolti</th>
-          </tr>
-        </thead>
+        <thead id="dest-thead"></thead>
         <tbody id="dest-tbody">
-          <tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
+          <tr><td colspan="5"><div class="ti-loading"><div class="ti-spinner"></div><p>Caricamento documenti&hellip;</p></div></td></tr>
         </tbody>
       </table>
     </div>
@@ -864,6 +862,7 @@
 {% include "core/partials/theme_toggle.html" %}
 
 {{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
+{% include "core/partials/doc_list_filters_js.html" %}
 <script>
 (function () {
   'use strict';
@@ -978,6 +977,77 @@
   };
 
   /* ══════════════════════════════════════════════════
+     Elenchi documenti (Nuova lettera, Destinazioni): ordinamento e filtri
+     per colonna, gli stessi di Gestisci emissione (DocListFilters). Uno
+     stato solo per la pagina: ogni modale lo reinizializza all'apertura.
+  ══════════════════════════════════════════════════ */
+  // L'ISO arriva già nell'ora di Roma: data e ora si leggono dalla stringa.
+  function fmtDataOra(iso) {
+    return iso ? formatDate(iso) + ', ' + String(iso).slice(11, 16) : '—';
+  }
+
+  function sigleSiti(d) {
+    return (d.siti || []).map(function (s) { return s.sigla || ''; }).join(', ');
+  }
+
+  function initFiltriDocumenti(getDocs, onApply, summaryId) {
+    DocListFilters.init({
+      filterLabels: {
+        vendor_doc: 'Documento',
+        doc_title: 'Titolo',
+        file_modificato_il: 'Ultima modifica',
+        siti: 'Siti coinvolti',
+      },
+      dateFilterKeys: ['file_modificato_il'],
+      getDocs: getDocs,
+      getCellValue: function (d, key) {
+        if (key === 'siti') return sigleSiti(d);
+        return d[key] || '';
+      },
+      getDateValue: function (d, key) {
+        return key === 'file_modificato_il' ? (d.file_modificato_il || '') : '';
+      },
+      getSortValue: function (d, key) { return d[key] || ''; },
+      // File modificati più di recente in cima; documenti senza file in coda.
+      defaultSort: function (docs) {
+        return docs.sort(function (a, b) {
+          var aT = a.file_modificato_il ? new Date(a.file_modificato_il).getTime() : null;
+          var bT = b.file_modificato_il ? new Date(b.file_modificato_il).getTime() : null;
+          if (aT !== bT) {
+            if (aT === null) return 1;
+            if (bT === null) return -1;
+            return bT - aT;
+          }
+          return (a.vendor_doc || '').localeCompare(b.vendor_doc || '', undefined, { numeric: true, sensitivity: 'base' });
+        });
+      },
+      onApply: onApply,
+      summaryId: summaryId,
+    });
+    var summary = document.getElementById(summaryId);
+    if (summary) { summary.style.display = 'none'; summary.innerHTML = ''; }
+  }
+
+  function theadDocumentiHtml(selectAllId, onToggle) {
+    return '<tr>'
+      + '<th class="col-chk"><div class="th-chk-wrap"><input type="checkbox" class="rchk" id="' + selectAllId + '" onchange="' + onToggle + '(this.checked)"></div></th>'
+      + DocListFilters.thHeader('Documento', 'vendor_doc', true, { className: 'col-doc' })
+      + DocListFilters.thHeader('Titolo', 'doc_title', true)
+      + DocListFilters.thHeader('Ultima modifica', 'file_modificato_il', true, {
+        className: 'col-modifica',
+        extraAttrs: ' title="Ultima modifica del file in PROGETTO/UT sul fileserver"',
+      })
+      + DocListFilters.thHeader('Siti coinvolti', 'siti', false)
+      + '</tr>';
+  }
+
+  function celleDocumentoHtml(d, extraDoc) {
+    return '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>' + (extraDoc || '') + '</td>'
+      + '<td><div class="cell-title">' + escHtml(d.doc_title || '') + '</div></td>'
+      + '<td><span class="cell-modifica">' + escHtml(fmtDataOra(d.file_modificato_il)) + '</span></td>';
+  }
+
+  /* ══════════════════════════════════════════════════
      Nuova lettera — selezione documenti + siti coinvolti
   ══════════════════════════════════════════════════ */
   let _docsSel = [];
@@ -985,8 +1055,6 @@
   let _selezionati = new Set();
   let _stabilimenti = [];
   let _searchSel = '';
-
-  function nomeDocSel(d) { return d.doc_title || d.vendor_doc || ('Documento #' + d.id); }
 
   function sitiCellHtmlSel(d) {
     var chips = (d.siti && d.siti.length)
@@ -998,12 +1066,12 @@
 
   function emptySelTbl(msg) {
     document.getElementById('sel-tbody').innerHTML =
-      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+      '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
   }
 
   function loadingSelTbl(msg) {
     document.getElementById('sel-tbody').innerHTML =
-      '<tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
+      '<tr><td colspan="5"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
   }
 
   function renderSelTbl(docs) {
@@ -1020,9 +1088,7 @@
         + (rigaCliccabile ? ' onclick="rigaSelClick(event, ' + d.id + ')"' : '') + '>'
         + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk sel-chk"' + (checked ? ' checked' : '') + disabledAttr
         + ' onchange="toggleSelezioneRiga(' + d.id + ', this.checked)"></div></td>'
-        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
-        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '')
-        + motivo + '</td>'
+        + celleDocumentoHtml(d, motivo)
         + '<td id="sel-siti-cell-' + d.id + '">' + sitiCellHtmlSel(d) + '</td>'
         + '</tr>';
     }).join('');
@@ -1044,10 +1110,15 @@
 
   function docTestoRicercaSel(d) { return ((d.vendor_doc || '') + ' ' + (d.doc_title || '')).toLowerCase(); }
 
+  function renderTheadSel() {
+    document.getElementById('sel-thead').innerHTML = theadDocumentiHtml('sel-all', 'toggleTuttiSelezione');
+  }
+
   function applyAndRenderSel() {
     var q = _searchSel.trim().toLowerCase();
-    _visibiliSel = (q ? _docsSel.filter(function (d) { return docTestoRicercaSel(d).indexOf(q) !== -1; }) : _docsSel.slice())
-      .sort(function (a, b) { return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' }); });
+    var cercati = q ? _docsSel.filter(function (d) { return docTestoRicercaSel(d).indexOf(q) !== -1; }) : _docsSel;
+    renderTheadSel();
+    _visibiliSel = DocListFilters.applyPipeline(cercati);
     renderSelTbl(_visibiliSel);
     aggiornaSelAll(_visibiliSel);
     updSelCounter();
@@ -1100,21 +1171,18 @@
   window.apriNuovaLettera = async function () {
     document.getElementById('nuova-modal').classList.add('open');
     _selezionati = new Set();
+    _visibiliSel = [];
     _searchSel = '';
     document.getElementById('sel-search').value = '';
+    initFiltriDocumenti(function () { return _docsSel; }, applyAndRenderSel, 'sel-filter-summary');
+    renderTheadSel();
     loadingSelTbl('Caricamento documenti… la verifica dei file sul fileserver può richiedere qualche secondo.');
     try {
-      const [rSel, rDest] = await Promise.all([
-        fetch(baseUrl() + 'selezione/'),
-        fetch(baseUrl() + 'destinazioni/'),
-      ]);
-      if (!rSel.ok) { emptySelTbl('Errore nel caricamento.'); return; }
-      const dSel = await rSel.json();
-      _docsSel = dSel.documenti || [];
-      if (rDest.ok) {
-        const dDest = await rDest.json();
-        _stabilimenti = dDest.stabilimenti || [];
-      }
+      const r = await fetch(baseUrl() + 'selezione/');
+      if (!r.ok) { emptySelTbl('Errore nel caricamento.'); return; }
+      const d = await r.json();
+      _docsSel = d.documenti || [];
+      _stabilimenti = d.stabilimenti || [];
       applyAndRenderSel();
     } catch {
       emptySelTbl('Errore di rete.');
@@ -1513,8 +1581,28 @@
   var ORIGINE_LABELS = { stabilimento: 'Stabilimenti', pm: 'PM', pe: 'PE', qci: 'QCI', export: 'Export', manuale: 'Manuale' };
   var ORIGINE_ORDER = ['stabilimento', 'pm', 'pe', 'qci', 'export', 'manuale'];
 
+  // Indirizzi già presenti nell'applicazione, suggeriti nei campi TO/CC
+  // (datalist #email-suggerimenti): caricati una volta sola per pagina.
+  var _indirizziNotiCaricati = false;
+
+  async function caricaIndirizziNoti() {
+    if (_indirizziNotiCaricati) return;
+    _indirizziNotiCaricati = true;
+    try {
+      const r = await fetch('/api/trasmittal-interno/indirizzi-email/');
+      if (!r.ok) { _indirizziNotiCaricati = false; return; }
+      const data = await r.json();
+      document.getElementById('email-suggerimenti').innerHTML = (data.indirizzi || []).map(function (x) {
+        return '<option value="' + escHtml(x.email) + '">' + escHtml(x.nome || '') + '</option>';
+      }).join('');
+    } catch {
+      _indirizziNotiCaricati = false;
+    }
+  }
+
   window.apriConferma = async function () {
     if (!requireWriteTI()) return;
+    caricaIndirizziNoti();
     _esitoMostrato = false;
     document.getElementById('componi-modal').classList.remove('open');
     document.getElementById('conferma-modal').classList.add('open');
@@ -1604,9 +1692,20 @@
     var input = document.getElementById(inputId);
     var email = input.value.trim();
     if (!email) return;
-    _destinatariCorrenti.push({ email: email, tipo: tipo, origine: 'manuale' });
+    var chiave = email.toLowerCase();
+    var giaPresente = _destinatariCorrenti.some(function (d) {
+      return d.tipo === tipo && d.email.trim().toLowerCase() === chiave;
+    });
+    if (!giaPresente) _destinatariCorrenti.push({ email: email, tipo: tipo, origine: 'manuale' });
     input.value = '';
     renderDestinatari();
+  };
+
+  // Invio nel campo = "+": si sceglie un suggerimento e lo si aggiunge da tastiera.
+  window.tastoDestinatario = function (e, tipo) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    aggiungiDestinatario(tipo);
   };
 
   function renderConferma(anteprima) {
@@ -1643,11 +1742,13 @@
       + '<div class="ti-dest-cols" style="margin-top:14px;">'
       + '<div><div class="ti-dest-col-title">A (TO)</div>'
       + '<div id="dest-to-list"></div>'
-      + '<div class="ti-dest-add"><input type="email" id="dest-to-input" class="ctrl-input" placeholder="Aggiungi email…">'
+      + '<div class="ti-dest-add"><input type="email" id="dest-to-input" class="ctrl-input" placeholder="Aggiungi email…"'
+      + ' list="email-suggerimenti" autocomplete="off" onkeydown="tastoDestinatario(event, \'to\')">'
       + '<button type="button" class="btn-secondary" onclick="aggiungiDestinatario(\'to\')">+</button></div></div>'
       + '<div><div class="ti-dest-col-title">CC</div>'
       + '<div id="dest-cc-list"></div>'
-      + '<div class="ti-dest-add"><input type="email" id="dest-cc-input" class="ctrl-input" placeholder="Aggiungi email…">'
+      + '<div class="ti-dest-add"><input type="email" id="dest-cc-input" class="ctrl-input" placeholder="Aggiungi email…"'
+      + ' list="email-suggerimenti" autocomplete="off" onkeydown="tastoDestinatario(event, \'cc\')">'
       + '<button type="button" class="btn-secondary" onclick="aggiungiDestinatario(\'cc\')">+</button></div></div>'
       + '</div>'
       + '<div class="ti-messaggio-wrap">'
@@ -1788,6 +1889,7 @@
      Destinazioni — siti coinvolti per tutti i documenti UT
   ══════════════════════════════════════════════════ */
   let _docsDest = [];
+  let _visibiliDest = [];
   let _selezionatiDest = new Set();
 
   function sitiCellHtmlDest(d) {
@@ -1800,44 +1902,48 @@
 
   function emptyDestTbl(msg) {
     document.getElementById('dest-tbody').innerHTML =
-      '<tr><td colspan="3" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
+      '<tr><td colspan="5" style="padding:48px;text-align:center;color:var(--color-text-secondary);opacity:.45;font-style:italic;">' + escHtml(msg) + '</td></tr>';
   }
 
   function loadingDestTbl(msg) {
     document.getElementById('dest-tbody').innerHTML =
-      '<tr><td colspan="3"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
+      '<tr><td colspan="5"><div class="ti-loading"><div class="ti-spinner"></div><p>' + escHtml(msg) + '</p></div></td></tr>';
   }
 
   function renderDestTbl(docs) {
-    if (!docs.length) { emptyDestTbl('Nessun documento UT per questa commessa.'); return; }
-    document.getElementById('dest-tbody').innerHTML = docs.slice().sort(function (a, b) {
-      return nomeDocSel(a).localeCompare(nomeDocSel(b), 'it', { sensitivity: 'base' });
-    }).map(function (d) {
+    if (!_docsDest.length) { emptyDestTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!docs.length) { emptyDestTbl('Nessun documento corrisponde al filtro.'); return; }
+    document.getElementById('dest-tbody').innerHTML = docs.map(function (d) {
       var checked = _selezionatiDest.has(d.id);
       return '<tr data-id="' + d.id + '" class="ti-row-selectable" onclick="rigaDestClick(event, ' + d.id + ')">'
         + '<td><div class="td-chk-wrap"><input type="checkbox" class="rchk"' + (checked ? ' checked' : '')
         + ' onchange="toggleSelezioneRigaDest(' + d.id + ', this.checked)"></div></td>'
-        + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>'
-        + (d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '') + '</td>'
+        + celleDocumentoHtml(d)
         + '<td id="dest-siti-cell-' + d.id + '">' + sitiCellHtmlDest(d) + '</td>'
         + '</tr>';
     }).join('');
   }
 
   function aggiornaDestAll() {
-    var n = _docsDest.filter(function (d) { return _selezionatiDest.has(d.id); }).length;
+    var n = _visibiliDest.filter(function (d) { return _selezionatiDest.has(d.id); }).length;
     var all = document.getElementById('dest-all');
     if (!all) return;
-    all.checked = _docsDest.length > 0 && n === _docsDest.length;
-    all.indeterminate = n > 0 && n < _docsDest.length;
+    all.checked = _visibiliDest.length > 0 && n === _visibiliDest.length;
+    all.indeterminate = n > 0 && n < _visibiliDest.length;
   }
 
   function updDestCounter() {
     document.getElementById('dest-counter').innerHTML = '<strong>' + _selezionatiDest.size + '</strong> selezionat' + (_selezionatiDest.size === 1 ? 'o' : 'i');
   }
 
+  function renderTheadDest() {
+    document.getElementById('dest-thead').innerHTML = theadDocumentiHtml('dest-all', 'toggleTuttiDest');
+  }
+
   function applyAndRenderDest() {
-    renderDestTbl(_docsDest);
+    renderTheadDest();
+    _visibiliDest = DocListFilters.applyPipeline(_docsDest);
+    renderDestTbl(_visibiliDest);
     aggiornaDestAll();
     updDestCounter();
   }
@@ -1855,8 +1961,10 @@
     toggleSelezioneRigaDest(id, cb.checked);
   };
 
+  // Solo le righe visibili: con un filtro attivo, Aggiungi/Rimuovi non deve
+  // toccare documenti nascosti.
   window.toggleTuttiDest = function (checked) {
-    _docsDest.forEach(function (d) {
+    _visibiliDest.forEach(function (d) {
       if (checked) _selezionatiDest.add(d.id); else _selezionatiDest.delete(d.id);
     });
     applyAndRenderDest();
@@ -1926,7 +2034,10 @@
   window.apriDestinazioni = async function () {
     document.getElementById('destinazioni-modal').classList.add('open');
     _selezionatiDest = new Set();
-    loadingDestTbl('Caricamento documenti…');
+    _visibiliDest = [];
+    initFiltriDocumenti(function () { return _docsDest; }, applyAndRenderDest, 'dest-filter-summary');
+    renderTheadDest();
+    loadingDestTbl('Caricamento documenti… la verifica dei file sul fileserver può richiedere qualche secondo.');
     try {
       const r = await fetch(baseUrl() + 'destinazioni/');
       if (!r.ok) { emptyDestTbl('Errore nel caricamento.'); return; }

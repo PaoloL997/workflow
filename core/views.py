@@ -131,6 +131,7 @@ from .services.trasmittal_interno import (
     emetti_trasmittal_interno,
     imposta_destinazione_stabilimento_bulk,
     imposta_destinazioni_ut,
+    indirizzi_email_noti,
     indirizzi_per_siti,
     invia_email_trasmittal,
     mittente_trasmittal,
@@ -1037,16 +1038,20 @@ def stabilimenti_api(request):
 # ── API: Trasmittal interno — destinazioni cartacee ────────────────────────────
 
 
+def _stabilimenti_costruttivi_payload():
+    return [
+        {"codice_bc": s.codice_bc, "sigla": s.sigla, "nome": s.nome}
+        for s in stabilimenti_costruttivi()
+    ]
+
+
 @api_login_required
 @require_http_methods(["GET"])
 @con_commessa
 def trasmittal_interno_destinazioni_api(request, job, testata):
     return JsonResponse(
         {
-            "stabilimenti": [
-                {"codice_bc": s.codice_bc, "sigla": s.sigla, "nome": s.nome}
-                for s in stabilimenti_costruttivi()
-            ],
+            "stabilimenti": _stabilimenti_costruttivi_payload(),
             "documenti": elenco_destinazioni_ut(testata),
         }
     )
@@ -1121,7 +1126,19 @@ def _sigle_stabilimento_per_email(righe):
 @require_http_methods(["GET"])
 @con_commessa
 def trasmittal_interno_selezione_api(request, job, testata):
-    return JsonResponse({"documenti": elenco_selezione_ut(testata)})
+    return JsonResponse(
+        {
+            "stabilimenti": _stabilimenti_costruttivi_payload(),
+            "documenti": elenco_selezione_ut(testata),
+        }
+    )
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_indirizzi_email_api(request):
+    """Indirizzi già presenti nell'applicazione, per l'autocompletamento dei destinatari."""
+    return JsonResponse({"indirizzi": indirizzi_email_noti()})
 
 
 @api_login_required

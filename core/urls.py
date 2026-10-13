@@ -206,6 +206,11 @@ urlpatterns = [
         name="trasmittal_interno_anteprima_pdf_api",
     ),
     path(
+        "api/trasmittal-interno/indirizzi-email/",
+        views.trasmittal_interno_indirizzi_email_api,
+        name="trasmittal_interno_indirizzi_email_api",
+    ),
+    path(
         "api/commesse/<str:job>/trasmittal-interno/emetti/",
         views.trasmittal_interno_emetti_api,
         name="trasmittal_interno_emetti_api",

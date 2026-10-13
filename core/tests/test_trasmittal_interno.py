@@ -1,6 +1,7 @@
 import json
+import os
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,10 +15,12 @@ from django.test import Client, RequestFactory, SimpleTestCase, TestCase, overri
 from django.utils import timezone
 
 from ..models import (
+    DestinatarioTransmittalInterno,
     Documento,
     FirmatarioStabilimento,
     IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
+    OrigineDestinatarioTransmittalInterno,
     Permesso,
     PersonaCommessa,
     Reparto,
@@ -31,6 +34,7 @@ from ..models import (
     TipoIndirizzoStabilimento,
     TransmittalInterno,
 )
+from ..services.fileserver import get_base_path
 from ..services.media import StorageNonDisponibile
 from ..services.trasmittal_interno import (
     componi_nome,
@@ -1035,6 +1039,32 @@ class TrasmittalInternoLetteraTests(TestCase):
         # Lo stepper parte dal numero: dall'etichetta sola non si ricaverebbe.
         self.assertEqual(voce["revisione_corrente_numero"], 1)
 
+    def test_selezione_riporta_i_siti_costruttivi(self):
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        self.assertEqual(
+            risposta.json()["stabilimenti"],
+            [{"codice_bc": 1, "sigla": "BG", "nome": "Valbrembo"}],
+        )
+
+    def test_selezione_e_destinazioni_riportano_l_ultima_modifica_del_file(self):
+        percorso = get_base_path(self.testata.job, "UT") / f"{self.doc_ok.vendor_doc} Rev A.pdf"
+        istante = timezone.make_aware(datetime(2026, 3, 2, 9, 30)).timestamp()
+        os.utime(percorso, (istante, istante))
+        self.client.force_login(self.reader)
+
+        for path in ("selezione/", "destinazioni/"):
+            with self.subTest(path=path):
+                risposta = self.client.get(self._url(path))
+
+                documenti = {d["id"]: d for d in risposta.json()["documenti"]}
+                self.assertEqual(
+                    documenti[self.doc_ok.pk]["file_modificato_il"], "2026-03-02T09:30:00+01:00"
+                )
+                self.assertIsNone(documenti[self.doc_senza_file.pk]["file_modificato_il"])
+
     # -- anteprima --
 
     def test_anteprima_pdf_con_storage_irraggiungibile_risponde_503(self):
@@ -1993,3 +2023,73 @@ class TrasmittalInternoPermessoRistrettoTests(TestCase):
 
         self.assertEqual(risposta.status_code, 200)
         self.assertContains(risposta, "Trasmittal interno")
+
+
+class IndirizziEmailNotiApiTests(TestCase):
+    """Suggerimenti per i destinatari TO/CC del pannello di conferma."""
+
+    URL = "/api/trasmittal-interno/indirizzi-email/"
+
+    def setUp(self):
+        self.client = Client()
+        self.utente = User.objects.create_user(
+            "tie_utente", "mario.rossi@b.it", "pw", first_name="Mario", last_name="Rossi"
+        )
+        User.objects.create_user("tie_inattivo", "inattivo@b.it", "pw", is_active=False)
+
+        bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        IndirizzoStabilimento.objects.create(
+            stabilimento=bg, email="spento@b.it", tipo=TipoIndirizzoStabilimento.CC, attivo=False
+        )
+        IndirizzoDefaultTrasmittalInterno.objects.create(
+            stabilimento=bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+        )
+
+        trasmittal = TransmittalInterno.objects.create(
+            testata=Testata.objects.create(job="99096"),
+            data=date(2026, 1, 1),
+            progressivo=1,
+            nome="99096_2026-01-01_E1",
+            creato_da=self.utente,
+        )
+        for email in ("esterno@x.it", "Mario.Rossi@B.it"):
+            DestinatarioTransmittalInterno.objects.create(
+                trasmittal=trasmittal,
+                email=email,
+                tipo=TipoDestinatarioTransmittalInterno.TO,
+                origine=OrigineDestinatarioTransmittalInterno.MANUALE,
+            )
+
+    def _indirizzi(self):
+        self.client.force_login(self.utente)
+        risposta = self.client.get(self.URL)
+        self.assertEqual(risposta.status_code, 200)
+        return risposta.json()["indirizzi"]
+
+    def test_richiede_login(self):
+        self.assertEqual(self.client.get(self.URL).status_code, 401)
+
+    def test_unisce_utenti_stabilimenti_default_e_destinatari_gia_usati(self):
+        self.assertEqual(
+            self._indirizzi(),
+            [
+                {"email": "bg@b.it", "nome": "Stabilimento BG"},
+                {"email": "esterno@x.it", "nome": ""},
+                {"email": "mario.rossi@b.it", "nome": "Mario Rossi"},
+                {"email": "qualita@b.it", "nome": "Stabilimento BG"},
+            ],
+        )
+
+    def test_esclude_utenti_e_indirizzi_non_attivi(self):
+        email = {voce["email"] for voce in self._indirizzi()}
+
+        self.assertNotIn("inattivo@b.it", email)
+        self.assertNotIn("spento@b.it", email)
+
+    def test_deduplica_senza_distinguere_maiuscole_e_tiene_il_nome_dell_utente(self):
+        voci = [v for v in self._indirizzi() if v["email"].lower() == "mario.rossi@b.it"]
+
+        self.assertEqual(voci, [{"email": "mario.rossi@b.it", "nome": "Mario Rossi"}])
