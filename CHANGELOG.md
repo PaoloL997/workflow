@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-10-13
+
 ### Added
 
 - Trasmittal interno, pannello **A chi va**: scrivendo nei campi A (TO) e CC compaiono come suggerimenti gli indirizzi email già presenti in Workflow: utenti attivi (con il nome), indirizzi degli stabilimenti e di default, destinatari delle lettere già emesse, compresi quelli aggiunti a mano. **Invio** aggiunge l'indirizzo come il pulsante **+**, e un indirizzo già presente nella stessa colonna non viene ripetuto

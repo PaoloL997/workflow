@@ -1098,7 +1098,7 @@
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
   </svg>
-  v0.1.5
+  v0.1.6
 </button>
 
 <!-- ── Modal: Changelog / version ── -->
@@ -1110,7 +1110,7 @@
           <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
         </svg>
         <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
-        <span class="version-modal-tag">v0.1.5</span>
+        <span class="version-modal-tag">v0.1.6</span>
       </div>
       <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
     </div>
@@ -1118,30 +1118,29 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
-          <li>Situazione documenti, vista orizzontale: <strong>Filtra per risposta del cliente</strong> tiene i documenti in base a come sta l’ultima revisione, a spunte multiple. Ci sono le risposte del cliente in uso più <em>Inviato al Cliente</em> e <em>Da inviare</em>, così si includono o si escludono in un colpo solo i documenti in attesa di risposta e quelli mai inviati</li>
-          <li>Situazione documenti, vista verticale: <strong>Mostra solo ultima revisione</strong> riduce la tabella a una riga per documento, quella dell’ultima revisione</li>
-          <li>Con un filtro attivo l’export di situazione documenti contiene solo i documenti rimasti a schermo — e solo l’ultima revisione se il pulsante è acceso. Vale per Excel e PDF, in entrambe le viste e con tutti i filtri, anche quelli di colonna</li>
-          <li>Notifiche sui commenti: quando qualcuno commenta un thread di feature o problemi, la campanella avvisa chi lo ha aperto e chi lo ha già commentato. Resta una notifica sola per thread, che torna da leggere ad ogni nuovo commento</li>
-          <li>Barra di ricerca: digitando il codice completo di una commessa e premendo <strong>Invio</strong> si apre direttamente la sua pagina</li>
-          <li>Anche la vista orizzontale di situazione documenti ha l’export in Excel accanto a quello in PDF, con la tabella riprodotta com’è a schermo</li>
+          <li>Trasmittal interno, <strong>A chi va</strong>: scrivendo un indirizzo nei campi A e CC compaiono quelli già presenti in Workflow; <strong>Invio</strong> lo aggiunge</li>
+          <li>Informazioni archivio: nuova sezione <strong>Revisioni</strong> per indicarle con numero, lettera o una sequenza personalizzata</li>
+          <li>Informazioni archivio: pulsante <strong>Aggiorna da BC</strong> per allineare subito la commessa a Business Central, e nuovo campo <strong>Sito costruttivo</strong></li>
+          <li>Trasmittal interno: le destinazioni cartacee dei documenti UT si precompilano dal vecchio file <em>RecipientsData</em> del fileserver</li>
         </ul>
       </section>
       <section>
         <h3 class="version-modal-section-title">Modifiche</h3>
         <ul class="version-modal-list">
-          <li>Situazione documenti, vista orizzontale: a colorarsi è solo la colonna <strong>B&amp;R Doc</strong>, che da sola dice come sta il documento; le celle Status riportano la lettera senza colore. Il colore è quello dell’ultimo stato: giallo <em>Inviato al Cliente</em> se l’ultima revisione è partita e la risposta manca ancora, altrimenti il colore dell’ultima risposta arrivata, grigio <em>Da inviare</em> per i documenti mai inviati e mai valutati</li>
-          <li>Nuovi colori delle risposte del cliente: Approved e For Information verde, i due Commented rosso, Final - As Built e Superseeded blu, Old quasi nero, Rejected nero. Valgono ovunque, legende ed export compresi</li>
-          <li><em>Final - As Built</em> e <em>For Information</em> non creano più in automatico una nuova revisione alla ricezione: con quelle risposte il documento chiude il giro</li>
-          <li>Situazione documenti, vista verticale: il filtro <strong>Client response</strong> sulla colonna passa da una risposta sola alle spunte multiple, come gli altri filtri</li>
-          <li>Nelle pagine della commessa il nome della scheda del browser riporta il numero di commessa (<em>26042 · Situazione documenti</em>), così con più schede aperte si riconosce subito di quale si tratta</li>
-          <li>La revisione si legge sempre come dice l’archivio: con il flag <strong>Revisioni con lettera</strong> esce ovunque la lettera, senza il flag ovunque il numero. Vale per le pagine, gli export, il trasmittal e l’admin</li>
-          <li>La legenda STATUS nell’header del PDF segue le risposte del cliente configurate nell’admin invece di colori fissi</li>
+          <li>Trasmittal interno: in <strong>Nuova lettera</strong> e <strong>Destinazioni</strong> i documenti si ordinano e filtrano per colonna come in Gestisci emissione; in cima quelli modificati più di recente in PROGETTO\UT, con la data di <em>ultima modifica</em></li>
+          <li>Trasmittal interno: l’email parte dalla casella dell’applicazione con il nome di chi la emette, e si può aggiungere un messaggio per i destinatari</li>
+          <li>Trasmittal interno: modificare destinazioni ed emettere o annullare lettere è riservato agli utenti abilitati</li>
+          <li>Proposte e segnalazioni: i post chiusi si vedono solo con il filtro <strong>Post chiusi</strong></li>
         </ul>
       </section>
       <section>
         <h3 class="version-modal-section-title">Correzioni</h3>
         <ul class="version-modal-list">
-          <li>Registra ricezioni: un documento già registrato poteva restare in bozza nel browser e venire reinviato ad ogni click successivo, marcando come rientrata una revisione mai spedita e creando una revisione fantasma. Ora non succede più, e il server rifiuta un rientro su una revisione che non è stata inviata al cliente</li>
+          <li>Trasmittal interno: niente più errori con due emissioni contemporanee o con un destinatario non valido; le lettere senza PDF sul fileserver hanno la data in grigio invece di un link rotto</li>
+          <li>Gestisci ricezione: la registrazione è tutto o niente, un errore su una voce non lascia le altre salvate a metà</li>
+          <li>Le date degli aggiornamenti da Business Central sono nel fuso locale: fra mezzanotte e le 2 compariva il giorno prima</li>
+          <li>I modali non si chiudono più da soli quando si seleziona del testo e il mouse finisce fuori dal campo</li>
+          <li>Scarica: le date sono in formato gg/mm/aaaa e leggibili senza allargare le colonne; le foto profilo si vedono anche sul server</li>
         </ul>
       </section>
     </div>
