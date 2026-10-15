@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import date as _date
+from datetime import timedelta
 from functools import wraps
 
 import openpyxl
@@ -912,8 +913,23 @@ def _trasmittal_addresses(testata, addr_ids):
     return addresses
 
 
-def _trasmittal_documents(testata, doc_ids):
+def _required_by(testata, date_str):
+    """Data REQUIRED BY del trasmittal: emissione + giorni concessi al cliente.
+
+    Stessa regola di ``esegui_emissione`` per ``rec_plan_date``, ma calcolata
+    sulla data del trasmittal (anche in anteprima) e solo per la stampa: non
+    tocca le revisioni. Senza giorni configurati sulla commessa resta vuota e
+    la colonna non compare.
+    """
+    if not (date_str and testata.time_cli_doc_rev):
+        return None
+    data = _date.fromisoformat(date_str) if isinstance(date_str, str) else date_str
+    return (data + timedelta(days=testata.time_cli_doc_rev)).isoformat()
+
+
+def _trasmittal_documents(testata, doc_ids, date_str=None):
     documents = []
+    required_by = _required_by(testata, date_str)
     for doc in Documento.objects.filter(pk__in=doc_ids, testata=testata).order_by("item_no"):
         rev = ultima_revisione(doc)
         documents.append(
@@ -933,9 +949,7 @@ def _trasmittal_documents(testata, doc_ids):
                 )
                 if rev
                 else "",
-                "dis_plan_date": rev.dis_plan_date.isoformat()
-                if (rev and rev.dis_plan_date)
-                else None,
+                "required_by": required_by,
             }
         )
     return documents
@@ -957,7 +971,7 @@ def _generate_trasmittal_pdf_bytes(request, testata, data, date_str, doc_ids):
     return genera_trasmittal_pdf(
         testata_dict,
         _trasmittal_addresses(testata, data.get("addr_ids") or []),
-        _trasmittal_documents(testata, doc_ids),
+        _trasmittal_documents(testata, doc_ids, date_str),
         date_str,
         our_ref=data.get("our_ref") or "",
         city=data.get("city") or "",

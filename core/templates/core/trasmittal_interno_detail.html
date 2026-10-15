@@ -861,7 +861,6 @@
 <!-- ── Theme toggle ── -->
 {% include "core/partials/theme_toggle.html" %}
 
-{{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
 {% include "core/partials/doc_list_filters_js.html" %}
 <script>
 (function () {
@@ -869,8 +868,6 @@
 
   const JOB  = "{{ testata.job|escapejs }}";
   const CSRF = window.CSRF_TOKEN || '';
-  const REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
-  const REV_SEQ = revSequenzaDaPagina('rev-seq-pagina');
   // Scrittura riservata a chi ha User.trasmittal_interno_writer (spuntabile da admin):
   // indipendente dal permesso generale USER_CAN_WRITE.
   const TI_CAN_WRITE = {{ trasmittal_interno_can_write|yesno:"true,false" }};
@@ -1208,22 +1205,19 @@
   var rowState = {};
 
   function offsetRange(stato) {
-    // Revisione di cui il server non ha ricavato il numero (dati storici
-    // incoerenti): la si propone com'è, senza poterla cambiare.
-    if (stato.bloccato) return { min: 0, max: 0 };
-    return { min: Math.max(-2, -stato.baseNumero), max: 2 };
+    // Lo stepper scorre solo le revisioni ammissibili decise dal server
+    // (prima emissione o con risposta del cliente); l'ultima è la corrente.
+    return { min: 0, max: Math.max(0, stato.ammissibili.length - 1) };
   }
 
   function revisioneLabel(stato) {
-    // Offset 0 = esattamente l'etichetta mostrata per la revisione corrente.
-    if (stato.offset === 0) return stato.etichettaBase;
-    return formatRevLabel({ rev_no: stato.baseNumero + stato.offset }, REV_LET_FLAG, REV_SEQ);
+    return stato.ammissibili[stato.indice] || '';
   }
 
   function stepperHtmlComponi(id, stato) {
     var range = offsetRange(stato);
-    var meno = stato.offset <= range.min ? ' disabled' : '';
-    var piu = stato.offset >= range.max ? ' disabled' : '';
+    var meno = stato.indice <= range.min ? ' disabled' : '';
+    var piu = stato.indice >= range.max ? ' disabled' : '';
     return '<div class="ti-stepper">'
       + '<button type="button" class="ti-stepper-btn" onclick="steppaRevisione(' + id + ',-1)" aria-label="Riduci revisione"' + meno + '>&minus;</button>'
       + '<span class="ti-stepper-label" id="rev-label-' + id + '">' + escHtml(revisioneLabel(stato)) + '</span>'
@@ -1402,7 +1396,7 @@
 
   function rigaHtmlComponi(d, stato) {
     var titolo = d.doc_title ? '<div class="cell-title">' + escHtml(d.doc_title) + '</div>' : '';
-    return '<tr id="componi-riga-' + d.id + '" class="' + (stato.offset !== 0 ? 'ti-row--changed' : '') + '" data-id="' + d.id + '">'
+    return '<tr id="componi-riga-' + d.id + '" class="' + (stato.indice !== offsetRange(stato).max ? 'ti-row--changed' : '') + '" data-id="' + d.id + '">'
       + '<td><div class="doc-code">' + escHtml(d.vendor_doc || '—') + '</div>' + titolo + '</td>'
       + '<td>' + stepperHtmlComponi(d.id, stato) + '</td>'
       + '<td id="componi-siti-cell-' + d.id + '">' + sitiCellHtmlComponi(d.id, stato) + '</td>'
@@ -1426,18 +1420,18 @@
     var stato = rowState[id];
     if (!stato) return;
     var range = offsetRange(stato);
-    var next = stato.offset + delta;
+    var next = stato.indice + delta;
     if (next < range.min || next > range.max) return;
-    stato.offset = next;
+    stato.indice = next;
     var label = document.getElementById('rev-label-' + id);
     if (label) label.textContent = revisioneLabel(stato);
     var tr = document.getElementById('componi-riga-' + id);
     if (tr) {
-      tr.classList.toggle('ti-row--changed', stato.offset !== 0);
+      tr.classList.toggle('ti-row--changed', stato.indice !== range.max);
       var meno = tr.querySelector('.ti-stepper-btn:first-child');
       var piu = tr.querySelector('.ti-stepper-btn:last-child');
-      if (meno) meno.disabled = stato.offset <= range.min;
-      if (piu) piu.disabled = stato.offset >= range.max;
+      if (meno) meno.disabled = stato.indice <= range.min;
+      if (piu) piu.disabled = stato.indice >= range.max;
     }
   };
 
@@ -1514,14 +1508,13 @@
     _righeComponi = docs;
     rowState = {};
     docs.forEach(function (d) {
-      // Numero progressivo calcolato dal server: l'etichetta da sola non basta
-      // a ricavarlo con una sequenza personalizzata.
-      var baseNumero = revNumeroIntero(d.revisione_corrente_numero);
+      // Etichette già formattate dal server: la lettera parte dalla revisione
+      // corrente (l'ultima ammissibile) e lo stepper può solo tornare indietro.
+      var ammissibili = (d.revisioni_ammissibili || []).map(function (r) { return r.etichetta; });
+      if (!ammissibili.length) ammissibili = [d.revisione_corrente || ''];
       rowState[d.id] = {
-        baseNumero: baseNumero === null ? 0 : baseNumero,
-        bloccato: baseNumero === null,
-        etichettaBase: d.revisione_corrente || '',
-        offset: 0,
+        ammissibili: ammissibili,
+        indice: ammissibili.length - 1,
         copie: 1,
         tpi: false,
         tpi_destinatario: '',

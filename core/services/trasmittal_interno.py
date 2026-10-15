@@ -37,7 +37,8 @@ from ..models import (
 )
 from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
 from .revisione_label import MAX_LUNGHEZZA_ETICHETTA, format_revisione_label, numero_revisione
-from .ultima_revisione import ORDINE_DECRESCENTE, ultima_revisione
+from .stato_interno import INVIATO, RICEVUTO, stato_interno_effettivo_da_revisione
+from .ultima_revisione import ORDINE_DECRESCENTE, chiave_ordinamento, ultima_revisione
 
 logger = logging.getLogger(__name__)
 
@@ -692,12 +693,33 @@ def _data_modifica_iso(trovati):
     ).isoformat()
 
 
+def _revisione_ammissibile(revisione, prima_revisione):
+    """Se la revisione può comparire in una lettera di trasmittal interno.
+
+    Regola: la prima emissione del documento (la Rev 0, o la revisione senza
+    numero degli import Access) va sempre bene; una revisione successiva solo
+    quando il cliente ha risposto. Una revisione successiva in attesa — inviata
+    senza risposta, o non ancora inviata — non può entrare nella lettera.
+    """
+    if revisione.pk == prima_revisione.pk:
+        return True
+    return stato_interno_effettivo_da_revisione(revisione) == RICEVUTO
+
+
+def _motivo_non_ammissibile(revisione, etichetta):
+    """Perché l'ultima revisione del documento tiene fuori il documento dalla lettera."""
+    if stato_interno_effettivo_da_revisione(revisione) == INVIATO:
+        return f"Rev {etichetta} in attesa di risposta dal cliente."
+    return f"Rev {etichetta} non ancora inviata al cliente."
+
+
 def elenco_selezione_ut(testata):
     """Documenti UT della commessa per la selezione della lettera trasmittal interno.
 
     A differenza della griglia destinazioni, ogni documento porta anche la
-    sua validità per la lettera: un documento senza revisione registrata o
-    senza file risolvibile sul fileserver è segnalato SUBITO qui
+    sua validità per la lettera: un documento senza revisione registrata,
+    con l'ultima revisione non ammissibile (vedi ``_revisione_ammissibile``)
+    o senza file risolvibile sul fileserver è segnalato SUBITO qui
     (``selezionabile`` False, ``motivo`` spiegato) — non al momento della
     creazione come faceva il vecchio strumento Excel, che bloccava l'intera
     lettera.
@@ -713,8 +735,10 @@ def elenco_selezione_ut(testata):
         - ``id``, ``vendor_doc``, ``doc_title``
         - ``revisione_corrente``: etichetta della revisione più recente
           ("" se nessuna)
-        - ``revisione_corrente_numero``: suo numero progressivo, base dello
-          stepper revisione (``None`` se nessuna o non ricavabile)
+        - ``revisioni_ammissibili``: le revisioni del documento che possono
+          comparire nella lettera, dalla più vecchia alla più recente, come
+          dict ``{"etichetta", "numero"}``: sono le scelte dello stepper
+          revisione (vuota se il documento non è selezionabile)
         - ``file_modificato_il``: ISO datetime del file risolto, o ``None``
         - ``siti``: destinazioni cartacee salvate (INVOLVED SITES), lista di
           dict ``{"sigla", "nome", "codice_bc"}``
@@ -746,7 +770,7 @@ def elenco_selezione_ut(testata):
             "vendor_doc": documento.vendor_doc,
             "doc_title": documento.doc_title,
             "revisione_corrente": "",
-            "revisione_corrente_numero": None,
+            "revisioni_ammissibili": [],
             "file_modificato_il": None,
             "siti": [_serializza_sito(d.stabilimento) for d in documento.destinazioni.all()],
             "selezionabile": False,
@@ -761,9 +785,19 @@ def elenco_selezione_ut(testata):
         voce["revisione_corrente"] = format_revisione_label(
             latest_rev.rev_no, latest_rev.rev_let, *formato
         )
-        voce["revisione_corrente_numero"] = numero_revisione(
-            latest_rev.rev_no, latest_rev.rev_let, *formato
-        )
+        revisioni = sorted(documento.revisioni.all(), key=chiave_ordinamento)
+        if not _revisione_ammissibile(latest_rev, revisioni[0]):
+            voce["motivo"] = _motivo_non_ammissibile(latest_rev, voce["revisione_corrente"])
+            risultato.append(voce)
+            continue
+        voce["revisioni_ammissibili"] = [
+            {
+                "etichetta": format_revisione_label(rev.rev_no, rev.rev_let, *formato),
+                "numero": numero_revisione(rev.rev_no, rev.rev_let, *formato),
+            }
+            for rev in revisioni
+            if _revisione_ammissibile(rev, revisioni[0])
+        ]
         trovati = _cerca_in_indice(indice_cartella, documento.vendor_doc)
         if len(trovati) != 1:
             voce["motivo"] = "Nessun file trovato sul fileserver."
@@ -779,7 +813,8 @@ def _prepara_righe(testata, righe_payload):
     """Valida e converte il payload delle righe (dict JSON) per ``crea_trasmittal_interno``.
 
     Ogni voce richiede ``documento_id`` (un documento UT selezionabile di
-    questa commessa) e ``revisione``; ``copie``, ``tpi``, ``tpi_destinatario``,
+    questa commessa) e ``revisione`` (una delle sue ``revisioni_ammissibili``
+    di ``elenco_selezione_ut``); ``copie``, ``tpi``, ``tpi_destinatario``,
     ``note``, ``cliente`` sono opzionali. Il primo problema trovato interrompe
     con un ``ValueError`` esplicito — niente lettera creata a metà da un
     payload malformato o da una selezione che nel frattempo è diventata non
@@ -811,6 +846,12 @@ def _prepara_righe(testata, righe_payload):
             raise ValueError(
                 f"{stato['vendor_doc']}: la revisione «{revisione}» supera i "
                 f"{MAX_LUNGHEZZA_ETICHETTA} caratteri."
+            )
+        if revisione not in {r["etichetta"] for r in stato["revisioni_ammissibili"]}:
+            # Stessa regola dello stepper: il client non può aggirarla.
+            raise ValueError(
+                f"{stato['vendor_doc']}: la revisione «{revisione}» non è ammessa nella "
+                "lettera: solo la prima emissione o revisioni con risposta del cliente."
             )
         tpi = bool(voce.get("tpi", False))
         tpi_destinatario = str(voce.get("tpi_destinatario") or "").strip()

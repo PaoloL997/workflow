@@ -49,7 +49,7 @@ _COL_VENDOR = ("vendor_doc", "VENDOR DOC.", 32, "LEFT")
 _COL_CONTRACTOR = ("contractor_doc_no", "CONTRACTOR DOC.", 32, "LEFT")
 _COL_REV = ("rev_no", "REV.", 10, "CENTER")
 _COL_DOCUMENT = ("doc_title", "DOCUMENT", 60, "LEFT")
-_COL_REQUIRED = ("dis_plan_date", "REQUIRED BY", 20, "CENTER")
+_COL_REQUIRED = ("required_by", "REQUIRED BY", 20, "CENTER")
 
 # ID columns selectable via multi-select (fixed display order).
 _ID_COL_ORDER = ("client", "vendor", "contractor")
@@ -448,8 +448,8 @@ def _normalize_doc_id_cols(doc_id_cols=None, doc_id_mode=None):
 
 def _cell_value_for_col(doc, key):
     """Display value for a trasmittal table column key."""
-    if key == "dis_plan_date":
-        return format_display_date(doc.get("dis_plan_date")) or ""
+    if key == "required_by":
+        return format_display_date(doc.get("required_by")) or ""
     if key == "rev_no":
         # ``rev_label`` è già lettera o numero secondo il flag di archivio;
         # ``rev_no`` resta il ripiego per i chiamanti che non lo passano.
@@ -558,7 +558,8 @@ def genera_trasmittal_pdf(
         testata: dict with keys job, po_no, job_detail, client
         addresses: list of dicts with keys consignee, address, zip_code, city, country, attn, ph_no
         documents: list of dicts with keys item_no, vendor_doc, client_doc_no,
-            contractor_doc_no, doc_title, rev_no, dis_plan_date (ISO; shown in REQUIRED BY);
+            contractor_doc_no, doc_title, rev_no, required_by (ISO; shown in REQUIRED BY:
+            data del trasmittal + giorni concessi al cliente, vedi views._required_by);
             rev_label (opzionale) sostituisce rev_no nella colonna REV. quando presente
         date_str: ISO date string (e.g. '2025-01-15')
         our_ref: trasmittal reference number (user-provided)

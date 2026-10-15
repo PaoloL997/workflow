@@ -811,6 +811,26 @@ class RevisioneLabelExportTests(TestCase):
         self.assertEqual(documents[0]["rev_label"], "1")
         self.assertEqual(_cell_value_for_col(documents[0], "rev_no"), "1")
 
+    def test_required_by_e_la_data_del_trasmittal_piu_i_giorni_del_cliente(self):
+        from core.views import _trasmittal_documents
+
+        self.testata.time_cli_doc_rev = 15
+        self.testata.save(update_fields=["time_cli_doc_rev"])
+
+        documents = _trasmittal_documents(self.testata, [self.doc.pk], "2026-03-01")
+
+        self.assertEqual(documents[0]["required_by"], "2026-03-16")
+
+    def test_required_by_vuoto_senza_giorni_concessi_al_cliente(self):
+        from core.views import _trasmittal_documents
+
+        self.testata.time_cli_doc_rev = None
+        self.testata.save(update_fields=["time_cli_doc_rev"])
+
+        documents = _trasmittal_documents(self.testata, [self.doc.pk], "2026-03-01")
+
+        self.assertIsNone(documents[0]["required_by"])
+
     def test_le_pagine_ricevono_il_flag_e_l_helper_condiviso(self):
         """Le tabelle costruite in JS formattano la revisione con la regola condivisa."""
         for url in (
