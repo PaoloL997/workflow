@@ -636,6 +636,20 @@ class PreparaPerDccTests(TestCase):
             [m["vendor_doc"] for m in esito["mancanti"]], [self.doc_missing.vendor_doc]
         )
 
+    def test_codice_prefisso_di_un_altro_documento_copia_il_file_esatto(self):
+        doc = Documento.objects.create(
+            testata=self.testata, vendor_doc="99030-ESH1", reparto=self.reparto.nome
+        )
+        base = self.get_base_path("99030", "QMD")
+        (base / "99030-ESH1.pdf").write_bytes(b"%PDF-esh1")
+        (base / "99030-ESH10.pdf").write_bytes(b"%PDF-esh10")
+        trasmittal = self._trasmittal([{"documento": doc, "revisione": "1", "cliente": True}])
+
+        esito = prepara_per_dcc(trasmittal)
+
+        self.assertEqual([c["file"] for c in esito["copiati"]], ["99030-ESH1.pdf"])
+        self.assertEqual(esito["mancanti"], [])
+
     def test_seconda_esecuzione_idempotente(self):
         trasmittal = self._trasmittal(
             [{"documento": self.doc_ok, "revisione": "1", "cliente": True}]
@@ -1017,6 +1031,34 @@ class TrasmittalInternoLetteraTests(TestCase):
         voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_senza_file.pk)
         self.assertFalse(voce["selezionabile"])
         self.assertEqual(voce["motivo"], "Nessun file trovato sul fileserver.")
+
+    def test_codice_prefisso_di_un_altro_documento_sceglie_il_file_esatto(self):
+        # ESH1 e ESH10 sono documenti diversi: il file di ESH10 contiene "ESH1" ma
+        # non deve rendere ambiguo il file di ESH1.
+        doc = Documento.objects.create(
+            testata=self.testata, vendor_doc="99070-01-ESH1", reparto=self.reparto_ut.nome
+        )
+        Revisione.objects.create(documento=doc, rev_no=0)
+        base = get_base_path(self.testata.job, "UT")
+        (base / "99070-01-ESH1.pdf").write_bytes(b"%PDF-esh1")
+        (base / "99070-01-ESH10.pdf").write_bytes(b"%PDF-esh10")
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == doc.pk)
+        self.assertTrue(voce["selezionabile"])
+
+    def test_piu_file_esatti_non_selezionabile_con_motivo_dedicato(self):
+        base = get_base_path(self.testata.job, "UT")
+        (base / f"{self.doc_ok.vendor_doc} Rev B.pdf").write_bytes(b"%PDF-fake-b")
+        self.client.force_login(self.reader)
+
+        risposta = self.client.get(self._url("selezione/"))
+
+        voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Più file corrispondenti sul fileserver.")
 
     def test_documento_valido_selezionabile(self):
         self.client.force_login(self.reader)
