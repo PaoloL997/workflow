@@ -1069,58 +1069,65 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertTrue(voce["selezionabile"])
         self.assertEqual(voce["motivo"], "")
 
-    # -- regola: prima emissione, oppure revisione con risposta del cliente --
+    # -- regola: solo la revisione da emettere (come in «Gestisci emissione») --
 
     def _voce_doc_ok(self):
         self.client.force_login(self.reader)
         risposta = self.client.get(self._url("selezione/"))
         return next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
 
-    def test_prima_emissione_in_attesa_e_selezionabile(self):
+    def test_revisione_da_emettere_e_selezionabile(self):
+        voce = self._voce_doc_ok()
+
+        self.assertTrue(voce["selezionabile"])
+        self.assertEqual(voce["revisioni_ammissibili"], [{"etichetta": "0", "numero": 0}])
+
+    def test_revisione_in_lavorazione_e_selezionabile(self):
+        Revisione.objects.filter(documento=self.doc_ok).update(int_status="in_lavorazione")
+
+        voce = self._voce_doc_ok()
+
+        self.assertTrue(voce["selezionabile"])
+
+    def test_revisione_inviata_al_cliente_non_selezionabile(self):
         Revisione.objects.filter(documento=self.doc_ok).update(
             dis_act_date=date(2026, 1, 5), int_status="inviato_al_cliente"
         )
 
         voce = self._voce_doc_ok()
 
-        self.assertTrue(voce["selezionabile"])
-        self.assertEqual(voce["revisioni_ammissibili"], [{"etichetta": "0", "numero": 0}])
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Rev 0 già inviata al cliente.")
+        self.assertEqual(voce["revisioni_ammissibili"], [])
 
-    def test_revisione_successiva_inviata_senza_risposta_non_selezionabile(self):
+    def test_revisione_ricevuta_non_selezionabile(self):
         Revisione.objects.filter(documento=self.doc_ok).update(rec_act_date=date(2026, 1, 10))
-        Revisione.objects.create(
-            documento=self.doc_ok,
-            rev_no=1,
-            dis_act_date=date(2026, 2, 1),
-            int_status="inviato_al_cliente",
-        )
 
         voce = self._voce_doc_ok()
 
         self.assertFalse(voce["selezionabile"])
-        self.assertEqual(voce["motivo"], "Rev 1 in attesa di risposta dal cliente.")
-        self.assertEqual(voce["revisione_corrente"], "1")
-        self.assertEqual(voce["revisioni_ammissibili"], [])
+        self.assertEqual(voce["motivo"], "Rev 0 già ricevuta dal cliente.")
 
-    def test_revisione_successiva_mai_inviata_non_selezionabile(self):
+    def test_revisione_con_risposta_del_cliente_non_selezionabile(self):
+        # Basta la risposta registrata, anche senza data di rientro.
+        risposta_cliente = StatoEsterno.objects.create(nome="Approved", lettera="A")
+        Revisione.objects.filter(documento=self.doc_ok).update(ext_status=risposta_cliente)
+
+        voce = self._voce_doc_ok()
+
+        self.assertFalse(voce["selezionabile"])
+        self.assertEqual(voce["motivo"], "Rev 0 già ricevuta dal cliente.")
+
+    def test_nuova_revisione_dopo_la_risposta_e_selezionabile(self):
+        # Rev 0 rientrata, Rev 1 appena creata: la lettera accompagna solo la Rev 1.
         Revisione.objects.filter(documento=self.doc_ok).update(rec_act_date=date(2026, 1, 10))
         Revisione.objects.create(documento=self.doc_ok, rev_no=1)
 
         voce = self._voce_doc_ok()
 
-        self.assertFalse(voce["selezionabile"])
-        self.assertEqual(voce["motivo"], "Rev 1 non ancora inviata al cliente.")
-
-    def test_revisione_successiva_con_risposta_e_selezionabile(self):
-        # Basta la risposta registrata, anche senza data di rientro.
-        risposta_cliente = StatoEsterno.objects.create(nome="Approved", lettera="A")
-        Revisione.objects.create(documento=self.doc_ok, rev_no=1, ext_status=risposta_cliente)
-
-        voce = self._voce_doc_ok()
-
         self.assertTrue(voce["selezionabile"])
         self.assertEqual(voce["revisione_corrente"], "1")
-        self.assertEqual([r["etichetta"] for r in voce["revisioni_ammissibili"]], ["0", "1"])
+        self.assertEqual(voce["revisioni_ammissibili"], [{"etichetta": "1", "numero": 1}])
 
     def test_anteprima_rifiuta_revisione_non_ammissibile(self):
         self.client.force_login(self.reader)
@@ -1137,18 +1144,16 @@ class TrasmittalInternoLetteraTests(TestCase):
     def test_selezione_revisione_corrente_con_sequenza_personalizzata(self):
         self.testata.rev_sequenza = ["P", "Q"]
         self.testata.save(update_fields=["rev_sequenza"])
-        Revisione.objects.create(documento=self.doc_ok, rev_no=1, rec_act_date=date(2026, 1, 10))
+        Revisione.objects.filter(documento=self.doc_ok).update(rec_act_date=date(2026, 1, 10))
+        Revisione.objects.create(documento=self.doc_ok, rev_no=1)
         self.client.force_login(self.reader)
 
         risposta = self.client.get(self._url("selezione/"))
 
         voce = next(d for d in risposta.json()["documenti"] if d["id"] == self.doc_ok.pk)
         self.assertEqual(voce["revisione_corrente"], "Q")
-        # Lo stepper usa le etichette già formattate dal server.
-        self.assertEqual(
-            voce["revisioni_ammissibili"],
-            [{"etichetta": "P", "numero": 0}, {"etichetta": "Q", "numero": 1}],
-        )
+        # Lo stepper usa l'etichetta già formattata dal server.
+        self.assertEqual(voce["revisioni_ammissibili"], [{"etichetta": "Q", "numero": 1}])
 
     def test_selezione_riporta_i_siti_costruttivi(self):
         self.client.force_login(self.reader)
@@ -1775,14 +1780,15 @@ class TrasmittalInternoEmissioneApiTests(TestCase):
 
     # -- revisione modificata --
 
-    def test_revisione_modificata_viene_usata_nella_lettera(self):
-        # Rev 1 ricevuta: corrente è "1", ma lo stepper può tornare alla "0".
-        Revisione.objects.create(documento=self.doc_ok, rev_no=1, rec_act_date=date(2026, 1, 10))
+    def test_revisione_da_emettere_viene_usata_nella_lettera(self):
+        # Rev 0 rientrata, Rev 1 da emettere: la lettera porta la "1".
+        Revisione.objects.filter(documento=self.doc_ok).update(rec_act_date=date(2026, 1, 10))
+        Revisione.objects.create(documento=self.doc_ok, rev_no=1)
         self.client.force_login(self.writer)
 
         risposta = self.client.post(
             self._api_url("emetti/"),
-            data=json.dumps({"righe": [self._riga(self.doc_ok, revisione="0")]}),
+            data=json.dumps({"righe": [self._riga(self.doc_ok, revisione="1")]}),
             content_type="application/json",
         )
 
@@ -1791,7 +1797,7 @@ class TrasmittalInternoEmissioneApiTests(TestCase):
         riga = RigaTransmittalInterno.objects.get(
             trasmittal_id=trasmittal_id, documento=self.doc_ok
         )
-        self.assertEqual(riga.revisione, "0")
+        self.assertEqual(riga.revisione, "1")
 
     def test_revisione_non_ammissibile_e_un_400(self):
         self.client.force_login(self.writer)

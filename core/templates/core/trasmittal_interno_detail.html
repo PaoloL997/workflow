@@ -1206,7 +1206,7 @@
 
   function offsetRange(stato) {
     // Lo stepper scorre solo le revisioni ammissibili decise dal server
-    // (prima emissione o con risposta del cliente); l'ultima è la corrente.
+    // (oggi la sola revisione da emettere); l'ultima è la corrente.
     return { min: 0, max: Math.max(0, stato.ammissibili.length - 1) };
   }
 
@@ -1509,7 +1509,7 @@
     rowState = {};
     docs.forEach(function (d) {
       // Etichette già formattate dal server: la lettera parte dalla revisione
-      // corrente (l'ultima ammissibile) e lo stepper può solo tornare indietro.
+      // corrente (l'ultima ammissibile, oggi l'unica).
       var ammissibili = (d.revisioni_ammissibili || []).map(function (r) { return r.etichetta; });
       if (!ammissibili.length) ammissibili = [d.revisione_corrente || ''];
       rowState[d.id] = {
