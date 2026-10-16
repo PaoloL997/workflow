@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- API `POST /api/revisioni/<id>/risposta-cliente/` (per ora senza pulsante nelle pagine) per correggere la risposta del cliente di una revisione già rientrata: allinea anche **Crea nuova revisione** e la revisione successiva, che si elimina se è ancora vuota e la nuova risposta non prevede un'altra revisione, o si crea come alla ricezione se la prevede e manca. Se la revisione successiva è già in lavorazione (inviata, ricevuta, con risposta, con un file collegato o in un trasmittal) la correzione viene rifiutata senza toccare nulla e va fatta a mano
+
 ### Changed
 
 - Trasmittal (verso il cliente): la colonna **REQUIRED BY** del PDF riporta la data del trasmittal più i giorni concessi al cliente per la revisione (**Revisione cliente** in Informazioni archivio), invece della data di invio pianificata della revisione. Vale anche per l'anteprima; senza giorni configurati la colonna non compare. Cambia solo la data stampata: le date registrate sulle revisioni restano quelle di sempre

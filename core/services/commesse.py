@@ -910,18 +910,29 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         result.append(serialize_revisione(rev))
 
         if crea_rev:
-            next_rev_no = (rev.rev_no or 0) + 1
-            time_ven = doc.testata.time_ven_doc_rev
-            dis_plan = rec_act_date + timedelta(days=time_ven) if time_ven else None
-            new_rev = Revisione.objects.create(
-                documento=doc,
-                rev_no=next_rev_no,
-                dis_plan_date=dis_plan,
-                crea_nuova_rev=True,
-            )
-            result.append(serialize_revisione(new_rev))
+            result.append(serialize_revisione(crea_revisione_successiva(doc, rev)))
 
     return result
+
+
+def crea_revisione_successiva(doc, rev):
+    """Crea la revisione ``rev_no + 1`` di ``doc`` dopo il rientro di ``rev``.
+
+    La data di invio pianificata è la data di rientro di ``rev`` più i giorni
+    concessi al vendor (``Testata.time_ven_doc_rev``); senza uno dei due resta
+    vuota. Usata dalla ricezione e dalla correzione della risposta cliente
+    (vedi ``services/risposta_cliente.py``).
+    """
+    time_ven = doc.testata.time_ven_doc_rev
+    dis_plan = (
+        rev.rec_act_date + timedelta(days=time_ven) if time_ven and rev.rec_act_date else None
+    )
+    return Revisione.objects.create(
+        documento=doc,
+        rev_no=(rev.rev_no or 0) + 1,
+        dis_plan_date=dis_plan,
+        crea_nuova_rev=True,
+    )
 
 
 # ── File resolution ───────────────────────────────────────────────────────────

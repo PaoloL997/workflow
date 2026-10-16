@@ -243,6 +243,11 @@ urlpatterns = [
     # API — Revisioni (usate dalla ricezione per creare nuova revisione)
     path("api/documenti/<int:doc_pk>/revisioni/", views.revisioni_api, name="revisioni_api"),
     path("api/revisioni/<int:pk>/", views.revisione_api_detail, name="revisione_api_detail"),
+    path(
+        "api/revisioni/<int:pk>/risposta-cliente/",
+        views.risposta_cliente_api,
+        name="risposta_cliente_api",
+    ),
     # API — File revisione
     path("api/revisioni/<int:pk>/file/", views.revisione_file_api, name="revisione_file_api"),
     path(

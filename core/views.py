@@ -109,6 +109,11 @@ from .services.revisione_anomalie import (
 )
 from .services.revisione_label import format_revisione_label
 from .services.revisione_sblocco import list_revisioni_sbloccabili, sblocca_revisione
+from .services.risposta_cliente import (
+    RevisioneSuccessivaInLavorazione,
+    RispostaClienteNonCorreggibile,
+    correggi_risposta_cliente,
+)
 from .services.segnalazioni import (
     SegnalazioneClosed,
     SegnalazioneForbidden,
@@ -1531,6 +1536,32 @@ def revisione_api_detail(request, pk):
         return JsonResponse({"ok": True})
     except Revisione.DoesNotExist:
         return JsonResponse({"error": "Revisione non trovata."}, status=404)
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def risposta_cliente_api(request, pk):
+    """Corregge la risposta del cliente di una revisione già rientrata.
+
+    Vedi ``services/risposta_cliente.py``: oltre alla risposta allinea il flag
+    ``crea_nuova_rev`` e la revisione successiva.
+    """
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _errore("JSON non valido.")
+    ext_status_id = data.get("ext_status_id")
+    if isinstance(ext_status_id, bool) or not isinstance(ext_status_id, int):
+        return _errore("Specificare la risposta del cliente (ext_status_id).")
+    try:
+        esito = correggi_risposta_cliente(pk, ext_status_id)
+    except Revisione.DoesNotExist:
+        return _errore("Revisione non trovata.", status=404)
+    except RevisioneSuccessivaInLavorazione as exc:
+        return _errore(str(exc), status=409)
+    except RispostaClienteNonCorreggibile as exc:
+        return _errore(str(exc))
+    return JsonResponse({"ok": True, **esito})
 
 
 # ── Export: Document list as Excel ───────────────────────────────────────────
