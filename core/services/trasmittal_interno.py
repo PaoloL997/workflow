@@ -35,7 +35,13 @@ from ..models import (
     TransmittalInterno,
     User,
 )
-from .fileserver import elenca_cartella, get_base_path, get_jobs_root, trova_file
+from .fileserver import (
+    elenca_cartella,
+    get_base_path,
+    get_jobs_root,
+    scegli_corrispondenza_esatta,
+    trova_file,
+)
 from .revisione_label import MAX_LUNGHEZZA_ETICHETTA, format_revisione_label, numero_revisione
 from .ultima_revisione import ORDINE_DECRESCENTE, ultima_revisione
 
@@ -613,7 +619,10 @@ def prepara_per_dcc(trasmittal):
         documento = riga.documento
         reparto = Reparto.objects.filter(nome=documento.reparto).first()
         trovati = (
-            trova_file(get_base_path(job, reparto.acronimo), documento.vendor_doc)
+            scegli_corrispondenza_esatta(
+                trova_file(get_base_path(job, reparto.acronimo), documento.vendor_doc),
+                documento.vendor_doc,
+            )
             if reparto and reparto.acronimo
             else []
         )
@@ -666,9 +675,14 @@ def ruoli_persona_mancanti(testata):
 
 
 def _cerca_in_indice(indice, vendor_doc):
-    """Stessa regola di corrispondenza di ``trova_file``, su un elenco già scansionato."""
+    """Stessa regola di corrispondenza di ``trova_file``, su un elenco già scansionato.
+
+    Con più file che contengono il codice, ``scegli_corrispondenza_esatta`` dà la
+    precedenza a quello che coincide col documento (ESH1 contro ESH10).
+    """
     needle = vendor_doc.lower()
-    return [f for f in indice if needle in f["nome"].lower()]
+    trovati = [f for f in indice if needle in f["nome"].lower()]
+    return scegli_corrispondenza_esatta(trovati, vendor_doc)
 
 
 def _indice_cartella_ut(testata):
@@ -766,7 +780,11 @@ def elenco_selezione_ut(testata):
         )
         trovati = _cerca_in_indice(indice_cartella, documento.vendor_doc)
         if len(trovati) != 1:
-            voce["motivo"] = "Nessun file trovato sul fileserver."
+            voce["motivo"] = (
+                "Più file corrispondenti sul fileserver."
+                if trovati
+                else "Nessun file trovato sul fileserver."
+            )
             risultato.append(voce)
             continue
         voce["file_modificato_il"] = _data_modifica_iso(trovati)

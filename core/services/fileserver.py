@@ -7,6 +7,7 @@ All operations are restricted to the JOBS root directory defined by
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from django.conf import settings
@@ -97,6 +98,28 @@ def trova_file(directory: Path, vendor_doc: str) -> list[dict]:
         for entry in _scandir_files(directory)
         if needle in entry.name.lower()
     ]
+
+
+def scegli_corrispondenza_esatta(trovati: list[dict], vendor_doc: str) -> list[dict]:
+    """Spareggio fra più file che contengono ``vendor_doc`` nel nome.
+
+    La ricerca per sottostringa trova anche i documenti il cui codice contiene
+    quello cercato (``…-ESH1`` trova pure ``…-ESH10``). Con più candidati vale
+    quello in cui il codice non è né preceduto né seguito da una lettera o una
+    cifra, se è uno solo; altrimenti ``trovati`` resta com'è.
+
+    Args:
+        trovati: Corrispondenze per sottostringa (dict con la chiave ``nome``).
+        vendor_doc: Codice del documento cercato.
+
+    Returns:
+        ``trovati``, oppure la lista col solo file che corrisponde esattamente.
+    """
+    if len(trovati) < 2:
+        return trovati
+    parola_intera = re.compile(rf"(?<![0-9a-z]){re.escape(vendor_doc.lower())}(?![0-9a-z])")
+    esatti = [f for f in trovati if parola_intera.search(f["nome"].lower())]
+    return esatti if len(esatti) == 1 else trovati
 
 
 def elenca_cartella(directory: Path) -> list[dict]:
