@@ -1,9 +1,14 @@
+import hashlib
+import secrets
+from datetime import timedelta
 from urllib.parse import quote
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 
 
 class Stabilimento(models.Model):
@@ -1171,3 +1176,57 @@ class EsecuzioneSchedulata(models.Model):
 
     def __str__(self):
         return f"{self.nome}: {self.ultima_esecuzione or 'mai eseguito'}"
+
+
+def _scadenza_api_token():
+    """Scadenza di un token API appena emesso: dura quanto una sessione."""
+    return timezone.now() + timedelta(seconds=settings.SESSION_COOKIE_AGE)
+
+
+class ApiToken(models.Model):
+    """Token con cui un servizio esterno chiama le API per conto di un utente.
+
+    Nel database c'è solo lo sha256 della chiave: la chiave in chiaro esce una
+    volta sola, da ``crea_per_utente``, e non si può ricostruire. Chi usa il
+    token agisce come l'utente, con i suoi permessi (vedi ``core.api_auth``).
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="api_tokens",
+    )
+    key = models.CharField(max_length=64, unique=True, verbose_name="Hash della chiave (sha256)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(default=_scadenza_api_token)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = True
+        db_table = "api_tokens"
+        verbose_name = "Token API"
+        verbose_name_plural = "Token API"
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"Token #{self.pk} di {self.user}"
+
+    @staticmethod
+    def hash_chiave(chiave):
+        return hashlib.sha256(chiave.encode()).hexdigest()
+
+    @classmethod
+    def crea_per_utente(cls, user):
+        """Un nuovo token per ``user``: ``(token, chiave in chiaro)``.
+
+        Cancella anche i token già scaduti, di tutti gli utenti: non servono
+        più a niente e, a parte questa pulizia, nessuno li toglierebbe.
+        """
+        cls.objects.filter(expires_at__lte=timezone.now()).delete()
+        chiave = secrets.token_urlsafe(32)
+        token = cls.objects.create(user=user, key=cls.hash_chiave(chiave))
+        return token, chiave
+
+    def is_valid(self):
+        """Non scaduto e di un utente ancora attivo, come per la sessione."""
+        return self.expires_at > timezone.now() and self.user.is_active

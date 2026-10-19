@@ -15,6 +15,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidd
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -28,7 +29,9 @@ from src.pdf import (
     genera_trasmittal_pdf,
 )
 
+from .api_auth import autentica_api
 from .models import (
+    ApiToken,
     Documento,
     IndirSped,
     Permesso,
@@ -152,15 +155,23 @@ logger = logging.getLogger(__name__)
 
 
 def api_login_required(view_func):
-    """Decorator that returns 401 JSON for unauthenticated requests instead of redirecting."""
+    """Decorator that returns 401 JSON for unauthenticated requests instead of redirecting.
+
+    Accetta la sessione o l'header ``Authorization: Token <chiave>`` (vedi
+    ``core.api_auth``, anche per il CSRF).
+    """
 
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
+        errore = autentica_api(request)
+        if errore is not None:
+            return errore
         if not request.user.is_authenticated:
             return JsonResponse({"error": "Non autenticato."}, status=401)
         return view_func(request, *args, **kwargs)
 
-    return wrapper
+    # Il CSRF lo controlla autentica_api, solo per le richieste senza token.
+    return csrf_exempt(wrapper)
 
 
 def _errore(messaggio, status=400):
@@ -535,6 +546,28 @@ def trasmittal_interno_detail_view(request, job, testata):
 @login_required
 def home_view(request):
     return render(request, "core/home.html", {})
+
+
+# ── API: Token per servizi esterni ───────────────────────────────────────────
+
+
+@require_http_methods(["POST", "DELETE"])
+def agent_token_api(request):
+    """Emette un token API per l'utente (POST) o revoca tutti i suoi (DELETE).
+
+    Solo con la sessione, quindi col CSRF: niente ``api_login_required``,
+    perché un token non deve poterne emettere un altro e rinnovarsi da solo
+    l'accesso oltre la scadenza.
+    """
+    if not request.user.is_authenticated:
+        return _errore("Non autenticato.", status=401)
+    if request.method == "POST":
+        token, chiave = ApiToken.crea_per_utente(request.user)
+        logger.info("Token API #%s emesso per %s.", token.pk, request.user)
+        return JsonResponse({"token": chiave, "expires_at": token.expires_at.isoformat()})
+    revocati, _ = request.user.api_tokens.all().delete()
+    logger.info("Revocati %s token API di %s.", revocati, request.user)
+    return JsonResponse({"ok": True, "revocati": revocati})
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────

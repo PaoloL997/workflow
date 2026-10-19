@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from .models import (
     AggiornamentoBC,
+    ApiToken,
     CartellaModelloDocumento,
     DestinatarioTransmittalInterno,
     DestinazioneDocumento,
@@ -455,3 +456,26 @@ class TransmittalInternoAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(ApiToken)
+class ApiTokenAdmin(admin.ModelAdmin):
+    """Sola lettura, cancellabile: eliminare un token lo revoca.
+
+    I token si emettono da ``POST /api/agent/token/``, l'unico punto in cui
+    esce la chiave in chiaro; qui non compare né lei né il suo hash.
+    """
+
+    list_display = ("id", "user", "created_at", "expires_at", "last_used_at", "valido")
+    search_fields = ("user__username", "user__first_name", "user__last_name")
+    fields = ("user", "created_at", "expires_at", "last_used_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    @admin.display(boolean=True, description="Valido")
+    def valido(self, obj):
+        return obj.is_valid()

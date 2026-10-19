@@ -218,6 +218,44 @@ Un valore vuoto in Business Central non sovrascrive mai un dato già inserito ne
 
 Le modifiche a `BC_SYNC_*` richiedono un riavvio: `Restart-Service WorkflowWaitress`.
 
+## API con token (servizi esterni)
+
+Un servizio esterno, ad esempio un agent che lavora per conto di un utente, può chiamare le API
+`/api/...` con un token invece della sessione. Il token è legato all'utente e vale come lui, con gli
+stessi permessi (lettura/scrittura, trasmittal interno).
+
+1. L'utente, loggato, emette il token con `POST /api/agent/token/` (sessione e CSRF, come le altre
+   chiamate delle pagine). Per ora non c'è un pulsante: si può lanciare dalla console del browser
+   su una qualsiasi pagina di Workflow:
+
+   ```js
+   fetch("/api/agent/token/", { method: "POST", headers: { "X-CSRFToken": window.CSRF_TOKEN } })
+     .then((r) => r.json()).then(console.log);
+   // {"token": "<chiave>", "expires_at": "2026-10-19T17:30:00+00:00"}
+   ```
+
+   La chiave si vede solo in questa risposta: nel database resta solo il suo hash (sha256).
+
+2. Il servizio la manda in ogni richiesta:
+
+   ```bash
+   curl -H "Authorization: Token <chiave>" http://localhost:8000/api/stati-esterni/
+   ```
+
+- **Scadenza**: dura quanto una sessione (`SESSION_COOKIE_AGE`, 8 ore). Un utente può avere più
+  token attivi; quelli scaduti si cancellano quando ne viene emesso uno nuovo.
+- **Revoca**: `DELETE /api/agent/token/` (con la sessione) revoca tutti i token dell'utente; dall'admin
+  (*Token API*) si elimina un singolo token. I token di un utente disattivato non valgono più.
+- **Errori**: senza header si usa la sessione come sempre (401 `Non autenticato.` se manca); token
+  non valido, scaduto o revocato → 401 `{"error": "Token non valido."}`.
+- **CSRF**: le richieste col token non lo richiedono (il CSRF protegge i cookie, non un header che
+  solo chi ha la chiave può mettere); quelle con la sessione restano protette come prima. I dettagli
+  sono in `core/api_auth.py`.
+- Con un token non se ne emette un altro: `/api/agent/token/` accetta solo la sessione.
+- Non accettano il token tre download pensati per il browser, che usano il login di sessione:
+  `api/commesse/<job>/situazione/export/`, `api/commesse/<job>/trasmittal/<id>/file/` e
+  `api/revisioni/<id>/file/serve/`.
+
 ## Database
 
 PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non committare questo file.
