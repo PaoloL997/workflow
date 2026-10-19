@@ -242,6 +242,9 @@ stessi permessi (lettura/scrittura, trasmittal interno).
    curl -H "Authorization: Token <chiave>" http://localhost:8000/api/stati-esterni/
    ```
 
+- **Chi sono**: `GET /api/agent/me/` restituisce l'utente del token (o della sessione), ad es.
+  `{"username": "mrossi", "full_name": "Mario Rossi", "can_write": true}`; `can_write` è lo stesso
+  criterio dei permessi di scrittura delle API. Senza nome e cognome `full_name` è lo username.
 - **Scadenza**: dura quanto una sessione (`SESSION_COOKIE_AGE`, 8 ore). Un utente può avere più
   token attivi; quelli scaduti si cancellano quando ne viene emesso uno nuovo.
 - **Revoca**: `DELETE /api/agent/token/` (con la sessione) revoca tutti i token dell'utente; dall'admin

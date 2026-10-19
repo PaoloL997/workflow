@@ -62,6 +62,8 @@ urlpatterns = [
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Token per servizi esterni (emissione e revoca, solo con la sessione)
     path("api/agent/token/", views.agent_token_api, name="agent_token_api"),
+    # Chi è l'utente della richiesta (token o sessione)
+    path("api/agent/me/", views.agent_me_api, name="agent_me_api"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
     path("api/commesse/<str:job>/", views.commessa_api_detail, name="commessa_api_detail"),

@@ -11,6 +11,7 @@ from ..models import ApiToken, Permesso, StatoEsterno
 from ._fixtures import User
 
 URL_TOKEN = "/api/agent/token/"
+URL_ME = "/api/agent/me/"
 URL_STATI = "/api/stati-esterni/"
 
 
@@ -222,6 +223,62 @@ class RevocaTokenTests(TestCase):
         res = Client().delete(URL_TOKEN, headers=_token(chiave))
         self.assertEqual(res.status_code, 401)
         self.assertTrue(ApiToken.objects.exists())
+
+
+class AgentMeTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(
+            "agente",
+            "agente@example.com",
+            "pw",
+            first_name="Mario",
+            last_name="Rossi",
+            permesso=Permesso.WRITING,
+        )
+        self.token, self.chiave = ApiToken.crea_per_utente(self.user)
+
+    def test_con_token_valido(self):
+        res = self.client.get(URL_ME, headers=_token(self.chiave))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(
+            res.json(), {"username": "agente", "full_name": "Mario Rossi", "can_write": True}
+        )
+
+    def test_can_write_segue_il_permesso_dell_utente(self):
+        lettore = User.objects.create_user(
+            "lettore", "lettore@example.com", "pw", permesso=Permesso.READING
+        )
+        _, chiave = ApiToken.crea_per_utente(lettore)
+        res = self.client.get(URL_ME, headers=_token(chiave))
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["username"], "lettore")
+        self.assertIs(res.json()["can_write"], False)
+        # Stesso esito di api_write_required: lo stesso utente non può scrivere.
+        self.assertEqual(_nuovo_stato(Client(), headers=_token(chiave)).status_code, 403)
+
+    def test_con_sessione(self):
+        self.client.force_login(self.user)
+        res = self.client.get(URL_ME)
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["username"], "agente")
+
+    def test_senza_autenticazione_401(self):
+        res = self.client.get(URL_ME)
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()["error"], "Non autenticato.")
+
+    def test_token_scaduto_401(self):
+        ApiToken.objects.filter(pk=self.token.pk).update(
+            expires_at=timezone.now() - timedelta(seconds=1)
+        )
+        res = self.client.get(URL_ME, headers=_token(self.chiave))
+        self.assertEqual(res.status_code, 401)
+        self.assertEqual(res.json()["error"], "Token non valido.")
+
+    def test_solo_get(self):
+        res = self.client.post(URL_ME, headers=_token(self.chiave))
+        self.assertEqual(res.status_code, 405)
 
 
 class ApiTokenAdminTests(TestCase):

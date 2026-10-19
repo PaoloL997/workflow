@@ -45,7 +45,7 @@ from .models import (
     User,
     valida_immagine_firma,
 )
-from .permissions import api_write_required, trasmittal_interno_write_required
+from .permissions import api_write_required, trasmittal_interno_write_required, user_can_write
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.commesse import (
@@ -568,6 +568,24 @@ def agent_token_api(request):
     revocati, _ = request.user.api_tokens.all().delete()
     logger.info("Revocati %s token API di %s.", revocati, request.user)
     return JsonResponse({"ok": True, "revocati": revocati})
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def agent_me_api(request):
+    """L'utente per cui vale la richiesta (token o sessione).
+
+    Serve al servizio esterno che ha ricevuto il token per sapere per chi
+    agisce. ``can_write`` è lo stesso criterio di ``api_write_required``.
+    """
+    user = request.user
+    return JsonResponse(
+        {
+            "username": user.username,
+            "full_name": user.nome_completo,
+            "can_write": user_can_write(user),
+        }
+    )
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
