@@ -13,6 +13,10 @@
 - Trasmittal (verso il cliente): la colonna **REQUIRED BY** del PDF riporta la data del trasmittal più i giorni concessi al cliente per la revisione (**Revisione cliente** in Informazioni archivio), invece della data di invio pianificata della revisione. Vale anche per l'anteprima; senza giorni configurati la colonna non compare. Cambia solo la data stampata: le date registrate sulle revisioni restano quelle di sempre
 - Trasmittal interno: nella lettera entrano solo la **prima emissione** (Rev 0) di un documento oppure una revisione successiva **che ha già la risposta del cliente**. Un documento la cui ultima revisione è ancora in attesa (inviata senza risposta, o non ancora inviata) compare in grigio in **Nuova lettera** con il motivo e non si può selezionare. Lo stepper della revisione sceglie solo tra le revisioni ammesse del documento (al posto del ±2 libero) e il server rifiuta un'etichetta diversa
 
+### Fixed
+
+- La revisione successiva creata dalla ricezione (e dalla correzione della risposta del cliente) nasceva con **Crea nuova revisione** attivo, anche se non ha ancora nessuna risposta del cliente. Ora nasce con il flag spento: vale solo per la revisione che ha già la risposta
+
 ## [0.1.6] - 2026-10-13
 
 ### Added

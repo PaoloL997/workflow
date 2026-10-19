@@ -51,7 +51,7 @@ class RispostaClienteApiTests(TestCase):
             crea_nuova_rev=True,
         )
         self.rev1 = Revisione.objects.create(
-            documento=self.doc, rev_no=1, dis_plan_date=date(2026, 5, 4), crea_nuova_rev=True
+            documento=self.doc, rev_no=1, dis_plan_date=date(2026, 5, 4)
         )
 
     def _url(self, pk=None):
@@ -139,6 +139,19 @@ class RispostaClienteApiTests(TestCase):
         self.rev0.refresh_from_db()
         self.assertEqual(self.rev0.ext_status_id, self.commented.pk)
         self.assertTrue(self.rev0.crea_nuova_rev)
+
+    def test_la_successiva_creata_nasce_senza_crea_nuova_rev(self):
+        """Il flag resta solo sulla revisione che ha la risposta del cliente."""
+        self.rev1.delete()
+        self.rev0.ext_status = self.approved
+        self.rev0.crea_nuova_rev = False
+        self.rev0.save()
+
+        successiva = self._correggi(self.commented).json()["successiva"]
+
+        self.assertEqual(successiva["azione"], "creata")
+        self.assertFalse(successiva["revisione"]["crea_nuova_rev"])
+        self.assertFalse(Revisione.objects.get(pk=successiva["revisione"]["id"]).crea_nuova_rev)
 
     def test_risposta_con_nuova_rev_e_successiva_presente_non_la_tocca(self):
         risposta = self._correggi(self.rejected)
@@ -260,7 +273,10 @@ class CreaRevisioneSuccessivaRicezioneTests(TestCase):
         nuova = self._ricevi()
 
         self.assertEqual(nuova.dis_plan_date, date(2026, 9, 24))
-        self.assertTrue(nuova.crea_nuova_rev)
+
+    def test_la_nuova_revisione_nasce_senza_crea_nuova_rev(self):
+        """Il flag resta solo sulla revisione che ha la risposta del cliente."""
+        self.assertFalse(self._ricevi().crea_nuova_rev)
 
     def test_senza_giorni_del_vendor_la_data_resta_vuota(self):
         self.testata.time_ven_doc_rev = None

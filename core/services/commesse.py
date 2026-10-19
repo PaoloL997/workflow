@@ -920,8 +920,9 @@ def crea_revisione_successiva(doc, rev):
 
     La data di invio pianificata è la data di rientro di ``rev`` più i giorni
     concessi al vendor (``Testata.time_ven_doc_rev``); senza uno dei due resta
-    vuota. Usata dalla ricezione e dalla correzione della risposta cliente
-    (vedi ``services/risposta_cliente.py``).
+    vuota. ``crea_nuova_rev`` resta False: ha senso solo su una revisione che
+    ha già ricevuto la risposta del cliente. Usata dalla ricezione e dalla
+    correzione della risposta cliente (vedi ``services/risposta_cliente.py``).
     """
     time_ven = doc.testata.time_ven_doc_rev
     dis_plan = (
@@ -931,7 +932,7 @@ def crea_revisione_successiva(doc, rev):
         documento=doc,
         rev_no=(rev.rev_no or 0) + 1,
         dis_plan_date=dis_plan,
-        crea_nuova_rev=True,
+        crea_nuova_rev=False,
     )
 
 
