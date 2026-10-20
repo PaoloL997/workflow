@@ -1,21 +1,30 @@
 {% comment %}
-Pannello laterale dell'assistente, incluso una sola volta da base.html per gli utenti
-autenticati. Per ora è vuoto: la chat arriva in un task successivo. Apertura e chiusura
+Finestra modale dell'assistente, inclusa una sola volta da base.html per gli utenti
+autenticati. Per ora è vuota: la chat arriva in un task successivo. Apertura e chiusura
 le gestisce base.html (pulsante core/partials/agent_toggle.html); lo stile è in
-core/static/core/agent_widget.css.
+core/static/core/agent_widget.css. La finestra sta dentro lo sfondo, che la centra.
 {% endcomment %}
-<div class="agent-panel-backdrop" id="agent-panel-backdrop"></div>
-<aside class="agent-panel" id="agent-panel" role="dialog" aria-modal="true" aria-labelledby="agent-panel-title">
-  <div class="agent-panel-header">
-    <h2 class="agent-panel-title" id="agent-panel-title">Assistente</h2>
-    <button type="button" class="agent-panel-close" id="agent-panel-close" aria-label="Chiudi assistente">✕</button>
-  </div>
-  <div class="agent-panel-body">
-    <p class="agent-panel-placeholder">La chat arriverà qui</p>
-  </div>
-  <div class="agent-panel-footer">
-    <input type="text" class="agent-panel-input" placeholder="Scrivi un messaggio…"
-           aria-label="Messaggio per l'assistente" disabled>
-    <button type="button" class="agent-panel-send" disabled>Invia</button>
-  </div>
-</aside>
+<div class="agent-panel-backdrop" id="agent-panel-backdrop">
+  <section class="agent-panel" id="agent-panel" role="dialog" aria-modal="true" aria-labelledby="agent-panel-title">
+    <div class="agent-panel-header">
+      <span class="agent-panel-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z"/>
+        </svg>
+      </span>
+      <div class="agent-panel-heading">
+        <h2 class="agent-panel-title" id="agent-panel-title">Assistente</h2>
+        <p class="agent-panel-subtitle">Chiedi informazioni su commesse e documenti</p>
+      </div>
+      <button type="button" class="agent-panel-close" id="agent-panel-close" aria-label="Chiudi assistente">✕</button>
+    </div>
+    <div class="agent-panel-body">
+      <p class="agent-panel-placeholder">La chat arriverà qui</p>
+    </div>
+    <div class="agent-panel-footer">
+      <input type="text" class="agent-panel-input" placeholder="Scrivi un messaggio…"
+             aria-label="Messaggio per l'assistente" disabled>
+      <button type="button" class="agent-panel-send" disabled>Invia</button>
+    </div>
+  </section>
+</div>

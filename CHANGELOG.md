@@ -6,7 +6,7 @@
 
 - Token API per i servizi esterni (es. un agent che lavora per conto di un utente): l'utente loggato emette un token con `POST /api/agent/token/` e il servizio chiama le API con l'header `Authorization: Token <chiave>`, con gli stessi permessi dell'utente. Il token scade come una sessione (8 ore), si revoca con `DELETE /api/agent/token/` o dall'admin (*Token API*) e nel database resta solo l'hash della chiave. Per ora senza pulsante nelle pagine (vedi README)
 - API `GET /api/agent/me/`: con il token (o la sessione) restituisce l'utente per cui vale la richiesta (`username`, `full_name`, `can_write`), così il servizio esterno sa per chi sta agendo e se può scrivere
-- Pulsante **Assistente** (icona robot), subito sopra quello chiaro/scuro in tutte le pagine dopo il login: apre un pannello laterale a destra, per ora vuoto, che ospiterà la chat con l'assistente. Si chiude con la ✕, con Esc o cliccando fuori
+- Pulsante **Assistente** (icona robot), subito sopra quello chiaro/scuro in tutte le pagine dopo il login: apre una finestra centrata, per ora vuota, che ospiterà la chat con l'assistente. Si chiude con la ✕, con Esc o cliccando fuori
 - API `POST /api/revisioni/<id>/risposta-cliente/` (per ora senza pulsante nelle pagine) per correggere la risposta del cliente di una revisione già rientrata: allinea anche **Crea nuova revisione** e la revisione successiva, che si elimina se è ancora vuota e la nuova risposta non prevede un'altra revisione, o si crea come alla ricezione se la prevede e manca. Se la revisione successiva è già in lavorazione (inviata, ricevuta, con risposta, con un file collegato o in un trasmittal) la correzione viene rifiutata senza toccare nulla e va fatta a mano
 
 ### Changed
