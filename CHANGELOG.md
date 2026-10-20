@@ -8,6 +8,7 @@
 - API `GET /api/agent/me/`: con il token (o la sessione) restituisce l'utente per cui vale la richiesta (`username`, `full_name`, `can_write`), così il servizio esterno sa per chi sta agendo e se può scrivere
 - Pulsante **Assistente** (icona robot), subito sopra quello chiaro/scuro in tutte le pagine dopo il login: apre una finestra in basso a destra, per ora vuota, che ospiterà la chat con l'assistente. Si chiude con la ✕, con Esc o cliccando fuori
 - API `POST /api/revisioni/<id>/risposta-cliente/` (per ora senza pulsante nelle pagine) per correggere la risposta del cliente di una revisione già rientrata: allinea anche **Crea nuova revisione** e la revisione successiva, che si elimina se è ancora vuota e la nuova risposta non prevede un'altra revisione, o si crea come alla ricezione se la prevede e manca. Se la revisione successiva è già in lavorazione (inviata, ricevuta, con risposta, con un file collegato o in un trasmittal) la correzione viene rifiutata senza toccare nulla e va fatta a mano
+- API `POST /api/revisioni/<id>/annulla-invio/` (per ora senza pulsante nelle pagine) per annullare un invio al cliente registrato per errore: la revisione torna **Da emettere** e si azzerano la data di invio e la data di ricezione prevista. Vale solo per una revisione inviata e non ancora rientrata (senza data di ricezione né risposta del cliente); trasmittal e file collegati restano com'erano
 
 ### Changed
 
