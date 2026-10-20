@@ -513,7 +513,7 @@
     }
   </style>
   {% if user.is_authenticated %}
-  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}">
+  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}?v=2">
   {% endif %}
   <!-- Anti-flash: apply saved theme before first paint -->
   <script>
@@ -721,7 +721,7 @@
     <span class="app-brand-sub">Gestione di commessa</span>
   </div>
 
-  <!-- ── Assistente — finestra modale centrata, si apre dal pulsante robot ── -->
+  <!-- ── Assistente — finestra modale in basso a destra, si apre dal pulsante robot ── -->
   {% include "core/partials/agent_panel.html" %}
   {% endif %}
 
