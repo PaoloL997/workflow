@@ -98,6 +98,7 @@ from .services.commesse import (
 from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
+from .services.manuale import leggi_manuale
 from .services.media import (
     ERRORI_STORAGE,
     StorageNonDisponibile,
@@ -1632,6 +1633,43 @@ def annulla_invio_api(request, pk):
     except InvioNonAnnullabile as exc:
         return _errore(str(exc))
     return JsonResponse({"ok": True, **esito})
+
+
+# ── API: Manuale utente ──────────────────────────────────────────────────────
+
+
+def _etag_corrisponde(if_none_match, version):
+    """Vero se ``If-None-Match`` cita ``version`` (anche fra virgolette o con ``W/``)."""
+    for etag in (if_none_match or "").split(","):
+        etag = etag.strip()
+        if etag.startswith("W/"):
+            etag = etag[2:]
+        if etag.strip('"') == version:
+            return True
+    return False
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def manuale_api(request):
+    """Il manuale utente in markdown, con la versione per il servizio che lo indicizza.
+
+    ``?only_version=1`` restituisce solo ``version`` e ``updated_at``. L'header
+    ``ETag`` vale ``version``: con ``If-None-Match`` uguale la risposta è 304.
+    """
+    try:
+        manuale = leggi_manuale()
+    except FileNotFoundError:
+        return _errore("Manuale non trovato.", status=404)
+    version = manuale["version"]
+    if _etag_corrisponde(request.headers.get("If-None-Match"), version):
+        risposta = HttpResponse(status=304)
+    else:
+        if request.GET.get("only_version") in ("1", "true"):
+            manuale.pop("content")
+        risposta = JsonResponse(manuale)
+    risposta["ETag"] = version
+    return risposta
 
 
 # ── Export: Document list as Excel ───────────────────────────────────────────
