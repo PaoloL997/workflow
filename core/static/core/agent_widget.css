@@ -1,0 +1,144 @@
+/* ── Assistente: pulsante (core/partials/agent_toggle.html) e pannello laterale
+   (core/partials/agent_panel.html). Caricato da base.html per gli utenti autenticati. ── */
+
+/* Il pulsante ha anche la classe .theme-toggle della pagina: da lì prende forma,
+   colori e hover. Qui solo la posizione, subito sopra il pulsante del tema
+   (44px di altezza a 24px dal fondo, 10px di spazio come fra campanella e avatar).
+   Due classi: vince sul .theme-toggle della pagina qualunque sia l'ordine degli stili. */
+.theme-toggle.agent-toggle {
+  bottom: calc(24px + 44px + 10px);
+}
+
+/* ── Sfondo: stesso velo dei modali delle pagine (.modal-overlay) ── */
+.agent-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  background: hsla(0,0%,0%,0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.agent-panel-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease;
+}
+
+/* ── Pannello: superficie, bordo e ombra dei modali, ancorato a destra ── */
+.agent-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 191;
+  width: 380px;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-elevated);
+  transform: translateX(100%);
+  visibility: hidden;
+  transition: transform 0.25s ease, visibility 0s linear 0.25s;
+}
+.agent-panel.open {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.25s ease;
+}
+
+@media (max-width: 480px) {
+  .agent-panel { width: 100%; border-left: none; }
+}
+
+.agent-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.agent-panel-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Come .btn-close dei modali */
+.agent-panel-close {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-elevated);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: background 0.15s;
+}
+.agent-panel-close:hover { background: var(--color-border); }
+.agent-panel-close:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.agent-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agent-panel-placeholder {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.agent-panel-footer {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Come .form-input dei modali */
+.agent-panel-input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: 15px;
+  box-shadow: inset 0 1px 3px hsla(0,0%,0%,0.08);
+}
+.agent-panel-input::placeholder { color: var(--color-text-secondary); opacity: 0.6; }
+
+/* Come .btn.btn-primary delle pagine */
+.agent-panel-send {
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.agent-panel-input:disabled,
+.agent-panel-send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

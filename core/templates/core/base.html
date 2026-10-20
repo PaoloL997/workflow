@@ -512,6 +512,9 @@
       transform: translateX(-50%) translateY(0);
     }
   </style>
+  {% if user.is_authenticated %}
+  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}">
+  {% endif %}
   <!-- Anti-flash: apply saved theme before first paint -->
   <script>
     (function(){
@@ -717,6 +720,9 @@
     <span class="app-brand-sep">/</span>
     <span class="app-brand-sub">Gestione di commessa</span>
   </div>
+
+  <!-- ── Assistente — pannello laterale, si apre dal pulsante robot ── -->
+  {% include "core/partials/agent_panel.html" %}
   {% endif %}
 
   <!-- ── Spotlight: Cerca Commessa (globale) ── -->
@@ -973,6 +979,42 @@
         var next = isDark ? 'light' : 'dark';
         document.documentElement.setAttribute('data-theme', next);
         localStorage.setItem('theme', next);
+      });
+    })();
+
+    /* Assistente (core/partials/agent_toggle.html + agent_panel.html): un handler per tutte
+       le pagine. Lo stato aperto/chiuso non si salva: a ogni pagina il pannello parte chiuso. */
+    (function () {
+      var btn = document.getElementById('agent-toggle-btn');
+      var panel = document.getElementById('agent-panel');
+      var backdrop = document.getElementById('agent-panel-backdrop');
+      var closeBtn = document.getElementById('agent-panel-close');
+      if (!btn || !panel || !backdrop || !closeBtn) return;
+
+      function isOpen() { return panel.classList.contains('open'); }
+
+      function openPanel() {
+        panel.classList.add('open');
+        backdrop.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+        closeBtn.focus();
+      }
+
+      function closePanel() {
+        if (!isOpen()) return;
+        panel.classList.remove('open');
+        backdrop.classList.remove('open');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.focus();
+      }
+
+      btn.addEventListener('click', function () {
+        if (isOpen()) { closePanel(); } else { openPanel(); }
+      });
+      closeBtn.addEventListener('click', closePanel);
+      bindBackdropClose(backdrop, closePanel);
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closePanel();
       });
     })();
   </script>

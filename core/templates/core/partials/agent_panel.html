@@ -1,0 +1,21 @@
+{% comment %}
+Pannello laterale dell'assistente, incluso una sola volta da base.html per gli utenti
+autenticati. Per ora è vuoto: la chat arriva in un task successivo. Apertura e chiusura
+le gestisce base.html (pulsante core/partials/agent_toggle.html); lo stile è in
+core/static/core/agent_widget.css.
+{% endcomment %}
+<div class="agent-panel-backdrop" id="agent-panel-backdrop"></div>
+<aside class="agent-panel" id="agent-panel" role="dialog" aria-modal="true" aria-labelledby="agent-panel-title">
+  <div class="agent-panel-header">
+    <h2 class="agent-panel-title" id="agent-panel-title">Assistente</h2>
+    <button type="button" class="agent-panel-close" id="agent-panel-close" aria-label="Chiudi assistente">✕</button>
+  </div>
+  <div class="agent-panel-body">
+    <p class="agent-panel-placeholder">La chat arriverà qui</p>
+  </div>
+  <div class="agent-panel-footer">
+    <input type="text" class="agent-panel-input" placeholder="Scrivi un messaggio…"
+           aria-label="Messaggio per l'assistente" disabled>
+    <button type="button" class="agent-panel-send" disabled>Invia</button>
+  </div>
+</aside>
