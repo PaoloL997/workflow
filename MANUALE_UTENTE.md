@@ -6,6 +6,7 @@ Questo documento descrive **tutte le operazioni disponibili** nell'interfaccia u
 
 ---
 
+<!-- no-index -->
 ## Indice
 
 1. [Panoramica](#1-panoramica)
@@ -54,6 +55,8 @@ Workflow consente di:
 
 ## 2. Accesso e account
 
+Questo capitolo spiega come accedere all'applicazione, registrarsi e gestire il proprio profilo.
+
 ### 2.1 Accedere all'applicazione
 
 1. Apri l'indirizzo dell'applicazione nel browser (es. `http://server:8000/`).
@@ -82,13 +85,13 @@ Clicca sull'**avatar** in alto a destra per aprire la pagina **Profilo**.
 
 #### Modificare i dati personali
 
-1. Aggiorna nome, cognome, email, ruolo e reparto.
+1. Nella pagina **Profilo**, aggiorna nome, cognome, email, ruolo e reparto.
 2. Per cambiare l'avatar, clicca sull'immagine circolare e seleziona un file.
 3. Clicca **Salva modifiche**.
 
 #### Cambiare password
 
-1. Nella sezione **Cambia password**, inserisci la password attuale.
+1. Nella pagina **Profilo**, sezione **Cambia password**, inserisci la password attuale.
 2. Inserisci la nuova password e la conferma (minimo 8 caratteri).
 3. Clicca **Aggiorna password**.
 
@@ -99,6 +102,8 @@ Dalla pagina Profilo, clicca **Esci** (in basso nella colonna sinistra).
 ---
 
 ## 3. Navigazione generale
+
+Questo capitolo descrive gli elementi comuni a tutte le pagine: barra di navigazione, ricerca, tema, notifiche e download dei dati grezzi.
 
 ### 3.1 Barra di navigazione
 
@@ -200,7 +205,7 @@ Clicca **Visualizza tutte** sotto i pulsanti principali per aprire l'elenco comp
    - **Termini consegna** — es. DDP, FCA
 3. Clicca **Crea commessa**.
 
-> **Suggerimento ERP:** quando digiti il Job (almeno 3 caratteri), l'app interroga automaticamente Business Central e, se trova la commessa, compila i campi Cliente, PO, Descrizione e Data consegna. Compare l'indicatore ✓ *Trovata* o *Non trovata in ERP*. Se in seguito quei dati cambiano in Business Central, il controllo giornaliero riallinea la commessa (vedi [6.4](#64-aggiornamenti-da-business-central)).
+> **Suggerimento ERP:** quando digiti il Job (almeno 3 caratteri), l'app interroga automaticamente Business Central e, se trova la commessa, compila i campi Cliente, PO, Descrizione e Data consegna. Compare l'indicatore ✓ *Trovata* o *Non trovata in ERP*. Se in seguito quei dati cambiano in Business Central, il controllo giornaliero riallinea la commessa (vedi [6.4 Aggiornamenti da Business Central](#64-aggiornamenti-da-business-central)).
 
 ### 4.3 Importare una commessa dal vecchio sistema (Report/Access)
 
@@ -240,7 +245,7 @@ La dashboard della commessa è il punto centrale per tutte le attività. Mostra:
 | **Gestisci ricezione** | Registrazione risposte cliente |
 | **Situazione documenti** | Vista tabellare completa |
 
-> **Nota:** le sezioni Emissione, Ricezione e Situazione sono **pienamente attive** solo quando l'archivio è completo, cioè quando sono stati impostati sia i **giorni revisione cliente** sia i **giorni revisione B&R** in Informazioni archivio. Se mancano, le card appaiono attenuate con il messaggio *"Clicca per compilare"*.
+> **Nota:** le sezioni Emissione, Ricezione e Situazione sono **pienamente attive** solo quando l'archivio è completo, cioè quando sono stati impostati sia i **giorni revisione cliente** sia i **giorni revisione B&R** in **6.1 Tempi di revisione**. Se mancano, le card appaiono attenuate con il messaggio *"Clicca per compilare"*.
 
 ### 5.2 Anteprime nella dashboard
 
@@ -278,7 +283,7 @@ Questa sezione configura i parametri che governano il calcolo automatico delle d
 1. Inserisci i valori nei campi numerici.
 2. Clicca **Salva modifiche**.
 
-Come vengono indicate le revisioni (numero, lettera o sequenza personalizzata) si sceglie nella sezione **Revisioni** (§6.3).
+Come vengono indicate le revisioni (numero, lettera o sequenza personalizzata) si sceglie nella sezione **6.3 Revisioni**.
 
 ### 6.2 Indirizzi di consegna
 
@@ -286,7 +291,7 @@ Gli indirizzi vengono usati nella generazione del PDF trasmittal.
 
 #### Aggiungere un indirizzo
 
-1. Clicca **+ Aggiungi indirizzo**.
+1. In **Informazioni archivio**, sezione **Indirizzi di consegna**, clicca **+ Aggiungi indirizzo**.
 2. Compila i campi:
    - Consignee (destinatario)
    - Indirizzo
@@ -296,6 +301,8 @@ Gli indirizzi vengono usati nella generazione del PDF trasmittal.
 3. Clicca **Salva**.
 
 #### Modificare o eliminare un indirizzo
+
+In **Informazioni archivio**, sezione **Indirizzi di consegna**:
 
 - Clicca **Modifica** sulla riga dell'indirizzo, aggiorna i campi e salva.
 - Clicca **Elimina** per rimuoverlo (con conferma implicita).
@@ -326,7 +333,7 @@ Scegliendo **Numero** o **Lettera** e salvando, la sequenza personalizzata viene
 
 #### Come viene mostrata la revisione
 
-Questa scelta è l'unica cosa che decide come si legge la revisione. Vale per ogni schermata (elenco documenti, situazione documenti in entrambe le viste comprese le intestazioni di colonna, emissione, ricezione, trasmittal interno, sblocco e anomalie revisioni) e per ogni stampa o export (Excel, PDF, trasmittal).
+La scelta fatta nella sezione **6.3 Revisioni** (Numero, Lettera o Personalizzata) è l'unica cosa che decide come si legge la revisione. Vale per ogni schermata (elenco documenti, situazione documenti in entrambe le viste comprese le intestazioni di colonna, emissione, ricezione, trasmittal interno, sblocco e anomalie revisioni) e per ogni stampa o export (Excel, PDF, trasmittal).
 
 Sotto, ogni revisione resta un numero progressivo. Numero e lettera sono due modi di scrivere lo stesso dato (`0 = A`, `1 = B`, … `25 = Z`, `26 = AA`): se sulla revisione manca il valore richiesto, viene ricavato dall'altro. Con la sequenza personalizzata conta solo il numero progressivo, e la lettera eventualmente salvata sulla revisione viene ignorata. Cambiare la scelta non modifica quindi i dati, solo la loro lettura: i PDF già emessi e le lettere di trasmittal interno già create mantengono la revisione con cui sono state prodotte.
 
@@ -413,7 +420,7 @@ Per ogni riga importata viene creata una Revisione 0. Eventuali errori (es. repa
 3. Il numero B&R Doc viene calcolato come `{job}-{codice_fisso}` (es. `25056-QMDBI`).
 4. I modelli il cui documento esiste già nella commessa vengono saltati.
 
-> I modelli documento si gestiscono dal pannello admin (sezione *Modelli documento*).
+> I modelli documento si gestiscono dal pannello admin (sezione *Modelli documento*, vedi **12.1 Configurare un modello documento**).
 
 ### 7.5 Modificare un documento
 
@@ -436,6 +443,8 @@ Clicca **Esporta** per scaricare un file Excel (`<job>_document_list.xlsx`) con 
 ---
 
 ## 8. Revisioni e file collegati
+
+Questo capitolo spiega dove stanno i file delle revisioni sul fileserver e come l'applicazione li apre o li collega.
 
 ### 8.1 Struttura cartelle sul fileserver
 
@@ -499,7 +508,7 @@ Vengono elencati i documenti la cui revisione corrente **non** è ancora in stat
 ### 9.2 Procedura di emissione
 
 1. **Imposta la data** di emissione nella barra superiore (default: oggi).
-2. **Seleziona i destinatari** cliccando il pulsante destinatari e spuntando gli indirizzi di consegna configurati in archivio.
+2. **Seleziona i destinatari** cliccando il pulsante destinatari e spuntando gli indirizzi di consegna configurati in **6.2 Indirizzi di consegna**.
 3. **Seleziona i documenti** da emettere spuntando le checkbox (o usa *Seleziona tutti*).
 4. Scegli l'azione:
    - **Stampa** — genera solo il PDF trasmittal senza registrare l'emissione
@@ -553,7 +562,7 @@ Per ogni documento da registrare:
 2. **Data ricezione** — inserisci la data in formato `gg/mm/aaaa` oppure usa il calendario.
 3. **Nuova rev.** — toggle che indica se creare automaticamente la revisione successiva.
 
-> Quando selezioni uno stato esterno, il toggle **Nuova rev.** si imposta automaticamente in base alla configurazione dello stato (campo *Crea nuova revisione* nell'admin).
+> Quando selezioni uno stato esterno, il toggle **Nuova rev.** si imposta automaticamente in base alla configurazione dello stato (campo *Crea nuova revisione* nell'admin, vedi **12.2 Configurare una risposta del cliente**).
 
 ### 10.3 Registrare le ricezioni
 
@@ -637,7 +646,7 @@ Clicca sull'intestazione di una colonna per ordinare i dati.
 
 ### 11.5 Apertura file
 
-Clicca su una riga o su una data di ricezione effettiva per aprire il file collegato alla revisione (stessa logica descritta al §8).
+Clicca su una riga o su una data di ricezione effettiva per aprire il file collegato alla revisione (stessa logica descritta in **8.2 Apertura automatica dei file**).
 
 ### 11.6 Esportazione Excel e PDF
 
@@ -747,6 +756,8 @@ Questo è il ciclo tipico di vita di un documento:
 
 ### Esempio pratico
 
+Un esempio del ciclo descritto nel capitolo **13. Flusso di lavoro completo**:
+
 1. Crei la commessa `25056` con cliente "ACME Corp".
 2. In archivio imposti: 14 giorni revisione cliente, 7 giorni revisione interna.
 3. Aggiungi il documento `25056-QMDBI` con data invio prevista 15/06/2026.
@@ -757,6 +768,8 @@ Questo è il ciclo tipico di vita di un documento:
 ---
 
 ## 14. Glossario
+
+Questo capitolo raccoglie il significato degli stati interni e dei campi di documenti e revisioni.
 
 ### Stati interni
 
@@ -790,7 +803,7 @@ Questo è il ciclo tipico di vita di un documento:
 |-------|-------------|
 | **Rev. No** | Numero revisione (0, 1, 2…) |
 | **Rev. Let** | Lettera revisione (A, B, C…) |
-| | Come si vede la revisione a schermo e nelle stampe dipende solo dalla sezione **Revisioni** in archivio (§6.3): numero, lettera o sequenza personalizzata; se il valore manca viene ricavato dall'altro |
+| | Come si vede la revisione a schermo e nelle stampe dipende solo dalla sezione **6.3 Revisioni** in Informazioni archivio: numero, lettera o sequenza personalizzata; se il valore manca viene ricavato dall'altro |
 | **Inv. previsto** | Data pianificata di invio al cliente |
 | **Inv. effettivo** | Data effettiva di invio |
 | **Ric. previsto** | Data entro cui ci si aspetta la risposta |
@@ -810,9 +823,11 @@ Questo è il ciclo tipico di vita di un documento:
 
 ## 16. Domande frequenti
 
+Questo capitolo risponde ai dubbi più comuni su emissione, ricezione, file e integrazioni.
+
 ### Perché non vedo documenti in Emissione/Ricezione?
 
-Verifica di aver compilato **entrambi** i campi giorni revisione in **Informazioni archivio**. Senza questi valori l'archivio è considerato incompleto.
+Verifica di aver compilato **entrambi** i campi giorni revisione in **Informazioni archivio → 6.1 Tempi di revisione**. Senza questi valori l'archivio è considerato incompleto.
 
 ### Perché un documento non compare in Ricezione?
 
@@ -826,7 +841,7 @@ Possibili cause:
 - Il nome file non contiene il B&R Doc
 - La share JOBS non è montata o accessibile dal server
 
-Soluzione: usa il **collegamento manuale** tramite il browser file.
+Soluzione: usa il **collegamento manuale** tramite il browser file (vedi **8.3 Collegamento manuale di un file**).
 
 ### Posso modificare lo stato interno di una revisione?
 
@@ -838,7 +853,7 @@ Quando crei una nuova commessa e digiti il Job, l'app interroga **Business Centr
 
 ### I dati presi da Business Central restano aggiornati?
 
-Sì: ogni giorno alle 17:00 il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.4](#64-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
+Sì: ogni giorno alle 17:00 il sistema riconfronta cliente, PO, descrizione e data consegna delle commesse aperte con Business Central e le riallinea se in BC sono cambiate. Le modifiche applicate sono elencate in **Informazioni archivio → Aggiornamenti da Business Central** (vedi [6.4 Aggiornamenti da Business Central](#64-aggiornamenti-da-business-central)). Un valore vuoto in BC non cancella mai quello inserito nel sistema.
 
 ### Come importo dati dal vecchio database Access?
 

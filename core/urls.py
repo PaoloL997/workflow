@@ -64,6 +64,8 @@ urlpatterns = [
     path("api/agent/token/", views.agent_token_api, name="agent_token_api"),
     # Chi è l'utente della richiesta (token o sessione)
     path("api/agent/me/", views.agent_me_api, name="agent_me_api"),
+    # Manuale utente in markdown, con versione (per l'indicizzazione esterna)
+    path("api/manuale/", views.manuale_api, name="manuale_api"),
     # API — Commesse
     path("api/commesse/", views.commesse_api, name="commesse_api"),
     path("api/commesse/<str:job>/", views.commessa_api_detail, name="commessa_api_detail"),

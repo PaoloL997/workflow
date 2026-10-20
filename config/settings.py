@@ -278,6 +278,9 @@ SHORT_DATETIME_FORMAT = "j M Y H:i"
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Manuale utente servito da GET /api/manuale/ (indicizzato da un servizio esterno).
+MANUALE_UTENTE_PATH = BASE_DIR / "MANUALE_UTENTE.md"
+
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
