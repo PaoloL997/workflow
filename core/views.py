@@ -46,6 +46,7 @@ from .models import (
     valida_immagine_firma,
 )
 from .permissions import api_write_required, trasmittal_interno_write_required, user_can_write
+from .services.annulla_invio import InvioNonAnnullabile, annulla_invio_cliente
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.commesse import (
@@ -1611,6 +1612,24 @@ def risposta_cliente_api(request, pk):
     except RevisioneSuccessivaInLavorazione as exc:
         return _errore(str(exc), status=409)
     except RispostaClienteNonCorreggibile as exc:
+        return _errore(str(exc))
+    return JsonResponse({"ok": True, **esito})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def annulla_invio_api(request, pk):
+    """Annulla un invio al cliente registrato per errore.
+
+    Vedi ``services/annulla_invio.py``: riporta la revisione a "da emettere" e
+    azzera le date dell'invio; trasmittal e file restano.
+    """
+    try:
+        esito = annulla_invio_cliente(pk)
+    except Revisione.DoesNotExist:
+        return _errore("Revisione non trovata.", status=404)
+    except InvioNonAnnullabile as exc:
         return _errore(str(exc))
     return JsonResponse({"ok": True, **esito})
 
