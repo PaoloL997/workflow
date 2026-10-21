@@ -289,8 +289,8 @@ l'header `Authorization: Token <chiave>` e restituiscono status e JSON dell'agen
   gli altri errori dell'agent (400, 404, 409…) arrivano al widget con lo stesso status e JSON.
   Su 404 il widget azzera la conversazione. Timeout verso l'agent: 120 s.
 - La conversazione (`conversation_id`) sopravvive al cambio pagina nella stessa scheda
-  (`sessionStorage`). Il tasto **ℹ** nell'intestazione apre le informazioni sull'agent e il
-  pulsante **Nuova conversazione**.
+  (`sessionStorage`). Nell'intestazione: **ℹ** apre le informazioni sull'agent, la matita inizia una
+  nuova conversazione.
 
 ## Database
 

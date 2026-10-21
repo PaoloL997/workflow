@@ -39,7 +39,7 @@ class AgentWidgetTemplateTests(TestCase):
         self.assertContains(res, "core/agent_widget.js")
         self.assertContains(res, 'id="agent-panel-info"', count=1)
         self.assertContains(res, 'id="agent-info-backdrop"', count=1)
-        self.assertContains(res, 'id="agent-info-new"', count=1)
+        self.assertContains(res, 'id="agent-panel-new"', count=1)
         # Campo e Invia attivi: la chat c'è
         self.assertContains(res, 'id="agent-input"', count=1)
         self.assertContains(res, 'id="agent-send"', count=1)

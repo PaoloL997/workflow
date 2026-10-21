@@ -25,7 +25,7 @@
   var infoBtn = document.getElementById('agent-panel-info');
   var infoBackdrop = document.getElementById('agent-info-backdrop');
   var infoClose = document.getElementById('agent-info-close');
-  var newBtn = document.getElementById('agent-info-new');
+  var newBtn = document.getElementById('agent-panel-new');
   if (!panel || !body || !list || !form || !input || !sendBtn) return;
 
   var STORAGE_KEY = 'agent_conversation_id';
@@ -218,7 +218,7 @@
   function updateInputState() {
     var locked = state.busy || state.pending.length > 0;
     input.disabled = locked;
-    sendBtn.disabled = locked;
+    sendBtn.disabled = locked || !input.value.trim();
     input.placeholder = state.pending.length > 0 && !state.busy
       ? 'Decidi sulle azioni proposte…'
       : 'Scrivi un messaggio…';
@@ -327,7 +327,8 @@
 
   function errorMessage(status, data) {
     var msg = null;
-    if (data && typeof data.error === 'string') msg = data.error;
+    if (status === 503) msg = 'Workflow Agent non è disponibile al momento.';
+    else if (data && typeof data.error === 'string') msg = data.error;
     else if (data && typeof data.detail === 'string') {
       msg = data.detail;
       if (data.expected !== undefined || data.received !== undefined) {
@@ -336,13 +337,12 @@
     }
     if (msg === null) {
       switch (status) {
-        case 0: msg = 'Assistente non raggiungibile: controlla la connessione e riprova.'; break;
+        case 0: msg = 'Workflow Agent non raggiungibile: controlla la connessione e riprova.'; break;
         case 401: msg = 'Sessione scaduta: ricarica la pagina e accedi di nuovo.'; break;
         case 403: msg = 'Richiesta rifiutata: ricarica la pagina e riprova.'; break;
         case 404: msg = 'Conversazione non trovata.'; break;
         case 409: msg = 'Nessuna azione in attesa di conferma.'; break;
-        case 503: msg = 'Assistente non disponibile.'; break;
-        default: msg = 'Errore dell\'assistente (' + status + ').';
+        default: msg = 'Errore di Workflow Agent (' + status + ').';
       }
     }
     if (status === 404) {
@@ -448,12 +448,31 @@
 
   /* ── Collegamento al pannello ── */
 
+  /* Textarea a una riga che cresce fino a 4 (il massimo lo fissa il CSS con max-height) */
+  function autosize() {
+    input.style.height = 'auto';
+    // box-sizing: border-box, quindi al contenuto va aggiunto il bordo
+    input.style.height = (input.scrollHeight + input.offsetHeight - input.clientHeight) + 'px';
+  }
+
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var text = input.value.trim();
     if (!text || state.busy || state.pending.length) return;
     input.value = '';
+    autosize();
     sendMessage(text);
+  });
+  input.addEventListener('input', function () {
+    autosize();
+    updateInputState();
+  });
+  // Invio manda, Shift+Invio va a capo
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
   });
 
   if (newBtn) newBtn.addEventListener('click', newConversation);

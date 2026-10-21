@@ -513,7 +513,7 @@
     }
   </style>
   {% if user.is_authenticated %}
-  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}?v=4">
+  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}?v=5">
   {% endif %}
   <!-- Anti-flash: apply saved theme before first paint -->
   <script>
@@ -1021,7 +1021,7 @@
 
   {% if user.is_authenticated %}
   <!-- Chat di Workflow Agent (core/partials/agent_panel.html): stato, invio, conferme, modale ℹ -->
-  <script src="{% static 'core/agent_widget.js' %}?v=2" defer></script>
+  <script src="{% static 'core/agent_widget.js' %}?v=3" defer></script>
   {% endif %}
 
   {% block extra_scripts %}{% endblock %}
