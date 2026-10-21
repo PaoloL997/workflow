@@ -1,4 +1,4 @@
-/* ── Workflow Agent: pulsante (core/partials/agent_toggle.html), drawer a destra e modale
+/* ── Workflow Agent: pulsante (core/partials/agent_toggle.html), finestra in basso a destra e modale
    informativo (core/partials/agent_panel.html). Caricato da base.html per gli utenti
    autenticati. Solo variabili del tema (base.html): funziona in chiaro e in scuro. ── */
 
@@ -10,13 +10,16 @@
   bottom: calc(24px + 44px + 10px);
 }
 
-/* ── Sfondo: velo leggero, ancora il drawer al bordo destro ── */
+/* ── Sfondo: velo leggero, ancora la finestra in basso a destra, sopra la colonna
+   dei pulsanti robot/tema ── */
 .agent-panel-backdrop {
   position: fixed;
   inset: 0;
   z-index: 190;
   display: flex;
+  align-items: flex-end;
   justify-content: flex-end;
+  padding: 24px;
   background: hsla(0,0%,0%,0.3);
   opacity: 0;
   visibility: hidden;
@@ -28,26 +31,31 @@
   transition: opacity 0.2s ease;
 }
 
-/* ── Drawer: tutta l'altezza, angoli arrotondati solo sul lato interno, nessun bordo ── */
+/* ── Finestra: figlia dello sfondo, in basso a destra, alta al massimo 4/5 dello schermo,
+   angoli 16px, ombra morbida, nessun bordo ── */
 .agent-panel {
   width: 400px;
   max-width: 100%;
-  height: 100%;
+  height: 640px;
+  max-height: min(80vh, 640px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   background: var(--color-bg);
-  border-radius: var(--radius-lg, 16px) 0 0 var(--radius-lg, 16px);
-  box-shadow: -12px 0 40px hsla(0,0%,0%,0.18);
-  transform: translateX(100%);
-  transition: transform 0.2s ease;
+  border-radius: var(--radius-lg, 16px);
+  box-shadow: 0 20px 50px hsla(0,0%,0%,0.22);
+  transform: translateY(12px);
+  opacity: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 .agent-panel-backdrop.open .agent-panel {
   transform: none;
+  opacity: 1;
 }
 
 @media (max-width: 480px) {
-  .agent-panel { width: 100%; border-radius: 0; }
+  .agent-panel-backdrop { padding: 12px; }
+  .agent-panel { width: 100%; max-height: 85vh; }
 }
 
 /* ── Intestazione a una riga: titolo a sinistra, icone a destra ── */
@@ -360,7 +368,7 @@
 }
 .agent-panel-send:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
-/* ── Modale informativo (tasto ℹ): sopra il drawer ── */
+/* ── Modale informativo (tasto ℹ): sopra la finestra ── */
 .agent-info-backdrop {
   position: fixed;
   inset: 0;

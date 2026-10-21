@@ -1,9 +1,9 @@
 {% comment %}
-Drawer di Workflow Agent, incluso una sola volta da base.html per gli utenti
+Finestra di Workflow Agent, inclusa una sola volta da base.html per gli utenti
 autenticati. Apertura e chiusura le gestisce base.html (pulsante
 core/partials/agent_toggle.html); la chat e il modale informativo (tasto ℹ) li gestisce
-core/static/core/agent_widget.js, lo stile è in core/static/core/agent_widget.css. Il
-drawer sta dentro lo sfondo, che lo ancora al bordo destro.
+core/static/core/agent_widget.js, lo stile è in core/static/core/agent_widget.css. La
+finestra sta dentro lo sfondo, che la ancora in basso a destra.
 data-job: la commessa della pagina, se c'è (le pagine di commessa passano ``testata`` al
 template); il JS la manda all'agent come context.job.
 {% endcomment %}
@@ -45,7 +45,7 @@ template); il JS la manda all'agent come context.job.
   </section>
 </div>
 
-{% comment %} Modale informativo del tasto ℹ: sopra il drawer, lo apre e chiude agent_widget.js {% endcomment %}
+{% comment %} Modale informativo del tasto ℹ: sopra la finestra, lo apre e chiude agent_widget.js {% endcomment %}
 <div class="agent-info-backdrop" id="agent-info-backdrop">
   <div class="agent-info" role="dialog" aria-modal="true" aria-labelledby="agent-info-title">
     <h3 class="agent-info-title" id="agent-info-title">Workflow Agent</h3>
