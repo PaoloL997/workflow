@@ -6,28 +6,6 @@ Questo documento descrive **tutte le operazioni disponibili** nell'interfaccia u
 
 ---
 
-<!-- no-index -->
-## Indice
-
-1. [Panoramica](#1-panoramica)
-2. [Accesso e account](#2-accesso-e-account)
-3. [Navigazione generale](#3-navigazione-generale)
-4. [Home e gestione commesse](#4-home-e-gestione-commesse)
-5. [Pagina commessa (dashboard)](#5-pagina-commessa-dashboard)
-6. [Informazioni archivio](#6-informazioni-archivio)
-7. [Elenco documenti](#7-elenco-documenti)
-8. [Revisioni e file collegati](#8-revisioni-e-file-collegati)
-9. [Gestione emissione](#9-gestione-emissione)
-10. [Gestione ricezione](#10-gestione-ricezione)
-11. [Situazione documenti](#11-situazione-documenti)
-12. [Pannello amministrazione](#12-pannello-amministrazione)
-13. [Flusso di lavoro completo](#13-flusso-di-lavoro-completo)
-14. [Glossario](#14-glossario)
-15. [Scorciatoie da tastiera](#15-scorciatoie-da-tastiera)
-16. [Domande frequenti](#16-domande-frequenti)
-
----
-
 ## 1. Panoramica
 
 Workflow consente di:
