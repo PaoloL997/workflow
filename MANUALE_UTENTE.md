@@ -14,6 +14,7 @@ Workflow consente di:
 - Gestire l'**elenco documenti** di ogni commessa
 - Tracciare le **revisioni** di ogni documento con stati interni ed esterni
 - **Emettere** documenti al cliente (con generazione PDF trasmittal)
+- **Distribuire** internamente i documenti UT agli stabilimenti con il **trasmittal interno** (modulo MQ 7.5-04)
 - **Registrare la ricezione** delle risposte del cliente
 - Visualizzare la **situazione** complessiva dei documenti
 - Collegare e aprire i **file** sul fileserver di rete (cartelle JOBS)
@@ -28,6 +29,8 @@ Workflow consente di:
 | **Stato interno** | Fase di lavorazione interna (da iniziare → inviato al cliente → ricevuto) |
 | **Risposta cliente** | Esito della revisione da parte del cliente (Approved, Commented, ecc.) |
 | **Trasmittal** | Lettera di accompagnamento PDF inviata al cliente con i documenti |
+| **Trasmittal interno** | Lettera (modulo MQ 7.5-04) con cui i documenti UT vengono distribuiti agli stabilimenti e preparati per il DCC, prima dell'invio al cliente |
+| **Sito costruttivo** | Stabilimento che costruisce la commessa; serve per il trasmittal interno |
 
 ---
 
@@ -65,7 +68,8 @@ Clicca sull'**avatar** in alto a destra per aprire la pagina **Profilo**.
 
 1. Nella pagina **Profilo**, aggiorna nome, cognome, email, ruolo e reparto.
 2. Per cambiare l'avatar, clicca sull'immagine circolare e seleziona un file.
-3. Clicca **Salva modifiche**.
+3. Nel riquadro **Firma**, carica (o sostituisci) l'immagine della tua firma: viene stampata nel PDF del trasmittal interno se sei registrato come firmatario di uno stabilimento (vedi **12.8 Il PDF della lettera**).
+4. Clicca **Salva modifiche**.
 
 #### Cambiare password
 
@@ -222,8 +226,9 @@ La dashboard della commessa è il punto centrale per tutte le attività. Mostra:
 | **Gestisci emissione** | Invio documenti al cliente |
 | **Gestisci ricezione** | Registrazione risposte cliente |
 | **Situazione documenti** | Vista tabellare completa |
+| **Trasmittal interno** | Distribuzione interna dei documenti UT agli stabilimenti (capitolo **12. Trasmittal interno**) |
 
-> **Nota:** le sezioni Emissione, Ricezione e Situazione sono **pienamente attive** solo quando l'archivio è completo, cioè quando sono stati impostati sia i **giorni revisione cliente** sia i **giorni revisione B&R** in **6.1 Tempi di revisione**. Se mancano, le card appaiono attenuate con il messaggio *"Clicca per compilare"*.
+> **Nota:** le sezioni Emissione, Ricezione e Situazione sono **pienamente attive** solo quando l'archivio è completo, cioè quando sono stati impostati sia i **giorni revisione cliente** sia i **giorni revisione B&R** in **6.1 Tempi di revisione**. Se mancano, le card appaiono attenuate con il messaggio *"Clicca per compilare"*. La card **Trasmittal interno** si sblocca invece quando è impostato il **Sito costruttivo** della commessa.
 
 ### 5.2 Anteprime nella dashboard
 
@@ -260,6 +265,8 @@ Questa sezione configura i parametri che governano il calcolo automatico delle d
 
 1. Inserisci i valori nei campi numerici.
 2. Clicca **Salva modifiche**.
+
+Nello stesso riquadro c'è il campo **Sito costruttivo**: lo stabilimento che costruisce la commessa, scelto tra quelli con un codice sito Business Central. Serve a sbloccare il **Trasmittal interno** (capitolo **12. Trasmittal interno**). Se è vuoto, il controllo giornaliero con Business Central prova a impostarlo da solo; si può comunque scegliere a mano e salvare con **Salva modifiche**.
 
 Come vengono indicate le revisioni (numero, lettera o sequenza personalizzata) si sceglie nella sezione **6.3 Revisioni**.
 
@@ -398,7 +405,7 @@ Per ogni riga importata viene creata una Revisione 0. Eventuali errori (es. repa
 3. Il numero B&R Doc viene calcolato come `{job}-{codice_fisso}` (es. `25056-QMDBI`).
 4. I modelli il cui documento esiste già nella commessa vengono saltati.
 
-> I modelli documento si gestiscono dal pannello admin (sezione *Modelli documento*, vedi **12.1 Configurare un modello documento**).
+> I modelli documento si gestiscono dal pannello admin (sezione *Modelli documento*, vedi **13.1 Configurare un modello documento**).
 
 ### 7.5 Modificare un documento
 
@@ -641,7 +648,157 @@ Clicca l'icona schermo intero per espandere la tabella a tutto lo schermo. Clicc
 
 ---
 
-## 12. Pannello amministrazione
+## 12. Trasmittal interno
+
+URL: `/commesse/<job>/trasmittal-interno/`
+
+Il trasmittal interno è la lettera (modulo qualità **MQ 7.5-04**) con cui l'Ufficio Tecnico distribuisce agli **stabilimenti** le copie dei documenti UT e segnala quali vanno preparati per il cliente. È un'operazione separata da **Gestisci emissione** (capitolo **9. Gestione emissione**): emettere una lettera di trasmittal interno **non cambia lo stato di nessuna revisione**.
+
+A ogni emissione l'applicazione crea la lettera, salva il PDF sul fileserver, prepara una cartella per il DCC con i PDF dei documenti destinati al cliente e invia un'email ai destinatari.
+
+### 12.1 Prerequisiti
+
+| Requisito | Dove si imposta |
+|-----------|-----------------|
+| **Sito costruttivo** della commessa | **Informazioni archivio** (campo *Sito costruttivo*, vedi **6.1 Tempi di revisione**). Se manca, la card *Trasmittal interno* nella pagina commessa è bloccata con il messaggio *"Completa prima il sito costruttivo della commessa"*. Il controllo giornaliero con Business Central prova a impostarlo da solo |
+| Documenti del reparto **UT** | Nella lettera entrano solo i documenti il cui reparto ha acronimo `UT`. I documenti degli altri reparti non compaiono |
+| Permesso **Può scrivere sul trasmittal interno** | Pannello admin, scheda *Utenti* → *Permessi app*. È indipendente dal permesso generale di scrittura: chi non lo ha vede la sezione ma non può modificare destinazioni, emettere, annullare o ritentare un passo |
+| **Stabilimenti** con sigla, codice sito Business Central e indirizzi email | Pannello admin, *Stabilimenti*: per ogni sito gli indirizzi **TO/CC** e gli indirizzi **default** sempre in copia |
+| **Persone commessa** (PM, PE, QCI) | Pannello admin, *Archivi commessa* → riquadro *Persone commessa*. Servono per i destinatari automatici dell'email |
+| **Firmatari stabilimento** | Pannello admin, *Firmatari stabilimento*: chi firma per Produzione e Qualità nel PDF (vedi **12.8 Il PDF della lettera**) |
+
+### 12.2 La schermata
+
+La pagina mostra lo **storico delle lettere emesse** per la commessa, le più recenti in cima. Ogni lettera ha un nome del tipo `<job>_<aaaa-mm-gg>_E<n>` (es. `25056_2026-10-21_E1`): il progressivo `E<n>` riparte da 1 ogni giorno per ogni commessa.
+
+Per ogni lettera:
+
+- la **data** è un link che apre il PDF salvato sul fileserver. Se il PDF non è più nella cartella, la data è grigia con l'indicazione *"PDF non trovato sul fileserver"*;
+- il pulsante **Annulla** compare solo sull'ultima lettera emessa in quel giorno (vedi **12.9 Annullare una lettera**).
+
+In alto a destra ci sono i due pulsanti **Destinazioni** e **Nuova Lettera**. L'icona informativa accanto al titolo spiega come compaiono le firme nel PDF.
+
+### 12.3 Destinazioni (siti coinvolti)
+
+**Destinazioni** apre l'elenco di tutti i documenti UT della commessa con i siti a cui va la copia cartacea di ciascuno. Sono le destinazioni che la lettera riporta nella colonna *INVOLVED SITES* e che decidono quali stabilimenti ricevono l'email.
+
+Colonne: **Documento**, **Titolo**, **Ultima modifica** (data del file in `PROGETTO\UT`, in grigio) e **Siti coinvolti**. Si ordinano cliccando l'intestazione e si filtrano con l'imbuto, come in Gestisci emissione. Di default i documenti modificati più di recente sono in cima, quelli senza file in coda.
+
+Per impostare i siti:
+
+- **Un documento alla volta:** clicca la cella **Siti coinvolti** del documento e spunta gli stabilimenti nel menu a tendina. Il salvataggio è immediato.
+- **Più documenti insieme:** spunta i documenti (o **Seleziona tutti**), scegli lo stabilimento in *Assegna sito ai documenti selezionati* e clicca **Aggiungi** oppure **Rimuovi**. Con un filtro attivo, *Seleziona tutti* seleziona solo i documenti visibili.
+
+Le destinazioni dei documenti che non ne hanno ancora nessuna vengono **precompilate automaticamente** ogni giorno, insieme al controllo con Business Central, dal vecchio file `<job>-RecipientsData.txt` sul fileserver, se esiste. Una destinazione impostata (a mano o dall'import) non viene più toccata dall'import.
+
+### 12.4 Nuova lettera: scegliere i documenti
+
+**Nuova Lettera** apre l'elenco dei documenti UT con le stesse colonne, ordinamenti e filtri di **Destinazioni**, più la casella **Cerca documento**. Il caricamento può richiedere qualche secondo perché l'applicazione verifica i file sul fileserver.
+
+Un documento si può selezionare solo se:
+
+1. ha almeno una revisione registrata;
+2. la sua **ultima revisione è ancora da emettere** al cliente, cioè lo stato interno non è né *Inviato al Cliente* né *Ricevuto* (lo stesso criterio di Gestisci emissione);
+3. nella cartella `PROGETTO\UT` c'è **un solo file** che corrisponde al B&R Doc.
+
+Gli altri documenti compaiono in grigio con il motivo (*"Nessuna revisione registrata"*, *"Rev 1 già inviata al cliente"*, *"Nessun file trovato sul fileserver"*, *"Più file corrispondenti sul fileserver"*) e non si possono spuntare.
+
+Spunta i documenti e clicca **Emetti trasmittal interno** per passare alla compilazione.
+
+### 12.5 Cosa stai trasmettendo: compilare la lettera
+
+Il pannello **Cosa stai trasmettendo** mostra in alto le sigle dei siti coinvolti e una riga per ogni documento scelto:
+
+| Colonna | Cosa indica |
+|---------|-------------|
+| **Documento** | B&R Doc e titolo |
+| **Revisione** | Revisione trasmessa. Lo stepper ± sceglie solo tra le revisioni ammesse del documento: oggi è l'ultima, quindi un solo valore |
+| **Siti** | Siti coinvolti della riga. Si possono modificare qui, cliccando la cella: il cambio aggiorna anche le destinazioni del documento |
+| **Copie** | Numero di copie cartacee (facoltativo) |
+| **Cliente** | Spuntato (default): il documento va al cliente e il suo PDF viene copiato nella cartella DCC. Deselezionalo per un documento solo interno |
+| **TPI** | Spunta se il documento va a un ispettore terzo e scrivi a chi (suggerimenti: `No.Bo.`, `AI`) |
+| **Nota** | Richiama una o più delle note libere della lettera: nel PDF la riga riporta il numero della nota |
+
+Sotto la tabella, **Note libere della lettera** (tre righe, si aggiungono con **+ Aggiungi nota**) finiscono nella sezione *NOTES* del PDF; le righe vuote vengono ignorate.
+
+Clicca **Emetti** per passare ai destinatari.
+
+### 12.6 A chi va: destinatari e invio
+
+Il pannello **A chi va** riepiloga cosa succederà all'invio (nome della lettera, percorso del PDF, cartella DCC o l'avviso che nessun documento è marcato *Cliente*, email) e propone i destinatari calcolati automaticamente, divisi in **A (TO)** e **CC** e raggruppati per origine:
+
+| Gruppo | Chi | Colonna |
+|--------|-----|---------|
+| **Stabilimenti** | Indirizzi TO/CC e indirizzi default dei siti coinvolti (tra parentesi la sigla del sito) | TO o CC come da anagrafica |
+| **PM** | Project manager della commessa | TO |
+| **PE** / **QCI** | Project engineer e ispettore qualità della commessa | CC |
+| **Export** | `export@brembanarolle.com`, solo se nella lettera c'è almeno un documento SHn (B&R Doc del tipo `xxxxx-xx-ESH…`) | CC |
+| **Manuale** | Indirizzi aggiunti a mano | dove li hai inseriti |
+
+Se sulla commessa manca una persona per un ruolo (PM, PE o QCI), un avviso lo segnala: per quel ruolo non viene aggiunto nessun destinatario. Il ruolo WE non ha una lista di distribuzione e non genera destinatari.
+
+Prima di inviare puoi:
+
+- togliere un destinatario con la **×** sulla sua etichetta;
+- aggiungerne uno scrivendolo nel campo **Aggiungi email…** della colonna giusta e premendo **+** o **Invio**. Mentre scrivi compaiono gli indirizzi già noti all'applicazione (utenti attivi, indirizzi degli stabilimenti, destinatari delle lettere precedenti). Un indirizzo già presente nella stessa colonna non viene duplicato;
+- scrivere un **Messaggio nell'email** (facoltativo, massimo 2000 caratteri): compare nell'email sopra la tabella dei documenti, non nel PDF;
+- scaricare un'**Anteprima PDF** della lettera così com'è: non crea nulla e non occupa un progressivo.
+
+Clicca **Invia a N destinatari** per emettere la lettera.
+
+### 12.7 Cosa succede all'invio
+
+L'emissione è una sequenza di passi. Il primo è l'unico che può bloccare tutto: se la selezione o un destinatario non sono validi, non viene creata nessuna lettera. Gli altri sono indipendenti: un passo che fallisce non annulla la lettera e non blocca i successivi.
+
+| Passo | Cosa fa |
+|-------|---------|
+| **Archivio** | Crea la lettera con il progressivo del giorno, le righe e i destinatari. I siti di ogni riga sono una fotografia delle destinazioni in quel momento: cambiarle dopo non modifica la lettera |
+| **PDF** | Salva il PDF in `Z:\JOBS\<job>\Progetto\UT\Transmittal\<nome>.pdf` |
+| **DCC** | Copia il PDF di ogni documento con **Cliente** spuntato nella cartella `Z:\JOBS\<job>\PROGETTO\DCC\DA SPEDIRE\<nome>`. Un documento di cui non si trova il file viene segnalato come mancante, gli altri vengono copiati comunque. Senza documenti per il cliente la cartella non viene creata |
+| **Email** | Invia l'email ai destinatari confermati |
+
+Al termine il pannello mostra l'esito di ogni passo con ✓ o ✗. Su un passo fallito compare **Riprova**, che ripete solo quel passo (ad esempio il PDF se lo storage delle firme non rispondeva, o l'email se il server di posta era fermo).
+
+L'email:
+
+- parte dalla **casella dell'applicazione**; chi ha emesso la lettera è scritto nella prima riga del testo (*emesso da Nome Cognome (email)*), riceve le risposte e una copia. Vale anche se **Riprova** sull'email lo preme un'altra persona;
+- ha come oggetto `DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: <nome lettera>`;
+- riporta nel corpo il messaggio facoltativo, la tabella dei documenti con le stesse colonne del PDF e il percorso in cui il PDF è salvato sul fileserver. Il PDF non è allegato: si apre dal percorso indicato.
+
+### 12.8 Il PDF della lettera
+
+Il PDF riproduce il modulo **MQ 7.5-04**, dall'alto in basso:
+
+1. **Intestazione** con logo, titolo del modulo e numero di commessa.
+2. **Tabella dei documenti**: *B&R DOC. No.*, *REV.*, *INVOLVED SITES (a)*, *No. OF COPIES*, *CLIENT (b)*, *TPI (b)(c)*, *NOTES*.
+3. **REMARKS LEGENDA**: la legenda delle sigle dei siti (a), il significato di CLIENT/TPI (b) e dei destinatari TPI (c).
+4. **NOTES**: le note libere della lettera, numerate.
+5. **PAPER COPIES DISTRIBUTION**: una riga **PRODUCTION** e una **QUALITY** con firma e data. La data è il giorno lavorativo successivo all'emissione (il venerdì diventa lunedì): è il termine entro cui distribuire le copie cartacee, non la data della firma.
+6. I riferimenti fissi del modulo.
+
+La revisione è scritta come indicato in **6.3 Revisioni** al momento dell'emissione; una lettera già emessa non cambia se la scelta cambia dopo.
+
+**Firme di Produzione e Qualità.** Per ogni sito coinvolto, la firma compare in automatico solo se valgono entrambe le condizioni:
+
+1. la persona ha caricato la propria firma nella pagina **Profilo** (vedi **2.3 Profilo utente**);
+2. è registrata come **Firmatario stabilimento** per quel sito e quel ruolo (pannello admin).
+
+Chi è firmatario ma non ha caricato la firma ha nel PDF un riquadro vuoto da firmare a mano. Se per un ruolo non c'è nessun firmatario, per quel ruolo non compare nulla. Se lo storage delle firme non risponde, il passo PDF fallisce e va ripetuto con **Riprova**: la lettera non viene emessa senza firme.
+
+### 12.9 Annullare una lettera
+
+**Annulla** è disponibile solo sull'**ultima lettera emessa in quel giorno** per la commessa, così il progressivo liberato è davvero l'ultimo. Dopo la conferma:
+
+- la lettera e le sue righe vengono eliminate dall'archivio;
+- il PDF viene rimosso dal fileserver;
+- i file copiati nella cartella DCC vengono rimossi, e la cartella viene eliminata se resta vuota;
+- l'email, se era già partita, **non può essere richiamata**: avvisa tu i destinatari.
+
+Una lettera che non è l'ultima del suo giorno può essere eliminata solo da un superuser dal pannello admin (*Trasmittal interni*). Quell'eliminazione non tocca il PDF, la cartella DCC né l'email: per l'uso normale usa **Annulla**.
+
+---
+
+## 13. Pannello amministrazione
 
 URL: `/admin/` — accessibile dalla navbar tramite **Impostazioni**.
 
@@ -649,18 +806,20 @@ Richiede un account con privilegi di staff. Qui si gestiscono le entità di conf
 
 | Sezione | Cosa si configura |
 |---------|-------------------|
-| **Utenti** | Account, ruolo, reparto, permessi staff |
+| **Utenti** | Account, ruolo, reparto, permessi staff, flag *Può scrivere sul trasmittal interno* |
 | **Reparti** | Nome e acronimo (usato per le cartelle fileserver) |
-| **Stabilimenti** | Sedi per il trasmittal PDF |
+| **Stabilimenti** | Sedi per il trasmittal PDF; per il trasmittal interno anche sigla, codice sito Business Central, indirizzi email TO/CC e indirizzi default sempre in copia |
+| **Firmatari stabilimento** | Chi firma per Produzione e Qualità nel PDF del trasmittal interno |
+| **Trasmittal interni** | Lettere di trasmittal interno emesse; un superuser può eliminarle |
 | **Risposte del cliente** | Stati esterni, colore, flag *Crea nuova revisione* |
 | **Modelli documento** | Template per generazione automatica documenti |
-| **Archivi commessa** | Accesso diretto alle testate |
+| **Archivi commessa** | Accesso diretto alle testate; riquadro *Persone commessa* (PM, PE, QCI) per i destinatari del trasmittal interno |
 | **Documenti / Revisioni** | Consultazione e modifica avanzata |
 | **Link file revisione** | Collegamenti manuali ai file |
 | **Aggiornamenti da Business Central** | Storico (sola lettura) dei campi riallineati all'ERP |
 | **Esecuzioni schedulate** | Data ed esito dell'ultimo controllo automatico con l'ERP (sola lettura) |
 
-### 12.1 Configurare un modello documento
+### 13.1 Configurare un modello documento
 
 1. Vai su **Modelli documento** → **Aggiungi**.
 2. Compila:
@@ -670,7 +829,7 @@ Richiede un account con privilegi di staff. Qui si gestiscono le entità di conf
    - **Reparto**
 3. Salva.
 
-### 12.2 Configurare una risposta del cliente
+### 13.2 Configurare una risposta del cliente
 
 1. Vai su **Risposte del cliente** → **Aggiungi** (o modifica esistente).
 2. Imposta:
@@ -680,7 +839,7 @@ Richiede un account con privilegi di staff. Qui si gestiscono le entità di conf
 
 ---
 
-## 13. Flusso di lavoro completo
+## 14. Flusso di lavoro completo
 
 Questo è il ciclo tipico di vita di un documento:
 
@@ -734,7 +893,7 @@ Questo è il ciclo tipico di vita di un documento:
 
 ### Esempio pratico
 
-Un esempio del ciclo descritto nel capitolo **13. Flusso di lavoro completo**:
+Un esempio del ciclo descritto nel capitolo **14. Flusso di lavoro completo**:
 
 1. Crei la commessa `25056` con cliente "ACME Corp".
 2. In archivio imposti: 14 giorni revisione cliente, 7 giorni revisione interna.
@@ -745,7 +904,7 @@ Un esempio del ciclo descritto nel capitolo **13. Flusso di lavoro completo**:
 
 ---
 
-## 14. Glossario
+## 15. Glossario
 
 Questo capitolo raccoglie il significato degli stati interni e dei campi di documenti e revisioni.
 
@@ -789,7 +948,7 @@ Questo capitolo raccoglie il significato degli stati interni e dei campi di docu
 
 ---
 
-## 15. Scorciatoie da tastiera
+## 16. Scorciatoie da tastiera
 
 | Scorciatoia | Azione |
 |-------------|--------|
@@ -799,7 +958,7 @@ Questo capitolo raccoglie il significato degli stati interni e dei campi di docu
 
 ---
 
-## 16. Domande frequenti
+## 17. Domande frequenti
 
 Questo capitolo risponde ai dubbi più comuni su emissione, ricezione, file e integrazioni.
 
@@ -821,6 +980,22 @@ Possibili cause:
 
 Soluzione: usa il **collegamento manuale** tramite il browser file (vedi **8.3 Collegamento manuale di un file**).
 
+### Perché la card Trasmittal interno è bloccata?
+
+Manca il **Sito costruttivo** della commessa. Impostalo in **Informazioni archivio** (vedi **6.1 Tempi di revisione**) e salva.
+
+### Perché un documento è grigio in Nuova lettera del trasmittal interno?
+
+Il motivo è scritto accanto al documento: non ha revisioni, la sua ultima revisione è già stata inviata al cliente o ricevuta, oppure in `PROGETTO\UT` non c'è esattamente un file con il suo B&R Doc. Vedi **12.4 Nuova lettera: scegliere i documenti**.
+
+### Perché non posso modificare il trasmittal interno?
+
+Serve il flag **Può scrivere sul trasmittal interno** sul tuo utente, che un amministratore imposta dal pannello admin (scheda *Utenti* → *Permessi app*). È separato dal permesso generale di scrittura. Senza il flag vedi lo storico, le destinazioni e l'anteprima, ma non puoi salvare né emettere.
+
+### Nel PDF del trasmittal interno mancano le firme
+
+Per ogni sito coinvolto la firma compare solo se la persona ha caricato la firma nel proprio **Profilo** ed è registrata come **Firmatario stabilimento** per quel sito e quel ruolo (Produzione o Qualità). Vedi **12.8 Il PDF della lettera**.
+
 ### Posso modificare lo stato interno di una revisione?
 
 Non dall'interfaccia lista documenti (sola lettura). Puoi farlo dal pannello **admin** oppure tramite le operazioni di Emissione e Ricezione che aggiornano automaticamente gli stati.
@@ -839,4 +1014,4 @@ Usa **Apri Commessa → Importa da Report** dalla Home. Il server deve avere acc
 
 ---
 
-*Ultimo aggiornamento: giugno 2026*
+*Ultimo aggiornamento: ottobre 2026*
