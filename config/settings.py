@@ -320,6 +320,10 @@ ACCESS_ODBC_DRIVER = os.environ.get(
     "Microsoft Access Driver (*.mdb, *.accdb)",
 )
 
+# Servizio dell'assistente (FastAPI, separato): le pagine gli parlano solo
+# attraverso i proxy /agent/chat/ e /agent/confirm/ (core.views), mai direttamente.
+AGENT_BASE_URL = os.environ.get("AGENT_BASE_URL", "").strip().rstrip("/") or "http://localhost:8001"
+
 ORGANIZZAZIONE_COMMESSE_XLSM_PATH = os.environ.get(
     "ORGANIZZAZIONE_COMMESSE_XLSM_PATH",
     r"Z:\Organizzazione commesse\MQ 8.3-06 Rev1_Organizzazione Commesse.xlsm",

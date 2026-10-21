@@ -64,6 +64,9 @@ urlpatterns = [
     path("api/agent/token/", views.agent_token_api, name="agent_token_api"),
     # Chi è l'utente della richiesta (token o sessione)
     path("api/agent/me/", views.agent_me_api, name="agent_me_api"),
+    # Assistente: le pagine parlano con l'agent solo attraverso questi proxy (sessione + CSRF)
+    path("agent/chat/", views.agent_chat_proxy, name="agent_chat"),
+    path("agent/confirm/", views.agent_confirm_proxy, name="agent_confirm"),
     # Manuale utente in markdown, con versione (per l'indicizzazione esterna)
     path("api/manuale/", views.manuale_api, name="manuale_api"),
     # API — Commesse
