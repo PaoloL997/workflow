@@ -1,4 +1,4 @@
-# Manuale utente — Workflow (Gestione Commesse)
+# Manuale utente — Workflow (Gestione Documentale)
 
 Applicazione web per la gestione di commesse, documenti e revisioni in ambito industriale (Brembana&Rolle).
 
