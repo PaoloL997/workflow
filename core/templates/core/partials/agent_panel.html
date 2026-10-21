@@ -1,9 +1,9 @@
 {% comment %}
-Finestra modale dell'assistente, inclusa una sola volta da base.html per gli utenti
+Finestra di Workflow Agent, inclusa una sola volta da base.html per gli utenti
 autenticati. Apertura e chiusura le gestisce base.html (pulsante
-core/partials/agent_toggle.html); la chat la gestisce core/static/core/agent_widget.js,
-lo stile è in core/static/core/agent_widget.css. La finestra sta dentro lo sfondo, che la
-ancora in basso a destra.
+core/partials/agent_toggle.html); la chat e il modale informativo (tasto ℹ) li gestisce
+core/static/core/agent_widget.js, lo stile è in core/static/core/agent_widget.css. La
+finestra sta dentro lo sfondo, che la ancora in basso a destra.
 data-job: la commessa della pagina, se c'è (le pagine di commessa passano ``testata`` al
 template); il JS la manda all'agent come context.job.
 {% endcomment %}
@@ -15,25 +15,63 @@ template); il JS la manda all'agent come context.job.
           <path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z"/>
         </svg>
       </span>
-      <div class="agent-panel-heading">
-        <h2 class="agent-panel-title" id="agent-panel-title">Assistente</h2>
-        <p class="agent-panel-subtitle">Chiedi informazioni su commesse e documenti</p>
-      </div>
-      <button type="button" class="agent-panel-new" id="agent-panel-new" title="Nuova conversazione" aria-label="Nuova conversazione">
+      <h2 class="agent-panel-title" id="agent-panel-title">Workflow Agent</h2>
+      <button type="button" class="agent-panel-info" id="agent-panel-info" title="Informazioni su Workflow Agent" aria-label="Informazioni su Workflow Agent" aria-haspopup="dialog">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <path d="M12 5v14M5 12h14"/>
+          <circle cx="12" cy="12" r="9.5"/><path d="M12 11v6M12 7.5v.5"/>
         </svg>
       </button>
-      <button type="button" class="agent-panel-close" id="agent-panel-close" aria-label="Chiudi assistente">✕</button>
+      <button type="button" class="agent-panel-close" id="agent-panel-close" aria-label="Chiudi Workflow Agent">✕</button>
     </div>
     <div class="agent-panel-body" id="agent-panel-body">
-      <p class="agent-panel-placeholder" id="agent-panel-placeholder">Chiedi qualcosa sulle commesse o sui documenti: l'assistente risponde e, prima di modificare qualcosa, ti chiede conferma.</p>
+      <div class="agent-panel-placeholder" id="agent-panel-placeholder">
+        <p class="agent-panel-placeholder-title">Cosa posso fare</p>
+        <ul class="agent-panel-capabilities">
+          <li>Cercare commesse, documenti e revisioni e dirti a che punto sono</li>
+          <li>Rispondere su come si usa Workflow</li>
+          <li>Proporre modifiche: le faccio solo dopo la tua conferma</li>
+        </ul>
+        <p class="agent-panel-placeholder-note" id="agent-panel-resume" hidden>La conversazione di prima continua da qui.</p>
+      </div>
       <div class="agent-messages" id="agent-messages" aria-live="polite"></div>
     </div>
     <form class="agent-panel-footer" id="agent-form" autocomplete="off">
       <input type="text" class="agent-panel-input" id="agent-input" placeholder="Scrivi un messaggio…"
-             aria-label="Messaggio per l'assistente" maxlength="4000">
+             aria-label="Messaggio per Workflow Agent" maxlength="4000">
       <button type="submit" class="agent-panel-send" id="agent-send">Invia</button>
     </form>
   </section>
+</div>
+
+{% comment %} Modale informativo del tasto ℹ: sopra la finestra, lo apre e chiude agent_widget.js {% endcomment %}
+<div class="agent-info-backdrop" id="agent-info-backdrop">
+  <div class="agent-info" role="dialog" aria-modal="true" aria-labelledby="agent-info-title">
+    <div class="agent-info-header">
+      <span class="agent-panel-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zM16 17H8v-2h8v2zm-1-4c-.83 0-1.5-.67-1.5-1.5S14.17 10 15 10s1.5.67 1.5 1.5S15.83 13 15 13z"/>
+        </svg>
+      </span>
+      <h3 class="agent-info-title" id="agent-info-title">Workflow Agent</h3>
+    </div>
+    <div class="agent-info-body">
+      <p>Un assistente che lavora dentro Workflow con il tuo utente e i tuoi permessi: quello che non puoi fare tu non lo fa nemmeno lui.</p>
+      <p class="agent-info-label">Cosa sa fare</p>
+      <ul>
+        <li>Cercare commesse, documenti e revisioni e riassumerne lo stato</li>
+        <li>Rispondere sul funzionamento di Workflow, a partire dal manuale utente</li>
+        <li>Proporre modifiche ai dati: prima di eseguirle le elenca e ti chiede di approvarle o rifiutarle una per una</li>
+      </ul>
+      <p class="agent-info-label">Buono a sapersi</p>
+      <ul>
+        <li>Nelle pagine di una commessa sa già di quale commessa stai parlando</li>
+        <li>La conversazione continua anche cambiando pagina in questa scheda del browser</li>
+        <li>Controlla sempre cosa propone prima di approvare: può sbagliare</li>
+      </ul>
+    </div>
+    <div class="agent-info-actions">
+      <button type="button" class="agent-btn" id="agent-info-new">Nuova conversazione</button>
+      <button type="button" class="agent-btn agent-btn-approve" id="agent-info-close">Chiudi</button>
+    </div>
+  </div>
 </div>

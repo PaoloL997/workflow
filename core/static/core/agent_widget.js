@@ -1,5 +1,6 @@
-/* Chat dell'assistente dentro il pannello core/partials/agent_panel.html (incluso da
-   base.html per gli utenti autenticati; apertura/chiusura le gestisce base.html).
+/* Chat di Workflow Agent dentro il pannello core/partials/agent_panel.html (incluso da
+   base.html per gli utenti autenticati; apertura/chiusura le gestisce base.html). Gestisce
+   anche il modale informativo del tasto ℹ, che contiene "Nuova conversazione".
 
    Parla solo con i proxy di Workflow, /agent/chat/ e /agent/confirm/ (sessione + CSRF):
    sono loro a mettere il token API e a girare la richiesta all'agent. Risposta dell'agent:
@@ -20,7 +21,11 @@
   var form = document.getElementById('agent-form');
   var input = document.getElementById('agent-input');
   var sendBtn = document.getElementById('agent-send');
-  var newBtn = document.getElementById('agent-panel-new');
+  var resumeNote = document.getElementById('agent-panel-resume');
+  var infoBtn = document.getElementById('agent-panel-info');
+  var infoBackdrop = document.getElementById('agent-info-backdrop');
+  var infoClose = document.getElementById('agent-info-close');
+  var newBtn = document.getElementById('agent-info-new');
   if (!panel || !body || !list || !form || !input || !sendBtn) return;
 
   var STORAGE_KEY = 'agent_conversation_id';
@@ -198,7 +203,7 @@
     if (typingEl) return;
     typingEl = document.createElement('div');
     typingEl.className = 'agent-typing';
-    typingEl.setAttribute('aria-label', 'L\'assistente sta scrivendo');
+    typingEl.setAttribute('aria-label', 'Workflow Agent sta scrivendo');
     typingEl.innerHTML = '<span></span><span></span><span></span>';
     hidePlaceholder();
     list.appendChild(typingEl);
@@ -416,18 +421,32 @@
     closePending();
     setConversationId(null);
     list.innerHTML = '';
-    if (placeholder) {
-      placeholder.textContent = PLACEHOLDER_EMPTY;
-      placeholder.hidden = false;
-    }
+    if (resumeNote) resumeNote.hidden = true;
+    if (placeholder) placeholder.hidden = false;
+    closeInfo();
     updateInputState();
     focusInput();
   }
 
-  /* ── Collegamento al pannello ── */
+  /* ── Modale informativo (tasto ℹ) ── */
 
-  var PLACEHOLDER_EMPTY = placeholder ? placeholder.textContent : '';
-  var PLACEHOLDER_RESUME = 'La conversazione di prima continua da qui: scrivi per proseguire, oppure aprine una nuova con il pulsante +.';
+  function infoOpen() {
+    return !!infoBackdrop && infoBackdrop.classList.contains('open');
+  }
+
+  function openInfo() {
+    if (!infoBackdrop) return;
+    infoBackdrop.classList.add('open');
+    if (infoClose) infoClose.focus();
+  }
+
+  function closeInfo() {
+    if (!infoOpen()) return;
+    infoBackdrop.classList.remove('open');
+    if (infoBtn) infoBtn.focus();
+  }
+
+  /* ── Collegamento al pannello ── */
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
@@ -438,7 +457,21 @@
   });
 
   if (newBtn) newBtn.addEventListener('click', newConversation);
+  if (infoBtn) infoBtn.addEventListener('click', openInfo);
+  if (infoClose) infoClose.addEventListener('click', closeInfo);
+  if (infoBackdrop) {
+    infoBackdrop.addEventListener('click', function (e) {
+      if (e.target === infoBackdrop) closeInfo();
+    });
+    // In cattura, prima dell'handler di base.html: Esc chiude solo il modale, non la finestra
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && infoOpen()) {
+        e.stopImmediatePropagation();
+        closeInfo();
+      }
+    }, true);
+  }
 
-  if (state.conversationId && placeholder) placeholder.textContent = PLACEHOLDER_RESUME;
+  if (state.conversationId && resumeNote) resumeNote.hidden = false;
   updateInputState();
 })();

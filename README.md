@@ -259,9 +259,9 @@ stessi permessi (lettura/scrittura, trasmittal interno).
   `api/commesse/<job>/situazione/export/`, `api/commesse/<job>/trasmittal/<id>/file/` e
   `api/revisioni/<id>/file/serve/`.
 
-## Assistente (widget di chat)
+## Workflow Agent (widget di chat)
 
-Il pulsante **Assistente** (icona robot) apre in ogni pagina una chat con *workflow-agent*, un
+Il pulsante **Workflow Agent** (icona robot) apre in ogni pagina una chat con *workflow-agent*, un
 servizio FastAPI separato che risponde sulle commesse e sui documenti e, prima di modificare
 qualcosa, chiede conferma. L'indirizzo del servizio sta nel `.env`:
 
@@ -289,7 +289,8 @@ l'header `Authorization: Token <chiave>` e restituiscono status e JSON dell'agen
   gli altri errori dell'agent (400, 404, 409…) arrivano al widget con lo stesso status e JSON.
   Su 404 il widget azzera la conversazione. Timeout verso l'agent: 120 s.
 - La conversazione (`conversation_id`) sopravvive al cambio pagina nella stessa scheda
-  (`sessionStorage`); **+** nell'intestazione del pannello ne inizia una nuova.
+  (`sessionStorage`). Il tasto **ℹ** nell'intestazione apre le informazioni sull'agent e il
+  pulsante **Nuova conversazione**.
 
 ## Database
 

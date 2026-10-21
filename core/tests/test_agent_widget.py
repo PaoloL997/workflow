@@ -20,7 +20,7 @@ AGENT = "http://agent.test"
 
 
 class AgentWidgetTemplateTests(TestCase):
-    """Pulsante e pannello dell'assistente: accanto al pulsante del tema, solo dopo il login."""
+    """Pulsante e pannello di Workflow Agent: accanto al pulsante del tema, solo dopo il login."""
 
     def setUp(self):
         self.client = Client()
@@ -33,11 +33,13 @@ class AgentWidgetTemplateTests(TestCase):
         self.assertTemplateUsed(res, TOGGLE)
         self.assertTemplateUsed(res, PANEL)
         self.assertContains(res, 'id="agent-toggle-btn"', count=1)
-        self.assertContains(res, 'aria-label="Apri assistente"')
+        self.assertContains(res, 'aria-label="Apri Workflow Agent"')
         self.assertContains(res, 'id="agent-panel"', count=1)
         self.assertContains(res, "core/agent_widget.css")
         self.assertContains(res, "core/agent_widget.js")
-        self.assertContains(res, 'id="agent-panel-new"', count=1)
+        self.assertContains(res, 'id="agent-panel-info"', count=1)
+        self.assertContains(res, 'id="agent-info-backdrop"', count=1)
+        self.assertContains(res, 'id="agent-info-new"', count=1)
         # Campo e Invia attivi: la chat c'è
         self.assertContains(res, 'id="agent-input"', count=1)
         self.assertContains(res, 'id="agent-send"', count=1)

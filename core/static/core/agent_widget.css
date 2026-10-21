@@ -1,5 +1,6 @@
-/* ── Assistente: pulsante (core/partials/agent_toggle.html) e finestra modale laterale
-   (core/partials/agent_panel.html). Caricato da base.html per gli utenti autenticati. ── */
+/* ── Workflow Agent: pulsante (core/partials/agent_toggle.html), finestra modale laterale
+   e modale informativo (core/partials/agent_panel.html). Caricato da base.html per gli
+   utenti autenticati. ── */
 
 /* Il pulsante ha anche la classe .theme-toggle della pagina: da lì prende forma,
    colori e hover. Qui solo la posizione, subito sopra il pulsante del tema
@@ -32,12 +33,12 @@
   transition: opacity 0.2s ease;
 }
 
-/* ── Finestra: figlia dello sfondo, a destra, alta al massimo 3/4 dello schermo ── */
+/* ── Finestra: figlia dello sfondo, a destra, alta al massimo 4/5 dello schermo ── */
 .agent-panel {
-  width: 440px;
+  width: 520px;
   max-width: 100%;
-  height: 600px;
-  max-height: min(75vh, 600px);
+  height: 700px;
+  max-height: min(80vh, 700px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -59,18 +60,19 @@
   .agent-panel { width: 100%; max-height: 85vh; }
 }
 
+/* Intestazione compatta: lo spazio va alla chat */
 .agent-panel-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
+  gap: 10px;
+  padding: 10px 14px 10px 16px;
   border-bottom: 1px solid var(--color-border);
 }
 
 /* Icona robot su disco accentato, come .del-modal-icon */
 .agent-panel-icon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   border-radius: 50%;
   display: flex;
@@ -80,24 +82,15 @@
   color: var(--color-accent);
 }
 
-.agent-panel-heading {
+.agent-panel-title {
   flex: 1;
   min-width: 0;
-}
-
-.agent-panel-title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--color-text-primary);
   margin: 0;
   line-height: 1.2;
-}
-
-.agent-panel-subtitle {
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  margin: 2px 0 0;
 }
 
 /* Come .btn-close dei modali */
@@ -125,8 +118,8 @@
   outline-offset: 2px;
 }
 
-/* Nuova conversazione: stesso disco di .agent-panel-close, a sinistra della ✕ */
-.agent-panel-new {
+/* Informazioni (ℹ): stesso disco di .agent-panel-close, a sinistra della ✕ */
+.agent-panel-info {
   width: 30px;
   height: 30px;
   flex-shrink: 0;
@@ -140,11 +133,11 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.agent-panel-new:hover {
+.agent-panel-info:hover {
   background: var(--color-border);
   color: var(--color-text-primary);
 }
-.agent-panel-new:focus-visible {
+.agent-panel-info:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
@@ -159,16 +152,44 @@
   background: var(--color-bg, var(--color-elevated));
 }
 
-/* Vuoto: centrato nel corpo; sparisce al primo messaggio (agent_widget.js) */
+/* Vuoto: al centro, in sintesi, cosa sa fare l'agent; sparisce al primo messaggio */
 .agent-panel-placeholder {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  text-align: center;
   margin: auto;
-  max-width: 30ch;
+  max-width: 34ch;
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 14px;
   line-height: 1.5;
 }
 .agent-panel-placeholder[hidden] { display: none; }
+.agent-panel-placeholder-title {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.agent-panel-capabilities {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-panel-capabilities li {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+.agent-panel-placeholder-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-style: italic;
+}
+.agent-panel-placeholder-note[hidden] { display: none; }
 
 /* ── Messaggi (agent_widget.js) ── */
 .agent-messages {
@@ -396,3 +417,74 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── Modale informativo (tasto ℹ): sopra la finestra, nella forma di .del-modal ── */
+.agent-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: hsla(0,0%,0%,0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.agent-info-backdrop.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease;
+}
+.agent-info {
+  width: calc(100% - 32px);
+  max-width: 480px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px 28px 20px;
+  border-radius: 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 24px 60px hsla(0,0%,0%,0.25);
+  color: var(--color-text-primary);
+  transform: translateY(8px);
+  transition: transform 0.22s ease;
+}
+.agent-info-backdrop.open .agent-info { transform: none; }
+.agent-info-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.agent-info-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.agent-info-body {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.agent-info-body p { margin: 0 0 10px; }
+.agent-info-label {
+  margin: 14px 0 6px !important;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.agent-info-body ul { margin: 0; padding-left: 20px; }
+.agent-info-body li { margin: 3px 0; }
+.agent-info-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.agent-info-actions .agent-btn { padding: 9px 20px; font-size: 14px; }

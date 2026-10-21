@@ -513,7 +513,7 @@
     }
   </style>
   {% if user.is_authenticated %}
-  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}?v=3">
+  <link rel="stylesheet" href="{% static 'core/agent_widget.css' %}?v=4">
   {% endif %}
   <!-- Anti-flash: apply saved theme before first paint -->
   <script>
@@ -721,7 +721,7 @@
     <span class="app-brand-sub">Gestione di commessa</span>
   </div>
 
-  <!-- ── Assistente — finestra modale in basso a destra, si apre dal pulsante robot ── -->
+  <!-- ── Workflow Agent — finestra modale in basso a destra, si apre dal pulsante robot ── -->
   {% include "core/partials/agent_panel.html" %}
   {% endif %}
 
@@ -982,7 +982,7 @@
       });
     })();
 
-    /* Assistente (core/partials/agent_toggle.html + agent_panel.html): un handler per tutte
+    /* Workflow Agent (core/partials/agent_toggle.html + agent_panel.html): un handler per tutte
        le pagine. Lo stato aperto/chiuso non si salva: a ogni pagina il pannello parte chiuso. */
     (function () {
       var btn = document.getElementById('agent-toggle-btn');
@@ -1020,8 +1020,8 @@
   </script>
 
   {% if user.is_authenticated %}
-  <!-- Chat dell'assistente (core/partials/agent_panel.html): stato, invio, conferme -->
-  <script src="{% static 'core/agent_widget.js' %}?v=1" defer></script>
+  <!-- Chat di Workflow Agent (core/partials/agent_panel.html): stato, invio, conferme, modale ℹ -->
+  <script src="{% static 'core/agent_widget.js' %}?v=2" defer></script>
   {% endif %}
 
   {% block extra_scripts %}{% endblock %}
