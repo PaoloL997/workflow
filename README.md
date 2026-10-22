@@ -246,9 +246,11 @@ stessi permessi (lettura/scrittura, trasmittal interno).
   `{"username": "mrossi", "full_name": "Mario Rossi", "can_write": true}`; `can_write` è lo stesso
   criterio dei permessi di scrittura delle API. Senza nome e cognome `full_name` è lo username.
 - **Scadenza**: dura quanto una sessione (`SESSION_COOKIE_AGE`, 8 ore). Un utente può avere più
-  token attivi; quelli scaduti si cancellano quando ne viene emesso uno nuovo.
+  token attivi; quelli scaduti si cancellano quando ne viene emesso uno nuovo. Non scadono solo i
+  token di servizio (vedi sotto).
 - **Revoca**: `DELETE /api/agent/token/` (con la sessione) revoca tutti i token dell'utente; dall'admin
-  (*Token API*) si elimina un singolo token. I token di un utente disattivato non valgono più.
+  (*Token API*, azione **Revoca i token selezionati**) si revocano i token scelti. I token di un
+  utente disattivato non valgono più.
 - **Errori**: senza header si usa la sessione come sempre (401 `Non autenticato.` se manca); token
   non valido, scaduto o revocato → 401 `{"error": "Token non valido."}`.
 - **CSRF**: le richieste col token non lo richiedono (il CSRF protegge i cookie, non un header che
@@ -258,6 +260,39 @@ stessi permessi (lettura/scrittura, trasmittal interno).
 - Non accettano il token tre download pensati per il browser, che usano il login di sessione:
   `api/commesse/<job>/situazione/export/`, `api/commesse/<job>/trasmittal/<id>/file/` e
   `api/revisioni/<id>/file/serve/`.
+
+### Token di servizio (senza scadenza)
+
+Un servizio che non agisce per conto di una persona, come l'ingestion giornaliera di
+*workflow-agent* che legge `GET /api/manuale/`, non può dipendere da un token che scade dopo 8 ore.
+Usa il token di un **utente di servizio**, che non scade:
+
+```bash
+python manage.py crea_token_servizio workflow-agent
+```
+
+Il comando crea l'utente `workflow-agent` se non c'è (attivo, permesso Lettura, non staff, senza
+una password utilizzabile) e lo mette nel gruppo Django **Servizio**, revoca i suoi token precedenti
+e ne emette uno nuovo senza scadenza. La chiave compare una volta sola, nell'output del comando: va
+copiata subito nel `.env` di workflow-agent, poi si riavvia il servizio.
+
+```
+WORKFLOW_TOKEN=<chiave>
+```
+
+- **Cosa può fare**: leggere, come un utente in sola lettura. Le API di scrittura rispondono 403
+  qualunque permesso gli venga dato (anche il flag del trasmittal interno) e `GET /api/agent/me/`
+  risponde `"can_write": false`. Non entra dalla pagina di login, neanche se un giorno avesse una
+  password, quindi non può nemmeno emettersi token con `POST /api/agent/token/`.
+- **Rinnovo**: rilanciare lo stesso comando. Il token vecchio smette subito di valere: aggiornare
+  `WORKFLOW_TOKEN` e riavviare workflow-agent.
+- **Revoca**: `python manage.py crea_token_servizio workflow-agent --revoca` elimina tutti i token
+  dell'utente senza crearne uno nuovo; dall'admin (*Token API*, colonne *Di servizio* e *Scadenza*
+  «mai») si revoca anche un token solo. Togliere l'utente dal gruppo **Servizio** o disattivarlo
+  rende il token non valido (401).
+- Un token senza scadenza vale solo per un utente del gruppo **Servizio**. Il comando non converte
+  un utente che esiste già e non è di servizio: si rifiuta, per non togliere scrittura e login a una
+  persona per uno username sbagliato.
 
 ## Workflow Agent (widget di chat)
 

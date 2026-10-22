@@ -1192,6 +1192,9 @@ def _scadenza_api_token():
 class ApiToken(models.Model):
     """Token con cui un servizio esterno chiama le API per conto di un utente.
 
+    Un servizio che non agisce per una persona usa invece il token senza
+    scadenza di un utente di servizio (comando ``crea_token_servizio``).
+
     Nel database c'è solo lo sha256 della chiave: la chiave in chiaro esce una
     volta sola, da ``crea_per_utente``, e non si può ricostruire. Chi usa il
     token agisce come l'utente, con i suoi permessi (vedi ``core.api_auth``).
@@ -1204,7 +1207,12 @@ class ApiToken(models.Model):
     )
     key = models.CharField(max_length=64, unique=True, verbose_name="Hash della chiave (sha256)")
     created_at = models.DateTimeField(auto_now_add=True)
-    expires_at = models.DateTimeField(default=_scadenza_api_token)
+    expires_at = models.DateTimeField(
+        default=_scadenza_api_token,
+        null=True,
+        blank=True,
+        help_text="Vuota: il token non scade. Vale solo per gli utenti di servizio.",
+    )
     last_used_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -1222,17 +1230,34 @@ class ApiToken(models.Model):
         return hashlib.sha256(chiave.encode()).hexdigest()
 
     @classmethod
-    def crea_per_utente(cls, user):
+    def crea_per_utente(cls, user, senza_scadenza=False):
         """Un nuovo token per ``user``: ``(token, chiave in chiaro)``.
 
+        Di norma scade come una sessione; con ``senza_scadenza`` non scade
+        (``expires_at`` nullo), ma vale solo se ``user`` è di servizio (vedi
+        ``is_valid``). Lo emette così solo il comando ``crea_token_servizio``.
+
         Cancella anche i token già scaduti, di tutti gli utenti: non servono
-        più a niente e, a parte questa pulizia, nessuno li toglierebbe.
+        più a niente e, a parte questa pulizia, nessuno li toglierebbe. Quelli
+        senza scadenza restano: ``expires_at__lte`` non seleziona un valore nullo.
         """
         cls.objects.filter(expires_at__lte=timezone.now()).delete()
         chiave = secrets.token_urlsafe(32)
-        token = cls.objects.create(user=user, key=cls.hash_chiave(chiave))
+        scadenza = {"expires_at": None} if senza_scadenza else {}
+        token = cls.objects.create(user=user, key=cls.hash_chiave(chiave), **scadenza)
         return token, chiave
 
     def is_valid(self):
-        """Non scaduto e di un utente ancora attivo, come per la sessione."""
-        return self.expires_at > timezone.now() and self.user.is_active
+        """Non scaduto e di un utente ancora attivo, come per la sessione.
+
+        Un token senza scadenza vale solo se l'utente è di servizio: su un
+        utente normale (anche uno tolto dal gruppo "Servizio") non vale.
+        """
+        if not self.user.is_active:
+            return False
+        if self.expires_at is None:
+            # Import locale: core.permissions importa già da questo modulo.
+            from .permissions import is_service_user
+
+            return is_service_user(self.user)
+        return self.expires_at > timezone.now()
