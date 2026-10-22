@@ -23,7 +23,6 @@ from ..models import (
     Testata,
     User,
 )
-from .revisione_label import format_revisione_label
 from .stato_esterno_colori import cell_colors, da_inviare_cell_colors, inviato_cell_colors
 from .stato_interno import (
     DA_INVIARE_LABEL,
@@ -389,6 +388,8 @@ def serialize_documento(d, reparto_acronimi=None, testata=None):
     )
     # La testata si passa per non rileggerla documento per documento.
     testata = testata or d.testata
+    # Stessa etichetta di rev_label (Revisione.etichetta); "—" senza revisioni.
+    latest_rev_display = (latest_rev.etichetta(testata) if latest_rev else "") or "—"
     reparto_acronimo = ""
     if d.reparto:
         if reparto_acronimi is not None:
@@ -439,17 +440,10 @@ def serialize_documento(d, reparto_acronimi=None, testata=None):
         "latest_rec_act_date": latest_rev.rec_act_date.isoformat()
         if (latest_rev and latest_rev.rec_act_date)
         else None,
-        "latest_rev_display": (
-            format_revisione_label(
-                latest_rev.rev_no,
-                latest_rev.rev_let,
-                testata.rev_let_flag,
-                testata.rev_sequenza,
-            )
-            if latest_rev
-            else "—"
-        )
-        or "—",
+        "latest_rev_display": latest_rev_display,
+        # Alias di latest_rev_display, con lo stesso nome di rev_label delle
+        # revisioni; latest_rev_display resta per compatibilità.
+        "latest_rev_label": latest_rev_display,
     }
 
 
@@ -470,9 +464,10 @@ def list_documenti(job):
 def revisioni_by_doc_for_job(job: str) -> dict[int, list[dict]]:
     """Return all revisions for a commessa, grouped by document id."""
     revs_by_doc: dict[int, list[dict]] = {}
+    # documento__testata: l'etichetta di ogni revisione non costa query in più.
     revisioni_qs = (
         Revisione.objects.filter(documento__testata_id=job)
-        .select_related("ext_status")
+        .select_related("ext_status", "documento__testata")
         .order_by("documento_id", "rev_no")
     )
     for r in revisioni_qs:
@@ -724,7 +719,17 @@ def delete_stato_esterno(pk):
 # ── Revisione CRUD ───────────────────────────────────────────────────────────
 
 
-def serialize_revisione(r):
+def serialize_revisione(r, testata=None):
+    """Revisione come dizionario per le API.
+
+    Args:
+        r: La revisione.
+        testata: La testata del documento, da passare quando si serializzano
+            molte revisioni della stessa commessa: ``rev_label`` ne legge le
+            impostazioni e senza costerebbe due query per revisione. In
+            alternativa caricare le revisioni con
+            ``select_related("documento__testata")``.
+    """
     int_status_label = ""
     if r.int_status:
         label_map = dict(STATI_INTERNI_CHOICES)
@@ -745,6 +750,9 @@ def serialize_revisione(r):
         "documento_id": r.documento_id,
         "rev_no": r.rev_no,
         "rev_let": r.rev_let,
+        # Etichetta come la vede l'utente: numero, lettera o sequenza della
+        # commessa (vedi services/revisione_label.py).
+        "rev_label": r.etichetta(testata),
         "dis_plan_date": r.dis_plan_date.isoformat() if r.dis_plan_date else None,
         "dis_act_date": r.dis_act_date.isoformat() if r.dis_act_date else None,
         "rec_plan_date": r.rec_plan_date.isoformat() if r.rec_plan_date else None,
@@ -764,15 +772,17 @@ def serialize_revisione(r):
 
 
 def list_revisioni(doc_pk):
-    d = Documento.objects.get(pk=doc_pk)
+    # La testata arriva con il documento (stessa query): l'etichetta di ogni
+    # revisione non costa query in più.
+    d = Documento.objects.select_related("testata").get(pk=doc_pk)
     return [
-        serialize_revisione(r)
+        serialize_revisione(r, testata=d.testata)
         for r in d.revisioni.select_related("ext_status").order_by(*ORDINE_CRESCENTE)
     ]
 
 
 def create_revisione(doc_pk, data):
-    d = Documento.objects.get(pk=doc_pk)
+    d = Documento.objects.select_related("testata").get(pk=doc_pk)
     r = Revisione(documento=d, **_clean_revisione_fields(data))
     r.full_clean()
     r.save()
@@ -780,7 +790,7 @@ def create_revisione(doc_pk, data):
 
 
 def update_revisione(pk, data):
-    r = Revisione.objects.get(pk=pk)
+    r = Revisione.objects.select_related("documento__testata").get(pk=pk)
     for k, v in _clean_revisione_fields(data).items():
         setattr(r, k, v)
     r.full_clean()
@@ -852,7 +862,7 @@ def esegui_emissione(doc_ids, dis_act_date):
             rev.rec_plan_date = None
 
         rev.save()
-        updated.append(serialize_revisione(rev))
+        updated.append(serialize_revisione(rev, testata=doc.testata))
 
     return updated
 
@@ -907,10 +917,12 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
         rev.ext_status_id = ext_status_id
         rev.int_status = "ricevuto"
         rev.save()
-        result.append(serialize_revisione(rev))
+        result.append(serialize_revisione(rev, testata=doc.testata))
 
         if crea_rev:
-            result.append(serialize_revisione(crea_revisione_successiva(doc, rev)))
+            result.append(
+                serialize_revisione(crea_revisione_successiva(doc, rev), testata=doc.testata)
+            )
 
     return result
 

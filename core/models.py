@@ -936,11 +936,17 @@ class Revisione(models.Model):
         verbose_name_plural = "Revisioni"
         ordering = ["rev_no"]
 
-    def etichetta(self):
-        """Etichetta della revisione: numero, lettera o sequenza della testata."""
+    def etichetta(self, testata=None):
+        """Etichetta della revisione: numero, lettera o sequenza della testata.
+
+        Args:
+            testata: La testata del documento, se il chiamante l'ha già letta:
+                serializzando molte revisioni evita due query per revisione
+                (documento e testata). Senza, viene letta dal documento.
+        """
         from .services.revisione_label import format_revisione_label
 
-        testata = self.documento.testata
+        testata = testata or self.documento.testata
         return format_revisione_label(
             self.rev_no, self.rev_let, testata.rev_let_flag, testata.rev_sequenza
         )

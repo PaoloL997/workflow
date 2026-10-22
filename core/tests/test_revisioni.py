@@ -677,6 +677,103 @@ class RevisioneLabelDisplayTests(TestCase):
         self.assertEqual(str(rev), "Rev D")
 
 
+class RevLabelApiTests(TestCase):
+    """``rev_label`` / ``latest_rev_label``: l'etichetta che vede l'utente, nelle API."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            "revlabel_reader", "revlabel-reader@b.it", "pw", permesso=Permesso.READING
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def _commessa(self, job, n_revisioni, **impostazioni):
+        testata = Testata.objects.create(job=job, **impostazioni)
+        doc = Documento.objects.create(testata=testata, vendor_doc=f"{job}-01")
+        for rev_no in range(n_revisioni):
+            Revisione.objects.create(documento=doc, rev_no=rev_no)
+        return doc
+
+    def _rev_labels(self, doc):
+        res = self.client.get(f"/api/documenti/{doc.pk}/revisioni/")
+        self.assertEqual(res.status_code, 200)
+        return {r["rev_no"]: r["rev_label"] for r in res.json()["revisioni"]}
+
+    def _documento(self, doc):
+        res = self.client.get(f"/api/commesse/{doc.testata_id}/documenti/")
+        self.assertEqual(res.status_code, 200)
+        return res.json()["documenti"][0]
+
+    def test_modalita_numero(self):
+        doc = self._commessa("RLAB1", 3)
+
+        self.assertEqual(self._rev_labels(doc)[2], "2")
+
+    def test_modalita_lettera(self):
+        doc = self._commessa("RLAB2", 3, rev_let_flag=True)
+
+        self.assertEqual(self._rev_labels(doc)[2], "C")
+
+    def test_modalita_personalizzata_e_prosecuzione(self):
+        doc = self._commessa("RLAB3", 6, rev_sequenza=["1", "2", "3", "D"])
+
+        etichette = self._rev_labels(doc)
+
+        self.assertEqual(etichette[3], "D")
+        # Oltre la fine la sequenza prosegue dall'ultima etichetta: D → E → F.
+        self.assertEqual(etichette[4], "E")
+        self.assertEqual(etichette[5], "F")
+
+    def test_latest_rev_label_coincide_con_rev_label_dell_ultima_revisione(self):
+        casi = [
+            ("RLAB4", {}, "2"),
+            ("RLAB5", {"rev_let_flag": True}, "C"),
+            ("RLAB6", {"rev_sequenza": ["1", "2", "3", "D"]}, "F"),
+        ]
+        for job, impostazioni, attesa in casi:
+            with self.subTest(job=job):
+                n = 6 if "rev_sequenza" in impostazioni else 3
+                doc = self._commessa(job, n, **impostazioni)
+
+                ultima = self._rev_labels(doc)[n - 1]
+                documento = self._documento(doc)
+
+                self.assertEqual(ultima, attesa)
+                self.assertEqual(documento["latest_rev_label"], ultima)
+                self.assertEqual(documento["latest_rev_display"], ultima)
+
+    def test_documento_senza_revisioni_mantiene_il_trattino(self):
+        doc = self._commessa("RLAB7", 0)
+
+        documento = self._documento(doc)
+
+        self.assertEqual(documento["latest_rev_display"], "—")
+        self.assertEqual(documento["latest_rev_label"], "—")
+
+    def test_l_endpoint_delle_revisioni_non_aggiunge_query(self):
+        doc = self._commessa("RLAB8", 5, rev_sequenza=["1", "2", "3", "D"])
+
+        # Sessione, utente, documento con la testata, revisioni: 4 query come
+        # prima di rev_label, qualunque sia il numero di revisioni.
+        with self.assertNumQueries(4):
+            etichette = self._rev_labels(doc)
+
+        self.assertEqual(len(etichette), 5)
+
+    def test_revisioni_della_commessa_in_una_query(self):
+        testata = Testata.objects.create(job="RLAB9", rev_let_flag=True)
+        for n in range(3):
+            doc = Documento.objects.create(testata=testata, vendor_doc=f"RLAB9-{n}")
+            for rev_no in range(3):
+                Revisione.objects.create(documento=doc, rev_no=rev_no)
+
+        with self.assertNumQueries(1):
+            per_documento = revisioni_by_doc_for_job("RLAB9")
+
+        etichette = [r["rev_label"] for revs in per_documento.values() for r in revs]
+        self.assertEqual(etichette, ["A", "B", "C"] * 3)
+
+
 class RevisioneLabelExportTests(TestCase):
     """Excel, PDF e trasmittal stampano la revisione come dice l'archivio."""
 

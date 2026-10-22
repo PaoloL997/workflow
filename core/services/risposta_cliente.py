@@ -112,15 +112,17 @@ def correggi_risposta_cliente(pk, ext_status_id):
     rev.crea_nuova_rev = nuovo_stato.crea_nuova_rev
     rev.save(update_fields=["ext_status", "crea_nuova_rev"])
 
+    # La testata è già caricata con la revisione: l'etichetta non costa query.
+    testata = doc.testata
     if azione == ELIMINATA:
-        dati_successiva = serialize_revisione(successiva)
+        dati_successiva = serialize_revisione(successiva, testata=testata)
         Revisione.objects.filter(pk__in=[s.pk for s in successive]).delete()
     elif azione == CREATA:
-        dati_successiva = serialize_revisione(crea_revisione_successiva(doc, rev))
+        dati_successiva = serialize_revisione(crea_revisione_successiva(doc, rev), testata=testata)
     else:
-        dati_successiva = serialize_revisione(successiva) if successiva else None
+        dati_successiva = serialize_revisione(successiva, testata=testata) if successiva else None
 
     return {
-        "revisione": serialize_revisione(rev),
+        "revisione": serialize_revisione(rev, testata=testata),
         "successiva": {"azione": azione, "revisione": dati_successiva},
     }
