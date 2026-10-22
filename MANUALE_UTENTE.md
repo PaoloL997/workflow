@@ -210,7 +210,6 @@ Il pulsante con l'icona del **robot**, subito sopra quello del tema in basso a d
 
 - Controllare un documento: titolo e ultima revisione.
 - Leggere una revisione: stato interno, risposta del cliente, date di invio e di rientro, revisione successiva.
-- Elencare le risposte del cliente disponibili.
 - Spiegare come si usa Workflow, a partire da questo manuale.
 
 Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa, come **Gestisci ricezione** o **Situazione documenti**.
