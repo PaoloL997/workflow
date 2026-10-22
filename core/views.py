@@ -46,7 +46,12 @@ from .models import (
     User,
     valida_immagine_firma,
 )
-from .permissions import api_write_required, trasmittal_interno_write_required, user_can_write
+from .permissions import (
+    api_write_required,
+    is_service_user,
+    trasmittal_interno_write_required,
+    user_can_write,
+)
 from .services.agent import AgentNonDisponibile, chiama_agent
 from .services.annulla_invio import InvioNonAnnullabile, annulla_invio_cliente
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
@@ -285,7 +290,9 @@ def login_view(request):
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
         user = authenticate(request, username=username, password=password)
-        if user is not None:
+        # Un utente di servizio usa solo il token: niente sessione, anche se un
+        # giorno gli venisse data una password.
+        if user is not None and not is_service_user(user):
             login(request, user)
             return redirect(_destinazione_dopo_login(request))
         error = "Credenziali non valide. Riprova."

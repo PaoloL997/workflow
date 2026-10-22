@@ -2,6 +2,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib.admin.widgets import AdminFileWidget
 from django.contrib.auth.admin import UserAdmin
+from django.db.models import Exists, OuterRef
 from django.urls import reverse
 
 from .models import (
@@ -32,6 +33,7 @@ from .models import (
     TransmittalInterno,
     User,
 )
+from .permissions import GRUPPO_SERVIZIO
 
 
 class IndirizzoStabilimentoInline(admin.TabularInline):
@@ -462,19 +464,57 @@ class TransmittalInternoAdmin(admin.ModelAdmin):
 class ApiTokenAdmin(admin.ModelAdmin):
     """Sola lettura, cancellabile: eliminare un token lo revoca.
 
-    I token si emettono da ``POST /api/agent/token/``, l'unico punto in cui
+    I token si emettono da ``POST /api/agent/token/`` e, per gli utenti di
+    servizio, dal comando ``crea_token_servizio``: sono gli unici punti in cui
     esce la chiave in chiaro; qui non compare né lei né il suo hash.
     """
 
-    list_display = ("id", "user", "created_at", "expires_at", "last_used_at", "valido")
+    list_display = (
+        "id",
+        "user",
+        "di_servizio",
+        "created_at",
+        "scadenza",
+        "last_used_at",
+        "valido",
+    )
+    list_select_related = ("user",)
     search_fields = ("user__username", "user__first_name", "user__last_name")
-    fields = ("user", "created_at", "expires_at", "last_used_at")
+    fields = ("user", "di_servizio", "created_at", "scadenza", "last_used_at")
+    actions = ["revoca"]
+
+    def get_queryset(self, request):
+        # "Di servizio" in una query sola invece che una per riga.
+        gruppi = User.groups.through.objects.filter(
+            user_id=OuterRef("user_id"), group__name=GRUPPO_SERVIZIO
+        )
+        return super().get_queryset(request).annotate(_di_servizio=Exists(gruppi))
+
+    def get_actions(self, request):
+        # "Revoca" fa la stessa cosa di "Elimina": una sola voce, col nome giusto.
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
 
     def has_add_permission(self, request):
         return False
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    @admin.action(description="Revoca i token selezionati", permissions=["delete"])
+    def revoca(self, request, queryset):
+        revocati, _ = queryset.delete()
+        self.message_user(request, f"Token revocati: {revocati}.")
+
+    @admin.display(boolean=True, description="Di servizio", ordering="_di_servizio")
+    def di_servizio(self, obj):
+        return obj._di_servizio
+
+    @admin.display(description="Scadenza", ordering="expires_at")
+    def scadenza(self, obj):
+        # Una data l'admin la formatta come le altre colonne.
+        return "mai" if obj.expires_at is None else obj.expires_at
 
     @admin.display(boolean=True, description="Valido")
     def valido(self, obj):
