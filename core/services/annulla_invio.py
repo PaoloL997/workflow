@@ -37,7 +37,11 @@ def annulla_invio_cliente(pk):
         InvioNonAnnullabile: la revisione non risulta inviata al cliente, oppure
             è già rientrata (data di ricezione o risposta del cliente presenti).
     """
-    rev = Revisione.objects.select_for_update(of=("self",)).get(pk=pk)
+    rev = (
+        Revisione.objects.select_for_update(of=("self",))
+        .select_related("documento__testata")
+        .get(pk=pk)
+    )
     if rev.int_status != INVIATO:
         raise InvioNonAnnullabile(
             "La revisione non risulta inviata al cliente: niente da annullare."

@@ -1,0 +1,74 @@
+{% comment %}
+Finestra di Workflow Agent, inclusa una sola volta da base.html per gli utenti
+autenticati. Apertura e chiusura le gestisce base.html (pulsante
+core/partials/agent_toggle.html); la chat e il modale informativo (tasto ℹ) li gestisce
+core/static/core/agent_widget.js, lo stile è in core/static/core/agent_widget.css. La
+finestra sta dentro lo sfondo, che la ancora in basso a destra.
+data-job: la commessa della pagina, se c'è (le pagine di commessa passano ``testata`` al
+template); il JS la manda all'agent come context.job.
+{% endcomment %}
+<div class="agent-panel-backdrop" id="agent-panel-backdrop">
+  <section class="agent-panel" id="agent-panel" role="dialog" aria-modal="true" aria-labelledby="agent-panel-title"{% if testata.job %} data-job="{{ testata.job }}"{% endif %}>
+    <div class="agent-panel-header">
+      <h2 class="agent-panel-title" id="agent-panel-title">Workflow Agent <span class="agent-demo-badge" title="Funzione in prova: controlla sempre le risposte">Demo</span></h2>
+      <button type="button" class="agent-panel-iconbtn" id="agent-panel-info" title="Informazioni su Workflow Agent" aria-label="Informazioni su Workflow Agent" aria-haspopup="dialog">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.5"/>
+        </svg>
+      </button>
+      <button type="button" class="agent-panel-iconbtn" id="agent-panel-new" title="Nuova conversazione" aria-label="Nuova conversazione">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </button>
+      <button type="button" class="agent-panel-iconbtn" id="agent-panel-close" title="Chiudi" aria-label="Chiudi Workflow Agent">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div class="agent-panel-body" id="agent-panel-body">
+      <p class="agent-panel-placeholder" id="agent-panel-placeholder">Chiedi a Workflow Agent dei documenti o di come usare l'applicazione</p>
+      <div class="agent-messages" id="agent-messages" aria-live="polite"></div>
+    </div>
+    <form class="agent-panel-footer" id="agent-form" autocomplete="off">
+      <div class="agent-composer">
+        <textarea class="agent-panel-input" id="agent-input" rows="1" placeholder="Scrivi un messaggio…"
+                  aria-label="Messaggio per Workflow Agent" maxlength="4000"></textarea>
+        <button type="submit" class="agent-panel-send" id="agent-send" title="Invia" aria-label="Invia">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7"/>
+          </svg>
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+
+{% comment %} Modale informativo del tasto ℹ: sopra la finestra, lo apre e chiude agent_widget.js {% endcomment %}
+<div class="agent-info-backdrop" id="agent-info-backdrop">
+  <div class="agent-info" role="dialog" aria-modal="true" aria-labelledby="agent-info-title">
+    <h3 class="agent-info-title" id="agent-info-title">Informazioni sull'agent</h3>
+    <div class="agent-info-body">
+      <p>Workflow Agent lavora con il tuo utente e i tuoi permessi: quello che non puoi fare tu non lo fa nemmeno lui.</p>
+      <p class="agent-info-label">Utente standard</p>
+      <ul>
+        <li>Controllare un documento: titolo e ultima revisione</li>
+        <li>Leggere una revisione: stato interno, risposta del cliente, date di invio e di rientro, revisione successiva</li>
+        <li>Spiegare come si usa Workflow, a partire dal manuale utente</li>
+        <li>Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa</li>
+      </ul>
+      <p class="agent-info-label">Utente con permesso di scrittura (PM / Document Controller)</p>
+      <p>Oltre a quanto sopra:</p>
+      <ul>
+        <li>Correggere la risposta del cliente di una revisione già rientrata. Workflow allinea la revisione successiva: la crea se la nuova risposta la richiede, la elimina se non serve più ed è ancora vuota</li>
+        <li>Annullare un invio al cliente registrato per errore, sull'ultima revisione e solo se il cliente non ha ancora risposto</li>
+        <li>Correggere una ricezione registrata male: cambiare la data di rientro, o annullare la ricezione se il documento in realtà non è rientrato. La revisione successiva ancora vuota si allinea: prende la nuova data di invio prevista, o viene eliminata se la ricezione si annulla</li>
+        <li>Prima di ogni modifica mostra cosa farà e aspetta che tu la approvi o la rifiuti: controlla sempre, può sbagliare</li>
+      </ul>
+    </div>
+    <div class="agent-info-actions">
+      <button type="button" class="agent-btn agent-btn-approve" id="agent-info-close">Chiudi</button>
+    </div>
+  </div>
+</div>

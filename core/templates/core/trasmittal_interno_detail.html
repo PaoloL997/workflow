@@ -859,6 +859,7 @@
 </div>
 
 <!-- ── Theme toggle ── -->
+{% include "core/partials/agent_toggle.html" %}
 {% include "core/partials/theme_toggle.html" %}
 
 {% include "core/partials/doc_list_filters_js.html" %}
@@ -1723,7 +1724,7 @@
       + (anteprima.percorso_dcc_preview
           ? '<li>I documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC).</li>'
           : '<li>Nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC.</li>')
-      + '<li>Un\'email viene inviata ai destinatari qui sotto, col PDF allegato'
+      + '<li>Un\'email viene inviata ai destinatari qui sotto, con il percorso del PDF sul fileserver (non allegato)'
       + (anteprima.mittente ? ', dalla casella <strong>' + escHtml(anteprima.mittente) + '</strong> con il tuo nome nel testo, te in copia e le risposte a te' : '')
       + '.</li>'
       + '</ul></div>';

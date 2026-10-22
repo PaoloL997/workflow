@@ -1081,6 +1081,9 @@
 </div>
 
 
+<!-- ── Workflow Agent — subito sopra il pulsante del tema ── -->
+{% include "core/partials/agent_toggle.html" %}
+
 <!-- ── Theme toggle ── -->
 <button class="theme-toggle" id="theme-toggle" aria-label="Cambia tema">
   <!-- Moon: shown in light mode → click to go dark -->
@@ -1098,7 +1101,7 @@
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
   </svg>
-  v0.1.6
+  v0.2.0
 </button>
 
 <!-- ── Modal: Changelog / version ── -->
@@ -1110,7 +1113,7 @@
           <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
         </svg>
         <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
-        <span class="version-modal-tag">v0.1.6</span>
+        <span class="version-modal-tag">v0.2.0</span>
       </div>
       <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
     </div>
@@ -1118,29 +1121,7 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
-          <li>Trasmittal interno, <strong>A chi va</strong>: scrivendo un indirizzo nei campi A e CC compaiono quelli già presenti in Workflow; <strong>Invio</strong> lo aggiunge</li>
-          <li>Informazioni archivio: nuova sezione <strong>Revisioni</strong> per indicarle con numero, lettera o una sequenza personalizzata</li>
-          <li>Informazioni archivio: pulsante <strong>Aggiorna da BC</strong> per allineare subito la commessa a Business Central, e nuovo campo <strong>Sito costruttivo</strong></li>
-          <li>Trasmittal interno: le destinazioni cartacee dei documenti UT si precompilano dal vecchio file <em>RecipientsData</em> del fileserver</li>
-        </ul>
-      </section>
-      <section>
-        <h3 class="version-modal-section-title">Modifiche</h3>
-        <ul class="version-modal-list">
-          <li>Trasmittal interno: in <strong>Nuova lettera</strong> e <strong>Destinazioni</strong> i documenti si ordinano e filtrano per colonna come in Gestisci emissione; in cima quelli modificati più di recente in PROGETTO\UT, con la data di <em>ultima modifica</em></li>
-          <li>Trasmittal interno: l’email parte dalla casella dell’applicazione con il nome di chi la emette, e si può aggiungere un messaggio per i destinatari</li>
-          <li>Trasmittal interno: modificare destinazioni ed emettere o annullare lettere è riservato agli utenti abilitati</li>
-          <li>Proposte e segnalazioni: i post chiusi si vedono solo con il filtro <strong>Post chiusi</strong></li>
-        </ul>
-      </section>
-      <section>
-        <h3 class="version-modal-section-title">Correzioni</h3>
-        <ul class="version-modal-list">
-          <li>Trasmittal interno: niente più errori con due emissioni contemporanee o con un destinatario non valido; le lettere senza PDF sul fileserver hanno la data in grigio invece di un link rotto</li>
-          <li>Gestisci ricezione: la registrazione è tutto o niente, un errore su una voce non lascia le altre salvate a metà</li>
-          <li>Le date degli aggiornamenti da Business Central sono nel fuso locale: fra mezzanotte e le 2 compariva il giorno prima</li>
-          <li>I modali non si chiudono più da soli quando si seleziona del testo e il mouse finisce fuori dal campo</li>
-          <li>Scarica: le date sono in formato gg/mm/aaaa e leggibili senza allargare le colonne; le foto profilo si vedono anche sul server</li>
+          <li><strong>Workflow Agent</strong>, in versione demo: dal pulsante con il robot in basso a destra un assistente risponde su documenti e revisioni e spiega come si usa Workflow. Con il permesso di scrittura corregge anche risposte del cliente, ricezioni e invii registrati per errore, sempre dopo la tua approvazione. Il tasto <strong>ℹ</strong> nella finestra spiega cosa sa fare</li>
         </ul>
       </section>
     </div>

@@ -183,7 +183,7 @@ def serialize_anomalie_gruppi(job: str, anomalies: list[AnomaliaRevisione]) -> l
     rev_map = {
         r.pk: r
         for r in Revisione.objects.filter(pk__in=grouped.keys()).select_related(
-            "documento",
+            "documento__testata",
             "ext_status",
         )
     }

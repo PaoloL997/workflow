@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import date as _date
 from datetime import timedelta
 from functools import wraps
@@ -29,7 +30,7 @@ from src.pdf import (
     genera_trasmittal_pdf,
 )
 
-from .api_auth import autentica_api
+from .api_auth import autentica_api, token_valido
 from .models import (
     ApiToken,
     Documento,
@@ -46,6 +47,7 @@ from .models import (
     valida_immagine_firma,
 )
 from .permissions import api_write_required, trasmittal_interno_write_required, user_can_write
+from .services.agent import AgentNonDisponibile, chiama_agent
 from .services.annulla_invio import InvioNonAnnullabile, annulla_invio_cliente
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
@@ -105,6 +107,7 @@ from .services.media import (
     elimina_file,
     risposta_immagine,
 )
+from .services.modifica_ricezione import RicezioneNonModificabile, modifica_ricezione
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -588,6 +591,66 @@ def agent_me_api(request):
             "can_write": user_can_write(user),
         }
     )
+
+
+# ── Assistente: proxy verso il servizio dell'agent ───────────────────────────
+
+# Chiave della sessione in cui sta la chiave in chiaro del token con cui
+# l'agent agisce per l'utente. Nel database c'è solo l'hash, quindi è l'unico
+# posto da cui riusare un token già emesso; la sessione sta nel database
+# (``SESSION_ENGINE``), non nel cookie, e il browser non la vede.
+AGENT_TOKEN_SESSION_KEY = "agent_api_token"
+
+
+def _token_per_agent(request, nuovo=False):
+    """La chiave in chiaro di un ``ApiToken`` valido dell'utente della sessione.
+
+    Riusa quella in sessione se il token esiste ancora, non è scaduto ed è
+    dell'utente; altrimenti (o con ``nuovo``) ne emette uno come
+    ``agent_token_api`` e lo mette in sessione.
+    """
+    if not nuovo:
+        chiave = request.session.get(AGENT_TOKEN_SESSION_KEY)
+        token = token_valido(chiave)
+        if token is not None and token.user_id == request.user.pk:
+            return chiave
+    token, chiave = ApiToken.crea_per_utente(request.user)
+    request.session[AGENT_TOKEN_SESSION_KEY] = chiave
+    logger.info("Token API #%s emesso per %s (assistente).", token.pk, request.user)
+    return chiave
+
+
+def _agent_proxy(request, path):
+    """Inoltra il body JSON all'agent col token dell'utente; status e JSON tornano com'erano.
+
+    Solo con la sessione e col CSRF, come ``agent_token_api``: il token non
+    arriva mai al browser. Se l'agent risponde 401 (token scaduto o revocato)
+    ne emette uno nuovo e riprova una volta.
+    """
+    if not request.user.is_authenticated:
+        return _errore("Non autenticato.", status=401)
+    body = _json_body(request, vuoto={})
+    if not isinstance(body, dict):
+        return _errore("Body JSON non valido.")
+    try:
+        status, payload = chiama_agent(path, body, _token_per_agent(request))
+        if status == 401:
+            status, payload = chiama_agent(path, body, _token_per_agent(request, nuovo=True))
+    except AgentNonDisponibile:
+        return _errore("Assistente non disponibile.", status=503)
+    return JsonResponse(payload, status=status, safe=False)
+
+
+@require_http_methods(["POST"])
+def agent_chat_proxy(request):
+    """``POST /agent/chat/`` → ``POST {AGENT_BASE_URL}/chat`` (message, conversation_id, context)."""
+    return _agent_proxy(request, "/chat")
+
+
+@require_http_methods(["POST"])
+def agent_confirm_proxy(request):
+    """``POST /agent/confirm/`` → ``POST {AGENT_BASE_URL}/confirm`` (conversation_id, approvals)."""
+    return _agent_proxy(request, "/confirm")
 
 
 # ── API: Commesse (Testata) ──────────────────────────────────────────────────
@@ -1631,6 +1694,53 @@ def annulla_invio_api(request, pk):
     except Revisione.DoesNotExist:
         return _errore("Revisione non trovata.", status=404)
     except InvioNonAnnullabile as exc:
+        return _errore(str(exc))
+    return JsonResponse({"ok": True, **esito})
+
+
+def _data_iso(valore):
+    """``valore`` come data se è una stringa ``AAAA-MM-GG`` valida, altrimenti ``None``.
+
+    Più stretta di ``date.fromisoformat``, che accetta anche ``20260420`` o
+    ``2026-W17-1``.
+    """
+    if not isinstance(valore, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valore):
+        return None
+    try:
+        return _date.fromisoformat(valore)
+    except ValueError:
+        return None
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def modifica_ricezione_api(request, pk):
+    """Corregge la data di rientro di una revisione, o annulla la ricezione.
+
+    ``{"rec_act_date": "AAAA-MM-GG"}`` cambia la data, ``{"rec_act_date": null}``
+    annulla la ricezione. Vedi ``services/modifica_ricezione.py``: allinea anche
+    la revisione successiva ancora vuota.
+    """
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _errore("JSON non valido.")
+    if "rec_act_date" not in data:
+        return _errore(
+            "Specificare la data di rientro (rec_act_date), o null per annullare la ricezione."
+        )
+    rec_act_date = data["rec_act_date"]
+    if rec_act_date is not None:
+        rec_act_date = _data_iso(rec_act_date)
+        if rec_act_date is None:
+            return _errore("Data di rientro non valida: usare il formato AAAA-MM-GG.")
+    try:
+        esito = modifica_ricezione(pk, rec_act_date)
+    except Revisione.DoesNotExist:
+        return _errore("Revisione non trovata.", status=404)
+    except RevisioneSuccessivaInLavorazione as exc:
+        return _errore(str(exc), status=409)
+    except RicezioneNonModificabile as exc:
         return _errore(str(exc))
     return JsonResponse({"ok": True, **esito})
 

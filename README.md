@@ -259,6 +259,39 @@ stessi permessi (lettura/scrittura, trasmittal interno).
   `api/commesse/<job>/situazione/export/`, `api/commesse/<job>/trasmittal/<id>/file/` e
   `api/revisioni/<id>/file/serve/`.
 
+## Workflow Agent (widget di chat)
+
+Il pulsante **Workflow Agent** (icona robot) apre in ogni pagina una chat con *workflow-agent*, un
+servizio FastAPI separato che risponde sulle commesse e sui documenti e, prima di modificare
+qualcosa, chiede conferma. L'indirizzo del servizio sta nel `.env`:
+
+```
+AGENT_BASE_URL=http://127.0.0.1:8001
+```
+
+Default `http://localhost:8001`. Meglio `127.0.0.1`: su Windows `localhost` prova prima IPv6 e, se
+l'agent ascolta solo su IPv4, ogni richiesta perde circa 2 secondi.
+
+Le pagine non parlano mai direttamente con l'agent: il JS del widget (`core/static/core/agent_widget.js`)
+chiama due proxy di Workflow, `POST /agent/chat/` e `POST /agent/confirm/` (sessione e CSRF come le
+altre chiamate delle pagine), che inoltrano il body a `{AGENT_BASE_URL}/chat` e `/confirm` con
+l'header `Authorization: Token <chiave>` e restituiscono status e JSON dell'agent così come arrivano.
+
+- **Token**: il proxy riusa il token API dell'utente già emesso (la chiave in chiaro sta nella
+  sessione, lato server) finché è valido; altrimenti ne emette uno nuovo come `POST /api/agent/token/`.
+  Se l'agent risponde 401 ne emette uno nuovo e riprova una volta. La chiave non arriva mai al browser.
+- **Contesto**: nelle pagine di una commessa il widget manda anche `context: {"job": "<job>"}`
+  (attributo `data-job` del pannello).
+- **Conferme**: se la risposta ha `pending` non vuoto la run è ferma; il widget mostra una card per
+  azione con **Approva** / **Rifiuta** (e **Approva tutte**) e, prese tutte le decisioni, chiama
+  `/agent/confirm/` con `approvals: {tool_call_id: bool}`.
+- **Errori**: agent non raggiungibile o risposta non JSON → 503 `{"error": "Assistente non disponibile."}`;
+  gli altri errori dell'agent (400, 404, 409…) arrivano al widget con lo stesso status e JSON.
+  Su 404 il widget azzera la conversazione. Timeout verso l'agent: 120 s.
+- La conversazione (`conversation_id`) sopravvive al cambio pagina nella stessa scheda
+  (`sessionStorage`). Nell'intestazione: **ℹ** apre le informazioni sull'agent, la matita inizia una
+  nuova conversazione.
+
 ## Database
 
 PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non committare questo file.
