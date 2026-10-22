@@ -48,20 +48,24 @@ template); il JS la manda all'agent come context.job.
 {% comment %} Modale informativo del tasto ℹ: sopra la finestra, lo apre e chiude agent_widget.js {% endcomment %}
 <div class="agent-info-backdrop" id="agent-info-backdrop">
   <div class="agent-info" role="dialog" aria-modal="true" aria-labelledby="agent-info-title">
-    <h3 class="agent-info-title" id="agent-info-title">Workflow Agent</h3>
+    <h3 class="agent-info-title" id="agent-info-title">Informazioni sull'agent</h3>
     <div class="agent-info-body">
-      <p>Lavora dentro Workflow con il tuo utente e i tuoi permessi: quello che non puoi fare tu non lo fa nemmeno lui.</p>
-      <p class="agent-info-label">Cosa sa fare</p>
+      <p>Workflow Agent lavora con il tuo utente e i tuoi permessi: quello che non puoi fare tu non lo fa nemmeno lui.</p>
+      <p class="agent-info-label">Utente standard</p>
       <ul>
-        <li>Cercare commesse, documenti e revisioni e riassumerne lo stato</li>
-        <li>Rispondere sul funzionamento di Workflow, a partire dal manuale utente</li>
-        <li>Proporre modifiche ai dati: prima di eseguirle le elenca e ti chiede di approvarle o rifiutarle una per una</li>
-      </ul>
-      <p class="agent-info-label">Buono a sapersi</p>
-      <ul>
+        <li>Controllare un documento: titolo e ultima revisione</li>
+        <li>Leggere una revisione: stato interno, risposta del cliente, date di invio e di rientro, revisione successiva</li>
+        <li>Elencare le risposte del cliente disponibili</li>
+        <li>Spiegare come si usa Workflow, a partire dal manuale utente</li>
         <li>Nelle pagine di una commessa sa già di quale commessa stai parlando</li>
-        <li>La conversazione continua anche cambiando pagina in questa scheda del browser</li>
-        <li>Controlla sempre cosa propone prima di approvare: può sbagliare</li>
+        <li>Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa</li>
+      </ul>
+      <p class="agent-info-label">Utente con permesso di scrittura (PM / Document Controller)</p>
+      <p>Oltre a quanto sopra:</p>
+      <ul>
+        <li>Correggere la risposta del cliente di una revisione già rientrata. Workflow allinea la revisione successiva: la crea se la nuova risposta la richiede, la elimina se non serve più ed è ancora vuota</li>
+        <li>Annullare un invio al cliente registrato per errore, sull'ultima revisione e solo se il cliente non ha ancora risposto</li>
+        <li>Prima di ogni modifica mostra cosa farà e aspetta che tu la approvi o la rifiuti: controlla sempre, può sbagliare</li>
       </ul>
     </div>
     <div class="agent-info-actions">

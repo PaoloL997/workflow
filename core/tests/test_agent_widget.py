@@ -94,6 +94,20 @@ class AgentWidgetTemplateTests(TestCase):
         self.assertContains(res, 'id="agent-panel"', count=1)
         self.assertNotRegex(res.content.decode(), r'id="agent-panel"[^>]*data-job')
 
+    def test_scheda_informazioni_divisa_per_permesso(self):
+        self.client.force_login(self.user)
+        res = self.client.get("/")
+
+        self.assertContains(
+            res,
+            "<h3 class='agent-info-title' id='agent-info-title'>Informazioni sull'agent</h3>",
+            html=True,
+        )
+        self.assertContains(res, "Utente standard")
+        self.assertContains(res, "Utente con permesso di scrittura (PM / Document Controller)")
+        # Non promette più una ricerca che l'agent non sa fare.
+        self.assertNotContains(res, "Cercare commesse, documenti e revisioni")
+
 
 # ── Proxy verso l'agent ──────────────────────────────────────────────────────
 

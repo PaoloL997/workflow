@@ -206,11 +206,19 @@ Il pulsante con l'icona del **robot**, subito sopra quello del tema in basso a d
 3. La risposta arriva formattata (grassetto, elenchi, tabelle, codice). Mentre l'assistente lavora il campo è disabilitato.
 4. Chiudi con la **✕**, con **Esc**, cliccando fuori dalla finestra o di nuovo sul pulsante robot.
 
-**Cosa sa fare:**
+**Cosa sa fare per tutti gli utenti:**
 
-- Cercare commesse, documenti e revisioni e riassumerne lo stato.
-- Rispondere sul funzionamento di Workflow, a partire da questo manuale.
-- Proporre modifiche ai dati: prima di eseguirle le elenca e ti chiede di approvarle o rifiutarle una per una.
+- Controllare un documento: titolo e ultima revisione.
+- Leggere una revisione: stato interno, risposta del cliente, date di invio e di rientro, revisione successiva.
+- Elencare le risposte del cliente disponibili.
+- Spiegare come si usa Workflow, a partire da questo manuale.
+
+Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa, come **Gestisci ricezione** o **Situazione documenti**.
+
+**Cosa sa fare in più con il permesso di scrittura** (PM e Document Controller):
+
+- Correggere la risposta del cliente di una revisione già rientrata. Workflow allinea la revisione successiva: la crea se la nuova risposta la richiede, la elimina se non serve più ed è ancora vuota. Se la revisione successiva è già stata inviata o ha dati propri, la correzione viene rifiutata e non cambia nulla.
+- Annullare un invio al cliente registrato per errore, solo sull'ultima revisione e solo se il cliente non ha ancora risposto. La revisione torna *Da emettere*; il trasmittal e i file restano com'erano.
 
 **Azioni da confermare.** Quando l'assistente propone modifiche, nella risposta compare il blocco **Azione da confermare** (o **Azioni da confermare**) con una card per azione e i pulsanti **Rifiuta** / **Approva**; con più azioni c'è anche **Approva tutte**. Finché non hai deciso su tutte non puoi scrivere (*"Decidi sulle azioni proposte…"*). Prese tutte le decisioni, l'assistente le riceve e continua. Controlla sempre cosa propone prima di approvare: può sbagliare. Se non hai il permesso di scrittura, le modifiche che approvi vengono comunque rifiutate dall'applicazione.
 
@@ -218,7 +226,7 @@ Il pulsante con l'icona del **robot**, subito sopra quello del tema in basso a d
 
 - Nelle pagine di una commessa l'assistente sa già di quale commessa stai parlando.
 - La conversazione continua anche cambiando pagina nella stessa scheda del browser; ricaricando la pagina i messaggi a schermo spariscono ma l'assistente ricorda la conversazione.
-- Nell'intestazione il tasto **ℹ** apre la scheda informativa sull'agent; la **matita** inizia una nuova conversazione.
+- Nell'intestazione il tasto **ℹ** apre la scheda **Informazioni sull'agent**, con quello che può fare un utente standard e un utente con permesso di scrittura; la **matita** inizia una nuova conversazione.
 - Se l'assistente non è raggiungibile compare *"Workflow Agent non è disponibile al momento."* oppure *"Workflow Agent non raggiungibile: controlla la connessione e riprova."*; se la sessione è scaduta *"Sessione scaduta: ricarica la pagina e accedi di nuovo."*
 
 ### 3.7 Novità della versione
