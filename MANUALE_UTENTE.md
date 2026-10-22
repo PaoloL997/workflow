@@ -197,7 +197,7 @@ Il contatore si aggiorna automaticamente ogni minuto, senza ricaricare la pagina
 
 ### 3.6 Workflow Agent (assistente)
 
-Il pulsante con l'icona del **robot**, subito sopra quello del tema in basso a destra, apre in ogni pagina la finestra di **Workflow Agent**: un assistente che risponde sulle commesse e sui documenti e sull'uso dell'applicazione. È disponibile a tutti gli utenti e lavora **con il tuo utente e i tuoi permessi**: quello che non puoi fare tu non lo fa nemmeno lui.
+Il pulsante con l'icona del **robot**, subito sopra quello del tema in basso a destra, apre in ogni pagina la finestra di **Workflow Agent**: un assistente che risponde sulle commesse e sui documenti e sull'uso dell'applicazione. È disponibile a tutti gli utenti e lavora **con il tuo utente e i tuoi permessi**: quello che non puoi fare tu non lo fa nemmeno lui. Accanto al titolo della finestra l'etichetta **DEMO** ricorda che l'assistente è in prova: controlla sempre le sue risposte.
 
 **Come si usa:**
 
@@ -231,7 +231,7 @@ Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa, c
 
 ### 3.7 Novità della versione
 
-In basso a sinistra nella Home c'è il badge con il numero di versione (es. **v0.1.6**). Cliccandolo si apre il riquadro **Novità** con le sezioni **Aggiunte**, **Modifiche** e **Correzioni** della versione in uso. Si chiude con ✕, Esc o cliccando fuori.
+In basso a sinistra nella Home c'è il badge con il numero di versione (es. **v0.2.0**). Cliccandolo si apre il riquadro **Novità** con le novità principali della versione in uso, divise in **Aggiunte** e, quando ci sono, **Modifiche** e **Correzioni**. Si chiude con ✕, Esc o cliccando fuori.
 
 ---
 

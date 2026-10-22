@@ -69,12 +69,33 @@
 .agent-panel-title {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text-primary);
   line-height: 1.2;
+}
+
+/* Etichetta DEMO accanto al titolo: l'assistente è in prova. Ambra del tema, con il
+   testo mescolato al colore del testo per restare leggibile in chiaro e in scuro. */
+.agent-demo-badge {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--amber) var(--status-tint-pct, 12%), transparent);
+  color: color-mix(in srgb, var(--amber) 45%, var(--color-text-primary));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  cursor: default;
 }
 
 /* Icone dell'intestazione: nessuno sfondo, solo colore al passaggio */

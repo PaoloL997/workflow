@@ -104,6 +104,7 @@ class AgentWidgetTemplateTests(TestCase):
             html=True,
         )
         self.assertContains(res, "Utente standard")
+        self.assertContains(res, '<span class="agent-demo-badge"')
         self.assertContains(res, "Utente con permesso di scrittura (PM / Document Controller)")
         self.assertContains(res, "Correggere una ricezione registrata male")
         # Non promette più una ricerca che l'agent non sa fare.
