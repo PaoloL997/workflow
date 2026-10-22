@@ -105,6 +105,7 @@ class AgentWidgetTemplateTests(TestCase):
         )
         self.assertContains(res, "Utente standard")
         self.assertContains(res, "Utente con permesso di scrittura (PM / Document Controller)")
+        self.assertContains(res, "Correggere una ricezione registrata male")
         # Non promette più una ricerca che l'agent non sa fare.
         self.assertNotContains(res, "Cercare commesse, documenti e revisioni")
 

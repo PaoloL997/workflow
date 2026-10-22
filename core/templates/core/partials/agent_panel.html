@@ -63,6 +63,7 @@ template); il JS la manda all'agent come context.job.
       <ul>
         <li>Correggere la risposta del cliente di una revisione già rientrata. Workflow allinea la revisione successiva: la crea se la nuova risposta la richiede, la elimina se non serve più ed è ancora vuota</li>
         <li>Annullare un invio al cliente registrato per errore, sull'ultima revisione e solo se il cliente non ha ancora risposto</li>
+        <li>Correggere una ricezione registrata male: cambiare la data di rientro, o annullare la ricezione se il documento in realtà non è rientrato. La revisione successiva ancora vuota si allinea: prende la nuova data di invio prevista, o viene eliminata se la ricezione si annulla</li>
         <li>Prima di ogni modifica mostra cosa farà e aspetta che tu la approvi o la rifiuti: controlla sempre, può sbagliare</li>
       </ul>
     </div>
