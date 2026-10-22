@@ -44,6 +44,19 @@ def revisione_vuota(rev):
     )
 
 
+def revisioni_successive(rev):
+    """Le righe della revisione successiva a ``rev``: stesso documento, ``rev_no + 1``.
+
+    Più righe con lo stesso numero sono possibili (import dal vecchio Access):
+    contano tutte, la più recente (l'ultima della lista) è quella che si mostra.
+    """
+    return list(
+        Revisione.objects.filter(documento_id=rev.documento_id, rev_no=(rev.rev_no or 0) + 1)
+        .select_related("ext_status")
+        .order_by("pk")
+    )
+
+
 @transaction.atomic
 def correggi_risposta_cliente(pk, ext_status_id):
     """Cambia la risposta del cliente della revisione ``pk`` in ``ext_status_id``.
@@ -90,13 +103,7 @@ def correggi_risposta_cliente(pk, ext_status_id):
         )
 
     doc = rev.documento
-    # Più righe con lo stesso numero sono possibili (import dal vecchio Access):
-    # contano tutte, la più recente è quella che si mostra.
-    successive = list(
-        Revisione.objects.filter(documento=doc, rev_no=(rev.rev_no or 0) + 1)
-        .select_related("ext_status")
-        .order_by("pk")
-    )
+    successive = revisioni_successive(rev)
 
     azione, successiva = NESSUNA, (successive[-1] if successive else None)
     if not nuovo_stato.crea_nuova_rev and successive:

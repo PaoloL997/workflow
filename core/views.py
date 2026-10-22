@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from datetime import date as _date
 from datetime import timedelta
 from functools import wraps
@@ -106,6 +107,7 @@ from .services.media import (
     elimina_file,
     risposta_immagine,
 )
+from .services.modifica_ricezione import RicezioneNonModificabile, modifica_ricezione
 from .services.notifiche import count_notifiche, list_notifiche, segna_lette
 from .services.revisione_anomalie import (
     audit_commessa,
@@ -1692,6 +1694,53 @@ def annulla_invio_api(request, pk):
     except Revisione.DoesNotExist:
         return _errore("Revisione non trovata.", status=404)
     except InvioNonAnnullabile as exc:
+        return _errore(str(exc))
+    return JsonResponse({"ok": True, **esito})
+
+
+def _data_iso(valore):
+    """``valore`` come data se è una stringa ``AAAA-MM-GG`` valida, altrimenti ``None``.
+
+    Più stretta di ``date.fromisoformat``, che accetta anche ``20260420`` o
+    ``2026-W17-1``.
+    """
+    if not isinstance(valore, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", valore):
+        return None
+    try:
+        return _date.fromisoformat(valore)
+    except ValueError:
+        return None
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+def modifica_ricezione_api(request, pk):
+    """Corregge la data di rientro di una revisione, o annulla la ricezione.
+
+    ``{"rec_act_date": "AAAA-MM-GG"}`` cambia la data, ``{"rec_act_date": null}``
+    annulla la ricezione. Vedi ``services/modifica_ricezione.py``: allinea anche
+    la revisione successiva ancora vuota.
+    """
+    data = _json_body(request)
+    if not isinstance(data, dict):
+        return _errore("JSON non valido.")
+    if "rec_act_date" not in data:
+        return _errore(
+            "Specificare la data di rientro (rec_act_date), o null per annullare la ricezione."
+        )
+    rec_act_date = data["rec_act_date"]
+    if rec_act_date is not None:
+        rec_act_date = _data_iso(rec_act_date)
+        if rec_act_date is None:
+            return _errore("Data di rientro non valida: usare il formato AAAA-MM-GG.")
+    try:
+        esito = modifica_ricezione(pk, rec_act_date)
+    except Revisione.DoesNotExist:
+        return _errore("Revisione non trovata.", status=404)
+    except RevisioneSuccessivaInLavorazione as exc:
+        return _errore(str(exc), status=409)
+    except RicezioneNonModificabile as exc:
         return _errore(str(exc))
     return JsonResponse({"ok": True, **esito})
 

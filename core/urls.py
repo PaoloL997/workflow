@@ -262,6 +262,11 @@ urlpatterns = [
         views.annulla_invio_api,
         name="annulla_invio_api",
     ),
+    path(
+        "api/revisioni/<int:pk>/modifica-ricezione/",
+        views.modifica_ricezione_api,
+        name="modifica_ricezione_api",
+    ),
     # API — File revisione
     path("api/revisioni/<int:pk>/file/", views.revisione_file_api, name="revisione_file_api"),
     path(

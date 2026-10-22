@@ -927,23 +927,30 @@ def esegui_ricezione(entries, crea_nuova_revisione=False):
     return result
 
 
+def data_invio_successiva(testata, rec_act_date):
+    """Data di invio pianificata della revisione che segue un rientro.
+
+    È la data di rientro più i giorni concessi al vendor
+    (``Testata.time_ven_doc_rev``); ``None`` se manca uno dei due. Usata quando
+    la revisione successiva si crea e quando si corregge la data di rientro
+    (vedi ``services/modifica_ricezione.py``).
+    """
+    time_ven = testata.time_ven_doc_rev
+    return rec_act_date + timedelta(days=time_ven) if time_ven and rec_act_date else None
+
+
 def crea_revisione_successiva(doc, rev):
     """Crea la revisione ``rev_no + 1`` di ``doc`` dopo il rientro di ``rev``.
 
-    La data di invio pianificata è la data di rientro di ``rev`` più i giorni
-    concessi al vendor (``Testata.time_ven_doc_rev``); senza uno dei due resta
-    vuota. ``crea_nuova_rev`` resta False: ha senso solo su una revisione che
-    ha già ricevuto la risposta del cliente. Usata dalla ricezione e dalla
-    correzione della risposta cliente (vedi ``services/risposta_cliente.py``).
+    La data di invio pianificata segue ``data_invio_successiva``.
+    ``crea_nuova_rev`` resta False: ha senso solo su una revisione che ha già
+    ricevuto la risposta del cliente. Usata dalla ricezione e dalla correzione
+    della risposta cliente (vedi ``services/risposta_cliente.py``).
     """
-    time_ven = doc.testata.time_ven_doc_rev
-    dis_plan = (
-        rev.rec_act_date + timedelta(days=time_ven) if time_ven and rev.rec_act_date else None
-    )
     return Revisione.objects.create(
         documento=doc,
         rev_no=(rev.rev_no or 0) + 1,
-        dis_plan_date=dis_plan,
+        dis_plan_date=data_invio_successiva(doc.testata, rev.rec_act_date),
         crea_nuova_rev=False,
     )
 
