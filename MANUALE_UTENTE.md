@@ -955,7 +955,7 @@ L'email:
 
 - parte dalla **casella dell'applicazione**; chi ha emesso la lettera è scritto nella prima riga del testo (*"Trasmittal interno <nome> — commessa <job> — emesso da Nome Cognome (email)."*), è in copia e riceve le risposte. Vale anche se **Riprova** sull'email lo preme un'altra persona;
 - ha come oggetto `DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: <nome lettera>`;
-- riporta nel corpo il messaggio facoltativo, la tabella dei documenti con le stesse colonne del PDF e, in fondo, *"Salvato in: <percorso>"*. Il PDF **non è allegato**: si apre dal percorso indicato (il riepilogo a schermo parla di PDF allegato, ma nell'email c'è solo il percorso).
+- riporta nel corpo il messaggio facoltativo, la tabella dei documenti con le stesse colonne del PDF e, in fondo, *"Salvato in: <percorso>"*. Il PDF **non è allegato**: si apre dal percorso indicato.
 
 ### 12.8 Il PDF della lettera
 
