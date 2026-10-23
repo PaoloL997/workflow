@@ -1920,6 +1920,7 @@ class AnnullaTrasmittalInternoTests(TestCase):
 
     def setUp(self):
         self.client = Client()
+        _media_temporanea(self)
 
         self.jobs_root = tempfile.TemporaryDirectory()
         self.addCleanup(self.jobs_root.cleanup)
@@ -1972,7 +1973,7 @@ class AnnullaTrasmittalInternoTests(TestCase):
         risposta = self.client.post(
             self._url("emetti/"),
             data=json.dumps(
-                {"righe": [{"documento_id": documento.pk, "revisione": "A", "cliente": True}]}
+                {"righe": [{"documento_id": documento.pk, "revisione": "0", "cliente": True}]}
             ),
             content_type="application/json",
         )
@@ -2054,7 +2055,7 @@ class AnnullaTrasmittalInternoTests(TestCase):
         emesso = emesso_writer.post(
             self._url("emetti/"),
             data=json.dumps(
-                {"righe": [{"documento_id": self.doc1.pk, "revisione": "A", "cliente": True}]}
+                {"righe": [{"documento_id": self.doc1.pk, "revisione": "0", "cliente": True}]}
             ),
             content_type="application/json",
         ).json()

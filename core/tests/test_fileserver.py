@@ -126,19 +126,25 @@ class SalvaFileLinkTest(TestCase):
         objs = _make_fixtures_mock()
         self.rev = objs["rev_qmdbi_0"]
 
+    def _jobs_path(self, *parts: str) -> str:
+        from ..services.fileserver import get_jobs_root
+
+        return str(get_jobs_root().joinpath(*parts))
+
     def test_create_link(self):
-        path = r"Z:\JOBS\25056\PROGETTO\QC\25056-QMDBI Rev0.pdf"
+        path = self._jobs_path("25056", "PROGETTO", "QC", "25056-QMDBI Rev0.pdf")
         link = salva_file_link(self.rev.pk, path)
         self.assertEqual(link.percorso, path)
         self.assertEqual(RevisioneFileLink.objects.count(), 1)
 
     def test_update_existing_link(self):
-        salva_file_link(self.rev.pk, r"Z:\JOBS\25056\old.pdf")
-        salva_file_link(self.rev.pk, r"Z:\JOBS\25056\new.pdf")
+        salva_file_link(self.rev.pk, self._jobs_path("25056", "old.pdf"))
+        new_path = self._jobs_path("25056", "new.pdf")
+        salva_file_link(self.rev.pk, new_path)
         self.assertEqual(RevisioneFileLink.objects.count(), 1)
         self.assertEqual(
             RevisioneFileLink.objects.get(revisione=self.rev).percorso,
-            r"Z:\JOBS\25056\new.pdf",
+            new_path,
         )
 
 
