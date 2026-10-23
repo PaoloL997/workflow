@@ -812,7 +812,7 @@ def _build_remarks_legenda(pdf):
     righe_testo = [
         _legenda_siti_testo(),
         "(b) - CLIENT | TPI: YES/NO",
-        "(c) - TPI: specify No.Bo., AI, Other recipients…",
+        "(c) - TPI: specify No.Bo., AI, Other recipients...",
     ]
     h_riga = 4.5
     h_box = h_riga * len(righe_testo) + 3
