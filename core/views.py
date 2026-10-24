@@ -2341,6 +2341,12 @@ def _export_situazione_verticale_xlsx(job, payload):
                     center=col_idx in _CENTER_COLS,
                     wrap=col_idx == _TITLE_COL,
                 )
+            if rev:
+                _paint_xlsx_cell(
+                    ws.cell(row=row_idx, column=len(leaf_headers)),
+                    rev.get("ext_status_bg"),
+                    rev.get("ext_status_fg"),
+                )
             row_idx += 1
 
     _autosize_xlsx_columns(ws, leaf_headers, data_start_row=3)
