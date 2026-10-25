@@ -836,6 +836,18 @@ class RevisioneLabelExportTests(TestCase):
         self.assertEqual(self._colonna_rev(), ["1"])
         self.assertEqual(self._gruppi_rev_orizzontale(), ["Rev. 1"])
 
+    def test_export_xlsx_verticale_colora_la_risposta_cliente(self):
+        self.rev.ext_status = StatoEsterno.objects.create(
+            nome="Approved", lettera="A", colore="#00B050"
+        )
+        self.rev.save(update_fields=["ext_status"])
+
+        ws = self._foglio("verticale")
+        intestazioni = [cell.value for cell in ws[1]]
+        cella = ws.cell(row=3, column=intestazioni.index("Client response") + 1)
+        self.assertEqual(cella.value, "Approved")
+        self.assertEqual(cella.fill.start_color.rgb[-6:], "00B050")
+
     def test_intestazione_pdf_situazione_segue_il_flag(self):
         from src.pdf import _rev_group_label
 
