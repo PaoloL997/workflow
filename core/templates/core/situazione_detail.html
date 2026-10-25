@@ -1700,8 +1700,8 @@
   function plannedDatesForLatestRev(revs) {
     const latest = (revs && revs.length) ? revs[revs.length - 1] : null;
     if (!latest) return { planned_send: null, planned_receipt: null };
-    const extLabel = (latest.ext_status_label || '').trim().toLowerCase();
-    if (extLabel === 'approved') {
+    const extLetter = (latest.ext_status_lettera || '').trim().toUpperCase();
+    if (extLetter === 'A') {
       return { planned_send: null, planned_receipt: null };
     }
     const intStatus = intStatusCode(latest);

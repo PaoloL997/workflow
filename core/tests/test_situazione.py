@@ -827,3 +827,36 @@ class LegendaStatusPdfTests(TestCase):
         colori = self._colori_disegnati(status_legend=voci)
         self.assertIn((0, 112, 192), colori)
         self.assertNotIn((0, 176, 80), colori)
+
+
+class PlannedDatesForLatestRevTest(TestCase):
+    """``_planned_dates_for_latest_rev`` riconosce il documento chiuso dalla lettera dello stato."""
+
+    def _rev(self, **kw):
+        base = {
+            "ext_status_label": "",
+            "ext_status_lettera": "",
+            "int_status": "",
+            "dis_plan_date": "2026-01-10",
+            "rec_plan_date": "2026-01-20",
+        }
+        base.update(kw)
+        return base
+
+    def test_approved_by_letter_clears_planned_dates(self):
+        from src.pdf import _planned_dates_for_latest_rev
+
+        # Il nome dello stato può essere rinominato in anagrafica: conta la lettera.
+        rev = self._rev(ext_status_label="Approvato", ext_status_lettera="A")
+        self.assertEqual(
+            _planned_dates_for_latest_rev([rev]),
+            {"planned_send": None, "planned_receipt": None},
+        )
+
+    def test_label_approved_without_letter_keeps_planned_dates(self):
+        from src.pdf import _planned_dates_for_latest_rev
+
+        rev = self._rev(ext_status_label="approved", ext_status_lettera="B")
+        self.assertEqual(
+            _planned_dates_for_latest_rev([rev])["planned_send"], "2026-01-10"
+        )
