@@ -1195,8 +1195,8 @@ def _planned_dates_for_latest_rev(revs: list) -> dict:
     if not revs:
         return {"planned_send": None, "planned_receipt": None}
     latest = revs[-1]
-    ext_label = (latest.get("ext_status_label") or "").strip().lower()
-    if ext_label == "approved":
+    ext_letter = (latest.get("ext_status_lettera") or "").strip().upper()
+    if ext_letter == "A":
         return {"planned_send": None, "planned_receipt": None}
     int_status = _int_status_code(latest)
     if int_status == "inviato_al_cliente":
