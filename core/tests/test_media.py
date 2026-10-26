@@ -144,6 +144,32 @@ class FirmaUtenteTests(TestCase):
         self.assertEqual(self.writer.firma.name, "firme/prova.png")
 
 
+class EliminazioneUtenteTests(TestCase):
+    """Eliminando un utente i suoi file escono dallo storage."""
+
+    def setUp(self):
+        _media_temporanea(self)
+
+    def test_eliminare_l_utente_cancella_avatar_e_firma(self):
+        utente = User.objects.create_user("da_eliminare", "da-eliminare@b.it", "pw")
+        utente.avatar = default_storage.save("avatars/foto.png", io.BytesIO(_png()))
+        utente.firma = default_storage.save("firme/firma.png", io.BytesIO(_png()))
+        utente.save()
+        avatar, firma = utente.avatar.name, utente.firma.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            utente.delete()
+
+        self.assertFalse(default_storage.exists(avatar))
+        self.assertFalse(default_storage.exists(firma))
+
+    def test_utente_senza_file_si_elimina_senza_errori(self):
+        utente = User.objects.create_user("senza_file", "senza-file@b.it", "pw")
+        with self.captureOnCommitCallbacks(execute=True):
+            utente.delete()
+        self.assertFalse(User.objects.filter(username="senza_file").exists())
+
+
 class AvatarUtenteTests(TestCase):
     """Foto profilo: servita dall'app, sostituita senza perdere quella vecchia."""
 
