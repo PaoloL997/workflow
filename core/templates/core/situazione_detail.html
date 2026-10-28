@@ -1861,9 +1861,8 @@
   function renderExcelFilterBody(key, allValues, swatches) {
     const body = document.getElementById('col-filter-popover-body');
     const state = getFilterState(key) || { type: 'excel', selected: null, contains: '' };
-    const selectedSet = state.selected === null
-      ? new Set(allValues)
-      : new Set(state.selected);
+    // Senza filtro sui valori non c'è nessuna spunta: l'utente sceglie cosa tenere.
+    const selectedSet = new Set(state.selected || []);
     const contains = state.contains || '';
 
     let valuesHtml = '';
@@ -1948,8 +1947,9 @@
     const boxes = Array.from(document.querySelectorAll('#col-filter-values input.col-filter-value-cb'));
     const checked = boxes.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
     const contains = (document.getElementById('col-filter-contains')?.value || '').trim();
+    // Nessuna spunta vale come «nessun filtro sui valori», non come «nascondi tutto».
     let selected = null;
-    if (checked.length < allValues.length) selected = checked;
+    if (checked.length && checked.length < allValues.length) selected = checked;
     const active = (selected !== null) || Boolean(contains);
     return { selected, contains, active };
   }
