@@ -88,6 +88,34 @@ def valida_immagine_firma(file):
         )
 
 
+AVATAR_MAX_BYTE = 5 * 1024 * 1024
+AVATAR_FORMATI = ("PNG", "JPEG", "GIF", "WEBP")
+
+
+def valida_immagine_avatar(file):
+    """La foto profilo: un PNG, JPEG, GIF o WebP veri, al massimo 5 MB.
+
+    Come per la firma, il formato si legge dal contenuto e non dal nome.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    if file.size > AVATAR_MAX_BYTE:
+        raise ValidationError("La foto profilo può pesare al massimo 5 MB.")
+    try:
+        file.seek(0)
+        with Image.open(file) as immagine:
+            formato = immagine.format
+            immagine.verify()
+    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
+        raise ValidationError(
+            "Il file non è un'immagine valida: carica un PNG, JPEG, GIF o WebP."
+        ) from None
+    finally:
+        file.seek(0)
+    if formato not in AVATAR_FORMATI:
+        raise ValidationError("Formato non ammesso: carica un PNG, JPEG, GIF o WebP.")
+
+
 class User(AbstractUser):
     email = models.EmailField(db_column="Email", unique=True)
     ruolo = models.CharField(db_column="Ruolo", max_length=100, blank=True)

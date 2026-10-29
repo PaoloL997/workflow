@@ -629,7 +629,7 @@ Vengono elencati i documenti la cui revisione corrente **non** è ancora in stat
 Le pagine Emissione, Ricezione e Situazione condividono gli stessi comandi di colonna:
 
 - Clicca l'**intestazione** di una colonna per ordinare; un secondo clic inverte l'ordine.
-- Clicca l'**imbuto** accanto all'intestazione per filtrare. Per le colonne di testo il riquadro offre la casella *"Cerca…"*, la spunta **(Seleziona tutto)**, l'elenco dei valori presenti (*—* per i vuoti) e il campo **Contiene**. Per le colonne data c'è un calendario con intervallo **Dal / Al**: clicca la data di inizio, poi quella di fine (una sola delle due è sufficiente).
+- Clicca l'**imbuto** accanto all'intestazione per filtrare. Per le colonne di testo il riquadro offre la casella *"Cerca…"*, la spunta **(Seleziona tutto)**, l'elenco dei valori presenti (*—* per i vuoti) e il campo **Contiene**. Su una colonna non ancora filtrata nessun valore è spuntato: spunta quelli da tenere (con **(Seleziona tutto)** li spunti tutti e poi togli quelli da escludere). Se applichi senza spuntare nulla, la colonna non viene filtrata per valore. Per le colonne data c'è un calendario con intervallo **Dal / Al**: clicca la data di inizio, poi quella di fine (una sola delle due è sufficiente).
 - **Applica** conferma, **Cancella** azzera il filtro di quella colonna; Esc o un clic fuori chiudono senza applicare.
 - Con filtri attivi la barra mostra *"N di T righe"* e il pulsante **Azzera filtri**.
 
