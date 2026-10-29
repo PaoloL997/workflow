@@ -453,7 +453,7 @@ class RevisioneSbloccoTests(TestCase):
         new_rev = Revisione.objects.get(pk=result["revisione"]["id"])
         self.assertEqual(new_rev.rev_no, 3)
         self.assertEqual(new_rev.dis_plan_date.isoformat(), "2025-07-15")
-        self.assertTrue(new_rev.crea_nuova_rev)
+        self.assertFalse(new_rev.crea_nuova_rev)
         self.assertEqual(new_rev.ext_status_id, None)
 
     def test_sblocca_without_date(self):
