@@ -68,7 +68,7 @@ def sblocca_revisione(job: str, revisione_id: int, dis_plan_date=None) -> dict:
         documento=doc,
         rev_no=(rev.rev_no or 0) + 1,
         dis_plan_date=parse_iso_date(dis_plan_date, strict=True),
-        crea_nuova_rev=True,
+        crea_nuova_rev=False,
     )
     return {
         "revisione": serialize_revisione(new_rev),
