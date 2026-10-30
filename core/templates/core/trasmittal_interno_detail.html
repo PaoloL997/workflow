@@ -737,7 +737,7 @@
     <div class="ti-ctrl" style="margin-bottom:0;">
       <input type="search" class="ctrl-input" id="sel-search" style="max-width:280px;" placeholder="Cerca documento…" autocomplete="off">
       <div class="list-filter-summary" id="sel-filter-summary"></div>
-      {% if not user.can_write %}
+      {% if not trasmittal_interno_can_write %}
         <span class="readonly-note">Sola lettura: non hai i permessi per emettere lettere.</span>
       {% endif %}
     </div>
@@ -837,7 +837,7 @@
       <button type="button" class="btn-secondary" onclick="destBulkAssegnaSiti(false)">Rimuovi</button>
       <span class="status-msg" id="dest-bulk-status"></span>
       <div class="list-filter-summary" id="dest-filter-summary"></div>
-      {% if not user.can_write %}
+      {% if not trasmittal_interno_can_write %}
         <span class="readonly-note">Sola lettura: non hai i permessi per modificare le destinazioni.</span>
       {% endif %}
     </div>
