@@ -13,7 +13,6 @@
 - core/views.py `_export_situazione_orizzontale_xlsx` / `_export_situazione_verticale_xlsx` e src/pdf.py `_situazione_table_meta`: l'export della situazione documenti ignora l'ordinamento scelto a schermo. Gli Excel seguono l'ordine del payload (chiave del documento), il PDF riordina sempre per B&R Doc, quindi lo stesso elenco esce in tre ordini diversi. Far arrivare al server l'ordine visualizzato (la selezione filtrata lo porta già, basta rispettarlo anche nel PDF) o scegliere un ordinamento unico per tutti e tre.
 
 
-- core/templates/core/trasmittal_interno_detail.html (note libere) e src/pdf.py `_build_note_libere`: la colonna «Nota» di una riga richiama la posizione della nota nell'elenco a schermo (righe vuote comprese), mentre il PDF rinumera saltando le righe vuote e stampa al massimo tre note (`[:3]`) anche se con «+ Aggiungi nota» se ne possono scrivere di più. Limitare a tre note nella UI, scartare le righe vuote prima di numerarle (o numerare nel PDF con la stessa posizione della UI) così il numero richiamato coincide con quello stampato.
 
 
 - core/templates/core/archivio_detail.html (modale indirizzo): su un errore di validazione del server (es. campo oltre la lunghezza massima) il modale resta aperto senza nessun messaggio, perché la risposta non 403 viene ignorata. Mostrare l'errore nel footer del modale.
