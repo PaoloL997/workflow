@@ -1164,32 +1164,16 @@ def _riquadro_note_testo(trasmittal):
     return "\n".join(["NOTES", *righe])
 
 
-def _base_link(base_url):
-    """Base dei link nelle email: ``settings.WORKFLOW_BASE_URL``, altrimenti ``base_url``.
-
-    ``base_url`` è l'indirizzo con cui chi ha avviato l'invio ha aperto l'app,
-    passato dalla view; senza nessuno dei due i link restano il solo percorso.
-    """
-    return (getattr(settings, "WORKFLOW_BASE_URL", "") or base_url or "").rstrip("/")
-
-
 def link_lettera(trasmittal, base_url=""):
-    """Indirizzo della pagina del trasmittal interno della commessa, aperta su questa lettera."""
-    percorso = reverse("trasmittal_interno_detail", args=[trasmittal.testata.job])
-    return f"{_base_link(base_url)}{percorso}?lettera={trasmittal.pk}"
+    """Indirizzo della pagina del trasmittal interno della commessa, aperta su questa lettera.
 
-
-def link_pdf_lettera(trasmittal, base_url=""):
-    """Indirizzo della pagina che apre in Workflow il PDF definitivo della lettera.
-
-    Una pagina e non l'API: chi non ha fatto l'accesso passa dal login e torna
-    al PDF. Niente link ``file:`` al fileserver: i client di posta in uso non
-    li aprono.
+    La base è ``settings.WORKFLOW_BASE_URL``. Se è vuota vale ``base_url``,
+    l'indirizzo con cui chi emette (o chi riprova l'invio) ha aperto l'app,
+    passato dalla view; senza nessuna delle due resta il solo percorso.
     """
-    percorso = reverse(
-        "trasmittal_interno_lettera_pdf", args=[trasmittal.testata.job, trasmittal.pk]
-    )
-    return f"{_base_link(base_url)}{percorso}"
+    base = (getattr(settings, "WORKFLOW_BASE_URL", "") or base_url or "").rstrip("/")
+    percorso = reverse("trasmittal_interno_detail", args=[trasmittal.testata.job])
+    return f"{base}{percorso}?lettera={trasmittal.pk}"
 
 
 def _corpo_email_emissione(trasmittal, link):
@@ -1229,32 +1213,22 @@ def _righe_visionato(trasmittal):
     ]
 
 
-def _salvataggio(trasmittal, base_url=""):
-    """Dove è salvato il PDF e un link per aprirlo in Workflow.
-
-    Se il salvataggio non è riuscito lo dice, invece di un percorso vuoto, e
-    il link porta alla lettera, dove chi ha il flag lo salva con **Salva PDF**.
-
-    Returns:
-        Tupla ``(riga, etichetta del link, link)``.
-    """
+def _riga_salvataggio(trasmittal):
+    """Dove è salvato il PDF; se il salvataggio non è riuscito lo dice, invece di un percorso vuoto."""
     percorso = percorso_pdf(trasmittal)
     if percorso.is_file():
-        return f"Salvato in: {percorso}", "Apri il PDF", link_pdf_lettera(trasmittal, base_url)
+        return f"Salvato in: {percorso}"
     return (
-        f"PDF non ancora salvato (salvataggio non riuscito, da riprovare in Workflow): {percorso}",
-        "Apri la lettera in Workflow",
-        link_lettera(trasmittal, base_url),
+        f"PDF non ancora salvato (salvataggio non riuscito, da riprovare in Workflow): {percorso}"
     )
 
 
-def _corpo_email_completamento(trasmittal, base_url=""):
-    """Corpo dell'email di completamento: chi ha preso visione, quando, dove è il PDF e il link."""
-    riga, etichetta, link = _salvataggio(trasmittal, base_url)
+def _corpo_email_completamento(trasmittal):
+    """Corpo dell'email di completamento: chi ha preso visione, quando, e dove è il PDF."""
     return (
         f"{_intestazione_email(trasmittal)}\n\n"
         + "\n".join(_righe_visionato(trasmittal))
-        + f"\n\n{riga}\n{etichetta}: {link}"
+        + f"\n\n{_riga_salvataggio(trasmittal)}"
     )
 
 
@@ -1321,15 +1295,14 @@ def _corpo_email_emissione_html(trasmittal, link):
     )
 
 
-def _corpo_email_completamento_html(trasmittal, base_url=""):
+def _corpo_email_completamento_html(trasmittal):
     """Versione HTML di ``_corpo_email_completamento``."""
-    riga, etichetta, link = _salvataggio(trasmittal, base_url)
     return (
         f"<p>{escape(_intestazione_email(trasmittal))}</p>"
         + "<p>"
-        + "<br>".join(escape(r) for r in _righe_visionato(trasmittal))
+        + "<br>".join(escape(riga) for riga in _righe_visionato(trasmittal))
         + "</p>"
-        + f'<p>{escape(riga)}<br><a href="{escape(link)}">{escape(etichetta)}</a></p>'
+        + f"<p>{escape(_riga_salvataggio(trasmittal))}</p>"
     )
 
 
@@ -1512,7 +1485,7 @@ def invia_email_emissione(trasmittal, base_url=""):
     return {**esito, "message_id": message_id}
 
 
-def invia_email_completamento(trasmittal, base_url=""):
+def invia_email_completamento(trasmittal):
     """Email di completamento: QC e PROD hanno preso visione, il PDF è sul fileserver.
 
     Va solo a chi ha emesso la lettera (``_destinatario_completamento``), non
@@ -1521,8 +1494,7 @@ def invia_email_completamento(trasmittal, base_url=""):
     salvato (``trasmittal.message_id``): chi ha emesso aveva la prima in
     copia, quindi il suo client la mostra come risposta nello stesso thread.
     Se l'email di emissione non è mai partita il Message-ID manca e l'email
-    parte senza quegli header. ``base_url`` serve al link del PDF (vedi
-    ``link_pdf_lettera``).
+    parte senza quegli header.
 
     Returns:
         Dict ``{"to", "cc", "mittente"}``.
@@ -1535,8 +1507,8 @@ def invia_email_completamento(trasmittal, base_url=""):
         headers = {"In-Reply-To": trasmittal.message_id, "References": trasmittal.message_id}
     return _invia_email(
         trasmittal,
-        _corpo_email_completamento(trasmittal, base_url),
-        _corpo_email_completamento_html(trasmittal, base_url),
+        _corpo_email_completamento(trasmittal),
+        _corpo_email_completamento_html(trasmittal),
         headers=headers,
         destinatari=_destinatario_completamento(trasmittal),
     )
@@ -1582,9 +1554,9 @@ def _passo_email_emissione(trasmittal, base_url=""):
         return _esito_email_fallita(trasmittal, exc)
 
 
-def _passo_email_completamento(trasmittal, base_url=""):
+def _passo_email_completamento(trasmittal):
     try:
-        return {"ok": True, "errore": None, **invia_email_completamento(trasmittal, base_url)}
+        return {"ok": True, "errore": None, **invia_email_completamento(trasmittal)}
     except Exception as exc:
         logger.exception(
             'Invio email di completamento del trasmittal interno "%s" fallito.', trasmittal.nome
@@ -1592,15 +1564,14 @@ def _passo_email_completamento(trasmittal, base_url=""):
         return _esito_email_fallita(trasmittal, exc)
 
 
-def completa_trasmittal_interno(trasmittal, base_url=""):
+def completa_trasmittal_interno(trasmittal):
     """Archivia e distribuisce una lettera su cui QC e PROD hanno preso visione.
 
     Salva il PDF sul fileserver (``salva_pdf``), prepara la cartella DCC
     (``prepara_per_dcc``) e invia l'email di completamento
     (``invia_email_completamento``), nell'ordine. Ogni passo è indipendente e
     best-effort: un suo fallimento non ferma gli altri ed è riportato nel
-    risultato, così si ritenta solo quello (``riprova_passo``). ``base_url``
-    serve al link del PDF nell'email (vedi ``link_pdf_lettera``).
+    risultato, così si ritenta solo quello (``riprova_passo``).
 
     Returns:
         Dict con ``pdf``, ``dcc`` ed ``email``, ognuno ``{"ok": bool,
@@ -1609,16 +1580,16 @@ def completa_trasmittal_interno(trasmittal, base_url=""):
     return {
         "pdf": _passo_pdf(trasmittal),
         "dcc": _passo_dcc(trasmittal),
-        "email": _passo_email_completamento(trasmittal, base_url),
+        "email": _passo_email_completamento(trasmittal),
     }
 
 
-def _completa_lettera(trasmittal_id, base_url=""):
+def _completa_lettera(trasmittal_id):
     """Completamento in background: rilegge la lettera e la completa, segnalando nel log i passi falliti."""
     trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
         pk=trasmittal_id
     )
-    esito = completa_trasmittal_interno(trasmittal, base_url)
+    esito = completa_trasmittal_interno(trasmittal)
     falliti = [passo for passo, esito_passo in esito.items() if not esito_passo["ok"]]
     if falliti:
         logger.warning(
@@ -1682,7 +1653,7 @@ def riprova_passo(trasmittal, passo, base_url=""):
         return _passo_pdf(trasmittal)
     if passo == "dcc":
         return _passo_dcc(trasmittal)
-    return _passo_email_completamento(trasmittal, base_url)
+    return _passo_email_completamento(trasmittal)
 
 
 # ── Presa visione QC / PROD ────────────────────────────────────────────────────
@@ -1776,9 +1747,7 @@ def _ruoli_da_registrare(ruolo, ammessi, registrate):
     return mancanti
 
 
-def registra_presa_visione(
-    trasmittal, utente, ruolo=None, completa_in_background=False, base_url=""
-):
+def registra_presa_visione(trasmittal, utente, ruolo=None, completa_in_background=False):
     """Registra la presa visione di ``utente`` e, se completa la lettera, la archivia.
 
     Dalla pagina parte quando un firmatario apre l'anteprima della lettera
@@ -1802,7 +1771,6 @@ def registra_presa_visione(
         utente: Chi apre l'anteprima (l'utente autenticato).
         ruolo: ``RuoloFirmatarioStabilimento`` scelto, facoltativo.
         completa_in_background: Se ``True`` il completamento non si attende.
-        base_url: Indirizzo dell'app per il link nell'email di completamento.
 
     Returns:
         Dict con ``trasmittal_id``, ``nome``, ``registrate`` (le prese visione
@@ -1861,11 +1829,9 @@ def registra_presa_visione(
     if stato["stato"] == STATO_COMPLETATO:
         if completa_in_background:
             # Dopo il commit: il thread usa un'altra connessione e deve vedere le prese visione.
-            transaction.on_commit(
-                lambda: _in_background(_completa_lettera, trasmittal.pk, base_url)
-            )
+            transaction.on_commit(lambda: _in_background(_completa_lettera, trasmittal.pk))
         else:
-            risultato["completamento"] = completa_trasmittal_interno(trasmittal, base_url)
+            risultato["completamento"] = completa_trasmittal_interno(trasmittal)
     return risultato
 
 

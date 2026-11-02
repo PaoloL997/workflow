@@ -330,8 +330,7 @@ l'header `Authorization: Token <chiave>` e restituiscono status e JSON dell'agen
 ## Trasmittal interno: link nelle email
 
 L'email di emissione del trasmittal interno porta il link alla pagina della lettera, dove i
-firmatari QC e PROD registrano la presa visione; quella di completamento il link **Apri il PDF**.
-L'indirizzo pubblico dell'app sta nel `.env`:
+firmatari QC e PROD registrano la presa visione. L'indirizzo pubblico dell'app sta nel `.env`:
 
 ```
 WORKFLOW_BASE_URL=http://<host>:<porta>

@@ -994,9 +994,9 @@ La presa visione si registra a tuo nome, con data e ora: non serve una firma gra
 |-----------------------------|---------|
 | **PDF salvato sul fileserver** | Salva il PDF in `Z:\JOBS\<job>\Progetto\UT\Transmittal\<nome>.pdf`, anche quando la lettera contiene documenti QC o WE |
 | **Cartella DCC preparata** | Copia il PDF di ogni documento con **Cliente** spuntato nella cartella `Z:\JOBS\<job>\PROGETTO\DCC\DA SPEDIRE\<nome>` (*"N file copiati, M mancanti."*), cercandolo nella cartella del reparto del documento. Un documento di cui non si trova il file viene segnalato come mancante, gli altri vengono copiati comunque. Senza documenti per il cliente la cartella non viene creata |
-| **Email di completamento inviata** | Invia solo a chi ha emesso la lettera, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"* con sotto il link **Apri il PDF**, che apre il PDF in Workflow (passando dal login, se serve). Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
+| **Email di completamento inviata** | Invia solo a chi ha emesso la lettera, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"*. Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
 
-Chi apre l'anteprima che completa la lettera vede subito il PDF; tornando sull'elenco trova la lettera aggiornata. Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso, con il link **Apri la lettera in Workflow**, e nell'elenco chi ha il flag vede **Salva PDF**. Se non arriva la seconda email o manca la cartella DCC, avvisa un amministratore.
+Chi apre l'anteprima che completa la lettera vede subito il PDF; tornando sull'elenco trova la lettera aggiornata. Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso e nell'elenco chi ha il flag vede **Salva PDF**. Se non arriva la seconda email o manca la cartella DCC, avvisa un amministratore.
 
 ### 12.9 Il PDF della lettera
 

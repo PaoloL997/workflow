@@ -488,6 +488,18 @@ class CompletamentoTests(_LetteraTestCase):
         self.assertTrue(completamento["pdf"]["ok"])
         self.assertEqual(len(mail.outbox), 1)
 
+    def test_seconda_email_riporta_solo_il_percorso_del_pdf_senza_link(self):
+        lettera_id = self._emetti()["trasmittal_id"]
+
+        self._completa(lettera_id)
+
+        percorso = percorso_pdf(TransmittalInterno.objects.get(pk=lettera_id))
+        seconda = mail.outbox[1]
+        self.assertIn(f"Salvato in: {percorso}", seconda.body)
+        html = seconda.alternatives[0][0]
+        self.assertIn(f"<p>Salvato in: {percorso}</p>", html)
+        self.assertNotIn("<a ", html)
+
     def test_un_passo_fallito_non_ferma_gli_altri_e_l_email_lo_dice(self):
         esito = self._emetti()
         lettera = TransmittalInterno.objects.get(pk=esito["trasmittal_id"])
@@ -503,26 +515,6 @@ class CompletamentoTests(_LetteraTestCase):
         self.assertTrue(completamento["email"]["ok"])
         self.assertIn("PDF non ancora salvato", mail.outbox[1].body)
         self.assertNotIn("Salvato in", mail.outbox[1].body)
-        # Niente link al PDF: il link porta alla lettera, dove si salva di nuovo.
-        html = mail.outbox[1].alternatives[0][0]
-        self.assertIn(f'?lettera={lettera.pk}">Apri la lettera in Workflow</a>', html)
-        self.assertNotIn("/pdf/", html)
-
-    def test_seconda_email_link_al_pdf_in_workflow(self):
-        lettera_id = self._emetti()["trasmittal_id"]
-
-        self._completa(lettera_id)
-
-        percorso = percorso_pdf(TransmittalInterno.objects.get(pk=lettera_id))
-        link = (
-            f"http://testserver/commesse/{self.testata.job}/trasmittal-interno/"
-            f"lettere/{lettera_id}/pdf/"
-        )
-        seconda = mail.outbox[1]
-        self.assertIn(f"Salvato in: {percorso}\nApri il PDF: {link}", seconda.body)
-        html = seconda.alternatives[0][0]
-        self.assertIn(f'<a href="{link}">Apri il PDF</a>', html)
-        self.assertNotIn("file:", html)
 
     def test_senza_message_id_la_seconda_email_parte_senza_header_di_thread(self):
         with patch("django.core.mail.EmailMessage.send", side_effect=Exception("SMTP giù")):
@@ -699,9 +691,7 @@ class AnteprimaPresaVisioneTests(_LetteraTestCase):
             with self.captureOnCommitCallbacks(execute=True):
                 self._anteprima(self.prod_bg)
 
-        in_background.assert_called_once_with(
-            _completa_lettera, self.lettera_id, "http://testserver/"
-        )
+        in_background.assert_called_once_with(_completa_lettera, self.lettera_id)
         self.assertEqual(len(mail.outbox), 1)  # solo l'email di emissione: il resto non si attende
 
     def test_il_completamento_in_background_salva_il_pdf_e_invia_la_seconda_email(self):
@@ -716,57 +706,6 @@ class AnteprimaPresaVisioneTests(_LetteraTestCase):
         self.assertTrue(percorso_pdf(TransmittalInterno.objects.get(pk=self.lettera_id)).exists())
         self.assertEqual(len(mail.outbox), 2)
         self.assertIn("Visionato da Paola Produzione (PROD)", mail.outbox[1].body)
-
-
-class PdfDefinitivoPaginaTests(_LetteraTestCase):
-    """La pagina del link "Apri il PDF" dell'email di completamento."""
-
-    def setUp(self):
-        super().setUp()
-        self.lettera_id = self._emetti()["trasmittal_id"]
-
-    def _pagina(self, job=None):
-        return (
-            f"/commesse/{job or self.testata.job}/trasmittal-interno/lettere/{self.lettera_id}/pdf/"
-        )
-
-    def test_senza_accesso_passa_dal_login(self):
-        self.client.logout()
-
-        risposta = self.client.get(self._pagina())
-
-        self.assertEqual(risposta.status_code, 302)
-        self.assertTrue(risposta["Location"].startswith("/login/?next="))
-        self.assertIn(f"/lettere/{self.lettera_id}/pdf/", risposta["Location"])
-
-    def test_lettera_completata_apre_il_pdf_definitivo(self):
-        self._completa(self.lettera_id)
-        self.client.force_login(self.estraneo)  # basta l'accesso, come per l'Anteprima
-
-        risposta = self.client.get(self._pagina())
-
-        self.assertEqual(risposta.status_code, 200)
-        self.assertEqual(risposta["Content-Type"], "application/pdf")
-        self.assertTrue(risposta["Content-Disposition"].startswith("inline"))
-        # Letto fino in fondo il test client chiude il file (Windows).
-        self.assertTrue(b"".join(risposta.streaming_content).startswith(b"%PDF"))
-
-    def test_lettera_non_completata_rimanda_alla_lettera(self):
-        self.client.force_login(self.estraneo)
-
-        risposta = self.client.get(self._pagina())
-
-        self.assertRedirects(
-            risposta,
-            f"/commesse/{self.testata.job}/trasmittal-interno/?lettera={self.lettera_id}",
-            fetch_redirect_response=False,
-        )
-
-    def test_lettera_di_un_altra_commessa_404(self):
-        Testata.objects.create(job="99101", sito_costruttivo=self.bg)
-        self.client.force_login(self.estraneo)
-
-        self.assertEqual(self.client.get(self._pagina(job="99101")).status_code, 404)
 
 
 class InBackgroundTests(SimpleTestCase):
