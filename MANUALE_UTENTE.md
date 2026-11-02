@@ -705,7 +705,7 @@ Il PDF (sia con **Stampa** sia con **Emetti e scarica**) contiene:
 
 ### 9.8 Esportare l'elenco da emettere
 
-Il menu **Esporta** offre **Excel** (*senza header*) e **PDF** (*con header Document Status*), disponibili a tutti. Contengono tutti i documenti da emettere della commessa, ordinati per data prevista, con le date scadute in rosso; i filtri e la selezione a schermo non vengono applicati. File: `<job>_to_be_issued_<gg_mm_aaaa>.xlsx` oppure `.pdf`, colonne Item, B&R Doc, Rev., Client Doc N°, Contractor Doc N°, Client Doc Class, Title, Planned date.
+Il menu **Esporta** offre **Excel** (*senza header*) e **PDF** (*con header Document Status*), disponibili a tutti. Contengono tutti i documenti da emettere della commessa, ordinati per data prevista, con le date scadute in rosso; i filtri e la selezione a schermo non vengono applicati. File: `<job>_to_be_issued_<gg_mm_aaaa>.xlsx` oppure `.pdf`, colonne Item, B&R Doc, Rev., Client Doc N°, Contractor Doc N°, Client Doc Class, Title, Planned date. Nell'Excel le date sono vere date di Excel nel formato `gg/mm/aaaa`, come in **Scarica dati grezzi**, quindi si ordinano e si filtrano come date.
 
 ---
 
@@ -753,7 +753,7 @@ Se una revisione con risposta non ha generato la revisione successiva e serve cr
 
 ### 10.4 Esportare l'elenco in attesa
 
-Il menu **Esporta** offre **Excel** e **PDF** (*con header Document Status*), disponibili a tutti: tutti i documenti in attesa di risposta, ordinati per data di ricezione prevista (scadute in rosso), senza applicare i filtri a schermo. File: `<job>_to_be_received_<gg_mm_aaaa>.xlsx` oppure `.pdf`, colonne Item, B&R Doc, Rev., Client Doc N°, Contractor Doc N°, Client Doc Class, Title, Emission date, Planned return date.
+Il menu **Esporta** offre **Excel** e **PDF** (*con header Document Status*), disponibili a tutti: tutti i documenti in attesa di risposta, ordinati per data di ricezione prevista (scadute in rosso), senza applicare i filtri a schermo. File: `<job>_to_be_received_<gg_mm_aaaa>.xlsx` oppure `.pdf`, colonne Item, B&R Doc, Rev., Client Doc N°, Contractor Doc N°, Client Doc Class, Title, Emission date, Planned return date. Nell'Excel le date sono vere date di Excel nel formato `gg/mm/aaaa`, come in **Scarica dati grezzi**, quindi si ordinano e si filtrano come date.
 
 ---
 
@@ -840,7 +840,7 @@ La nuova revisione compare in **Gestisci emissione**. Si può sbloccare solo l'u
 
 Con un **filtro attivo** (di colonna, *Filtra per risposta del cliente* o *Mostra solo ultima revisione*) l'export contiene solo i documenti rimasti a schermo e, in verticale, solo le revisioni mostrate.
 
-L'Excel della vista orizzontale riproduce la tabella a schermo: colonne fisse, gruppo **Planning** e un gruppo per ogni revisione (Dispatch, Received, Status); solo la colonna **B&R Doc** è colorata, con la stessa regola dello schermo. L'Excel della vista verticale ha una riga per ogni revisione, senza colori, con i gruppi **Planning** (Submission date, Receipt date) e **Actual** (Dispatch, Received).
+L'Excel della vista orizzontale riproduce la tabella a schermo: colonne fisse, gruppo **Planning** e un gruppo per ogni revisione (Dispatch, Received, Status); solo la colonna **B&R Doc** è colorata, con la stessa regola dello schermo. L'Excel della vista verticale ha una riga per ogni revisione, senza colori, con i gruppi **Planning** (Submission date, Receipt date) e **Actual** (Dispatch, Received). In entrambe le viste le date sono vere date di Excel nel formato `gg/mm/aaaa`, come in **Scarica dati grezzi**, quindi si ordinano e si filtrano come date.
 
 Il PDF ha l'intestazione **Document Status** con la legenda **STATUS** costruita sulle risposte del cliente configurate a sistema: lettera, nome e colore del quadratino (al massimo dieci righe; senza risposte configurate viene usata la legenda storica delle otto risposte standard). Nel PDF orizzontale è colorata la cella B&R Doc; nel PDF verticale ogni riga è tinta con il colore della risposta.
 

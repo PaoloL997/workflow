@@ -10,6 +10,7 @@
 
 - Filtri di colonna (Gestisci emissione, Registra ricezioni, Situazione documenti, Trasmittal interno): aprendo il filtro di una colonna non ancora filtrata nessun valore è spuntato, neanche **(Seleziona tutto)**, e si spuntano solo i valori da tenere. Se si applica senza spuntare nulla la colonna resta senza filtro sui valori, invece di nascondere tutte le righe. Un filtro già attivo si riapre con i suoi valori spuntati
 - Filtri di colonna (Gestisci emissione, Gestisci ricezione, Trasmittal interno): tolto il campo **Contiene**, che ripeteva la casella *Cerca…*. Per tenere i valori che contengono un testo si scrive il testo in *Cerca…* e si spunta **(Seleziona tutto)**, che spunta solo i valori rimasti visibili. In Situazione documenti il campo resta
+- Excel di Gestisci emissione, Gestisci ricezione e Situazione documenti (vista orizzontale e verticale): le date non sono più testo (`10 jan 2026`) ma vere date di Excel nel formato `gg/mm/aaaa`, come in **Scarica dati grezzi**, quindi si ordinano e si filtrano come date. I PDF restano come prima
 
 ## [0.2.0] - 2026-10-22
 

@@ -31,6 +31,7 @@ from src.pdf import (
 )
 
 from .api_auth import autentica_api, token_valido
+from .date_fmt import parse_iso_date
 from .models import (
     ApiToken,
     Documento,
@@ -103,6 +104,7 @@ from .services.commesse import (
     update_revisione,
     update_stato_esterno,
 )
+from .services.export_grezzo import FORMATO_DATA as XLSX_FORMATO_DATA
 from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
@@ -1935,6 +1937,9 @@ def _style_xlsx_header_cell(cell):
 
 def _style_xlsx_data_cell(cell, *, overdue=False, center=False, wrap=False):
     cell.border = _XLSX_THIN
+    if isinstance(cell.value, _date):
+        # Data vera (ordinabile e filtrabile in Excel), come in "Scarica".
+        cell.number_format = XLSX_FORMATO_DATA
     if center:
         cell.alignment = _XLSX_CENTER_ALIGN
     elif wrap:
@@ -1984,7 +1989,7 @@ def _autosize_xlsx_columns(ws, headers, *, data_start_row: int = 2):
             # Acronyms / flags: fit content, keep narrow (header wraps).
             width = float(max(5, min(max(content_len + 1, 5), 10)))
         elif header in _XLSX_DATE_COLS:
-            width = float(max(11, min(max(content_len + 1, 11), 14)))
+            width = float(max(12, min(max(content_len + 1, 12), 14)))
         elif header in ("Internal status", "Client response"):
             width = float(max(12, min(max(content_len + 2, 12), 24)))
         elif header in ("B&R Doc", "Client Doc N°", "Contractor Doc N°", "Client Doc Class"):
@@ -2083,8 +2088,6 @@ def _export_planned_docs_xlsx(
     emission_date_key="latest_dis_act_date",
 ):
     """Build an Excel export for emissione/ricezione document lists."""
-    from .date_fmt import format_display_date
-
     docs = _sort_docs_by_date(docs, date_key)
 
     wb = openpyxl.Workbook()
@@ -2128,11 +2131,12 @@ def _export_planned_docs_xlsx(
         cells_meta.append((d.get("client_doc_class") or "", False, True))
         cells_meta.append((d.get("doc_title") or "", False, False))
         if emission_date_header:
-            raw_em = d.get(emission_date_key)
-            cells_meta.append((format_display_date(raw_em) if raw_em else "", False, True))
+            cells_meta.append((parse_iso_date(d.get(emission_date_key)), False, True))
         raw_plan = d.get(date_key)
-        plan_text = format_display_date(raw_plan) if raw_plan else ""
-        cells_meta.append((plan_text, _is_export_date_overdue(raw_plan) and bool(plan_text), True))
+        plan_date = parse_iso_date(raw_plan)
+        cells_meta.append(
+            (plan_date, plan_date is not None and _is_export_date_overdue(raw_plan), True)
+        )
 
         for value, overdue, center in cells_meta:
             cell = ws.cell(row=row_idx, column=col, value=value)
@@ -2227,8 +2231,6 @@ def export_ricezione(request, job):
 
 def _export_situazione_verticale_xlsx(job, payload):
     """Excel of the vista verticale: one row per revision, Planning/Actual date groups."""
-    from .date_fmt import format_display_date
-
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
@@ -2310,8 +2312,6 @@ def _export_situazione_verticale_xlsx(job, payload):
         revs = rev_map.get(d["id"]) or rev_map.get(str(d["id"])) or []
         revs = sorted(revs, key=lambda r: (r.get("rev_no") is None, r.get("rev_no") or 0))
         for rev in revs or [None]:
-            dis_plan = rev.get("dis_plan_date") if rev else None
-            rec_plan = rev.get("rec_plan_date") if rev else None
             values = [
                 d.get("item_no") or "",
                 d.get("vendor_doc") or "",
@@ -2323,14 +2323,10 @@ def _export_situazione_verticale_xlsx(job, payload):
                 "Yes" if d.get("doc_penalty") else "",
                 "Yes" if d.get("doc_payment") else "",
                 _rev_label(rev),
-                format_display_date(dis_plan) if dis_plan else "",
-                format_display_date(rec_plan) if rec_plan else "",
-                format_display_date(rev.get("dis_act_date"))
-                if rev and rev.get("dis_act_date")
-                else "",
-                format_display_date(rev.get("rec_act_date"))
-                if rev and rev.get("rec_act_date")
-                else "",
+                parse_iso_date(rev.get("dis_plan_date")) if rev else None,
+                parse_iso_date(rev.get("rec_plan_date")) if rev else None,
+                parse_iso_date(rev.get("dis_act_date")) if rev else None,
+                parse_iso_date(rev.get("rec_act_date")) if rev else None,
                 _int_status_label(rev),
                 (rev.get("ext_status_label") or "") if rev else "",
             ]
@@ -2387,8 +2383,6 @@ def _export_situazione_orizzontale_xlsx(job, payload):
     schermo e nel PDF (vedi services/situazione_cella_vendor.py); le celle
     Status riportano la lettera della risposta senza colore.
     """
-    from .date_fmt import format_display_date
-
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
@@ -2443,15 +2437,15 @@ def _export_situazione_orizzontale_xlsx(job, payload):
         planned = _planned_dates_for_latest_rev(revs)
         values = [d.get(key) or "" for key in keys]
         values += [
-            format_display_date(planned["planned_send"]),
-            format_display_date(planned["planned_receipt"]),
+            parse_iso_date(planned["planned_send"]),
+            parse_iso_date(planned["planned_receipt"]),
         ]
         for r in range(max_revs):
             rev = revs[r] if r < len(revs) else None
             if rev:
                 values += [
-                    format_display_date(rev.get("dis_act_date")),
-                    format_display_date(rev.get("rec_act_date")),
+                    parse_iso_date(rev.get("dis_act_date")),
+                    parse_iso_date(rev.get("rec_act_date")),
                     (rev.get("ext_status_lettera") or "").strip(),
                 ]
             else:
