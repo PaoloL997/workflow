@@ -1438,12 +1438,14 @@ def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
 def trasmittal_interno_presa_visione_api(request, job, trasmittal_id):
     """Registra la presa visione QC o PROD dell'utente loggato su una lettera.
 
-    Non serve il permesso di scrittura del trasmittal interno: può prendere
-    visione chi è firmatario QC o PROD di un sito della lettera (vedi
-    ``registra_presa_visione``). Il ruolo si deduce; ``{"ruolo": "qualita"}``
-    o ``"produzione"`` serve solo a chi è firmatario di entrambi. Se la presa
-    visione completa la lettera, la risposta riporta in ``completamento``
-    l'esito di PDF, cartella DCC ed email di completamento.
+    La pagina la chiama quando un firmatario apre l'anteprima della lettera,
+    prima di mostrargli il PDF. Non serve il permesso di scrittura del
+    trasmittal interno: può prendere visione chi è firmatario QC o PROD di un
+    sito della lettera (vedi ``registra_presa_visione``). Senza payload si
+    registrano tutti i ruoli mancanti dell'utente; ``{"ruolo": "qualita"}`` o
+    ``"produzione"`` limita a quello. Se la presa visione completa la lettera,
+    la risposta riporta in ``completamento`` l'esito di PDF, cartella DCC ed
+    email di completamento.
     """
     if is_service_user(request.user):
         return JsonResponse({"error": "Permesso negato."}, status=403)

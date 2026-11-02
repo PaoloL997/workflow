@@ -424,7 +424,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
 
         qc = self._prendi_visione(self.firmatari_utenti["MGalli"], lettera_id)
         self.assertEqual(qc.status_code, 200, qc.content)
-        self.assertEqual(qc.json()["presa_visione"]["sigla"], "QC")
+        self.assertEqual([p["sigla"] for p in qc.json()["registrate"]], ["QC"])
         self.assertEqual(qc.json()["stato"], "parziale")
         self.assertIsNone(qc.json()["completamento"])
 

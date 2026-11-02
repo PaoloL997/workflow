@@ -552,34 +552,16 @@
     border-bottom: 1px solid var(--color-border);
   }
   .storico-row--evidenziata { background: hsla(211, 100%, 55%, 0.08); }
-  .storico-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .storico-titolo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-  .storico-stato {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-    border: 1px solid transparent;
+  .storico-row:last-child { border-bottom: none; }
+  /* Nome e stato sulla stessa riga: vanno a capo solo se manca spazio. */
+  .storico-info { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; min-width: 0; }
+  .storico-nome {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    letter-spacing: -0.02em;
   }
-  /* In attesa / parziale: ambra; completata: verde. */
-  .storico-stato--in_attesa,
-  .storico-stato--parziale {
-    color: hsl(38, 92%, 60%);
-    background: hsla(38, 92%, 50%, 0.14);
-    border-color: hsla(38, 92%, 50%, 0.4);
-  }
-  [data-theme="light"] .storico-stato--in_attesa,
-  [data-theme="light"] .storico-stato--parziale { color: hsl(32, 85%, 32%); }
-  .storico-stato--completato {
-    color: var(--color-success);
-    background: color-mix(in srgb, var(--color-success) 14%, transparent);
-    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
-  }
-  .storico-visioni { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
-  .storico-visioni strong { color: var(--color-text-primary); font-weight: 600; }
+  .storico-stato { font-size: 12.5px; color: var(--color-text-secondary); }
   .storico-azione {
     display: inline-flex;
     align-items: center;
@@ -598,57 +580,8 @@
   }
   .storico-azione:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-color: var(--color-accent); }
   .storico-azione:disabled { opacity: .5; cursor: not-allowed; }
-  .storico-azione--primaria { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
-  .storico-azione--primaria:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
   .ti-esito-nota { margin-top: 12px; font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
-  .storico-row:last-child { border-bottom: none; }
-  .storico-nome {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    letter-spacing: -0.02em;
-  }
-  .storico-date-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 3px 9px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    background: hsla(211, 100%, 55%, 0.15);
-    color: var(--color-accent);
-    border: 1px solid hsla(211, 100%, 55%, 0.35);
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
-    white-space: nowrap;
-    text-decoration: none;
-  }
-  .storico-date-chip:hover {
-    background: hsla(211, 100%, 55%, 0.25);
-    border-color: var(--color-accent);
-  }
-  [data-theme="light"] .storico-date-chip {
-    background: hsl(211, 100%, 92%);
-    color: hsl(211, 80%, 38%);
-    border-color: hsl(211, 80%, 72%);
-  }
-  [data-theme="light"] .storico-date-chip:hover {
-    background: hsl(211, 100%, 88%);
-    border-color: var(--color-accent);
-  }
   .storico-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-  /* PDF definitivo non disponibile (lettera non completata, o file assente dal
-     fileserver): la data resta, ma non è un link. */
-  .storico-date-chip.storico-date-chip--assente,
-  .storico-date-chip.storico-date-chip--assente:hover {
-    background: transparent;
-    color: var(--color-text-secondary);
-    border-color: var(--color-border);
-    border-style: dashed;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
   .storico-annulla {
     display: inline-flex;
     align-items: center;
@@ -948,7 +881,7 @@
       + '</div>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">2</div>'
-      + '<div class="ti-info-step-text">Un firmatario QC e uno PROD di uno dei siti coinvolti cliccano <strong>Presa visione</strong> qui nell\'elenco. I firmatari, anche più di uno per ruolo e sito: ' + firmatari + '.</div>'
+      + '<div class="ti-info-step-text">Un firmatario QC e uno PROD di uno dei siti coinvolti aprono l\'<strong>Anteprima</strong> della lettera qui nell\'elenco: aprirla vale come presa visione, registrata a loro nome con data e ora. I firmatari, anche più di uno per ruolo e sito: ' + firmatari + '.</div>'
       + '</div>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">3</div>'
@@ -956,7 +889,7 @@
       + '</div>'
       + '<div class="ti-info-callout">'
       + '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>'
-      + '<span>Nel PDF, sotto PAPER COPIES DISTRIBUTION, compaiono nome, data e ora di chi ha preso visione: nessuna firma grafica. <strong>Stampa</strong> genera sempre il PDF del momento; il PDF definitivo si scarica dalla data solo a lettera completata.</span>'
+      + '<span>Nel PDF, sotto PAPER COPIES DISTRIBUTION, compaiono nome, data e ora di chi ha preso visione: nessuna firma grafica. <strong>Anteprima</strong> mostra sempre il PDF della lettera con le prese visione registrate fin lì.</span>'
       + '</div>';
     document.getElementById('info-firme-modal').classList.add('open');
   };
@@ -969,49 +902,32 @@
   /* ══════════════════════════════════════════════════
      Storico lettere emesse — schermata principale
   ══════════════════════════════════════════════════ */
-  var ETICHETTA_STATO = {
-    in_attesa: 'In attesa QC e PROD',
-    parziale: 'In attesa',
-    completato: 'Completata',
-  };
-
   // Lettera indicata nel link dell'email di emissione (?lettera=<id>).
   var LETTERA_EVIDENZIATA = parseInt(new URLSearchParams(window.location.search).get('lettera') || '', 10);
 
-  function etichettaStato(l) {
-    if (l.stato === 'parziale') return 'Manca ' + l.ruoli_mancanti.join(' e ');
-    return ETICHETTA_STATO[l.stato] || l.stato;
-  }
-
-  function preseVisioneHtml(l) {
-    if (!l.prese_visione.length) return '';
-    return '<div class="storico-visioni">' + l.prese_visione.map(function (p) {
-      return 'Visionato da <strong>' + escHtml(p.utente) + '</strong> (' + escHtml(p.sigla) + ') il ' + escHtml(fmtDataOra(p.registrata_il));
-    }).join('<br>') + '</div>';
+  // Una scritta per ruolo: chi ha preso visione e quando, o "in attesa".
+  function statoLetteraHtml(l) {
+    var prese = {};
+    l.prese_visione.forEach(function (p) { prese[p.sigla] = p; });
+    return '<span class="storico-stato">' + ['QC', 'PROD'].map(function (sigla) {
+      var p = prese[sigla];
+      return sigla + ': ' + (p ? escHtml(p.utente) + ' (' + escHtml(fmtDataOra(p.registrata_il)) + ')' : 'in attesa');
+    }).join(' · ') + '</span>';
   }
 
   function azioniLetteraHtml(l) {
-    var nomeJs = escHtml(l.nome).replace(/'/g, "\\'");
     var html = '<div class="storico-row-actions">';
-    (l.puo_prendere_visione || []).forEach(function (r) {
-      html += '<button type="button" class="storico-azione storico-azione--primaria" onclick="prendiVisione('
-        + l.id + ', \'' + r.ruolo + '\', \'' + r.sigla + '\', \'' + nomeJs + '\', this)">Presa visione ' + escHtml(r.sigla) + '</button>';
-    });
+    var sigle = (l.puo_prendere_visione || []).map(function (r) { return r.sigla; });
     html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/pdf/" target="_blank" rel="noopener" class="storico-azione"'
-      + ' title="PDF generato ora, con le prese visione registrate finora">Stampa</a>';
-    if (l.stato !== 'completato') {
-      html += '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true"'
-        + ' title="Il PDF definitivo si salva sul fileserver dopo la presa visione di QC e PROD">' + escHtml(l.data) + '</span>';
-    } else if (l.pdf_presente === false) {
-      html += '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true" title="PDF non trovato sul fileserver">' + escHtml(l.data) + '</span>';
-      if (TI_CAN_WRITE) {
-        html += '<button type="button" class="storico-azione" onclick="salvaPdfLettera(' + l.id + ', this)">Salva PDF</button>';
-      }
-    } else {
-      html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip" title="PDF definitivo sul fileserver">' + escHtml(l.data) + '</a>';
+      + (sigle.length
+        ? ' onclick="apriAnteprima(event, ' + l.id + ')" title="Aprendo l\'anteprima registri la presa visione ' + sigle.join(' e ') + '"'
+        : ' title="PDF della lettera con le prese visione registrate finora"')
+      + '>Anteprima</a>';
+    if (l.stato === 'completato' && l.pdf_presente === false && TI_CAN_WRITE) {
+      html += '<button type="button" class="storico-azione" title="PDF non trovato sul fileserver" onclick="salvaPdfLettera(' + l.id + ', this)">Salva PDF</button>';
     }
     if (l.annullabile && TI_CAN_WRITE) {
-      html += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + nomeJs + '\')">Annulla</button>';
+      html += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>';
     }
     return html + '</div>';
   }
@@ -1033,11 +949,7 @@
       }
       list.innerHTML = lettere.map(function (l) {
         return '<div class="storico-row' + (l.id === LETTERA_EVIDENZIATA ? ' storico-row--evidenziata' : '') + '" id="lettera-' + l.id + '">'
-          + '<div class="storico-info">'
-          + '<div class="storico-titolo"><span class="storico-nome">' + escHtml(l.nome) + '</span>'
-          + '<span class="storico-stato storico-stato--' + escHtml(l.stato) + '">' + escHtml(etichettaStato(l)) + '</span></div>'
-          + preseVisioneHtml(l)
-          + '</div>'
+          + '<div class="storico-info"><span class="storico-nome">' + escHtml(l.nome) + '</span>' + statoLetteraHtml(l) + '</div>'
           + azioniLetteraHtml(l)
           + '</div>';
       }).join('');
@@ -1048,38 +960,49 @@
     }
   }
 
-  window.prendiVisione = async function (id, ruolo, sigla, nome, btn) {
-    if (!confirm(
-      'Confermi la presa visione ' + sigla + ' della lettera ' + nome + '?\n\n'
-      + 'Viene registrata a tuo nome con data e ora e non si annulla da qui.'
-    )) {
-      return;
+  // Per un firmatario QC o PROD a cui manca ancora la presa visione, aprire
+  // l'anteprima la registra: prima la registrazione, poi il PDF, che riporta
+  // già il suo nome. La finestra si apre subito, dentro il clic, perché il
+  // browser non la blocchi; il PDF ci arriva dopo la risposta.
+  window.apriAnteprima = async function (event, id) {
+    event.preventDefault();
+    var url = event.currentTarget.href;
+    var finestra = window.open('', '_blank');
+    if (finestra && finestra.document.body) {
+      finestra.document.title = 'Anteprima';
+      finestra.document.body.textContent = 'Registro la presa visione e apro l\'anteprima…';
     }
-    btn.disabled = true;
+    var r = null;
+    var body = {};
     try {
-      const r = await fetch(baseUrl() + 'lettere/' + id + '/presa-visione/', {
+      r = await fetch(baseUrl() + 'lettere/' + id + '/presa-visione/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: JSON.stringify({ ruolo: ruolo }),
+        body: '{}',
       });
-      const body = await r.json().catch(function () { return {}; });
-      if (!r.ok) {
-        alert(body.error || 'Impossibile registrare la presa visione.');
-        btn.disabled = false;
-        await caricaStorico();
-        return;
-      }
-      if (body.completamento) {
-        _ultimoEsito = { tipo: 'completamento', dati: body };
-        document.getElementById('conferma-modal').classList.add('open');
-        renderRisultato();
-      } else {
-        await caricaStorico();
-      }
+      body = await r.json().catch(function () { return {}; });
     } catch {
-      alert('Errore di rete.');
-      btn.disabled = false;
+      r = null;
     }
+    // Il PDF si apre comunque, prima di eventuali avvisi: un alert qui
+    // bloccherebbe la pagina e lascerebbe la finestra in attesa.
+    if (finestra) {
+      finestra.opener = null;
+      finestra.location.replace(url);
+    } else {
+      window.location.assign(url);
+      return;
+    }
+    if (r === null) {
+      alert('Errore di rete: la presa visione non è stata registrata.');
+    } else if (!r.ok && r.status !== 409) {  // 409: registrata da un altro nel frattempo
+      alert(body.error || 'Impossibile registrare la presa visione.');
+    } else if (body.completamento) {
+      _ultimoEsito = { tipo: 'completamento', dati: body };
+      document.getElementById('conferma-modal').classList.add('open');
+      renderRisultato();
+    }
+    await caricaStorico();
   };
 
   window.salvaPdfLettera = async function (id, btn) {
@@ -2032,8 +1955,12 @@
           : 'Nessun documento per il cliente in questa lettera.')
         : '';
       var fallito = !(c.pdf.ok && c.dcc.ok && c.email.ok);
-      html = esitoRiga('Presa visione ' + esito.presa_visione.sigla + ' registrata: lettera completata', { ok: true },
-          escHtml(esito.presa_visione.utente) + ', ' + escHtml(fmtDataOra(esito.presa_visione.registrata_il)) + '.')
+      var registrate = esito.registrate || [];
+      var chi = registrate.length
+        ? escHtml(registrate[0].utente) + ', ' + escHtml(fmtDataOra(registrate[0].registrata_il)) + '.'
+        : null;
+      html = esitoRiga('Presa visione ' + registrate.map(function (p) { return p.sigla; }).join(' e ')
+          + ' registrata: lettera completata', { ok: true }, chi)
         + esitoRiga('PDF salvato sul fileserver', c.pdf, c.pdf.ok ? escHtml(c.pdf.percorso) : null, stepRiprova('pdf'), id)
         + esitoRiga('Cartella DCC preparata', c.dcc, dccDettaglio, stepRiprova('dcc'), id)
         + esitoRiga('Email di completamento inviata', c.email, dettaglioEmail(c.email), stepRiprova('email_completamento'), id)

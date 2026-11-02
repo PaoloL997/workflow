@@ -856,7 +856,7 @@ Il trasmittal interno è la lettera (modulo qualità **MQ 7.5-04**) con cui i do
 Ogni lettera passa da due momenti:
 
 1. **Emissione.** Chi ha il flag del trasmittal interno emette la lettera: l'applicazione la crea e invia una prima email ai destinatari. La lettera resta **in attesa di presa visione QC e PROD**.
-2. **Presa visione.** Un firmatario Qualità (QC) e uno Produzione (PROD) di uno dei siti coinvolti cliccano **Presa visione**. Con entrambe la lettera è **completata**: l'applicazione salva il PDF sul fileserver, prepara una cartella per il DCC con i PDF dei documenti destinati al cliente e invia una seconda email agli stessi destinatari.
+2. **Presa visione.** Un firmatario Qualità (QC) e uno Produzione (PROD) di uno dei siti coinvolti aprono l'**Anteprima** della lettera: aprirla vale come presa visione. Con entrambe la lettera è **completata**: l'applicazione salva il PDF sul fileserver, prepara una cartella per il DCC con i PDF dei documenti destinati al cliente e invia una seconda email agli stessi destinatari.
 
 ### 12.1 Prerequisiti
 
@@ -875,10 +875,9 @@ La pagina mostra lo **storico delle lettere emesse** per la commessa (*"N letter
 
 Per ogni lettera:
 
-- lo **stato**: *In attesa QC e PROD* se nessuno ha preso visione, *Manca QC* o *Manca PROD* se ne manca una, *Completata* con entrambe. Sotto, chi ha preso visione e quando (*"Visionato da Nome Cognome (QC) il …"*);
-- il pulsante **Presa visione QC** o **Presa visione PROD**, solo se sei firmatario di quel ruolo su un sito della lettera e quel ruolo manca ancora (vedi **12.8 Presa visione QC e PROD**);
-- **Stampa**, sempre disponibile, apre in una nuova scheda il PDF della lettera generato al momento, con le prese visione registrate finora;
-- la **data** apre il PDF definitivo salvato sul fileserver. Finché la lettera non è completata la data è grigia, perché il PDF definitivo non esiste ancora. Se la lettera è completata ma il PDF non è più nella cartella, la data è grigia con l'indicazione *"PDF non trovato sul fileserver"* e chi ha il flag vede **Salva PDF**, che lo salva di nuovo;
+- lo **stato**, accanto al nome: per QC e per PROD chi ha preso visione e quando (*"QC: Nome Cognome (2 nov 2026, 09:15)"*), oppure *in attesa*. Con entrambe la lettera è completata;
+- **Anteprima**, sempre disponibile, apre in una nuova scheda il PDF della lettera con le prese visione registrate fino a quel momento. Se sei firmatario QC o PROD di un sito della lettera e il tuo ruolo manca ancora, aprirla registra la tua presa visione (vedi **12.8 Presa visione QC e PROD**);
+- **Salva PDF**, solo per chi ha il flag e solo se la lettera è completata ma il PDF non è più sul fileserver: lo salva di nuovo;
 - il pulsante **Annulla** compare solo sull'ultima lettera emessa in quel giorno e solo per chi ha il flag (vedi **12.10 Annullare una lettera**).
 
 Aprendo la pagina dal link dell'email di emissione, la lettera dell'email è evidenziata nell'elenco.
@@ -983,9 +982,9 @@ Può prendere visione di una lettera chi un amministratore ha registrato come **
 Per prendere visione:
 
 1. apri la lettera dal link dell'email di emissione, oppure dalla card **Trasmittal interno** della commessa;
-2. sulla riga della lettera clicca **Presa visione QC** o **Presa visione PROD** e conferma. Se sei firmatario di entrambi i ruoli vedi due pulsanti: ognuno registra il suo ruolo.
+2. sulla riga della lettera clicca **Anteprima**. Il PDF si apre in una nuova scheda e la presa visione è registrata: nella riga del tuo ruolo, sotto PAPER COPIES DISTRIBUTION, c'è già il tuo nome. Passando il mouse su **Anteprima** il suggerimento lo ricorda (*"Aprendo l'anteprima registri la presa visione QC"*). Se sei firmatario di entrambi i ruoli, l'anteprima li registra entrambi.
 
-La presa visione si registra a tuo nome, con data e ora: non serve una firma grafica. Per ogni lettera c'è una sola presa visione per ruolo. Se nel frattempo l'ha già registrata un collega compare *"La presa visione QC è già stata registrata da Nome Cognome il …"*. Dall'applicazione non si annulla: se è stata registrata per errore, chiedi a un amministratore.
+La presa visione si registra a tuo nome, con data e ora: non serve una firma grafica né una conferma. Per ogni lettera c'è una sola presa visione per ruolo: se nel frattempo l'ha già registrata un collega, l'anteprima si apre comunque e l'elenco mostra la sua. Dall'applicazione non si annulla: se è stata registrata per errore, chiedi a un amministratore.
 
 **Completamento.** Quando ci sono sia QC sia PROD la lettera passa a *Completata* e l'applicazione esegue tre passi. Sono indipendenti: un passo che fallisce non blocca gli altri.
 
@@ -995,7 +994,7 @@ La presa visione si registra a tuo nome, con data e ora: non serve una firma gra
 | **Cartella DCC preparata** | Copia il PDF di ogni documento con **Cliente** spuntato nella cartella `Z:\JOBS\<job>\PROGETTO\DCC\DA SPEDIRE\<nome>` (*"N file copiati, M mancanti."*), cercandolo nella cartella del reparto del documento. Un documento di cui non si trova il file viene segnalato come mancante, gli altri vengono copiati comunque. Senza documenti per il cliente la cartella non viene creata |
 | **Email di completamento inviata** | Invia agli stessi destinatari, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"*. Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
 
-Chi registra la presa visione che completa la lettera vede il pannello **Lettera <nome>** con l'esito di ogni passo. Su un passo fallito chi ha il flag del trasmittal interno vede **Riprova**, che ripete solo quel passo; gli altri leggono *"Per ritentare i passi non riusciti chiedi a chi emette i trasmittal interni."* Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso, e nell'elenco compare **Salva PDF**.
+Chi registra la presa visione che completa la lettera trova, tornando sulla scheda dell'elenco, il pannello **Lettera <nome>** con l'esito di ogni passo. Su un passo fallito chi ha il flag del trasmittal interno vede **Riprova**, che ripete solo quel passo; gli altri leggono *"Per ritentare i passi non riusciti chiedi a chi emette i trasmittal interni."* Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso, e nell'elenco compare **Salva PDF**.
 
 ### 12.9 Il PDF della lettera
 
@@ -1010,7 +1009,7 @@ Il PDF riproduce il modulo **MQ 7.5-04**, dall'alto in basso:
 
 La revisione è scritta come indicato in **6.3 Revisioni** al momento dell'emissione; una lettera già emessa non cambia se la scelta cambia dopo.
 
-**Stampa** nell'elenco e l'**Anteprima PDF** prima dell'invio generano il PDF del momento, con il blocco PAPER COPIES DISTRIBUTION vuoto o parziale, e non scrivono nulla sul fileserver. Il PDF definitivo, con entrambe le prese visione, si salva al completamento e si apre dalla data della lettera.
+**Anteprima** nell'elenco e **Anteprima PDF** prima dell'invio generano il PDF della lettera al momento, con le prese visione registrate fin lì, e non scrivono nulla sul fileserver. Il PDF definitivo, con entrambe le prese visione, si salva al completamento in `Z:\JOBS\<job>\Progetto\UT\Transmittal` (vedi **12.8 Presa visione QC e PROD**).
 
 ### 12.10 Annullare una lettera
 
@@ -1281,13 +1280,13 @@ Serve il flag **Può scrivere sul trasmittal interno** sul tuo utente, che asseg
 
 Il blocco PAPER COPIES DISTRIBUTION riporta nome, data e ora delle prese visione registrate: finché QC o PROD non hanno preso visione, la loro riga resta vuota. Il PDF definitivo si salva sul fileserver solo con entrambe. Vedi **12.9 Il PDF della lettera**.
 
-### Perché non vedo il pulsante Presa visione?
+### Perché aprendo l'anteprima non si registra la mia presa visione?
 
-Compare solo a chi un amministratore ha registrato come **Firmatario stabilimento** per quel ruolo su uno dei siti coinvolti nella lettera, e solo finché quel ruolo manca. Se pensi di doverlo vedere, chiedi a un amministratore di registrarti. Vedi **12.8 Presa visione QC e PROD**.
+Si registra solo per chi un amministratore ha registrato come **Firmatario stabilimento** per quel ruolo su uno dei siti coinvolti nella lettera, e solo finché quel ruolo manca. Se pensi di doverlo essere, chiedi a un amministratore di registrarti. Vedi **12.8 Presa visione QC e PROD**.
 
-### Perché non riesco a scaricare il PDF di una lettera di trasmittal interno?
+### Dov'è il PDF definitivo di una lettera di trasmittal interno?
 
-Il PDF definitivo si salva sul fileserver solo quando la lettera ha la presa visione di QC e di PROD: fino ad allora la data della lettera è grigia. Per vedere o stampare la lettera nel frattempo usa **Stampa**, che genera il PDF del momento. Vedi **12.2 La schermata**.
+Si salva sul fileserver, in `Z:\JOBS\<job>\Progetto\UT\Transmittal`, solo quando la lettera ha la presa visione di QC e di PROD. Nell'elenco **Anteprima** mostra sempre il PDF della lettera, prima e dopo il completamento. Vedi **12.2 La schermata**.
 
 ### Posso modificare lo stato interno di una revisione?
 

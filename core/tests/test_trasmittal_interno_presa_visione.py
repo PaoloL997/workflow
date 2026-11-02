@@ -322,8 +322,9 @@ class PresaVisioneTests(_LetteraTestCase):
 
         self.assertEqual(risposta.status_code, 200)
         corpo = risposta.json()
-        self.assertEqual(corpo["presa_visione"]["ruolo"], QC)
-        self.assertEqual(corpo["presa_visione"]["utente"], "Quinto Qualita")
+        self.assertEqual(len(corpo["registrate"]), 1)
+        self.assertEqual(corpo["registrate"][0]["ruolo"], QC)
+        self.assertEqual(corpo["registrate"][0]["utente"], "Quinto Qualita")
         self.assertEqual(corpo["stato"], "parziale")
         self.assertEqual(corpo["ruoli_mancanti"], ["PROD"])
         self.assertIsNone(corpo["completamento"])
@@ -364,24 +365,41 @@ class PresaVisioneTests(_LetteraTestCase):
         risposta = self._prendi_visione(altro_qc, self.lettera_id)
 
         self.assertEqual(risposta.status_code, 200)
-        self.assertEqual(risposta.json()["presa_visione"]["utente"], "Quarta Qualita")
+        self.assertEqual(risposta.json()["registrate"][0]["utente"], "Quarta Qualita")
 
-    def test_firmatario_di_entrambi_i_ruoli_indica_il_ruolo(self):
+    def test_firmatario_di_entrambi_i_ruoli_li_registra_entrambi(self):
         doppio = self._firmatario("pv_doppio", "Dario", "Doppio", (self.bg, QC), (self.bg, PROD))
 
-        senza_ruolo = self._prendi_visione(doppio, self.lettera_id)
-        self.assertEqual(senza_ruolo.status_code, 400)
-        self.assertIn("indica per quale ruolo", senza_ruolo.json()["error"])
+        risposta = self._prendi_visione(doppio, self.lettera_id)
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertEqual([p["sigla"] for p in corpo["registrate"]], ["QC", "PROD"])
+        self.assertEqual(corpo["stato"], "completato")
+        self.assertIsNotNone(corpo["completamento"])
+        self.assertEqual(
+            sorted(PresaVisioneTransmittalInterno.objects.values_list("utente__username", "ruolo")),
+            [("pv_doppio", PROD), ("pv_doppio", QC)],
+        )
+
+    def test_firmatario_di_entrambi_i_ruoli_registra_solo_quello_mancante(self):
+        doppio = self._firmatario("pv_doppio", "Dario", "Doppio", (self.bg, QC), (self.bg, PROD))
+        self.assertEqual(self._prendi_visione(self.qc_bg, self.lettera_id).status_code, 200)
+
+        risposta = self._prendi_visione(doppio, self.lettera_id)
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual([p["sigla"] for p in risposta.json()["registrate"]], ["PROD"])
+        self.assertEqual(PresaVisioneTransmittalInterno.objects.get(ruolo=QC).utente, self.qc_bg)
+
+    def test_il_ruolo_chiesto_limita_la_registrazione(self):
+        doppio = self._firmatario("pv_doppio", "Dario", "Doppio", (self.bg, QC), (self.bg, PROD))
 
         prod = self._prendi_visione(doppio, self.lettera_id, ruolo=PROD)
-        self.assertEqual(prod.status_code, 200)
-        self.assertEqual(prod.json()["presa_visione"]["ruolo"], PROD)
 
-        # Ne manca uno solo dei suoi: il ruolo si deduce.
-        qc = self._prendi_visione(doppio, self.lettera_id)
-        self.assertEqual(qc.status_code, 200)
-        self.assertEqual(qc.json()["presa_visione"]["ruolo"], QC)
-        self.assertEqual(qc.json()["stato"], "completato")
+        self.assertEqual(prod.status_code, 200)
+        self.assertEqual([p["sigla"] for p in prod.json()["registrate"]], ["PROD"])
+        self.assertEqual(prod.json()["stato"], "parziale")
 
     def test_lettera_di_un_altra_commessa_404(self):
         altra = Testata.objects.create(job="99101", sito_costruttivo=self.bg)
@@ -696,7 +714,7 @@ class ElencoLettereStatoTests(_LetteraTestCase):
         self.assertEqual([p["sigla"] for p in voce["prese_visione"]], ["QC", "PROD"])
         self.assertTrue(voce["pdf_presente"])
 
-    def test_pulsante_presa_visione_solo_per_i_ruoli_mancanti_di_chi_chiede(self):
+    def test_puo_prendere_visione_solo_per_i_ruoli_mancanti_di_chi_chiede(self):
         lettera_id = self._emetti()["trasmittal_id"]
 
         self.assertEqual(
@@ -711,14 +729,16 @@ class ElencoLettereStatoTests(_LetteraTestCase):
         self._prendi_visione(self.qc_bg, lettera_id)
         self.assertEqual(self._voce(self.qc_bg)["puo_prendere_visione"], [])
 
-    def test_la_pagina_ha_il_pulsante_presa_visione_e_la_stampa(self):
+    def test_la_pagina_registra_la_presa_visione_aprendo_l_anteprima(self):
         self.client.force_login(self.qc_bg)
 
         pagina = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
 
-        self.assertContains(pagina, "window.prendiVisione")
+        self.assertContains(pagina, "window.apriAnteprima")
         self.assertContains(pagina, "/presa-visione/")
         self.assertContains(pagina, '/pdf/" target="_blank"')
+        self.assertContains(pagina, ">Anteprima</a>")
+        self.assertNotContains(pagina, ">Stampa</a>")
 
 
 class PresaVisioneAdminTests(TestCase):

@@ -1656,12 +1656,12 @@ def stato_prese_visione(prese):
     }
 
 
-def _ruolo_da_registrare(ruolo, ammessi, registrate):
-    """Il ruolo per cui registrare la presa visione: quello chiesto, o quello dedotto.
+def _ruoli_da_registrare(ruolo, ammessi, registrate):
+    """I ruoli per cui registrare la presa visione: quello chiesto, o tutti i mancanti dell'utente.
 
     Raises:
-        TrasmittalInternoPresaVisioneError: ruolo non valido o non ammesso, o
-            da indicare perché l'utente è firmatario di entrambi.
+        TrasmittalInternoPresaVisioneError: ruolo non valido (400) o non
+            ammesso (403), o già registrato per tutti i ruoli candidati (409).
     """
     if ruolo:
         if ruolo not in RuoloFirmatarioStabilimento.values:
@@ -1673,28 +1673,30 @@ def _ruolo_da_registrare(ruolo, ammessi, registrate):
                 "nessuno dei siti coinvolti nella lettera.",
                 status=403,
             )
-        return ruolo
-    if len(ammessi) == 1:
-        return next(iter(ammessi))
-    mancanti = [r for r in _RUOLI_PRESA_VISIONE if r in ammessi and r not in registrate]
-    if len(mancanti) == 1:
-        return mancanti[0]
+        candidati = [ruolo]
+    else:
+        candidati = [r for r in _RUOLI_PRESA_VISIONE if r in ammessi]
+    mancanti = [r for r in candidati if r not in registrate]
     if not mancanti:
-        return _RUOLI_PRESA_VISIONE[0]  # entrambi già visionati: il chiamante risponde 409
-    raise TrasmittalInternoPresaVisioneError(
-        "Sei firmatario sia QC sia PROD sui siti di questa lettera: indica per quale ruolo "
-        "prendi visione.",
-        status=400,
-    )
+        gia = registrate[candidati[0]]
+        raise TrasmittalInternoPresaVisioneError(
+            f"La presa visione {_SIGLA_RUOLO[gia.ruolo]} è già stata registrata da "
+            f"{gia.utente.nome_completo} il {_data_ora(gia.registrata_il)}.",
+            status=409,
+        )
+    return mancanti
 
 
 def registra_presa_visione(trasmittal, utente, ruolo=None):
     """Registra la presa visione di ``utente`` e, se completa la lettera, la archivia.
 
-    Può prendere visione un utente ``FirmatarioStabilimento`` di quel ruolo
-    su almeno uno dei siti coinvolti nella lettera (``ruoli_presa_visione_ammessi``).
-    Il ruolo si deduce dai suoi firmatari; ``ruolo`` serve quando è firmatario
-    sia QC sia PROD. Una sola presa visione per ruolo.
+    Dalla pagina parte quando un firmatario apre l'anteprima della lettera:
+    vederla vale come presa visione. Può prendere visione un utente
+    ``FirmatarioStabilimento`` di quel ruolo su almeno uno dei siti coinvolti
+    nella lettera (``ruoli_presa_visione_ammessi``). Senza ``ruolo`` si
+    registrano tutti i ruoli ancora mancanti di cui l'utente è firmatario
+    (entrambi, se è firmatario sia QC sia PROD); ``ruolo`` limita la
+    registrazione a quello. Una sola presa visione per ruolo.
 
     La registrazione blocca la riga del trasmittal (``select_for_update``):
     due prese visione contemporanee si mettono in fila, e solo quella che
@@ -1703,18 +1705,18 @@ def registra_presa_visione(trasmittal, utente, ruolo=None):
 
     Args:
         trasmittal: La lettera.
-        utente: Chi clicca "Presa visione" (l'utente autenticato).
+        utente: Chi apre l'anteprima (l'utente autenticato).
         ruolo: ``RuoloFirmatarioStabilimento`` scelto, facoltativo.
 
     Returns:
-        Dict con ``trasmittal_id``, ``nome``, ``presa_visione`` (la presa
-        visione registrata), lo stato (``stato_prese_visione``) e
+        Dict con ``trasmittal_id``, ``nome``, ``registrate`` (le prese visione
+        registrate ora), lo stato (``stato_prese_visione``) e
         ``completamento``: ``None`` se manca ancora un ruolo, altrimenti
         l'esito di ``completa_trasmittal_interno``.
 
     Raises:
         TrasmittalInternoPresaVisioneError: utente non autorizzato (403),
-            ruolo già visionato (409), ruolo non valido o da indicare (400).
+            ruolo già visionato (409), ruolo non valido (400).
     """
     with transaction.atomic():
         trasmittal = (
@@ -1730,36 +1732,33 @@ def registra_presa_visione(trasmittal, utente, ruolo=None):
                 status=403,
             )
         registrate = {p.ruolo: p for p in trasmittal.prese_visione.select_related("utente")}
-        ruolo = _ruolo_da_registrare(ruolo, ammessi, registrate)
-        if ruolo in registrate:
-            gia = registrate[ruolo]
-            raise TrasmittalInternoPresaVisioneError(
-                f"La presa visione {_SIGLA_RUOLO[ruolo]} è già stata registrata da "
-                f"{gia.utente.nome_completo} il {_data_ora(gia.registrata_il)}.",
-                status=409,
-            )
-        try:
-            with transaction.atomic():
-                presa = PresaVisioneTransmittalInterno.objects.create(
-                    trasmittal=trasmittal, utente=utente, ruolo=ruolo
-                )
-        except IntegrityError:
-            raise TrasmittalInternoPresaVisioneError(
-                f"La presa visione {_SIGLA_RUOLO[ruolo]} è già stata registrata.", status=409
-            ) from None
-        registrate[ruolo] = presa
+        nuove = []
+        for da_registrare in _ruoli_da_registrare(ruolo, ammessi, registrate):
+            try:
+                with transaction.atomic():
+                    presa = PresaVisioneTransmittalInterno.objects.create(
+                        trasmittal=trasmittal, utente=utente, ruolo=da_registrare
+                    )
+            except IntegrityError:
+                raise TrasmittalInternoPresaVisioneError(
+                    f"La presa visione {_SIGLA_RUOLO[da_registrare]} è già stata registrata.",
+                    status=409,
+                ) from None
+            registrate[da_registrare] = presa
+            nuove.append(presa)
 
-    logger.info(
-        'Presa visione %s del trasmittal interno "%s" registrata da %s.',
-        _SIGLA_RUOLO[ruolo],
-        trasmittal.nome,
-        utente.get_username(),
-    )
+    for presa in nuove:
+        logger.info(
+            'Presa visione %s del trasmittal interno "%s" registrata da %s.',
+            _SIGLA_RUOLO[presa.ruolo],
+            trasmittal.nome,
+            utente.get_username(),
+        )
     stato = stato_prese_visione(registrate.values())
     risultato = {
         "trasmittal_id": trasmittal.pk,
         "nome": trasmittal.nome,
-        "presa_visione": _serializza_presa_visione(presa),
+        "registrate": [_serializza_presa_visione(p) for p in nuove],
         **stato,
         "completamento": None,
     }
