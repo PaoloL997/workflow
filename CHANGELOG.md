@@ -6,6 +6,10 @@
 
 - Token di servizio senza scadenza per i servizi esterni che non agiscono per conto di una persona, come l'ingestion giornaliera del manuale di *workflow-agent*: `python manage.py crea_token_servizio workflow-agent` crea l'utente di servizio (gruppo Django **Servizio**, senza password utilizzabile) se non c'è, revoca i suoi token precedenti e ne emette uno nuovo, mostrando la chiave una sola volta; con `--revoca` elimina soltanto i token. Un utente di servizio legge ma non scrive, qualunque permesso abbia (le API di scrittura rispondono 403, `GET /api/agent/me/` dice `can_write: false`), e non può entrare dalla pagina di login. Nell'admin, in *Token API*, le colonne **Di servizio** e **Scadenza** («mai» per i token senza scadenza) e l'azione **Revoca i token selezionati** (vedi README)
 
+### Changed
+
+- Filtri di colonna (Gestisci emissione, Registra ricezioni, Situazione documenti, Trasmittal interno): aprendo il filtro di una colonna non ancora filtrata nessun valore è spuntato, neanche **(Seleziona tutto)**, e si spuntano solo i valori da tenere. Se si applica senza spuntare nulla la colonna resta senza filtro sui valori, invece di nascondere tutte le righe. Un filtro già attivo si riapre con i suoi valori spuntati
+
 ## [0.2.0] - 2026-10-22
 
 ### Added

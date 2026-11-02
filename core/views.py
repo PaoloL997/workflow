@@ -44,6 +44,7 @@ from .models import (
     Testata,
     TransmittalInterno,
     User,
+    valida_immagine_avatar,
     valida_immagine_firma,
 )
 from .permissions import (
@@ -3033,6 +3034,13 @@ def profilo_view(request):
             elif User.objects.filter(email=email).exclude(pk=user.pk).exists():
                 errors["email"] = "Email già utilizzata da un altro account."
 
+            avatar_file = request.FILES.get("avatar")
+            if avatar_file:
+                try:
+                    valida_immagine_avatar(avatar_file)
+                except ValidationError as exc:
+                    errors["avatar"] = " ".join(exc.messages)
+
             firma_file = request.FILES.get("firma")
             if firma_file:
                 try:
@@ -3050,7 +3058,6 @@ def profilo_view(request):
                 # I file sostituiti si cancellano solo dopo il salvataggio: se lo
                 # storage non risponde, la vecchia immagine resta al suo posto.
                 da_eliminare = []
-                avatar_file = request.FILES.get("avatar")
                 if avatar_file:
                     da_eliminare.append(user.avatar.name)
                     user.avatar = avatar_file

@@ -179,9 +179,8 @@
     if (!body || !pop) return;
     const state = getFilterState(key) || { type: 'excel', selected: null, contains: '' };
     const values = collectUniqueValuesForKey(key);
-    const selectedSet = state.selected === null
-      ? new Set(values)
-      : new Set(state.selected || []);
+    // No value filter yet: start with nothing ticked, the user picks what to keep.
+    const selectedSet = new Set(state.selected || []);
     const contains = state.contains || '';
 
     let valuesHtml = '';
@@ -419,8 +418,9 @@
         const checked = boxes.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
         const containsEl = document.getElementById('col-filter-contains');
         const contains = ((containsEl && containsEl.value) || '').trim();
+        // Nothing ticked means no value filter, not "hide every row".
         let selected = null;
-        if (checked.length < allValues.length) selected = checked;
+        if (checked.length && checked.length < allValues.length) selected = checked;
         if (selected !== null || contains) {
           _columnFilters[key] = { selected: selected, contains: contains };
         } else {

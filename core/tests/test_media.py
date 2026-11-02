@@ -13,6 +13,7 @@ from django.test import Client, SimpleTestCase, TestCase, override_settings
 from PIL import Image
 
 from ..models import (
+    AVATAR_MAX_BYTE,
     FIRMA_MAX_BYTE,
     Permesso,
 )
@@ -84,6 +85,27 @@ class FirmaUtenteTests(TestCase):
                 # L'immagine che c'era resta.
                 self.writer.refresh_from_db()
                 self.assertEqual(self.writer.firma.name, "firme/prova.png")
+
+    def test_foto_profilo_valida_si_salva(self):
+        risposta = self._profilo(avatar=SimpleUploadedFile("foto.png", _png(), "image/png"))
+
+        self.assertEqual(risposta.status_code, 302)
+        self.writer.refresh_from_db()
+        self.assertTrue(self.writer.avatar.name.startswith("avatars/"))
+
+    def test_foto_profilo_rifiuta_file_non_validi(self):
+        for nome, contenuto, messaggio in (
+            ("foto.png", b"non sono un'immagine", "immagine valida: carica un PNG"),
+            ("foto.bmp", _png(modo="RGB", formato="BMP"), "Formato non ammesso"),
+            ("foto.png", _png() + b"\0" * AVATAR_MAX_BYTE, "al massimo 5 MB"),
+        ):
+            with self.subTest(nome=nome, messaggio=messaggio):
+                risposta = self._profilo(avatar=SimpleUploadedFile(nome, contenuto, "image/png"))
+
+                self.assertEqual(risposta.status_code, 200)
+                self.assertContains(risposta, messaggio)
+                self.writer.refresh_from_db()
+                self.assertFalse(self.writer.avatar)
 
     def test_upload_rifiuta_un_file_oltre_il_limite(self):
         pesante = _png() + b"\0" * FIRMA_MAX_BYTE
