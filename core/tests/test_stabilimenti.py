@@ -75,14 +75,31 @@ class StabilimentoSiglaCodiceBCTests(TestCase):
 
 
 class FirmatarioStabilimentoTests(TestCase):
-    """Un solo firmatario per stabilimento e ruolo; lo stesso utente può firmare più siti."""
+    """Più firmatari per stabilimento e ruolo, ma lo stesso utente una volta sola;
+    lo stesso utente può comparire per più siti."""
 
     def setUp(self):
         self.stab = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
         self.altro_stab = Stabilimento.objects.create(nome="Schio", sigla="VI", codice_bc=5)
         self.utente = User.objects.create_user("firmatario", password="pw")
 
-    def test_un_solo_firmatario_per_ruolo_e_stabilimento(self):
+    def test_piu_firmatari_per_lo_stesso_ruolo_e_stabilimento(self):
+        altro = User.objects.create_user("firmatario2", email="f2@b.it", password="pw")
+        for utente in (self.utente, altro):
+            FirmatarioStabilimento.objects.create(
+                stabilimento=self.stab,
+                ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,
+                utente=utente,
+            )
+
+        self.assertEqual(
+            FirmatarioStabilimento.objects.filter(
+                stabilimento=self.stab, ruolo=RuoloFirmatarioStabilimento.PRODUZIONE
+            ).count(),
+            2,
+        )
+
+    def test_lo_stesso_utente_non_due_volte_per_ruolo_e_stabilimento(self):
         FirmatarioStabilimento.objects.create(
             stabilimento=self.stab,
             ruolo=RuoloFirmatarioStabilimento.PRODUZIONE,

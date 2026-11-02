@@ -235,6 +235,16 @@ urlpatterns = [
         name="trasmittal_interno_lettera_file_serve",
     ),
     path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/pdf/",
+        views.trasmittal_interno_lettera_pdf_api,
+        name="trasmittal_interno_lettera_pdf_api",
+    ),
+    path(
+        "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/presa-visione/",
+        views.trasmittal_interno_presa_visione_api,
+        name="trasmittal_interno_presa_visione_api",
+    ),
+    path(
         "api/commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/annulla/",
         views.trasmittal_interno_annulla_api,
         name="trasmittal_interno_annulla_api",

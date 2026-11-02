@@ -61,7 +61,7 @@ def _scandir_files(directory: Path):
     becomes its own network round trip. On a share with a few dozen files
     that difference is a couple hundred milliseconds; with realistic latency
     it can turn a page load into a multi-second (or worse, per-caller-loop,
-    multi-minute) wait — see ``elenco_selezione_ut``.
+    multi-minute) wait — see ``elenco_selezione``.
 
     Returns empty if ``directory`` does not exist.
     """
