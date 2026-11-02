@@ -16,6 +16,7 @@
 
 - core/templates/core/trasmittal_interno_detail.html (note libere) e src/pdf.py `_build_note_libere`: la colonna «Nota» di una riga richiama la posizione della nota nell'elenco a schermo (righe vuote comprese), mentre il PDF rinumera saltando le righe vuote e stampa al massimo tre note (`[:3]`) anche se con «+ Aggiungi nota» se ne possono scrivere di più. Limitare a tre note nella UI, scartare le righe vuote prima di numerarle (o numerare nel PDF con la stessa posizione della UI) così il numero richiamato coincide con quello stampato.
 
+
 - core/templates/core/archivio_detail.html (modale indirizzo): su un errore di validazione del server (es. campo oltre la lunghezza massima) il modale resta aperto senza nessun messaggio, perché la risposta non 403 viene ignorata. Mostrare l'errore nel footer del modale.
 
 - core/templates/core/base.html `MONTHS_SHORT` (riga ~535): le date delle schermate usano le abbreviazioni inglesi dei mesi (`10 jan 2026`) in un'interfaccia tutta in italiano; la stessa lista è usata dal campo «Return date» della ricezione, dalle notifiche e dal forum. Scegliere le abbreviazioni italiane (o un formato numerico) e aggiornare i parser che le rileggono.
