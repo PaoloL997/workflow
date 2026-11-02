@@ -1414,16 +1414,28 @@ def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
-    """PDF di una lettera emessa, generato al momento: sempre disponibile, per stampa e anteprima.
+    """PDF di una lettera emessa, generato al momento: è l'Anteprima dell'elenco.
 
     Il blocco PAPER COPIES DISTRIBUTION riporta le prese visione registrate
     finora (vuoto o parziale finché la lettera non è completata). Non scrive
     niente sul fileserver.
+
+    Con ``?presa_visione=1`` (l'Anteprima di un firmatario a cui manca la
+    presa visione) aprire il PDF la registra prima di generarlo, così il PDF
+    riporta già il suo nome: un GET con effetto voluto, perché vedere la
+    lettera è la presa visione. Se completa la lettera, PDF sul fileserver,
+    cartella DCC ed email partono in background. Chi non può prendere visione,
+    o l'ha già presa, riceve il PDF e basta.
     """
     try:
         trasmittal = _lettera_della_commessa(job, trasmittal_id)
     except TransmittalInterno.DoesNotExist:
         raise Http404 from None
+    if request.GET.get("presa_visione") == "1" and not is_service_user(request.user):
+        try:
+            registra_presa_visione(trasmittal, request.user, completa_in_background=True)
+        except TrasmittalInternoPresaVisioneError:
+            pass  # non firmatario o già registrata: l'anteprima si apre comunque
     from src.pdf import genera_trasmittal_interno_pdf
 
     response = HttpResponse(
@@ -1438,8 +1450,9 @@ def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
 def trasmittal_interno_presa_visione_api(request, job, trasmittal_id):
     """Registra la presa visione QC o PROD dell'utente loggato su una lettera.
 
-    La pagina la chiama quando un firmatario apre l'anteprima della lettera,
-    prima di mostrargli il PDF. Non serve il permesso di scrittura del
+    Per chi la registra via API e vuole l'esito del completamento nella
+    risposta; la pagina la registra aprendo l'anteprima
+    (``trasmittal_interno_lettera_pdf_api``). Non serve il permesso di scrittura del
     trasmittal interno: può prendere visione chi è firmatario QC o PROD di un
     sito della lettera (vedi ``registra_presa_visione``). Senza payload si
     registrano tutti i ruoli mancanti dell'utente; ``{"ruolo": "qualita"}`` o

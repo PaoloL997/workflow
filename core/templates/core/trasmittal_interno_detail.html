@@ -929,9 +929,10 @@
   function azioniLetteraHtml(l) {
     var html = '<div class="storico-row-actions">';
     var sigle = (l.puo_prendere_visione || []).map(function (r) { return r.sigla; });
-    html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/pdf/" target="_blank" rel="noopener" class="storico-azione"'
+    html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/pdf/' + (sigle.length ? '?presa_visione=1' : '') + '"'
+      + ' target="_blank" rel="noopener" class="storico-azione"'
       + (sigle.length
-        ? ' onclick="apriAnteprima(event, ' + l.id + ')" title="Aprendo l\'anteprima registri la presa visione ' + sigle.join(' e ') + '"'
+        ? ' onclick="aggiornaStoricoDopoAnteprima()" title="Aprendo l\'anteprima registri la presa visione ' + sigle.join(' e ') + '"'
         : ' title="PDF della lettera con le prese visione registrate finora"')
       + '>Anteprima</a>';
     if (l.stato === 'completato' && l.pdf_presente === false && TI_CAN_WRITE) {
@@ -971,50 +972,19 @@
     }
   }
 
-  // Per un firmatario QC o PROD a cui manca ancora la presa visione, aprire
-  // l'anteprima la registra: prima la registrazione, poi il PDF, che riporta
-  // già il suo nome. La finestra si apre subito, dentro il clic, perché il
-  // browser non la blocchi; il PDF ci arriva dopo la risposta.
-  window.apriAnteprima = async function (event, id) {
-    event.preventDefault();
-    var url = event.currentTarget.href;
-    var finestra = window.open('', '_blank');
-    if (finestra && finestra.document.body) {
-      finestra.document.title = 'Anteprima';
-      finestra.document.body.textContent = 'Registro la presa visione e apro l\'anteprima…';
-    }
-    var r = null;
-    var body = {};
-    try {
-      r = await fetch(baseUrl() + 'lettere/' + id + '/presa-visione/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-        body: '{}',
-      });
-      body = await r.json().catch(function () { return {}; });
-    } catch {
-      r = null;
-    }
-    // Il PDF si apre comunque, prima di eventuali avvisi: un alert qui
-    // bloccherebbe la pagina e lascerebbe la finestra in attesa.
-    if (finestra) {
-      finestra.opener = null;
-      finestra.location.replace(url);
-    } else {
-      window.location.assign(url);
-      return;
-    }
-    if (r === null) {
-      alert('Errore di rete: la presa visione non è stata registrata.');
-    } else if (!r.ok && r.status !== 409) {  // 409: registrata da un altro nel frattempo
-      alert(body.error || 'Impossibile registrare la presa visione.');
-    } else if (body.completamento) {
-      _ultimoEsito = { tipo: 'completamento', dati: body };
-      document.getElementById('conferma-modal').classList.add('open');
-      renderRisultato();
-    }
-    await caricaStorico();
+  // L'anteprima di un firmatario registra la presa visione lato server
+  // mentre il PDF si apre (il completamento, se c'è, va in background):
+  // l'elenco si aggiorna tornando sulla pagina, o dopo qualche secondo.
+  var _aggiornaAlRitorno = false;
+  window.aggiornaStoricoDopoAnteprima = function () {
+    _aggiornaAlRitorno = true;
+    setTimeout(caricaStorico, 3000);
   };
+  window.addEventListener('focus', function () {
+    if (!_aggiornaAlRitorno) return;
+    _aggiornaAlRitorno = false;
+    caricaStorico();
+  });
 
   window.salvaPdfLettera = async function (id, btn) {
     if (!requireWriteTI()) return;
@@ -1915,7 +1885,7 @@
         document.getElementById('conferma-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiConferma()">Chiudi</button>';
         return;
       }
-      _ultimoEsito = { tipo: 'emissione', dati: body };
+      _ultimoEsito = body;
       renderRisultato();
     } catch {
       document.getElementById('conferma-body').innerHTML = '<p class="ti-warning">Errore di rete.</p>';
@@ -1947,39 +1917,16 @@
   // (es. il firmatario che ha completato la lettera) l'esito dice a chi chiedere.
   function stepRiprova(step) { return TI_CAN_WRITE ? step : null; }
 
-  // _ultimoEsito = { tipo: 'emissione' | 'completamento', dati: risposta dell'API }
+  // _ultimoEsito = risposta dell'API di emissione
   function renderRisultato() {
     _esitoMostrato = true;
-    var esito = _ultimoEsito.dati;
+    var esito = _ultimoEsito;
     var id = esito.trasmittal_id;
     document.getElementById('conferma-title').textContent = 'Lettera ' + esito.nome;
-    var html;
-    if (_ultimoEsito.tipo === 'emissione') {
-      html = esitoRiga('Trasmittal creato e archiviato', { ok: true })
-        + esitoRiga('Email di emissione inviata', esito.email, dettaglioEmail(esito.email), stepRiprova('email'), id)
-        + '<p class="ti-esito-nota">In attesa di presa visione QC e PROD: il PDF si salva sul fileserver e la cartella DCC si prepara quando entrambi hanno preso visione.</p>';
-    } else {
-      var c = esito.completamento;
-      var dccDettaglio = c.dcc && c.dcc.ok
-        ? (c.dcc.cartella
-          ? (c.dcc.copiati.length + ' file copiati' + (c.dcc.mancanti.length ? ', ' + c.dcc.mancanti.length + ' mancanti' : '') + '.')
-          : 'Nessun documento per il cliente in questa lettera.')
-        : '';
-      var fallito = !(c.pdf.ok && c.dcc.ok && c.email.ok);
-      var registrate = esito.registrate || [];
-      var chi = registrate.length
-        ? escHtml(registrate[0].utente) + ', ' + escHtml(fmtDataOra(registrate[0].registrata_il)) + '.'
-        : null;
-      html = esitoRiga('Presa visione ' + registrate.map(function (p) { return p.sigla; }).join(' e ')
-          + ' registrata: lettera completata', { ok: true }, chi)
-        + esitoRiga('PDF salvato sul fileserver', c.pdf, c.pdf.ok ? escHtml(c.pdf.percorso) : null, stepRiprova('pdf'), id)
-        + esitoRiga('Cartella DCC preparata', c.dcc, dccDettaglio, stepRiprova('dcc'), id)
-        + esitoRiga('Email di completamento inviata', c.email, dettaglioEmail(c.email), stepRiprova('email_completamento'), id)
-        + (fallito && !TI_CAN_WRITE
-          ? '<p class="ti-esito-nota">Per ritentare i passi non riusciti chiedi a chi emette i trasmittal interni.</p>'
-          : '');
-    }
-    document.getElementById('conferma-body').innerHTML = html;
+    document.getElementById('conferma-body').innerHTML =
+      esitoRiga('Trasmittal creato e archiviato', { ok: true })
+      + esitoRiga('Email di emissione inviata', esito.email, dettaglioEmail(esito.email), stepRiprova('email'), id)
+      + '<p class="ti-esito-nota">In attesa di presa visione QC e PROD: il PDF si salva sul fileserver e la cartella DCC si prepara quando entrambi hanno preso visione.</p>';
     document.getElementById('conferma-actions').innerHTML =
       '<button type="button" class="btn-confirm" onclick="chiudiConferma()">Fatto</button>';
   }
@@ -1998,11 +1945,7 @@
       if (isPermissionDeniedResponse(r, body)) { btn.disabled = false; btn.textContent = 'Riprova'; return; }
       if (!r.ok) { alert(body.error || 'Errore durante il nuovo tentativo.'); btn.disabled = false; btn.textContent = 'Riprova'; return; }
       if (_ultimoEsito) {
-        if (_ultimoEsito.tipo === 'emissione') {
-          _ultimoEsito.dati[step] = body.esito;
-        } else {
-          _ultimoEsito.dati.completamento[step === 'email_completamento' ? 'email' : step] = body.esito;
-        }
+        _ultimoEsito[step] = body.esito;
         renderRisultato();
       }
     } catch {

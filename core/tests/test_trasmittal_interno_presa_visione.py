@@ -4,6 +4,7 @@ PROD, completamento (PDF, DCC, email di completamento) e blocco del download."""
 import json
 import re
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -13,7 +14,13 @@ from django.contrib.auth.models import Group
 from django.core import mail
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test import (
+    Client,
+    SimpleTestCase,
+    TestCase,
+    TransactionTestCase,
+    override_settings,
+)
 from django.utils import timezone
 
 from ..models import (
@@ -33,6 +40,8 @@ from ..models import (
 from ..permissions import GRUPPO_SERVIZIO
 from ..services.fileserver import get_base_path
 from ..services.trasmittal_interno import (
+    _completa_lettera,
+    _in_background,
     _percorso_dcc_da,
     imposta_destinazioni,
     percorso_pdf,
@@ -607,6 +616,99 @@ class DownloadPdfTests(_LetteraTestCase):
         self.assertEqual(risposta.status_code, 404)
 
 
+class AnteprimaPresaVisioneTests(_LetteraTestCase):
+    """Aprire l'anteprima dall'elenco registra la presa visione; il completamento va in background."""
+
+    def setUp(self):
+        super().setUp()
+        self.lettera_id = self._emetti()["trasmittal_id"]
+
+    def _anteprima(self, utente, presa_visione=True):
+        """Apre l'anteprima come ``utente``; restituisce le prese visione finite nel PDF."""
+        from src import pdf as pdf_module
+
+        self.client.force_login(utente)
+        url = self._url(f"lettere/{self.lettera_id}/pdf/")
+        if presa_visione:
+            url += "?presa_visione=1"
+        with patch.object(
+            pdf_module, "_build_distribuzione_copie", wraps=pdf_module._build_distribuzione_copie
+        ) as blocco:
+            risposta = self.client.get(url)
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta["Content-Type"], "application/pdf")
+        return {ruolo: p.utente for ruolo, p in blocco.call_args.args[1].items()}
+
+    def test_registra_la_presa_visione_prima_di_generare_il_pdf(self):
+        nel_pdf = self._anteprima(self.qc_bg)
+
+        self.assertEqual(nel_pdf, {QC: self.qc_bg})
+        presa = PresaVisioneTransmittalInterno.objects.get()
+        self.assertEqual((presa.utente, presa.ruolo), (self.qc_bg, QC))
+
+    def test_senza_parametro_non_registra(self):
+        self.assertEqual(self._anteprima(self.qc_bg, presa_visione=False), {})
+        self.assertFalse(PresaVisioneTransmittalInterno.objects.exists())
+
+    def test_chi_non_e_firmatario_della_lettera_vede_il_pdf_e_basta(self):
+        self.assertEqual(self._anteprima(self.qc_pd), {})  # firmatario di un sito non coinvolto
+        self.assertFalse(PresaVisioneTransmittalInterno.objects.exists())
+
+    def test_gia_registrata_il_pdf_si_apre_comunque(self):
+        self._anteprima(self.qc_bg)
+        altro_qc = self._firmatario("pv_qc2", "Quarta", "Qualita", (self.bg, QC))
+
+        self.assertEqual(self._anteprima(altro_qc), {QC: self.qc_bg})
+        self.assertEqual(PresaVisioneTransmittalInterno.objects.count(), 1)
+
+    def test_il_completamento_parte_in_background(self):
+        self._anteprima(self.qc_bg)
+        with patch("core.services.trasmittal_interno._in_background") as in_background:
+            with self.captureOnCommitCallbacks(execute=True):
+                self._anteprima(self.prod_bg)
+
+        in_background.assert_called_once_with(_completa_lettera, self.lettera_id)
+        self.assertEqual(len(mail.outbox), 1)  # solo l'email di emissione: il resto non si attende
+
+    def test_il_completamento_in_background_salva_il_pdf_e_invia_la_seconda_email(self):
+        self._anteprima(self.qc_bg)
+        with patch(
+            "core.services.trasmittal_interno._in_background",
+            side_effect=lambda funzione, *args: funzione(*args),
+        ):
+            with self.captureOnCommitCallbacks(execute=True):
+                self._anteprima(self.prod_bg)
+
+        self.assertTrue(percorso_pdf(TransmittalInterno.objects.get(pk=self.lettera_id)).exists())
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertIn("Visionato da Paola Produzione (PROD)", mail.outbox[1].body)
+
+
+class InBackgroundTests(SimpleTestCase):
+    """``_in_background`` esegue in un altro thread e non lascia sfuggire gli errori."""
+
+    def test_esegue_in_un_altro_thread(self):
+        visto = {}
+
+        def lavoro(valore):
+            visto["thread"] = threading.current_thread()
+            visto["valore"] = valore
+
+        _in_background(lavoro, 7).join(5)
+
+        self.assertIsNot(visto["thread"], threading.current_thread())
+        self.assertEqual(visto["valore"], 7)
+
+    def test_un_errore_finisce_nel_log(self):
+        def lavoro():
+            raise RuntimeError("share irraggiungibile")
+
+        with self.assertLogs("core.services.trasmittal_interno", "ERROR") as log:
+            _in_background(lavoro).join(5)
+
+        self.assertIn("Lavoro in background lavoro fallito", log.output[0])
+
+
 class _PdfRegistra:
     """Finto FPDF che registra i testi di ``cell()``: si controlla un blocco del
     modulo senza estrarre il testo dal PDF (nessuna libreria per farlo qui)."""
@@ -734,9 +836,10 @@ class ElencoLettereStatoTests(_LetteraTestCase):
 
         pagina = self.client.get(f"/commesse/{self.testata.job}/trasmittal-interno/")
 
-        self.assertContains(pagina, "window.apriAnteprima")
-        self.assertContains(pagina, "/presa-visione/")
-        self.assertContains(pagina, '/pdf/" target="_blank"')
+        # Il link al PDF registra la presa visione: niente finestra di attesa.
+        self.assertContains(pagina, "?presa_visione=1")
+        self.assertContains(pagina, "window.aggiornaStoricoDopoAnteprima")
+        self.assertNotContains(pagina, "/presa-visione/")
         self.assertContains(pagina, ">Anteprima</a>")
         self.assertNotContains(pagina, ">Stampa</a>")
 

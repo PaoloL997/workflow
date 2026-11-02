@@ -3,6 +3,7 @@
 import logging
 import re
 import shutil
+import threading
 from datetime import datetime
 from email.utils import formataddr, make_msgid, parseaddr
 from pathlib import Path
@@ -11,7 +12,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connections, transaction
 from django.db.models import Max, Prefetch
 from django.urls import reverse
 from django.utils import timezone
@@ -1559,6 +1560,41 @@ def completa_trasmittal_interno(trasmittal):
     }
 
 
+def _completa_lettera(trasmittal_id):
+    """Completamento in background: rilegge la lettera e la completa, segnalando nel log i passi falliti."""
+    trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
+        pk=trasmittal_id
+    )
+    esito = completa_trasmittal_interno(trasmittal)
+    falliti = [passo for passo, esito_passo in esito.items() if not esito_passo["ok"]]
+    if falliti:
+        logger.warning(
+            'Completamento del trasmittal interno "%s": passi non riusciti: %s.',
+            trasmittal.nome,
+            ", ".join(falliti),
+        )
+
+
+def _in_background(funzione, *args):
+    """Esegue ``funzione(*args)`` in un thread a parte e ne restituisce il ``Thread``.
+
+    Un errore finisce nel log; a fine lavoro il thread chiude le sue
+    connessioni al database, che Django apre per thread.
+    """
+
+    def esegui():
+        try:
+            funzione(*args)
+        except Exception:
+            logger.exception("Lavoro in background %s fallito.", funzione.__name__)
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=esegui, name=f"trasmittal-{funzione.__name__}", daemon=True)
+    thread.start()
+    return thread
+
+
 PASSI_LETTERA = ("email", "pdf", "dcc", "email_completamento")
 
 
@@ -1687,11 +1723,12 @@ def _ruoli_da_registrare(ruolo, ammessi, registrate):
     return mancanti
 
 
-def registra_presa_visione(trasmittal, utente, ruolo=None):
+def registra_presa_visione(trasmittal, utente, ruolo=None, completa_in_background=False):
     """Registra la presa visione di ``utente`` e, se completa la lettera, la archivia.
 
-    Dalla pagina parte quando un firmatario apre l'anteprima della lettera:
-    vederla vale come presa visione. Può prendere visione un utente
+    Dalla pagina parte quando un firmatario apre l'anteprima della lettera
+    (``trasmittal_interno_lettera_pdf_api``): vederla vale come presa visione.
+    Può prendere visione un utente
     ``FirmatarioStabilimento`` di quel ruolo su almeno uno dei siti coinvolti
     nella lettera (``ruoli_presa_visione_ammessi``). Senza ``ruolo`` si
     registrano tutti i ruoli ancora mancanti di cui l'utente è firmatario
@@ -1701,18 +1738,21 @@ def registra_presa_visione(trasmittal, utente, ruolo=None):
     La registrazione blocca la riga del trasmittal (``select_for_update``):
     due prese visione contemporanee si mettono in fila, e solo quella che
     completa la coppia QC + PROD avvia ``completa_trasmittal_interno`` (PDF,
-    DCC, email di completamento), fuori dalla transazione e best-effort.
+    DCC, email di completamento), fuori dalla transazione e best-effort. Con
+    ``completa_in_background`` il completamento gira in un thread a parte dopo
+    il commit, così chi ha aperto l'anteprima non lo aspetta.
 
     Args:
         trasmittal: La lettera.
         utente: Chi apre l'anteprima (l'utente autenticato).
         ruolo: ``RuoloFirmatarioStabilimento`` scelto, facoltativo.
+        completa_in_background: Se ``True`` il completamento non si attende.
 
     Returns:
         Dict con ``trasmittal_id``, ``nome``, ``registrate`` (le prese visione
         registrate ora), lo stato (``stato_prese_visione``) e
-        ``completamento``: ``None`` se manca ancora un ruolo, altrimenti
-        l'esito di ``completa_trasmittal_interno``.
+        ``completamento``: l'esito di ``completa_trasmittal_interno``, oppure
+        ``None`` se manca ancora un ruolo o il completamento è in background.
 
     Raises:
         TrasmittalInternoPresaVisioneError: utente non autorizzato (403),
@@ -1763,7 +1803,11 @@ def registra_presa_visione(trasmittal, utente, ruolo=None):
         "completamento": None,
     }
     if stato["stato"] == STATO_COMPLETATO:
-        risultato["completamento"] = completa_trasmittal_interno(trasmittal)
+        if completa_in_background:
+            # Dopo il commit: il thread usa un'altra connessione e deve vedere le prese visione.
+            transaction.on_commit(lambda: _in_background(_completa_lettera, trasmittal.pk))
+        else:
+            risultato["completamento"] = completa_trasmittal_interno(trasmittal)
     return risultato
 
 

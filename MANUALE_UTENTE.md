@@ -986,7 +986,7 @@ Per prendere visione:
 
 La presa visione si registra a tuo nome, con data e ora: non serve una firma grafica né una conferma. Per ogni lettera c'è una sola presa visione per ruolo: se nel frattempo l'ha già registrata un collega, l'anteprima si apre comunque e l'elenco mostra la sua. Dall'applicazione non si annulla: se è stata registrata per errore, chiedi a un amministratore.
 
-**Completamento.** Quando ci sono sia QC sia PROD la lettera passa a *Completata* e l'applicazione esegue tre passi. Sono indipendenti: un passo che fallisce non blocca gli altri.
+**Completamento.** Quando ci sono sia QC sia PROD la lettera è completata e l'applicazione esegue in background tre passi, senza far attendere l'anteprima. Sono indipendenti: un passo che fallisce non blocca gli altri.
 
 | Passo (etichetta a schermo) | Cosa fa |
 |-----------------------------|---------|
@@ -994,7 +994,7 @@ La presa visione si registra a tuo nome, con data e ora: non serve una firma gra
 | **Cartella DCC preparata** | Copia il PDF di ogni documento con **Cliente** spuntato nella cartella `Z:\JOBS\<job>\PROGETTO\DCC\DA SPEDIRE\<nome>` (*"N file copiati, M mancanti."*), cercandolo nella cartella del reparto del documento. Un documento di cui non si trova il file viene segnalato come mancante, gli altri vengono copiati comunque. Senza documenti per il cliente la cartella non viene creata |
 | **Email di completamento inviata** | Invia agli stessi destinatari, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"*. Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
 
-Chi registra la presa visione che completa la lettera trova, tornando sulla scheda dell'elenco, il pannello **Lettera <nome>** con l'esito di ogni passo. Su un passo fallito chi ha il flag del trasmittal interno vede **Riprova**, che ripete solo quel passo; gli altri leggono *"Per ritentare i passi non riusciti chiedi a chi emette i trasmittal interni."* Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso, e nell'elenco compare **Salva PDF**.
+Chi apre l'anteprima che completa la lettera vede subito il PDF; tornando sull'elenco trova la lettera aggiornata. Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso e nell'elenco chi ha il flag vede **Salva PDF**. Se non arriva la seconda email o manca la cartella DCC, avvisa un amministratore.
 
 ### 12.9 Il PDF della lettera
 
