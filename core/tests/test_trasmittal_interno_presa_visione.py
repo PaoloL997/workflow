@@ -503,6 +503,18 @@ class CompletamentoTests(_LetteraTestCase):
         self.assertTrue(completamento["email"]["ok"])
         self.assertIn("PDF non ancora salvato", mail.outbox[1].body)
         self.assertNotIn("Salvato in", mail.outbox[1].body)
+        self.assertNotIn("<a href", mail.outbox[1].alternatives[0][0])
+
+    def test_seconda_email_link_cliccabile_al_pdf(self):
+        lettera_id = self._emetti()["trasmittal_id"]
+
+        self._completa(lettera_id)
+
+        percorso = percorso_pdf(TransmittalInterno.objects.get(pk=lettera_id))
+        seconda = mail.outbox[1]
+        self.assertIn(f"Salvato in: {percorso}", seconda.body)
+        self.assertTrue(percorso.as_uri().startswith("file:///"))
+        self.assertIn(f'<a href="{percorso.as_uri()}">{percorso}</a>', seconda.alternatives[0][0])
 
     def test_senza_message_id_la_seconda_email_parte_senza_header_di_thread(self):
         with patch("django.core.mail.EmailMessage.send", side_effect=Exception("SMTP giù")):

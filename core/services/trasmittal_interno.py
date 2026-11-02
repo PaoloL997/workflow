@@ -1223,6 +1223,19 @@ def _riga_salvataggio(trasmittal):
     )
 
 
+def _riga_salvataggio_html(trasmittal):
+    """``_riga_salvataggio`` in HTML, col percorso del PDF come link ``file:///`` cliccabile.
+
+    Outlook apre il link direttamente dal fileserver; il testo del link resta
+    il percorso, come nella versione di solo testo. Un percorso relativo (JOBS
+    configurato male) non ha un URI ``file:``: resta testo, l'email parte lo stesso.
+    """
+    percorso = percorso_pdf(trasmittal)
+    if not percorso.is_file() or not percorso.is_absolute():
+        return escape(_riga_salvataggio(trasmittal))
+    return f'Salvato in: <a href="{escape(percorso.as_uri())}">{escape(str(percorso))}</a>'
+
+
 def _corpo_email_completamento(trasmittal):
     """Corpo dell'email di completamento: chi ha preso visione, quando, e dove è il PDF."""
     return (
@@ -1302,7 +1315,7 @@ def _corpo_email_completamento_html(trasmittal):
         + "<p>"
         + "<br>".join(escape(riga) for riga in _righe_visionato(trasmittal))
         + "</p>"
-        + f"<p>{escape(_riga_salvataggio(trasmittal))}</p>"
+        + f"<p>{_riga_salvataggio_html(trasmittal)}</p>"
     )
 
 
