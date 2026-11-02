@@ -561,7 +561,13 @@
     color: var(--color-text-primary);
     letter-spacing: -0.02em;
   }
-  .storico-stato { font-size: 12.5px; color: var(--color-text-secondary); }
+  /* Stato: per QC e PROD la sigla in un badge e, accanto, chi ha preso
+     visione (verde) oppure "In attesa" (ambra). */
+  .storico-stato { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; }
+  .storico-ruolo { display: inline-flex; align-items: center; gap: 6px; }
+  .storico-visto { color: var(--color-success); }
+  .storico-attesa { color: var(--amber); }
+  [data-theme="light"] .storico-attesa { color: hsl(32, 85%, 32%); }
   .storico-azione {
     display: inline-flex;
     align-items: center;
@@ -905,14 +911,19 @@
   // Lettera indicata nel link dell'email di emissione (?lettera=<id>).
   var LETTERA_EVIDENZIATA = parseInt(new URLSearchParams(window.location.search).get('lettera') || '', 10);
 
-  // Una scritta per ruolo: chi ha preso visione e quando, o "in attesa".
+  // Per QC e PROD: la sigla in un badge e, accanto, chi ha preso visione e
+  // quando oppure "In attesa". L'ISO è già nell'ora di Roma.
   function statoLetteraHtml(l) {
     var prese = {};
     l.prese_visione.forEach(function (p) { prese[p.sigla] = p; });
     return '<span class="storico-stato">' + ['QC', 'PROD'].map(function (sigla) {
       var p = prese[sigla];
-      return sigla + ': ' + (p ? escHtml(p.utente) + ' (' + escHtml(fmtDataOra(p.registrata_il)) + ')' : 'in attesa');
-    }).join(' · ') + '</span>';
+      var testo = p
+        ? '<span class="storico-visto">Visionato da ' + escHtml(p.utente) + ' il ' + escHtml(formatDate(p.registrata_il))
+          + ' alle ' + escHtml(String(p.registrata_il).slice(11, 16)) + '</span>'
+        : '<span class="storico-attesa">In attesa</span>';
+      return '<span class="storico-ruolo"><span class="ti-site-chip">' + sigla + '</span>' + testo + '</span>';
+    }).join('') + '</span>';
   }
 
   function azioniLetteraHtml(l) {

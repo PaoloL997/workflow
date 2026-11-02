@@ -875,7 +875,7 @@ La pagina mostra lo **storico delle lettere emesse** per la commessa (*"N letter
 
 Per ogni lettera:
 
-- lo **stato**, accanto al nome: per QC e per PROD chi ha preso visione e quando (*"QC: Nome Cognome (2 nov 2026, 09:15)"*), oppure *in attesa*. Con entrambe la lettera è completata;
+- lo **stato**, accanto al nome: per **QC** e per **PROD** chi ha preso visione e quando, in verde (*"Visionato da Nome Cognome il 2 nov 2026 alle 09:15"*), oppure *In attesa*, in arancione. Con entrambe la lettera è completata;
 - **Anteprima**, sempre disponibile, apre in una nuova scheda il PDF della lettera con le prese visione registrate fino a quel momento. Se sei firmatario QC o PROD di un sito della lettera e il tuo ruolo manca ancora, aprirla registra la tua presa visione (vedi **12.8 Presa visione QC e PROD**);
 - **Salva PDF**, solo per chi ha il flag e solo se la lettera è completata ma il PDF non è più sul fileserver: lo salva di nuovo;
 - il pulsante **Annulla** compare solo sull'ultima lettera emessa in quel giorno e solo per chi ha il flag (vedi **12.10 Annullare una lettera**).
