@@ -59,6 +59,7 @@ from .services.annulla_invio import InvioNonAnnullabile, annulla_invio_cliente
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.commesse import (
+    aggiungi_persona_commessa,
     close_commessa,
     create_commessa,
     create_documento,
@@ -89,6 +90,7 @@ from .services.commesse import (
     pin_commessa,
     request_delete_commessa,
     revisioni_by_doc_for_job,
+    rimuovi_persona_commessa,
     risolvi_file_revisione,
     risolvi_persona_commessa,
     salva_file_link,
@@ -818,6 +820,51 @@ def persona_commessa_risolvi_api(request, pk):
     except User.DoesNotExist:
         return JsonResponse({"error": "Utente non trovato."}, status=404)
     return JsonResponse({"ok": True, "nome": persona.nome_visualizzato})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@con_commessa
+def persone_commessa_api(request, job, testata):
+    """Aggiunge un utente registrato a un ruolo (PM/PE/QCI/WE) della commessa.
+
+    Body: ``{"ruolo": "pm" | "pe" | "qci" | "we", "utente_id": <id>}``. Risponde
+    con le persone di quel ruolo come le mostra l'intestazione della commessa.
+    """
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
+    ruolo = data.get("ruolo")
+    try:
+        utente_id = int(data.get("utente_id"))
+    except (TypeError, ValueError):
+        return _errore("Parametro utente_id mancante o non valido.")
+    try:
+        aggiungi_persona_commessa(testata, ruolo, utente_id)
+    except ValueError as exc:
+        return _errore(str(exc))
+    except User.DoesNotExist:
+        return _errore("Utente non trovato.", 404)
+    return JsonResponse({"ok": True, "ruolo": ruolo, "persone": persone_per_ruolo(testata)[ruolo]})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["DELETE"])
+def persona_commessa_api_detail(request, pk):
+    """Toglie una persona da un ruolo della commessa; risponde con le persone rimaste del ruolo."""
+    try:
+        persona = rimuovi_persona_commessa(pk)
+    except PersonaCommessa.DoesNotExist:
+        return _errore("Voce non trovata.", 404)
+    return JsonResponse(
+        {
+            "ok": True,
+            "ruolo": persona.ruolo,
+            "persone": persone_per_ruolo(persona.testata)[persona.ruolo],
+        }
+    )
 
 
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────

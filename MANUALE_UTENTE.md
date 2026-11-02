@@ -300,7 +300,9 @@ La dashboard della commessa è il punto centrale per tutte le attività.
 
 In alto compaiono il nome del cliente, il titolo **Commessa <job>**, la riga con **PO No.**, **Bid No.**, **Termini consegna**, **PM**, **PE**, **QCI**, **WE** (un trattino se il dato manca) e la descrizione.
 
-**Persone non abbinate.** Un nome inserito come testo libero alla creazione e non collegato a un utente registrato compare in rosso con sottolineatura tratteggiata. Chi ha il permesso Scrittura può cliccarlo: nel riquadro *"Cerca utente…"* dalla seconda lettera compaiono gli utenti registrati; scegliendone uno il nome viene abbinato all'utente e torna in testo normale. Le persone commessa non si aggiungono né si modificano da questa pagina: si inseriscono alla creazione della commessa (vedi **4.3 Creare una nuova commessa**) e per cambiarle dopo serve un amministratore.
+**Persone non abbinate.** Un nome inserito come testo libero alla creazione e non collegato a un utente registrato compare in rosso con sottolineatura tratteggiata. Chi ha il permesso Scrittura può cliccarlo: nel riquadro *"Cerca utente…"* dalla seconda lettera compaiono gli utenti registrati; scegliendone uno il nome viene abbinato all'utente e torna in testo normale.
+
+**Modificare PM, PE, QCI e WE.** Chi ha il permesso Scrittura vede una matita accanto a ogni ruolo. Cliccandola si apre un riquadro con le persone del ruolo: **×** toglie una persona, anche un nome non abbinato. Nel campo *"Cerca utente…"*, dalla seconda lettera, compaiono gli utenti registrati: sceglierne uno lo aggiunge al ruolo. Si aggiungono solo utenti registrati e lo stesso utente non si ripete sullo stesso ruolo. La modifica vale subito, anche per i destinatari automatici del trasmittal interno (vedi **12.1 Prerequisiti**). **Esc** o un clic fuori chiude il riquadro.
 
 ### 5.2 Chiudere la commessa
 
@@ -866,7 +868,7 @@ Ogni lettera passa da due momenti:
 | Documenti dei reparti **UT**, **QC** e **WE** | Nella lettera entrano solo i documenti il cui reparto ha acronimo `UT`, `QC` o `WE`; il reparto WE entra quando un amministratore lo crea. I documenti degli altri reparti non compaiono |
 | Flag **Può scrivere sul trasmittal interno** sul tuo utente | Lo assegna un amministratore. È indipendente dal permesso generale di scrittura (vedi **1.2 Permessi degli utenti**): chi non lo ha vede storico, Destinazioni e Nuova lettera ma non può modificare destinazioni, emettere, annullare o ritentare un passo. Non serve per la presa visione |
 | **Stabilimenti** con sigla, codice sito Business Central e indirizzi email | Sono configurati da un amministratore: per ogni sito gli indirizzi **A (TO)** / **CC** e gli indirizzi sempre in copia. Se un sito non compare tra i siti coinvolti o manca un indirizzo, chiedi a un amministratore |
-| **Persone commessa** (PM, PE, QCI) | Si inseriscono alla creazione della commessa (vedi **4.3 Creare una nuova commessa**); per cambiarle dopo serve un amministratore. Servono per i destinatari automatici dell'email: se mancano, il pannello *A chi va* lo segnala |
+| **Persone commessa** (PM, PE, QCI) | Si inseriscono alla creazione della commessa (vedi **4.3 Creare una nuova commessa**) e chi ha il permesso Scrittura le modifica dall'intestazione della commessa (vedi **5.1 Intestazione**). Servono per i destinatari automatici dell'email: se mancano, il pannello *A chi va* lo segnala |
 | **Firmatari stabilimento** | Chi può prendere visione per Qualità e per Produzione di ogni sito è registrato da un amministratore, anche più persone per ruolo e sito (vedi **12.8 Presa visione QC e PROD**) |
 
 ### 12.2 La schermata

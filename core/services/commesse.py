@@ -212,6 +212,42 @@ def risolvi_persona_commessa(persona_id, utente_id):
     return persona
 
 
+def aggiungi_persona_commessa(testata, ruolo, utente_id):
+    """Aggiunge un utente registrato a un ruolo (PM/PE/QCI/WE) della commessa.
+
+    Lo stesso utente due volte sullo stesso ruolo non si duplica: resta la
+    voce che c'è già.
+
+    Args:
+        ruolo: ``"pm"``, ``"pe"``, ``"qci"`` o ``"we"``.
+
+    Raises:
+        ValueError: ruolo non valido.
+        User.DoesNotExist: utente inesistente o disattivato.
+    """
+    if ruolo not in _RUOLI_PERSONA:
+        raise ValueError(f'Ruolo non valido: "{ruolo}".')
+    utente = User.objects.get(pk=utente_id, is_active=True)
+    persona, _ = PersonaCommessa.objects.get_or_create(
+        testata=testata, ruolo=_RUOLI_PERSONA[ruolo], utente=utente
+    )
+    return persona
+
+
+def rimuovi_persona_commessa(persona_id):
+    """Toglie una persona (utente o nome libero) dal suo ruolo della commessa.
+
+    Returns:
+        La ``PersonaCommessa`` eliminata: ``testata`` e ``ruolo`` restano leggibili.
+
+    Raises:
+        PersonaCommessa.DoesNotExist: se la voce non esiste.
+    """
+    persona = PersonaCommessa.objects.select_related("testata").get(pk=persona_id)
+    persona.delete()
+    return persona
+
+
 def update_commessa(job, data):
     t = Testata.objects.get(job=job)
     for k, v in _clean_testata_fields(data).items():
