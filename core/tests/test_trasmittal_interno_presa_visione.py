@@ -446,17 +446,17 @@ class CompletamentoTests(_LetteraTestCase):
         self.assertTrue(completamento["email"]["ok"])
         self.assertEqual(len(mail.outbox), 2)
 
-    def test_seconda_email_stesso_oggetto_e_destinatari_nello_stesso_thread(self):
+    def test_seconda_email_solo_a_chi_ha_emesso_nello_stesso_thread(self):
         esito = self._emetti()
         lettera = TransmittalInterno.objects.get(pk=esito["trasmittal_id"])
 
         self._completa(lettera.pk)
 
         prima, seconda = mail.outbox
+        self.assertIn("writer@b.it", prima.cc)  # la prima l'aveva in copia
         self.assertEqual(seconda.subject, prima.subject)
-        self.assertEqual(seconda.to, prima.to)
-        self.assertEqual(seconda.cc, prima.cc)
-        self.assertIn("writer@b.it", seconda.cc)
+        self.assertEqual(seconda.to, ["writer@b.it"])
+        self.assertEqual(seconda.cc, [])
         self.assertEqual(seconda.reply_to, prima.reply_to)
         self.assertEqual(seconda.from_email, prima.from_email)
         self.assertEqual(seconda.extra_headers["In-Reply-To"], lettera.message_id)
@@ -475,6 +475,18 @@ class CompletamentoTests(_LetteraTestCase):
         self.assertLess(riga_qc.start(), riga_prod.start())
         self.assertIn(f"Salvato in: {percorso_pdf(lettera)}", seconda.body)
         self.assertIn("Visionato da Quinto Qualita (QC)", seconda.alternatives[0][0])
+
+    def test_senza_email_di_chi_ha_emesso_la_seconda_email_non_parte(self):
+        lettera_id = self._emetti()["trasmittal_id"]
+        self.writer.email = ""
+        self.writer.save()
+
+        completamento = self._completa(lettera_id)["completamento"]
+
+        self.assertFalse(completamento["email"]["ok"])
+        self.assertIn("non ha un indirizzo email", completamento["email"]["errore"])
+        self.assertTrue(completamento["pdf"]["ok"])
+        self.assertEqual(len(mail.outbox), 1)
 
     def test_un_passo_fallito_non_ferma_gli_altri_e_l_email_lo_dice(self):
         esito = self._emetti()

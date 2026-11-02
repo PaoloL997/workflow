@@ -1382,7 +1382,25 @@ def _destinatari_email(trasmittal):
     return to, cc
 
 
-def _invia_email(trasmittal, body, body_html, headers=None):
+def _destinatario_completamento(trasmittal):
+    """TO e CC dell'email di completamento: solo chi ha emesso la lettera.
+
+    Returns:
+        Tupla ``(to, cc)``: l'indirizzo di chi ha emesso, nessuna copia.
+
+    Raises:
+        ValueError: chi ha emesso la lettera non ha un indirizzo email.
+    """
+    emittente = (trasmittal.creato_da.email or "").strip()
+    if not emittente:
+        raise ValueError(
+            f"{trasmittal.creato_da.nome_completo} non ha un indirizzo email: "
+            "impossibile inviare l'email di completamento."
+        )
+    return [emittente], []
+
+
+def _invia_email(trasmittal, body, body_html, headers=None, destinatari=None):
     """Invia un'email della lettera ai suoi destinatari TO/CC registrati.
 
     L'email parte dalla casella dell'applicazione (``mittente_trasmittal``);
@@ -1396,6 +1414,10 @@ def _invia_email(trasmittal, body, body_html, headers=None):
     Con ``TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT`` impostato l'email va solo a
     quell'indirizzo, con i destinatari veri nell'oggetto e nel testo.
 
+    Args:
+        destinatari: Tupla ``(to, cc)`` al posto di quelli registrati
+            (``_destinatari_email``), es. ``_destinatario_completamento``.
+
     Returns:
         Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
         indirizzi usati (``cc`` comprende chi ha emesso la lettera).
@@ -1403,7 +1425,7 @@ def _invia_email(trasmittal, body, body_html, headers=None):
     Raises:
         ValueError: nessun destinatario in TO.
     """
-    to, cc = _destinatari_email(trasmittal)
+    to, cc = destinatari or _destinatari_email(trasmittal)
     subject = _oggetto_email(trasmittal)
     invio_to, invio_cc = to, cc
     test_redirect = getattr(settings, "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", "")
@@ -1466,18 +1488,19 @@ def invia_email_emissione(trasmittal, base_url=""):
 def invia_email_completamento(trasmittal):
     """Email di completamento: QC e PROD hanno preso visione, il PDF è sul fileserver.
 
-    Stesso oggetto, stessi destinatari, stesso Reply-To e stessa copia a chi
-    ha emesso dell'email di emissione, e header ``In-Reply-To`` e
-    ``References`` con il Message-ID salvato (``trasmittal.message_id``), così
-    i client la mostrano come risposta nello stesso thread. Se l'email di
-    emissione non è mai partita il Message-ID manca e l'email parte senza
-    quegli header.
+    Va solo a chi ha emesso la lettera (``_destinatario_completamento``), non
+    ai destinatari dell'emissione. Stesso oggetto e stesso Reply-To dell'email
+    di emissione, e header ``In-Reply-To`` e ``References`` con il Message-ID
+    salvato (``trasmittal.message_id``): chi ha emesso aveva la prima in
+    copia, quindi il suo client la mostra come risposta nello stesso thread.
+    Se l'email di emissione non è mai partita il Message-ID manca e l'email
+    parte senza quegli header.
 
     Returns:
         Dict ``{"to", "cc", "mittente"}``.
 
     Raises:
-        ValueError: nessun destinatario in TO.
+        ValueError: chi ha emesso la lettera non ha un indirizzo email.
     """
     headers = None
     if trasmittal.message_id:
@@ -1487,6 +1510,7 @@ def invia_email_completamento(trasmittal):
         _corpo_email_completamento(trasmittal),
         _corpo_email_completamento_html(trasmittal),
         headers=headers,
+        destinatari=_destinatario_completamento(trasmittal),
     )
 
 

@@ -858,7 +858,7 @@ Il trasmittal interno è la lettera (modulo qualità **MQ 7.5-04**) con cui i do
 Ogni lettera passa da due momenti:
 
 1. **Emissione.** Chi ha il flag del trasmittal interno emette la lettera: l'applicazione la crea e invia una prima email ai destinatari. La lettera resta **in attesa di presa visione QC e PROD**.
-2. **Presa visione.** Un firmatario Qualità (QC) e uno Produzione (PROD) di uno dei siti coinvolti aprono l'**Anteprima** della lettera: aprirla vale come presa visione. Con entrambe la lettera è **completata**: l'applicazione salva il PDF sul fileserver, prepara una cartella per il DCC con i PDF dei documenti destinati al cliente e invia una seconda email agli stessi destinatari.
+2. **Presa visione.** Un firmatario Qualità (QC) e uno Produzione (PROD) di uno dei siti coinvolti aprono l'**Anteprima** della lettera: aprirla vale come presa visione. Con entrambe la lettera è **completata**: l'applicazione salva il PDF sul fileserver, prepara una cartella per il DCC con i PDF dei documenti destinati al cliente e invia una seconda email a chi ha emesso la lettera.
 
 ### 12.1 Prerequisiti
 
@@ -947,7 +947,7 @@ Il pannello **A chi va** riepiloga cosa succederà: nome previsto della lettera,
 | **Export** | `export@brembanarolle.com`, solo se nella lettera c'è almeno un documento SHn (B&R Doc del tipo `xxxxx-xx-ESH…`) | CC |
 | **Manuale** | Indirizzi aggiunti a mano e gli indirizzi "sempre in copia" configurati per i siti coinvolti | dove sono inseriti |
 
-Se sulla commessa manca una persona per un ruolo (PM, PE o QCI), un avviso lo segnala (*"Ruoli non valorizzati sulla commessa: PM, PE — nessun destinatario verrà aggiunto per questi ruoli."*). Il ruolo WE non ha una lista di distribuzione e non genera destinatari. Un indirizzo presente sia in A sia in CC viene tenuto solo in A. Gli stessi destinatari ricevono anche l'email di completamento.
+Se sulla commessa manca una persona per un ruolo (PM, PE o QCI), un avviso lo segnala (*"Ruoli non valorizzati sulla commessa: PM, PE — nessun destinatario verrà aggiunto per questi ruoli."*). Il ruolo WE non ha una lista di distribuzione e non genera destinatari. Un indirizzo presente sia in A sia in CC viene tenuto solo in A. L'email di completamento invece va solo a chi ha emesso la lettera (vedi **12.8 Presa visione QC e PROD**).
 
 Prima di inviare puoi:
 
@@ -994,7 +994,7 @@ La presa visione si registra a tuo nome, con data e ora: non serve una firma gra
 |-----------------------------|---------|
 | **PDF salvato sul fileserver** | Salva il PDF in `Z:\JOBS\<job>\Progetto\UT\Transmittal\<nome>.pdf`, anche quando la lettera contiene documenti QC o WE |
 | **Cartella DCC preparata** | Copia il PDF di ogni documento con **Cliente** spuntato nella cartella `Z:\JOBS\<job>\PROGETTO\DCC\DA SPEDIRE\<nome>` (*"N file copiati, M mancanti."*), cercandolo nella cartella del reparto del documento. Un documento di cui non si trova il file viene segnalato come mancante, gli altri vengono copiati comunque. Senza documenti per il cliente la cartella non viene creata |
-| **Email di completamento inviata** | Invia agli stessi destinatari, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"*. Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
+| **Email di completamento inviata** | Invia solo a chi ha emesso la lettera, con lo stesso oggetto, una seconda email con chi ha preso visione per QC e per PROD, con data e ora, e *"Salvato in: <percorso del PDF>"*. Nei programmi di posta compare come risposta alla prima email, nello stesso thread |
 
 Chi apre l'anteprima che completa la lettera vede subito il PDF; tornando sull'elenco trova la lettera aggiornata. Se il PDF non è stato salvato, l'email di completamento lo dice al posto del percorso e nell'elenco chi ha il flag vede **Salva PDF**. Se non arriva la seconda email o manca la cartella DCC, avvisa un amministratore.
 

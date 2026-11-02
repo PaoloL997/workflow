@@ -891,7 +891,7 @@
       + '</div>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">3</div>'
-      + '<div class="ti-info-step-text">Con entrambe le prese visione il PDF viene salvato sul fileserver, i documenti per il cliente vengono copiati per il DCC e parte una seconda email agli stessi destinatari.</div>'
+      + '<div class="ti-info-step-text">Con entrambe le prese visione il PDF viene salvato sul fileserver, i documenti per il cliente vengono copiati per il DCC e parte una seconda email a chi ha emesso la lettera.</div>'
       + '</div>'
       + '<div class="ti-info-callout">'
       + '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>'
@@ -1798,7 +1798,7 @@
       + (anteprima.percorso_dcc_preview
           ? '<li>&nbsp;&nbsp;· i documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC);</li>'
           : '<li>&nbsp;&nbsp;· nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC;</li>')
-      + '<li>&nbsp;&nbsp;· parte una seconda email agli stessi destinatari, nello stesso thread.</li>'
+      + '<li>&nbsp;&nbsp;· ricevi una seconda email, solo tu, nello stesso thread.</li>'
       + '</ul></div>';
 
     document.getElementById('conferma-body').innerHTML =
