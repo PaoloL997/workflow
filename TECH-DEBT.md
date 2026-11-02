@@ -14,6 +14,7 @@
 
 - core/templates/core/trasmittal_interno_detail.html (righe ~740 e ~840): gli avvisi «Sola lettura: non hai i permessi per emettere lettere / modificare le destinazioni» sono condizionati a `user.can_write` (permesso generale), ma la scrittura sul trasmittal interno dipende solo da `User.trasmittal_interno_writer` (`TI_CAN_WRITE`). Un utente Scrittura senza flag non vede nessun avviso e non può scrivere; un utente Lettura con flag vede «Sola lettura» ma può fare tutto. Condizionare gli avvisi a `trasmittal_interno_can_write`.
 
+
 - core/templates/core/segnalazioni.html (invio commento e voto): gli errori diversi da 403 vengono ignorati, quindi un commento oltre i 2000 caratteri (il server risponde «Il commento può avere al massimo 2000 caratteri.») non dà nessun riscontro a schermo. Mostrare il messaggio del server sotto il campo, come fa il modale «Nuova proposta».
 
 - core/templates/core/archivio_detail.html (modale indirizzo): su un errore di validazione del server (es. campo oltre la lunghezza massima) il modale resta aperto senza nessun messaggio, perché la risposta non 403 viene ignorata. Mostrare l'errore nel footer del modale.
