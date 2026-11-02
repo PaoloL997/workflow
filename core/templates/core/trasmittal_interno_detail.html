@@ -1484,6 +1484,8 @@
   }
 
   window.aggiungiNotaLibera = function () {
+    // Il PDF stampa al massimo tre note.
+    if (_noteLibere.length >= 3) return;
     _noteLibere.push('');
     renderNoteLibere();
     aggiornaTutteLeCelleNota();
@@ -1501,7 +1503,10 @@
   };
 
   function noteLettera() {
-    return _noteLibere.filter(function (r) { return r.trim() !== ''; }).join('\n');
+    // Le righe vuote restano: il PDF numera per posizione, come la colonna Nota.
+    var righe = _noteLibere.map(function (r) { return r.trim(); });
+    while (righe.length && righe[righe.length - 1] === '') righe.pop();
+    return righe.join('\n');
   }
 
   function apriComponi(docs) {
