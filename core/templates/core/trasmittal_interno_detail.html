@@ -546,10 +546,61 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    flex-wrap: wrap;
+    gap: 10px 16px;
     padding: 12px 20px;
     border-bottom: 1px solid var(--color-border);
   }
+  .storico-row--evidenziata { background: hsla(211, 100%, 55%, 0.08); }
+  .storico-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .storico-titolo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .storico-stato {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  /* In attesa / parziale: ambra; completata: verde. */
+  .storico-stato--in_attesa,
+  .storico-stato--parziale {
+    color: hsl(38, 92%, 60%);
+    background: hsla(38, 92%, 50%, 0.14);
+    border-color: hsla(38, 92%, 50%, 0.4);
+  }
+  [data-theme="light"] .storico-stato--in_attesa,
+  [data-theme="light"] .storico-stato--parziale { color: hsl(32, 85%, 32%); }
+  .storico-stato--completato {
+    color: var(--color-success);
+    background: color-mix(in srgb, var(--color-success) 14%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+  .storico-visioni { font-size: 12px; color: var(--color-text-secondary); line-height: 1.5; }
+  .storico-visioni strong { color: var(--color-text-primary); font-weight: 600; }
+  .storico-azione {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--color-accent);
+    border: 1px solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+    cursor: pointer;
+    font-family: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .storico-azione:hover { background: color-mix(in srgb, var(--color-accent) 12%, transparent); border-color: var(--color-accent); }
+  .storico-azione:disabled { opacity: .5; cursor: not-allowed; }
+  .storico-azione--primaria { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+  .storico-azione--primaria:hover { background: var(--color-accent-hover); border-color: var(--color-accent-hover); }
+  .ti-esito-nota { margin-top: 12px; font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.5; }
   .storico-row:last-child { border-bottom: none; }
   .storico-nome {
     font-size: 14px;
@@ -586,8 +637,9 @@
     background: hsl(211, 100%, 88%);
     border-color: var(--color-accent);
   }
-  .storico-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  /* PDF assente dal fileserver: la data resta, ma non è un link. */
+  .storico-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  /* PDF definitivo non disponibile (lettera non completata, o file assente dal
+     fileserver): la data resta, ma non è un link. */
   .storico-date-chip.storico-date-chip--assente,
   .storico-date-chip.storico-date-chip--assente:hover {
     background: transparent;
@@ -690,7 +742,7 @@
     <header class="page-header">
       <div class="ti-title-row">
         <h1 class="page-title">Trasmittal interno</h1>
-        <button type="button" class="ti-info-btn" onclick="apriInfoFirme()" aria-label="Come funzionano le firme nel PDF" title="Come funzionano le firme nel PDF">
+        <button type="button" class="ti-info-btn" onclick="apriInfoFirme()" aria-label="Come funziona la presa visione" title="Come funziona la presa visione">
           <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
           </svg>
@@ -718,10 +770,10 @@
   </div><!-- /content -->
 </div><!-- /page -->
 
-<!-- ── Come funzionano le firme di Produzione/Qualità nel PDF ── -->
+<!-- ── Come funziona la presa visione di Produzione/Qualità ── -->
 <div class="modal-overlay" id="info-firme-modal" role="dialog" aria-modal="true" aria-labelledby="info-firme-title">
   <div class="modal-box" style="max-width:480px;">
-    <div class="modal-title" id="info-firme-title">Firme nel PDF</div>
+    <div class="modal-title" id="info-firme-title">Presa visione</div>
     <div class="modal-body" id="info-firme-body"></div>
     <div class="modal-actions">
       <button type="button" class="btn-confirm" onclick="chiudiInfoFirme()">Ho capito</button>
@@ -825,7 +877,7 @@
 <!-- Indirizzi già presenti nell'applicazione: suggerimenti per i destinatari TO/CC -->
 <datalist id="email-suggerimenti"></datalist>
 
-<!-- ── Destinazioni: siti coinvolti per tutti i documenti UT ── -->
+<!-- ── Destinazioni: siti coinvolti per tutti i documenti UT, QC e WE ── -->
 <div class="modal-overlay" id="destinazioni-modal" role="dialog" aria-modal="true" aria-labelledby="destinazioni-title">
   <div class="modal-box" style="max-width:900px;">
     <div class="modal-title" id="destinazioni-title">Destinazioni</div>
@@ -883,24 +935,28 @@
 
   function baseUrl() { return '/api/commesse/' + encodeURIComponent(JOB) + '/trasmittal-interno/'; }
 
-  /* ── Info: come funzionano le firme di Produzione/Qualità nel PDF ── */
+  /* ── Info: come funziona la presa visione di Produzione/Qualità ── */
   window.apriInfoFirme = function () {
-    var passoDue = window.USER_IS_ADMIN
-      ? '<a href="/admin/core/firmatariostabilimento/add/" target="_blank" rel="noopener">aggiungila da Admin</a>'
-      : 'chiedi a un amministratore di registrarla da <strong>Admin → Firmatario stabilimento</strong>';
+    var firmatari = window.USER_IS_ADMIN
+      ? '<a href="/admin/core/firmatariostabilimento/" target="_blank" rel="noopener">Admin → Firmatario stabilimento</a>'
+      : 'un amministratore li registra in <strong>Admin → Firmatario stabilimento</strong>';
     document.getElementById('info-firme-body').innerHTML =
-      '<p class="ti-info-intro">Le firme di Produzione e Qualità nel PDF compaiono automaticamente solo se sono vere entrambe queste condizioni:</p>'
+      '<p class="ti-info-intro">Una lettera emessa resta in attesa finché Qualità (QC) e Produzione (PROD) non ne prendono visione:</p>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">1</div>'
-      + '<div class="ti-info-step-text">La persona ha caricato la propria firma nella <a href="/profilo/">pagina profilo</a>.</div>'
+      + '<div class="ti-info-step-text">Chi emette invia la lettera: parte un\'email ai destinatari con il link alla lettera.</div>'
       + '</div>'
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">2</div>'
-      + '<div class="ti-info-step-text">È registrata come firmatario dello stabilimento coinvolto, per il ruolo Produzione o Qualità — ' + passoDue + '.</div>'
+      + '<div class="ti-info-step-text">Un firmatario QC e uno PROD di uno dei siti coinvolti cliccano <strong>Presa visione</strong> qui nell\'elenco. I firmatari, anche più di uno per ruolo e sito: ' + firmatari + '.</div>'
+      + '</div>'
+      + '<div class="ti-info-step">'
+      + '<div class="ti-info-step-num">3</div>'
+      + '<div class="ti-info-step-text">Con entrambe le prese visione il PDF viene salvato sul fileserver, i documenti per il cliente vengono copiati per il DCC e parte una seconda email agli stessi destinatari.</div>'
       + '</div>'
       + '<div class="ti-info-callout">'
       + '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>'
-      + '<span>Se la persona è registrata come firmatario ma non ha caricato la firma, nel PDF compare un riquadro vuoto da firmare a mano. Se non è registrata come firmatario, per quel ruolo non compare nulla.</span>'
+      + '<span>Nel PDF, sotto PAPER COPIES DISTRIBUTION, compaiono nome, data e ora di chi ha preso visione: nessuna firma grafica. <strong>Stampa</strong> genera sempre il PDF del momento; il PDF definitivo si scarica dalla data solo a lettera completata.</span>'
       + '</div>';
     document.getElementById('info-firme-modal').classList.add('open');
   };
@@ -913,6 +969,53 @@
   /* ══════════════════════════════════════════════════
      Storico lettere emesse — schermata principale
   ══════════════════════════════════════════════════ */
+  var ETICHETTA_STATO = {
+    in_attesa: 'In attesa QC e PROD',
+    parziale: 'In attesa',
+    completato: 'Completata',
+  };
+
+  // Lettera indicata nel link dell'email di emissione (?lettera=<id>).
+  var LETTERA_EVIDENZIATA = parseInt(new URLSearchParams(window.location.search).get('lettera') || '', 10);
+
+  function etichettaStato(l) {
+    if (l.stato === 'parziale') return 'Manca ' + l.ruoli_mancanti.join(' e ');
+    return ETICHETTA_STATO[l.stato] || l.stato;
+  }
+
+  function preseVisioneHtml(l) {
+    if (!l.prese_visione.length) return '';
+    return '<div class="storico-visioni">' + l.prese_visione.map(function (p) {
+      return 'Visionato da <strong>' + escHtml(p.utente) + '</strong> (' + escHtml(p.sigla) + ') il ' + escHtml(fmtDataOra(p.registrata_il));
+    }).join('<br>') + '</div>';
+  }
+
+  function azioniLetteraHtml(l) {
+    var nomeJs = escHtml(l.nome).replace(/'/g, "\\'");
+    var html = '<div class="storico-row-actions">';
+    (l.puo_prendere_visione || []).forEach(function (r) {
+      html += '<button type="button" class="storico-azione storico-azione--primaria" onclick="prendiVisione('
+        + l.id + ', \'' + r.ruolo + '\', \'' + r.sigla + '\', \'' + nomeJs + '\', this)">Presa visione ' + escHtml(r.sigla) + '</button>';
+    });
+    html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/pdf/" target="_blank" rel="noopener" class="storico-azione"'
+      + ' title="PDF generato ora, con le prese visione registrate finora">Stampa</a>';
+    if (l.stato !== 'completato') {
+      html += '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true"'
+        + ' title="Il PDF definitivo si salva sul fileserver dopo la presa visione di QC e PROD">' + escHtml(l.data) + '</span>';
+    } else if (l.pdf_presente === false) {
+      html += '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true" title="PDF non trovato sul fileserver">' + escHtml(l.data) + '</span>';
+      if (TI_CAN_WRITE) {
+        html += '<button type="button" class="storico-azione" onclick="salvaPdfLettera(' + l.id + ', this)">Salva PDF</button>';
+      }
+    } else {
+      html += '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip" title="PDF definitivo sul fileserver">' + escHtml(l.data) + '</a>';
+    }
+    if (l.annullabile && TI_CAN_WRITE) {
+      html += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + nomeJs + '\')">Annulla</button>';
+    }
+    return html + '</div>';
+  }
+
   async function caricaStorico() {
     var list = document.getElementById('storico-list');
     try {
@@ -929,31 +1032,89 @@
         return;
       }
       list.innerHTML = lettere.map(function (l) {
-        var actions = '<div class="storico-row-actions">'
-          + (l.pdf_presente === false
-            ? '<span class="storico-date-chip storico-date-chip--assente" aria-disabled="true" title="PDF non trovato sul fileserver">' + escHtml(l.data) + '</span>'
-            : '<a href="' + baseUrl() + 'lettere/' + l.id + '/file/" target="_blank" class="storico-date-chip">' + escHtml(l.data) + '</a>');
-        if (l.annullabile && TI_CAN_WRITE) {
-          actions += '<button type="button" class="storico-annulla" onclick="annullaLettera(' + l.id + ', \'' + escHtml(l.nome).replace(/'/g, "\\'") + '\')">Annulla</button>';
-        }
-        actions += '</div>';
-        return '<div class="storico-row">'
-          + '<span class="storico-nome">' + escHtml(l.nome) + '</span>'
-          + actions
+        return '<div class="storico-row' + (l.id === LETTERA_EVIDENZIATA ? ' storico-row--evidenziata' : '') + '" id="lettera-' + l.id + '">'
+          + '<div class="storico-info">'
+          + '<div class="storico-titolo"><span class="storico-nome">' + escHtml(l.nome) + '</span>'
+          + '<span class="storico-stato storico-stato--' + escHtml(l.stato) + '">' + escHtml(etichettaStato(l)) + '</span></div>'
+          + preseVisioneHtml(l)
+          + '</div>'
+          + azioniLetteraHtml(l)
           + '</div>';
       }).join('');
+      var evidenziata = document.getElementById('lettera-' + LETTERA_EVIDENZIATA);
+      if (evidenziata) evidenziata.scrollIntoView({ block: 'center' });
     } catch {
       list.innerHTML = '<p class="storico-empty">Errore di rete.</p>';
     }
   }
 
+  window.prendiVisione = async function (id, ruolo, sigla, nome, btn) {
+    if (!confirm(
+      'Confermi la presa visione ' + sigla + ' della lettera ' + nome + '?\n\n'
+      + 'Viene registrata a tuo nome con data e ora e non si annulla da qui.'
+    )) {
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const r = await fetch(baseUrl() + 'lettere/' + id + '/presa-visione/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ ruolo: ruolo }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (!r.ok) {
+        alert(body.error || 'Impossibile registrare la presa visione.');
+        btn.disabled = false;
+        await caricaStorico();
+        return;
+      }
+      if (body.completamento) {
+        _ultimoEsito = { tipo: 'completamento', dati: body };
+        document.getElementById('conferma-modal').classList.add('open');
+        renderRisultato();
+      } else {
+        await caricaStorico();
+      }
+    } catch {
+      alert('Errore di rete.');
+      btn.disabled = false;
+    }
+  };
+
+  window.salvaPdfLettera = async function (id, btn) {
+    if (!requireWriteTI()) return;
+    btn.disabled = true;
+    btn.textContent = 'Salvo…';
+    try {
+      const r = await fetch(baseUrl() + 'lettere/' + id + '/retry/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ step: 'pdf' }),
+      });
+      const body = await r.json().catch(function () { return {}; });
+      if (isPermissionDeniedResponse(r, body)) { btn.disabled = false; btn.textContent = 'Salva PDF'; return; }
+      if (!r.ok || !body.esito || !body.esito.ok) {
+        alert((body.esito && body.esito.errore) || body.error || 'Impossibile salvare il PDF.');
+        btn.disabled = false;
+        btn.textContent = 'Salva PDF';
+        return;
+      }
+      await caricaStorico();
+    } catch {
+      alert('Errore di rete.');
+      btn.disabled = false;
+      btn.textContent = 'Salva PDF';
+    }
+  };
+
   window.annullaLettera = async function (id, nome) {
     if (!requireWriteTI()) return;
     if (!confirm(
       'Annullare la lettera ' + nome + '?\n\n'
-      + 'Il PDF e la cartella preparata per il DCC verranno rimossi. '
-      + 'Se era già stata inviata via email, quell\'invio resta valido: '
-      + 'l\'annullamento non può richiamarlo.'
+      + 'Le prese visione registrate vengono eliminate e, se la lettera era già completata, '
+      + 'il PDF e la cartella preparata per il DCC vengono rimossi. '
+      + 'Le email già inviate restano valide: l\'annullamento non può richiamarle.'
     )) {
       return;
     }
@@ -1033,7 +1194,7 @@
       + DocListFilters.thHeader('Titolo', 'doc_title', true)
       + DocListFilters.thHeader('Ultima modifica', 'file_modificato_il', true, {
         className: 'col-modifica',
-        extraAttrs: ' title="Ultima modifica del file in PROGETTO/UT sul fileserver"',
+        extraAttrs: ' title="Ultima modifica del file nella cartella del reparto (PROGETTO/UT, QC o WE) sul fileserver"',
       })
       + DocListFilters.thHeader('Siti coinvolti', 'siti', false)
       + '</tr>';
@@ -1073,7 +1234,7 @@
   }
 
   function renderSelTbl(docs) {
-    if (!_docsSel.length) { emptySelTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!_docsSel.length) { emptySelTbl('Nessun documento UT, QC o WE per questa commessa.'); return; }
     if (!docs.length) { emptySelTbl('Nessun documento corrisponde al filtro.'); return; }
     var canWrite = TI_CAN_WRITE;
     document.getElementById('sel-tbody').innerHTML = docs.map(function (d) {
@@ -1725,13 +1886,15 @@
       + '<div class="ti-conferma-sintesi-titolo">Lettera <strong>' + escHtml(anteprima.nome_preview) + '</strong> — cosa succede all\'invio</div>'
       + '<ul>'
       + '<li>Il trasmittal viene creato e archiviato.</li>'
-      + '<li>Il PDF viene salvato in <code>' + escHtml(anteprima.percorso_pdf_preview) + '</code>.</li>'
-      + (anteprima.percorso_dcc_preview
-          ? '<li>I documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC).</li>'
-          : '<li>Nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC.</li>')
-      + '<li>Un\'email viene inviata ai destinatari qui sotto, con il percorso del PDF sul fileserver (non allegato)'
+      + '<li>Un\'email viene inviata ai destinatari qui sotto, con la tabella, le note e il link alla lettera, senza allegati'
       + (anteprima.mittente ? ', dalla casella <strong>' + escHtml(anteprima.mittente) + '</strong> con il tuo nome nel testo, te in copia e le risposte a te' : '')
       + '.</li>'
+      + '<li>La lettera resta <strong>in attesa di presa visione QC e PROD</strong>. Quando entrambi hanno preso visione:</li>'
+      + '<li>&nbsp;&nbsp;· il PDF viene salvato in <code>' + escHtml(anteprima.percorso_pdf_preview) + '</code>;</li>'
+      + (anteprima.percorso_dcc_preview
+          ? '<li>&nbsp;&nbsp;· i documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC);</li>'
+          : '<li>&nbsp;&nbsp;· nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC;</li>')
+      + '<li>&nbsp;&nbsp;· parte una seconda email agli stessi destinatari, nello stesso thread.</li>'
       + '</ul></div>';
 
     document.getElementById('conferma-body').innerHTML =
@@ -1818,8 +1981,8 @@
         document.getElementById('conferma-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiConferma()">Chiudi</button>';
         return;
       }
-      _ultimoEsito = body;
-      renderRisultato(body);
+      _ultimoEsito = { tipo: 'emissione', dati: body };
+      renderRisultato();
     } catch {
       document.getElementById('conferma-body').innerHTML = '<p class="ti-warning">Errore di rete.</p>';
       document.getElementById('conferma-actions').innerHTML = '<button type="button" class="btn-cancel" onclick="chiudiConferma()">Chiudi</button>';
@@ -1839,23 +2002,46 @@
       + '</div></div>';
   }
 
-  function renderRisultato(esito) {
+  function dettaglioEmail(email) {
+    return email && email.ok
+      ? ((email.mittente ? 'Da: ' + escHtml(email.mittente) + ' — ' : '')
+        + 'A: ' + email.to.join(', ') + (email.cc.length ? ' — CC: ' + email.cc.join(', ') : ''))
+      : '';
+  }
+
+  // Riprova lo può fare solo chi emette i trasmittal interni: agli altri
+  // (es. il firmatario che ha completato la lettera) l'esito dice a chi chiedere.
+  function stepRiprova(step) { return TI_CAN_WRITE ? step : null; }
+
+  // _ultimoEsito = { tipo: 'emissione' | 'completamento', dati: risposta dell'API }
+  function renderRisultato() {
     _esitoMostrato = true;
+    var esito = _ultimoEsito.dati;
+    var id = esito.trasmittal_id;
     document.getElementById('conferma-title').textContent = 'Lettera ' + esito.nome;
-    var dccDettaglio = esito.dcc && esito.dcc.ok
-      ? (esito.dcc.cartella
-        ? (esito.dcc.copiati.length + ' file copiati' + (esito.dcc.mancanti.length ? ', ' + esito.dcc.mancanti.length + ' mancanti' : '') + '.')
-        : 'Nessun documento per il cliente in questa lettera.')
-      : '';
-    var emailDettaglio = esito.email && esito.email.ok
-      ? ((esito.email.mittente ? 'Da: ' + escHtml(esito.email.mittente) + ' — ' : '')
-        + 'A: ' + esito.email.to.join(', ') + (esito.email.cc.length ? ' — CC: ' + esito.email.cc.join(', ') : ''))
-      : '';
-    document.getElementById('conferma-body').innerHTML =
-      esitoRiga('Trasmittal creato e archiviato', { ok: true })
-      + esitoRiga('PDF salvato sul fileserver', esito.pdf, null, 'pdf', esito.trasmittal_id)
-      + esitoRiga('Cartella DCC preparata', esito.dcc, dccDettaglio, 'dcc', esito.trasmittal_id)
-      + esitoRiga('Email inviata', esito.email, emailDettaglio, 'email', esito.trasmittal_id);
+    var html;
+    if (_ultimoEsito.tipo === 'emissione') {
+      html = esitoRiga('Trasmittal creato e archiviato', { ok: true })
+        + esitoRiga('Email di emissione inviata', esito.email, dettaglioEmail(esito.email), stepRiprova('email'), id)
+        + '<p class="ti-esito-nota">In attesa di presa visione QC e PROD: il PDF si salva sul fileserver e la cartella DCC si prepara quando entrambi hanno preso visione.</p>';
+    } else {
+      var c = esito.completamento;
+      var dccDettaglio = c.dcc && c.dcc.ok
+        ? (c.dcc.cartella
+          ? (c.dcc.copiati.length + ' file copiati' + (c.dcc.mancanti.length ? ', ' + c.dcc.mancanti.length + ' mancanti' : '') + '.')
+          : 'Nessun documento per il cliente in questa lettera.')
+        : '';
+      var fallito = !(c.pdf.ok && c.dcc.ok && c.email.ok);
+      html = esitoRiga('Presa visione ' + esito.presa_visione.sigla + ' registrata: lettera completata', { ok: true },
+          escHtml(esito.presa_visione.utente) + ', ' + escHtml(fmtDataOra(esito.presa_visione.registrata_il)) + '.')
+        + esitoRiga('PDF salvato sul fileserver', c.pdf, c.pdf.ok ? escHtml(c.pdf.percorso) : null, stepRiprova('pdf'), id)
+        + esitoRiga('Cartella DCC preparata', c.dcc, dccDettaglio, stepRiprova('dcc'), id)
+        + esitoRiga('Email di completamento inviata', c.email, dettaglioEmail(c.email), stepRiprova('email_completamento'), id)
+        + (fallito && !TI_CAN_WRITE
+          ? '<p class="ti-esito-nota">Per ritentare i passi non riusciti chiedi a chi emette i trasmittal interni.</p>'
+          : '');
+    }
+    document.getElementById('conferma-body').innerHTML = html;
     document.getElementById('conferma-actions').innerHTML =
       '<button type="button" class="btn-confirm" onclick="chiudiConferma()">Fatto</button>';
   }
@@ -1874,8 +2060,12 @@
       if (isPermissionDeniedResponse(r, body)) { btn.disabled = false; btn.textContent = 'Riprova'; return; }
       if (!r.ok) { alert(body.error || 'Errore durante il nuovo tentativo.'); btn.disabled = false; btn.textContent = 'Riprova'; return; }
       if (_ultimoEsito) {
-        _ultimoEsito[step] = body.esito;
-        renderRisultato(_ultimoEsito);
+        if (_ultimoEsito.tipo === 'emissione') {
+          _ultimoEsito.dati[step] = body.esito;
+        } else {
+          _ultimoEsito.dati.completamento[step === 'email_completamento' ? 'email' : step] = body.esito;
+        }
+        renderRisultato();
       }
     } catch {
       alert('Errore di rete.');
@@ -1885,7 +2075,7 @@
   };
 
   /* ══════════════════════════════════════════════════
-     Destinazioni — siti coinvolti per tutti i documenti UT
+     Destinazioni — siti coinvolti per tutti i documenti UT, QC e WE
   ══════════════════════════════════════════════════ */
   let _docsDest = [];
   let _visibiliDest = [];
@@ -1910,7 +2100,7 @@
   }
 
   function renderDestTbl(docs) {
-    if (!_docsDest.length) { emptyDestTbl('Nessun documento UT per questa commessa.'); return; }
+    if (!_docsDest.length) { emptyDestTbl('Nessun documento UT, QC o WE per questa commessa.'); return; }
     if (!docs.length) { emptyDestTbl('Nessun documento corrisponde al filtro.'); return; }
     document.getElementById('dest-tbody').innerHTML = docs.map(function (d) {
       var checked = _selezionatiDest.has(d.id);

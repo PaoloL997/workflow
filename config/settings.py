@@ -245,6 +245,12 @@ TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
     "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", ""
 )
 
+# Indirizzo pubblico dell'app (es. http://workflow.brembanarolle.local:8000),
+# usato per i link nelle email: l'email di emissione del trasmittal interno
+# porta alla pagina della lettera. Se vuoto vale l'indirizzo con cui chi emette
+# ha aperto l'app, che può essere un IP interno diverso da quello degli altri.
+WORKFLOW_BASE_URL = os.environ.get("WORKFLOW_BASE_URL", "").strip().rstrip("/")
+
 # Destinatari delle richieste di eliminazione commessa (chi non è admin non
 # elimina: chiede). Lista separata da virgole nel .env, come gli altri indirizzi.
 COMMESSA_DELETE_REQUEST_RECIPIENTS = env_list(

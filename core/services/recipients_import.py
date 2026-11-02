@@ -27,7 +27,7 @@ import re
 
 from ..models import DestinazioneDocumento, Testata
 from .fileserver import get_base_path
-from .trasmittal_interno import documenti_ut, imposta_destinazioni
+from .trasmittal_interno import documenti_trasmittal, imposta_destinazioni
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def importa_destinazioni_commessa(testata, dry_run: bool = False) -> dict:
     if dati is None:
         return report
 
-    documenti = {d.vendor_doc: d for d in documenti_ut(testata)}
+    documenti = {d.vendor_doc: d for d in documenti_trasmittal(testata)}
     documenti_gia_impostati = set(
         DestinazioneDocumento.objects.filter(documento__in=documenti.values())
         .values_list("documento__vendor_doc", flat=True)

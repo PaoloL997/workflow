@@ -111,7 +111,6 @@ from .services.import_old import importa_commessa_da_access
 from .services.manuale import leggi_manuale
 from .services.media import (
     ERRORI_STORAGE,
-    StorageNonDisponibile,
     elimina_file,
     risposta_immagine,
 )
@@ -143,24 +142,27 @@ from .services.segnalazioni import (
 from .services.situazione_cella_vendor import colori_cella_vendor
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 from .services.trasmittal_interno import (
+    PASSI_LETTERA,
+    STATO_COMPLETATO,
     TrasmittalInternoAnnullaError,
+    TrasmittalInternoNonCompletatoError,
+    TrasmittalInternoPresaVisioneError,
     annulla_trasmittal_interno,
     anteprima_pdf_bytes,
     anteprima_trasmittal,
-    elenco_destinazioni_ut,
-    elenco_selezione_ut,
+    elenco_destinazioni,
+    elenco_selezione,
     elenco_trasmittal_interni,
     emetti_trasmittal_interno,
     imposta_destinazione_stabilimento_bulk,
-    imposta_destinazioni_ut,
+    imposta_destinazioni_commessa,
     indirizzi_email_noti,
     indirizzi_per_siti,
-    invia_email_trasmittal,
-    mittente_trasmittal,
     percorso_pdf_lettera,
-    prepara_per_dcc,
-    salva_pdf,
+    registra_presa_visione,
+    riprova_passo,
     stabilimenti_costruttivi,
+    stato_prese_visione,
 )
 from .services.ultima_revisione import ultima_revisione
 
@@ -1197,7 +1199,7 @@ def trasmittal_interno_destinazioni_api(request, job, testata):
     return JsonResponse(
         {
             "stabilimenti": _stabilimenti_costruttivi_payload(),
-            "documenti": elenco_destinazioni_ut(testata),
+            "documenti": elenco_destinazioni(testata),
         }
     )
 
@@ -1214,7 +1216,7 @@ def documento_destinazioni_api(request, job, pk, testata):
     if not isinstance(codici_bc, list) or not all(isinstance(c, int) for c in codici_bc):
         return JsonResponse({"error": "codici_bc deve essere una lista di interi."}, status=400)
     try:
-        imposta_destinazioni_ut(testata, pk, codici_bc)
+        imposta_destinazioni_commessa(testata, pk, codici_bc)
     except Documento.DoesNotExist:
         return JsonResponse({"error": "Documento non trovato."}, status=404)
     return JsonResponse({"ok": True})
@@ -1274,7 +1276,7 @@ def trasmittal_interno_selezione_api(request, job, testata):
     return JsonResponse(
         {
             "stabilimenti": _stabilimenti_costruttivi_payload(),
-            "documenti": elenco_selezione_ut(testata),
+            "documenti": elenco_selezione(testata),
         }
     )
 
@@ -1316,11 +1318,18 @@ def trasmittal_interno_anteprima_pdf_api(request, job, testata):
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
-    except StorageNonDisponibile as exc:
-        return JsonResponse({"error": str(exc)}, status=503)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="anteprima_trasmittal_interno.pdf"'
     return response
+
+
+def _base_url(request):
+    """Indirizzo dell'app per i link nelle email, se ``WORKFLOW_BASE_URL`` non è impostato.
+
+    È l'host con cui chi fa la richiesta ha aperto l'app (vedi
+    ``core.services.trasmittal_interno.link_lettera``).
+    """
+    return request.build_absolute_uri("/")
 
 
 @api_login_required
@@ -1339,6 +1348,7 @@ def trasmittal_interno_emetti_api(request, job, testata):
             note=data.get("note", ""),
             destinatari=data.get("destinatari"),
             messaggio=data.get("messaggio", ""),
+            base_url=_base_url(request),
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
@@ -1349,16 +1359,46 @@ def trasmittal_interno_emetti_api(request, job, testata):
 @require_http_methods(["GET"])
 @con_commessa
 def trasmittal_interno_lettere_api(request, job, testata):
-    return JsonResponse({"lettere": elenco_trasmittal_interni(testata)})
+    """Lettere emesse, con lo stato delle prese visione e cosa può fare chi chiede."""
+    utente = None if is_service_user(request.user) else request.user
+    return JsonResponse({"lettere": elenco_trasmittal_interni(testata, utente)})
+
+
+def _lettera_della_commessa(job, trasmittal_id):
+    """La lettera ``trasmittal_id`` della commessa ``job``, con testata e chi l'ha emessa.
+
+    Raises:
+        TransmittalInterno.DoesNotExist: nessuna lettera con questo id per questa commessa.
+    """
+    return TransmittalInterno.objects.select_related("testata", "creato_da").get(
+        pk=trasmittal_id, testata__job=job
+    )
 
 
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
+    """Il PDF definitivo della lettera, sul fileserver: c'è solo a lettera completata.
+
+    Finché manca la presa visione di QC o di PROD risponde 409 con il ruolo
+    mancante: il PDF del momento si apre con ``trasmittal_interno_lettera_pdf_api``.
+    """
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404 from None
+    stato = stato_prese_visione(trasmittal.prese_visione.select_related("utente"))
+    if stato["stato"] != STATO_COMPLETATO:
+        return JsonResponse(
+            {
+                "error": "Il PDF definitivo si salva dopo la presa visione di QC e PROD. "
+                f"Manca: {', '.join(stato['ruoli_mancanti'])}.",
+                **stato,
+            },
+            status=409,
+        )
     try:
         file_path = percorso_pdf_lettera(job, trasmittal_id)
-    except TransmittalInterno.DoesNotExist:
-        raise Http404
     except PermissionError:
         return HttpResponseForbidden("Percorso non autorizzato.")
     if not file_path.is_file():
@@ -1369,6 +1409,56 @@ def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
         as_attachment=False,
         filename=file_path.name,
     )
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
+    """PDF di una lettera emessa, generato al momento: sempre disponibile, per stampa e anteprima.
+
+    Il blocco PAPER COPIES DISTRIBUTION riporta le prese visione registrate
+    finora (vuoto o parziale finché la lettera non è completata). Non scrive
+    niente sul fileserver.
+    """
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404 from None
+    from src.pdf import genera_trasmittal_interno_pdf
+
+    response = HttpResponse(
+        genera_trasmittal_interno_pdf(trasmittal), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = f'inline; filename="{trasmittal.nome}.pdf"'
+    return response
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def trasmittal_interno_presa_visione_api(request, job, trasmittal_id):
+    """Registra la presa visione QC o PROD dell'utente loggato su una lettera.
+
+    Non serve il permesso di scrittura del trasmittal interno: può prendere
+    visione chi è firmatario QC o PROD di un sito della lettera (vedi
+    ``registra_presa_visione``). Il ruolo si deduce; ``{"ruolo": "qualita"}``
+    o ``"produzione"`` serve solo a chi è firmatario di entrambi. Se la presa
+    visione completa la lettera, la risposta riporta in ``completamento``
+    l'esito di PDF, cartella DCC ed email di completamento.
+    """
+    if is_service_user(request.user):
+        return JsonResponse({"error": "Permesso negato."}, status=403)
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    data = _json_body(request, vuoto={})
+    if data is None:
+        return _errore("JSON non valido.")
+    try:
+        risultato = registra_presa_visione(trasmittal, request.user, ruolo=data.get("ruolo"))
+    except TrasmittalInternoPresaVisioneError as exc:
+        return JsonResponse({"error": str(exc)}, status=exc.status)
+    return JsonResponse({"ok": True, **risultato})
 
 
 @api_login_required
@@ -1393,20 +1483,15 @@ def trasmittal_interno_annulla_api(request, job, trasmittal_id):
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
-    """Riprova un solo passo (pdf/dcc/email) di una lettera già creata.
+    """Riprova un solo passo di una lettera già creata (vedi ``riprova_passo``).
 
-    Stessa logica di orchestrazione per-passo già usata dentro
-    ``emetti_trasmittal_interno`` — qui applicata a un singolo passo, sulle
-    stesse funzioni di servizio pubbliche, nessuna logica nuova nei servizi.
-
-    Il passo "email" riparte a nome di chi ha emesso la lettera, non di chi
-    preme Riprova (vedi ``invia_email_trasmittal``): da qui ``creato_da`` è
-    precaricato insieme alla testata.
+    ``email`` è l'email di emissione; ``pdf``, ``dcc`` ed
+    ``email_completamento`` sono i passi che seguono le due prese visione e
+    rispondono 409 finché ne manca una. Le email ripartono a nome di chi ha
+    emesso la lettera, non di chi preme Riprova.
     """
     try:
-        trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
-            pk=trasmittal_id, testata__job=job
-        )
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
     except TransmittalInterno.DoesNotExist:
         return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
     data = _json_body(request)
@@ -1414,47 +1499,14 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
         return _errore("JSON non valido.")
 
     step = data.get("step")
-    if step not in ("pdf", "dcc", "email"):
-        return JsonResponse({"error": 'step deve essere "pdf", "dcc" o "email".'}, status=400)
-
-    if step == "pdf":
-        try:
-            percorso = salva_pdf(trasmittal)
-            esito = {"ok": True, "errore": None, "percorso": str(percorso)}
-        except Exception as exc:
-            logger.exception(
-                'Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome
-            )
-            esito = {"ok": False, "errore": str(exc), "percorso": None}
-    elif step == "dcc":
-        try:
-            esito_dcc = prepara_per_dcc(trasmittal)
-            esito = {"ok": True, "errore": None, **esito_dcc}
-        except Exception as exc:
-            logger.exception(
-                'Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome
-            )
-            esito = {
-                "ok": False,
-                "errore": str(exc),
-                "cartella": None,
-                "copiati": [],
-                "mancanti": [],
-            }
-    else:
-        try:
-            esito_email = invia_email_trasmittal(trasmittal)
-            esito = {"ok": True, "errore": None, **esito_email}
-        except Exception as exc:
-            logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
-            esito = {
-                "ok": False,
-                "errore": str(exc),
-                "to": [],
-                "cc": [],
-                "mittente": mittente_trasmittal(trasmittal.creato_da),
-            }
-
+    if step not in PASSI_LETTERA:
+        return JsonResponse(
+            {"error": f"step deve essere uno fra {', '.join(PASSI_LETTERA)}."}, status=400
+        )
+    try:
+        esito = riprova_passo(trasmittal, step, base_url=_base_url(request))
+    except TrasmittalInternoNonCompletatoError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
     return JsonResponse({"ok": True, "step": step, "esito": esito})
 
 

@@ -8,12 +8,12 @@ from datetime import date, datetime
 from pathlib import Path
 
 from django.db.models import Prefetch
+from django.utils import timezone
 from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
 from core.date_fmt import format_display_date
-from core.models import FirmatarioStabilimento, RuoloFirmatarioStabilimento, Stabilimento
-from core.services.media import leggi_bytes
+from core.models import RuoloFirmatarioStabilimento, Stabilimento
 from core.services.revisione_label import format_revisione_label
 from core.services.situazione_cella_vendor import colore_cella_vendor
 from core.services.stato_esterno_colori import FALLBACK_BG, cell_colors, hex_to_rgb
@@ -650,15 +650,11 @@ _INT_LOGO_ASPECT = 544 / 1920  # altezza/larghezza del file trasmittal_logo.JPG
 # dal codice sito né dall'ordine alfabetico, replica il vecchio modulo Excel.
 _INT_LEGENDA_ORDINE_SIGLE = ("BG", "CR", "PD", "VI", "VE")
 
-_INT_SIGNATURE_W = 34
-_INT_SIGNATURE_H = 15
-_INT_SIGNATURE_GAP = 4
-
-# Distribuzione copie cartacee: etichetta ruolo | firme | data.
+# Distribuzione copie cartacee: etichetta ruolo | chi ha preso visione | quando.
 _INT_DIST_LABEL_W = 50.0
 _INT_DIST_SIGN_W = 95.0
 _INT_DIST_DATE_W = 35.0
-_INT_DIST_ROW_H = max(_INT_SIGNATURE_H + 8.0, 20.0)
+_INT_DIST_ROW_H = 12.0
 
 # Riga finale di riferimenti del modulo: testo fisso, descrive il modulo
 # stesso (form/revisione), non la singola lettera.
@@ -768,15 +764,6 @@ def _build_trasmittal_interno_table(pdf, righe):
                 row.cell(text, style=style)
 
 
-def _siti_snapshot_lettera(trasmittal):
-    """Siti coinvolti nella lettera: unione degli snapshot delle sue righe."""
-    return list(
-        Stabilimento.objects.filter(righe_trasmittal_interno__trasmittal=trasmittal)
-        .distinct()
-        .order_by("codice_bc")
-    )
-
-
 def _build_grey_bar(pdf, testo):
     """Barra grigia a tutta larghezza con il titolo di una sezione del modulo."""
     pdf.set_fill_color(*_INT_HEADER_FILL)
@@ -824,11 +811,20 @@ def _build_remarks_legenda(pdf):
     pdf.set_xy(x0, y0 + h_box)
 
 
+def _righe_note_libere(note):
+    """Le tre righe libere della lettera: le prime tre righe di ``note``, completate a tre.
+
+    Le usano il riquadro NOTES del PDF e quello dell'email di emissione
+    (``core.services.trasmittal_interno``): devono mostrare le stesse righe.
+    """
+    return ((note or "").split("\n") + ["", "", ""])[:3]
+
+
 def _build_note_libere(pdf, note):
     """'NOTES' section: barra grigia + le tre righe libere della lettera, numerate."""
     _build_grey_bar(pdf, "NOTES")
     x0, y0 = pdf.l_margin, pdf.get_y()
-    righe = ((note or "").split("\n") + ["", "", ""])[:3]
+    righe = _righe_note_libere(note)
     h_riga = 6.0
     h_box = h_riga * len(righe) + 3
     pdf.rect(x0, y0, _INT_TABLE_WIDTH_MM, h_box)
@@ -839,54 +835,18 @@ def _build_note_libere(pdf, note):
     pdf.set_xy(x0, y0 + h_box)
 
 
-def _leggi_firma_bytes(utente):
-    """Signature image bytes for ``utente``, or None if there is none.
+def _build_distribuzione_copie(pdf, prese_visione):
+    """'PAPER COPIES DISTRIBUTION' section: ruolo | chi ha preso visione | quando.
 
-    A missing file leaves the signature box empty; an unreachable storage
-    raises ``StorageNonDisponibile``, so the letter is not issued silently
-    without signatures (the PDF step fails and can be retried).
-    """
-    return leggi_bytes(utente.firma)
+    Per PRODUCTION e QUALITY la colonna SIGNATURE riporta il nome completo di
+    chi ha registrato la presa visione di quel ruolo e la colonna DATE la sua
+    data e ora. Nessuna immagine di firma: la presa visione è il clic
+    dell'utente autenticato. Senza presa visione per un ruolo la riga resta
+    vuota, come nell'anteprima e in una lettera ancora in attesa o parziale.
 
-
-def _firmatari_per_ruolo(siti, ruolo):
-    """FirmatarioStabilimento di un ruolo sui siti dati, deduplicati per utente.
-
-    Lo stesso utente può firmare per più stabilimenti (siti diversi possono
-    condividere i firmatari): deve comparire una volta sola.
-    """
-    firmatari = (
-        FirmatarioStabilimento.objects.filter(stabilimento__in=siti, ruolo=ruolo)
-        .select_related("utente")
-        .order_by("utente_id")
-    )
-    visti = set()
-    dedup = []
-    for firmatario in firmatari:
-        if firmatario.utente_id in visti:
-            continue
-        visti.add(firmatario.utente_id)
-        dedup.append(firmatario)
-    return dedup
-
-
-def _draw_signature_slot(pdf, x, y, utente):
-    """One signature box: the user's firma image, or an empty box to sign by hand."""
-    immagine = _leggi_firma_bytes(utente)
-    if immagine:
-        pdf.image(immagine, x=x, y=y, w=_INT_SIGNATURE_W, h=_INT_SIGNATURE_H)
-    else:
-        pdf.rect(x, y, _INT_SIGNATURE_W, _INT_SIGNATURE_H)
-
-
-def _build_distribuzione_copie(pdf, siti, data_distribuzione):
-    """'PAPER COPIES DISTRIBUTION' section: etichetta ruolo | firme | data, per riga.
-
-    ``data_distribuzione`` è il termine entro cui la distribuzione delle
-    copie cartacee va completata (vedi
-    ``core.services.trasmittal_interno.data_impegno``: il giorno lavorativo
-    successivo all'emissione, lunedì se si emette di venerdì) — non la data
-    di emissione della lettera, né quella in cui viene firmata.
+    Args:
+        prese_visione: dict ``{RuoloFirmatarioStabilimento: PresaVisioneTransmittalInterno}``
+            con ``utente`` già caricato; i ruoli mancanti restano vuoti.
     """
     family = pdf._font_family
     x0, y0 = pdf.l_margin, pdf.get_y()
@@ -900,31 +860,28 @@ def _build_distribuzione_copie(pdf, siti, data_distribuzione):
     pdf.cell(w_date, 6, "DATE", border=1, fill=True, align="C")
     y = y0 + 6
 
-    data_str = data_distribuzione.strftime("%d/%m/%Y") if data_distribuzione else ""
-
     for label, ruolo in (
         ("PRODUCTION:", RuoloFirmatarioStabilimento.PRODUZIONE),
         ("QUALITY:", RuoloFirmatarioStabilimento.QUALITA),
     ):
-        firmatari = _firmatari_per_ruolo(siti, ruolo)
         h_row = _INT_DIST_ROW_H
+        y_testo = y + h_row / 2 - 3
 
         pdf.rect(x0, y, w_lbl, h_row)
-        pdf.set_xy(x0 + 2, y + h_row / 2 - 3)
+        pdf.set_xy(x0 + 2, y_testo)
         pdf.set_font(family, "B", 9)
         pdf.cell(w_lbl - 4, 6, label)
 
         pdf.rect(x0 + w_lbl, y, w_sign, h_row)
-        x_sign = x0 + w_lbl + 3
-        y_sign = y + (h_row - _INT_SIGNATURE_H) / 2
-        for firmatario in firmatari:
-            _draw_signature_slot(pdf, x_sign, y_sign, firmatario.utente)
-            x_sign += _INT_SIGNATURE_W + _INT_SIGNATURE_GAP
-
         pdf.rect(x0 + w_lbl + w_sign, y, w_date, h_row)
-        pdf.set_xy(x0 + w_lbl + w_sign, y + h_row / 2 - 3)
-        pdf.set_font(family, "", 9)
-        pdf.cell(w_date, 6, data_str, align="C")
+        presa = prese_visione.get(ruolo)
+        if presa is not None:
+            pdf.set_font(family, "", 9)
+            pdf.set_xy(x0 + w_lbl + 3, y_testo)
+            pdf.cell(w_sign - 6, 6, presa.utente.nome_completo)
+            pdf.set_xy(x0 + w_lbl + w_sign, y_testo)
+            quando = timezone.localtime(presa.registrata_il).strftime("%d/%m/%Y %H:%M")
+            pdf.cell(w_date, 6, quando, align="C")
 
         y += h_row
 
@@ -946,18 +903,22 @@ def genera_trasmittal_interno_pdf(trasmittal):
         trasmittal: a ``TransmittalInterno`` instance with its righe already
             created (see ``core.services.trasmittal_interno.crea_trasmittal_interno``).
 
+    The PAPER COPIES DISTRIBUTION block shows the presa visione registered
+    so far for each role, empty where it is missing: the preview and a letter
+    still waiting print fine.
+
     Returns:
         bytes — the PDF content.
     """
-    from core.services.trasmittal_interno import data_impegno
-
     testata = trasmittal.testata
     righe = list(
         trasmittal.righe.select_related("documento")
         .prefetch_related(Prefetch("siti", queryset=Stabilimento.objects.order_by("codice_bc")))
         .order_by("posizione")
     )
-    siti = _siti_snapshot_lettera(trasmittal)
+    prese_visione = {
+        presa.ruolo: presa for presa in trasmittal.prese_visione.select_related("utente")
+    }
 
     pdf = TrasmittalInternoPDF()
     pdf.add_page()
@@ -970,7 +931,7 @@ def genera_trasmittal_interno_pdf(trasmittal):
     pdf.ln(3)
     _build_note_libere(pdf, trasmittal.note)
     pdf.ln(3)
-    _build_distribuzione_copie(pdf, siti, data_impegno(trasmittal.data))
+    _build_distribuzione_copie(pdf, prese_visione)
     pdf.ln(3)
     _build_footer_riferimenti(pdf)
 
