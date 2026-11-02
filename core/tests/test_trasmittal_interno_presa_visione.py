@@ -635,7 +635,7 @@ class BloccoDistribuzionePdfTests(_LetteraTestCase):
     def test_vuoto_senza_prese_visione(self):
         self.assertEqual(
             self._testi(),
-            ["PAPER COPIES DISTRIBUTION", "SIGNATURE", "DATE", "PRODUCTION:", "QUALITY:"],
+            ["PAPER COPIES DISTRIBUTION", "ACKNOWLEDGED BY", "DATE", "PRODUCTION:", "QUALITY:"],
         )
 
     def test_parziale_con_la_sola_qualita(self):

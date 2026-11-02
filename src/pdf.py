@@ -838,7 +838,7 @@ def _build_note_libere(pdf, note):
 def _build_distribuzione_copie(pdf, prese_visione):
     """'PAPER COPIES DISTRIBUTION' section: ruolo | chi ha preso visione | quando.
 
-    Per PRODUCTION e QUALITY la colonna SIGNATURE riporta il nome completo di
+    Per PRODUCTION e QUALITY la colonna ACKNOWLEDGED BY riporta il nome completo di
     chi ha registrato la presa visione di quel ruolo e la colonna DATE la sua
     data e ora. Nessuna immagine di firma: la presa visione è il clic
     dell'utente autenticato. Senza presa visione per un ruolo la riga resta
@@ -856,7 +856,7 @@ def _build_distribuzione_copie(pdf, prese_visione):
     pdf.set_font(family, "B", 8)
     pdf.set_xy(x0, y0)
     pdf.cell(w_lbl, 6, "PAPER COPIES DISTRIBUTION", border=1, fill=True, align="C")
-    pdf.cell(w_sign, 6, "SIGNATURE", border=1, fill=True, align="C")
+    pdf.cell(w_sign, 6, "ACKNOWLEDGED BY", border=1, fill=True, align="C")
     pdf.cell(w_date, 6, "DATE", border=1, fill=True, align="C")
     y = y0 + 6
 
