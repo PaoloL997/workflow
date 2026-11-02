@@ -59,6 +59,11 @@ urlpatterns = [
         views.trasmittal_interno_detail_view,
         name="trasmittal_interno_detail",
     ),
+    path(
+        "commesse/<str:job>/trasmittal-interno/lettere/<int:trasmittal_id>/pdf/",
+        views.trasmittal_interno_lettera_pdf_view,
+        name="trasmittal_interno_lettera_pdf",
+    ),
     path("scarica/", views.scarica_view, name="scarica"),
     # API — Token per servizi esterni (emissione e revoca, solo con la sessione)
     path("api/agent/token/", views.agent_token_api, name="agent_token_api"),

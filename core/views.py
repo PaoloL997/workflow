@@ -14,6 +14,7 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_exempt
@@ -1422,6 +1423,36 @@ def _lettera_della_commessa(job, trasmittal_id):
     )
 
 
+@login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettera_pdf_view(request, job, trasmittal_id):
+    """Il PDF definitivo della lettera, aperto dal link dell'email di completamento.
+
+    Pagina e non API: chi non ha fatto l'accesso passa dal login e torna qui.
+    Se il PDF definitivo non c'è (lettera non completata, o file tolto dal
+    fileserver) rimanda alla lettera nell'elenco, dove l'Anteprima c'è sempre.
+    """
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404 from None
+    try:
+        file_path = percorso_pdf_lettera(job, trasmittal_id)
+    except PermissionError:
+        return HttpResponseForbidden("Percorso non autorizzato.")
+    stato = stato_prese_visione(trasmittal.prese_visione.select_related("utente"))
+    if stato["stato"] != STATO_COMPLETATO or not file_path.is_file():
+        return redirect(
+            f"{reverse('trasmittal_interno_detail', args=[job])}?lettera={trasmittal.pk}"
+        )
+    return FileResponse(
+        open(file_path, "rb"),
+        content_type="application/pdf",
+        as_attachment=False,
+        filename=file_path.name,
+    )
+
+
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
@@ -1480,7 +1511,9 @@ def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
         raise Http404 from None
     if request.GET.get("presa_visione") == "1" and not is_service_user(request.user):
         try:
-            registra_presa_visione(trasmittal, request.user, completa_in_background=True)
+            registra_presa_visione(
+                trasmittal, request.user, completa_in_background=True, base_url=_base_url(request)
+            )
         except TrasmittalInternoPresaVisioneError:
             pass  # non firmatario o già registrata: l'anteprima si apre comunque
     from src.pdf import genera_trasmittal_interno_pdf
@@ -1517,7 +1550,9 @@ def trasmittal_interno_presa_visione_api(request, job, trasmittal_id):
     if data is None:
         return _errore("JSON non valido.")
     try:
-        risultato = registra_presa_visione(trasmittal, request.user, ruolo=data.get("ruolo"))
+        risultato = registra_presa_visione(
+            trasmittal, request.user, ruolo=data.get("ruolo"), base_url=_base_url(request)
+        )
     except TrasmittalInternoPresaVisioneError as exc:
         return JsonResponse({"error": str(exc)}, status=exc.status)
     return JsonResponse({"ok": True, **risultato})
