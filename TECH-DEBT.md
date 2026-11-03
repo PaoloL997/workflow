@@ -18,9 +18,6 @@
 - core/templates/core/archivio_detail.html (modale indirizzo): su un errore di validazione del server (es. campo oltre la lunghezza massima) il modale resta aperto senza nessun messaggio, perché la risposta non 403 viene ignorata. Mostrare l'errore nel footer del modale.
 
 - core/templates/core/base.html `MONTHS_SHORT` (riga ~535): le date delle schermate usano le abbreviazioni inglesi dei mesi (`10 jan 2026`) in un'interfaccia tutta in italiano; la stessa lista è usata dal campo «Return date» della ricezione, dalle notifiche e dal forum. Scegliere le abbreviazioni italiane (o un formato numerico) e aggiornare i parser che le rileggono.
-
-- core/services/commesse.py `risolvi_file_revisione` (docstring, riga ~951) e core/templates/core/documenti_list.html `apriFile` (commento, riga ~1579): il docstring dice che il nome file «must start with» il B&R Doc ma il codice cerca la sottostringa; il commento JS dice che PDF e altri formati sono «served as attachments» ma `revisione_file_serve` li serve inline (`as_attachment=False`, il PDF si apre nel browser). Allineare i commenti al comportamento reale.
-
 - core/views.py `import_documenti_excel`: le righe importate non passano da `full_clean`, quindi un valore oltre la lunghezza massima del campo produce un errore generico del database («Riga N: …») invece del messaggio di validazione del modello. Validare ogni documento prima del salvataggio e riportare il messaggio di campo nell'avviso di riga.
 
 - core/templates/core/documenti_list.html e situazione_detail.html (browser file «Collega un file alla revisione»): se la cartella della commessa non esiste sul fileserver, la lista mostra solo «Cartella non trovata» senza la voce «↑ Su», quindi non si può risalire a JOBS per cercare altrove. Mostrare «↑ Su» anche in caso di errore o partire da JOBS quando la cartella commessa manca.

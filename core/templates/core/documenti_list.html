@@ -1576,9 +1576,9 @@
    * Opens a file using the native application on the user's PC.
    * Word/Excel use the Office URI scheme (ms-word:/ms-excel:) so they open
    * directly in the app without a download step.
-   * All other formats (PDF, DWG, …) are served as attachments: the browser
-   * downloads the file and shows a notification — the user clicks "Apri file"
-   * to open it in the default app (Acrobat, AutoCAD, ecc.).
+   * All other formats (PDF, DWG, …) go through the Django serve endpoint,
+   * which responds inline (not as an attachment): the browser shows PDFs in
+   * a new tab, while types it cannot display (e.g. DWG) are downloaded.
    * _currentRevId must be set before calling this function.
    */
   function apriFile(file) {
@@ -1597,8 +1597,8 @@
     }
 
     // All other formats (PDF, DWG, …): trigger download via Django serve endpoint.
-    // Django serves the file as attachment; the browser downloads it and shows
-    // "Apri file" in the notification bar so the user can open it natively.
+    // Django serves the file inline (as_attachment=False): the browser opens
+    // PDFs in the new tab and downloads types it cannot display.
     var serveUrl = '/api/revisioni/' + _currentRevId + '/file/serve/?percorso=' + encodeURIComponent(file.percorso);
     var a = document.createElement('a');
     a.href = serveUrl;
