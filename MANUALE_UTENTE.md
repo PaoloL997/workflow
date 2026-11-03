@@ -882,6 +882,7 @@ Ogni lettera passa da due momenti:
 | Flag **Può scrivere sul trasmittal interno** sul tuo utente | Lo assegna un amministratore. È indipendente dal permesso generale di scrittura (vedi **1.2 Permessi degli utenti**): chi non lo ha vede storico, Destinazioni e Nuova lettera ma non può modificare destinazioni, emettere, annullare o ritentare un passo. Non serve per la presa visione |
 | **Stabilimenti** con sigla, codice sito Business Central e indirizzi email | Sono configurati da un amministratore: per ogni sito gli indirizzi **A (TO)** / **CC**. Se un sito non compare tra i siti coinvolti o manca un indirizzo, chiedi a un amministratore |
 | **Persone commessa** (PM, PE, QCI) | Si inseriscono alla creazione della commessa (vedi **4.3 Creare una nuova commessa**) e chi ha il permesso Scrittura le modifica dall'intestazione della commessa (vedi **5.1 Intestazione**). Servono per i destinatari automatici dell'email: se mancano, il pannello *A chi va* lo segnala |
+| **Indirizzi per tipo documento** | Un amministratore registra gli indirizzi che entrano nella lettera quando contiene un documento di un certo tipo (es. `export@brembanarolle.com` in CC per EBM, EGA ed ESH), validi per tutte le commesse. Se per un tipo manca un indirizzo, chiedi a un amministratore |
 | **Firmatari stabilimento** | Chi può prendere visione per Qualità e per Produzione di ogni sito è registrato da un amministratore, anche più persone per ruolo e sito (vedi **12.8 Presa visione QC e PROD**) |
 
 ### 12.2 La schermata
@@ -957,7 +958,7 @@ Il pannello **A chi va** riepiloga cosa succederà: nome previsto della lettera,
 | **Stabilimenti** | Indirizzi A/CC dei siti coinvolti (tra parentesi la sigla del sito) | TO o CC come da anagrafica |
 | **PM** | Project manager della commessa | TO |
 | **PE** / **QCI** | Project engineer e ispettore qualità della commessa | CC |
-| **Export** | `export@brembanarolle.com`, solo se nella lettera c'è almeno un documento SHn (B&R Doc del tipo `xxxxx-xx-ESH…`) | CC |
+| **Tipo documento** | Indirizzi previsti per i tipi dei documenti della lettera, in tutte le commesse. Il tipo sono le lettere del B&R Doc dopo il secondo trattino (`EBM` in `26026-01-EBM1`); tra parentesi i tipi che hanno portato l'indirizzo, es. `export@brembanarolle.com (EBM, ESH)` per i documenti EBM, EGA ed ESH | TO o CC come configurato |
 | **Manuale** | Indirizzi aggiunti a mano | dove sono inseriti |
 
 Se sulla commessa manca una persona per un ruolo (PM, PE o QCI), un avviso lo segnala (*"Ruoli non valorizzati sulla commessa: PM, PE — nessun destinatario verrà aggiunto per questi ruoli."*). Il ruolo WE non ha una lista di distribuzione e non genera destinatari. Un indirizzo presente sia in A sia in CC viene tenuto solo in A. L'email di completamento invece va solo a chi ha emesso la lettera (vedi **12.8 Presa visione QC e PROD**).

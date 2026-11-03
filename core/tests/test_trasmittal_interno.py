@@ -9,7 +9,7 @@ from django.contrib import admin
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.test import Client, RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
 from ..models import (
@@ -17,6 +17,7 @@ from ..models import (
     Documento,
     FirmatarioStabilimento,
     IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
     OrigineDestinatarioTransmittalInterno,
     Permesso,
     PersonaCommessa,
@@ -35,15 +36,18 @@ from ..models import (
 )
 from ..services.fileserver import get_base_path
 from ..services.trasmittal_interno import (
+    anteprima_destinatari,
     componi_nome,
     crea_trasmittal_interno,
     imposta_destinazioni,
+    indirizzi_per_tipi_documento,
     invia_email_emissione,
     mittente_trasmittal,
     prepara_per_dcc,
     prossimo_progressivo,
     registra_presa_visione,
     salva_pdf,
+    tipo_documento,
 )
 
 # ── Shared fixture factory (unit tests only — uses temp dir) ──────────────────
@@ -256,7 +260,7 @@ class RigaTransmittalInternoTpiTests(TestCase):
 
 
 class DestinatariTrasmittalInternoRuoliTests(TestCase):
-    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per documenti SHn."""
+    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per i documenti ESH."""
 
     def setUp(self):
         self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
@@ -308,20 +312,21 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
             {("bg@b.it", "to", "stabilimento")},
         )
 
-    def test_documento_shn_aggiunge_export_in_cc(self):
-        doc_shn = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
-        imposta_destinazioni(doc_shn, [1])
+    def test_documento_esh_aggiunge_export_in_cc(self):
+        # Regola iniziale della migrazione 0065, senza crearla qui.
+        doc_esh = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
+        imposta_destinazioni(doc_esh, [1])
 
         trasmittal = crea_trasmittal_interno(
-            self.testata, self._righe(self.doc, doc_shn), self.utente
+            self.testata, self._righe(self.doc, doc_esh), self.utente
         )
 
         self.assertIn(
-            ("export@brembanarolle.com", "cc", "export"),
+            ("export@brembanarolle.com", "cc", "tipo_documento"),
             set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
         )
 
-    def test_documento_non_shn_non_aggiunge_export(self):
+    def test_documento_senza_regola_non_aggiunge_export(self):
         trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
 
         self.assertNotIn(
@@ -378,6 +383,131 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
         self.assertIn(("qualita@b.it", "cc", "stabilimento"), destinatari)
         self.assertNotIn("disattivato@b.it", email_presenti)
         self.assertNotIn("altro_sito@b.it", email_presenti)
+
+
+class TipoDocumentoTests(SimpleTestCase):
+    """tipo_documento: le lettere del B&R Doc dopo il secondo trattino."""
+
+    def test_codici(self):
+        casi = {
+            "26026-01-EBM1": "EBM",
+            "26026-01-esh10": "ESH",
+            "26026-03-ED02": "ED",
+            "26026-04-QCPA": "QCPA",
+            " 26026-01-EGA1 ": "EGA",
+            "26026-QWR1": "",
+            "26026-01-123": "",
+            "": "",
+            None: "",
+        }
+        for vendor_doc, atteso in casi.items():
+            with self.subTest(vendor_doc=vendor_doc):
+                self.assertEqual(tipo_documento(vendor_doc), atteso)
+
+
+class IndirizziTipoDocumentoTests(TestCase):
+    """Indirizzi del trasmittal interno per tipo di documento (``IndirizzoTipoDocumento``)."""
+
+    def setUp(self):
+        # Senza le regole iniziali della migrazione: ogni test crea le sue.
+        IndirizzoTipoDocumento.objects.all().delete()
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.testata = Testata.objects.create(job="99013")
+        self.utente = User.objects.create_user("tipo_doc_utente", password="pw")
+
+    def _documento(self, vendor_doc):
+        documento = Documento.objects.create(testata=self.testata, vendor_doc=vendor_doc)
+        imposta_destinazioni(documento, [1])
+        return documento
+
+    def _destinatari(self, *documenti):
+        righe = [{"documento": documento, "revisione": "1"} for documento in documenti]
+        trasmittal = crea_trasmittal_interno(self.testata, righe, self.utente)
+        return set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+
+    def _regola(self, codice, email, tipo=TipoDestinatarioTransmittalInterno.CC, attivo=True):
+        return IndirizzoTipoDocumento.objects.create(
+            codice_tipo=codice, email=email, tipo=tipo, attivo=attivo
+        )
+
+    def test_regola_attiva_aggiunge_l_indirizzo_col_suo_tipo(self):
+        self._regola("EBM", "qa@b.it", tipo=TipoDestinatarioTransmittalInterno.TO)
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertIn(("qa@b.it", "to", "tipo_documento"), destinatari)
+
+    def test_documento_di_altro_tipo_non_aggiunge_nulla(self):
+        self._regola("EBM", "qa@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EGA1"))
+
+        self.assertNotIn("qa@b.it", {email for email, _, _ in destinatari})
+
+    def test_il_confronto_sul_tipo_e_esatto(self):
+        self._regola("ED", "ed@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EDV1"))
+
+        self.assertNotIn("ed@b.it", {email for email, _, _ in destinatari})
+
+    def test_regola_disattivata_ignorata(self):
+        self._regola("EBM", "qa@b.it", attivo=False)
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertNotIn("qa@b.it", {email for email, _, _ in destinatari})
+
+    def test_un_indirizzo_per_piu_tipi_compare_una_volta_con_tutti_i_tipi(self):
+        for codice in ("EBM", "ESH", "EGA"):
+            self._regola(codice, "export@b.it")
+        documenti = [self._documento("99013-01-EBM1"), self._documento("99013-01-ESH1")]
+
+        self.assertEqual(
+            indirizzi_per_tipi_documento(documenti),
+            [{"email": "export@b.it", "tipo": "cc", "codici": ["EBM", "ESH"]}],
+        )
+        self.assertEqual(
+            [
+                voce
+                for voce in anteprima_destinatari(self.testata, documenti)
+                if voce["email"] == "export@b.it"
+            ],
+            [{"email": "export@b.it", "tipo": "cc", "origine": "tipo_documento"}],
+        )
+
+    def test_indirizzo_gia_di_stabilimento_resta_in_to(self):
+        self._regola("EBM", "bg@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertIn(("bg@b.it", "to", "stabilimento"), destinatari)
+        self.assertNotIn(("bg@b.it", "cc", "tipo_documento"), destinatari)
+
+    def test_codice_in_maiuscolo_e_validato(self):
+        regola = self._regola("ebm", "qa@b.it")
+        self.assertEqual(regola.codice_tipo, "EBM")
+
+        doppione = IndirizzoTipoDocumento(codice_tipo="Ebm", email="qa@b.it", tipo="cc")
+        with self.assertRaises(ValidationError):
+            doppione.full_clean()
+        with self.assertRaises(ValidationError):
+            IndirizzoTipoDocumento(codice_tipo="EB1", email="x@b.it", tipo="cc").full_clean()
+
+
+class RegoleExportInizialiTests(TestCase):
+    """La migrazione 0065 porta in tabella la regola export@, estesa a EBM ed EGA."""
+
+    def test_export_in_cc_per_ebm_ega_esh(self):
+        regole = IndirizzoTipoDocumento.objects.filter(email="export@brembanarolle.com")
+
+        self.assertEqual(
+            list(regole.values_list("codice_tipo", "tipo", "attivo")),
+            [("EBM", "cc", True), ("EGA", "cc", True), ("ESH", "cc", True)],
+        )
 
 
 class TrasmittalInternoPdfTests(TestCase):

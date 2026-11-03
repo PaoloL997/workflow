@@ -6,6 +6,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -851,6 +852,9 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
     PM = "pm", "PM"
     PE = "pe", "PE"
     QCI = "qci", "QCI"
+    TIPO_DOCUMENTO = "tipo_documento", "Tipo documento"
+    # export@ per i documenti ESH, solo nelle lettere emesse prima che
+    # diventasse un indirizzo per tipo documento (migrazione 0065).
     EXPORT = "export", "Export"
     # Indirizzi "sempre in copia" del sito, solo nelle lettere emesse prima
     # che diventassero indirizzi dello stabilimento (migrazione 0064).
@@ -863,8 +867,8 @@ class DestinatarioTransmittalInterno(models.Model):
 
     ``origine`` spiega perché quell'indirizzo è finito in lista: vedi
     ``core.services.trasmittal_interno.crea_trasmittal_interno`` per le
-    regole di indirizzamento (stabilimento, PM, PE, QCI, export@ per i
-    documenti SHn); ``MANUALE`` per un indirizzo aggiunto a mano in
+    regole di indirizzamento (stabilimento, PM, PE, QCI, indirizzi per tipo
+    documento); ``MANUALE`` per un indirizzo aggiunto a mano in
     anteprima (vedi ``core.services.trasmittal_interno.sostituisci_destinatari``).
     WE non ha un'origine dedicata: la sua lista di distribuzione non è
     ancora definita.
@@ -934,6 +938,52 @@ class PresaVisioneTransmittalInterno(models.Model):
 
     def __str__(self):
         return f"{self.trasmittal_id}: {self.ruolo} = {self.utente_id}"
+
+
+class IndirizzoTipoDocumento(models.Model):
+    """Indirizzo email del trasmittal interno per un tipo di documento, in ogni commessa.
+
+    Entra, se attivo, in ogni lettera con almeno un documento di quel tipo
+    (es. export@ in CC per EBM, EGA ed ESH). Il tipo sono le lettere del
+    B&R Doc dopo il secondo trattino: ``26026-01-EBM1`` → ``EBM``, vedi
+    ``core.services.trasmittal_interno.tipo_documento``. Il confronto è
+    esatto: una regola per ``ED`` non vale per ``EDV``.
+    """
+
+    codice_tipo = models.CharField(
+        max_length=10,
+        validators=[
+            RegexValidator(r"^[A-Za-z]+$", "Solo lettere, senza numeri né trattini (es. EBM).")
+        ],
+        help_text="Le lettere del B&R Doc dopo il secondo trattino: EBM per 26026-01-EBM1.",
+    )
+    email = models.EmailField()
+    tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
+    attivo = models.BooleanField(default=True)
+
+    class Meta:
+        managed = True
+        db_table = "indirizzi_tipo_documento"
+        verbose_name = "Indirizzo per tipo documento"
+        verbose_name_plural = "Indirizzi per tipo documento"
+        ordering = ["codice_tipo", "tipo", "email"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["codice_tipo", "email", "tipo"],
+                name="uniq_indirizzo_tipo_documento",
+            ),
+        ]
+
+    def clean(self):
+        # Prima del controllo di unicità: "ebm" e "EBM" sono la stessa regola.
+        self.codice_tipo = (self.codice_tipo or "").strip().upper()
+
+    def save(self, *args, **kwargs):
+        self.codice_tipo = (self.codice_tipo or "").strip().upper()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.codice_tipo}: {self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):

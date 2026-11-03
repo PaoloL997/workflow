@@ -24,6 +24,7 @@ from ..models import (
     Documento,
     FirmatarioStabilimento,
     IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
     PresaVisioneTransmittalInterno,
@@ -51,8 +52,6 @@ from .stato_interno import INVIATO, RICEVUTO, stato_interno_effettivo_da_revisio
 from .ultima_revisione import ORDINE_DECRESCENTE, ultima_revisione
 
 logger = logging.getLogger(__name__)
-
-EMAIL_EXPORT = "export@brembanarolle.com"
 
 
 class TrasmittalInternoAnnullaError(Exception):
@@ -82,18 +81,46 @@ class TrasmittalInternoNonCompletatoError(Exception):
 REPARTI_TRASMITTAL_INTERNO = ("UT", "QC", "WE")
 
 
-# Documenti SHn: nel vecchio strumento Excel riconosciuti dal pattern DOS
-# "?????-??-ESH*" sul nome file. `Documento` non ha un campo di tipo/categoria
-# dedicato (verificato: solo item_no, vendor_doc, client_doc_no,
-# contractor_doc_no, client_doc_class, doc_title, reparto, remarks), quindi il
-# pattern si applica a `vendor_doc`, l'unico campo che porta quell'identificativo
-# (es. "25056-01-ESH1"). "?" = un carattere qualsiasi, "*" = zero o più.
-_PATTERN_DOCUMENTO_SHN = re.compile(r"^.{5}-.{2}-ESH.*$", re.IGNORECASE)
+# Tipo del documento: le lettere del B&R Doc dopo il secondo trattino, come nel
+# pattern DOS "?????-??-ESH*" del vecchio strumento Excel. `Documento` non ha un
+# campo di tipo dedicato, quindi si legge da `vendor_doc` ("26026-01-EBM1" →
+# "EBM"). Un B&R Doc senza il secondo pezzo (es. "26026-QWR1") non ha tipo.
+_PATTERN_TIPO_DOCUMENTO = re.compile(r"^.{5}-.{2}-([A-Za-z]+)")
 
 
-def _e_documento_shn(documento):
-    """True se ``documento.vendor_doc`` corrisponde al pattern dei documenti SHn."""
-    return bool(_PATTERN_DOCUMENTO_SHN.match(documento.vendor_doc or ""))
+def tipo_documento(vendor_doc):
+    """Codice tipo di un B&R Doc, in maiuscolo, o ``""`` se il B&R Doc non ne ha uno.
+
+    Sono tutte le lettere dopo il secondo trattino, fino alla prima cifra:
+    ``26026-01-EBM1`` → ``EBM``, ``26026-03-ED02`` → ``ED``,
+    ``26026-04-QCPA`` → ``QCPA``.
+    """
+    corrispondenza = _PATTERN_TIPO_DOCUMENTO.match((vendor_doc or "").strip())
+    return corrispondenza.group(1).upper() if corrispondenza else ""
+
+
+def indirizzi_per_tipi_documento(documenti):
+    """Indirizzi attivi di ``IndirizzoTipoDocumento`` per i tipi dei documenti dati.
+
+    Returns:
+        Lista di dict ``{"email", "tipo", "codici"}`` ordinata per email e
+        tipo: una voce per indirizzo e tipo (TO/CC), con i codici dei tipi
+        presenti fra i documenti che la richiedono (es. ``["EBM", "ESH"]``).
+        Nessun documento con un tipo, o nessuna regola, dà ``[]``.
+    """
+    codici = {tipo_documento(documento.vendor_doc) for documento in documenti} - {""}
+    if not codici:
+        return []
+    voci = {}
+    for regola in IndirizzoTipoDocumento.objects.filter(
+        codice_tipo__in=codici, attivo=True
+    ).order_by("email", "tipo", "codice_tipo"):
+        voce = voci.setdefault(
+            (regola.email.strip().lower(), regola.tipo),
+            {"email": regola.email, "tipo": regola.tipo, "codici": []},
+        )
+        voce["codici"].append(regola.codice_tipo)
+    return list(voci.values())
 
 
 def indirizzi_per_siti(codici_bc):
@@ -326,7 +353,8 @@ def _costruisci_destinatari(testata, documenti, siti):
     1. indirizzi di stabilimento dei siti coinvolti (TO/CC da anagrafica);
     2. PM della commessa → TO;
     3. PE e QCI della commessa → CC;
-    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC.
+    4. indirizzi attivi per i tipi dei documenti della lettera
+       (``IndirizzoTipoDocumento``, TO/CC da admin, per tutte le commesse).
 
     Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
     commessa non è un errore: contribuisce semplicemente zero indirizzi.
@@ -369,14 +397,10 @@ def _costruisci_destinatari(testata, documenti, siti):
         (email, TipoDestinatarioTransmittalInterno.CC, OrigineDestinatarioTransmittalInterno.QCI)
         for email in _email_persone(testata, RuoloPersonaCommessa.QCI)
     ]
-    if any(_e_documento_shn(documento) for documento in documenti):
-        voci.append(
-            (
-                EMAIL_EXPORT,
-                TipoDestinatarioTransmittalInterno.CC,
-                OrigineDestinatarioTransmittalInterno.EXPORT,
-            )
-        )
+    voci += [
+        (voce["email"], voce["tipo"], OrigineDestinatarioTransmittalInterno.TIPO_DOCUMENTO)
+        for voce in indirizzi_per_tipi_documento(documenti)
+    ]
 
     return _deduplica_destinatari(voci)
 
@@ -432,8 +456,8 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
 
     Non tocca nessuno stato dei documenti. Oltre agli indirizzi di
     stabilimento, i destinatari includono il PM della commessa (TO), PE e
-    QCI (CC) e, se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` (CC) —
-    vedi ``_destinatari_trasmittal``. WE resta escluso: la sua lista di
+    QCI (CC) e gli indirizzi per i tipi dei documenti della lettera
+    (``IndirizzoTipoDocumento``) — vedi ``_destinatari_trasmittal``. WE resta escluso: la sua lista di
     distribuzione non è ancora definita.
     """
     righe = list(righe)
@@ -898,6 +922,19 @@ def anteprima_destinatari(testata, documenti):
     return _costruisci_destinatari(testata, documenti, siti_coinvolti(documenti))
 
 
+def _tipi_documento_per_email(documenti):
+    """Email (minuscola) → codici dei tipi che la portano in lettera, per il pannello di conferma.
+
+    Come le sigle degli stabilimenti, dice accanto all'indirizzo perché c'è
+    (es. ``export@… (EBM, ESH)``). TO e CC dello stesso indirizzo si sommano.
+    """
+    codici = {}
+    for voce in indirizzi_per_tipi_documento(documenti):
+        lista = codici.setdefault(voce["email"].strip().lower(), [])
+        lista += [codice for codice in voce["codici"] if codice not in lista]
+    return {email: sorted(lista) for email, lista in codici.items()}
+
+
 def anteprima_trasmittal(testata, righe_payload, utente=None):
     """Anteprima di una lettera: riepilogo righe, destinatari risolti, ruoli mancanti.
 
@@ -942,6 +979,7 @@ def anteprima_trasmittal(testata, righe_payload, utente=None):
             for riga in righe
         ],
         "destinatari": anteprima_destinatari(testata, documenti),
+        "tipi_documento": _tipi_documento_per_email(documenti),
         "ruoli_mancanti": ruoli_persona_mancanti(testata),
         "mittente": mittente_trasmittal(utente) if utente is not None else None,
     }

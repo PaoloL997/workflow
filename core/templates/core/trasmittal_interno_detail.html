@@ -1639,11 +1639,12 @@
   // Messaggio facoltativo dell'email: sopravvive alle modifiche dei destinatari.
   var _messaggioEmail = '';
   var _sigleStabilimento = {};
+  var _tipiDocumento = {};
   var _ultimoEsito = null;
   var _esitoMostrato = false;
 
-  var ORIGINE_LABELS = { stabilimento: 'Stabilimenti', pm: 'PM', pe: 'PE', qci: 'QCI', export: 'Export', manuale: 'Manuale' };
-  var ORIGINE_ORDER = ['stabilimento', 'pm', 'pe', 'qci', 'export', 'manuale'];
+  var ORIGINE_LABELS = { stabilimento: 'Stabilimenti', pm: 'PM', pe: 'PE', qci: 'QCI', tipo_documento: 'Tipo documento', manuale: 'Manuale' };
+  var ORIGINE_ORDER = ['stabilimento', 'pm', 'pe', 'qci', 'tipo_documento', 'manuale'];
 
   // Indirizzi già presenti nell'applicazione, suggeriti nei campi TO/CC
   // (datalist #email-suggerimenti): caricati una volta sola per pagina.
@@ -1707,6 +1708,10 @@
     if (d.origine === 'stabilimento') {
       var sigle = _sigleStabilimento[d.email.trim().toLowerCase()] || [];
       return d.email + (sigle.length ? ' (' + sigle.join(', ') + ')' : '');
+    }
+    if (d.origine === 'tipo_documento') {
+      var tipi = _tipiDocumento[d.email.trim().toLowerCase()] || [];
+      return d.email + (tipi.length ? ' (' + tipi.join(', ') + ')' : '');
     }
     return d.email;
   }
@@ -1775,6 +1780,7 @@
   function renderConferma(anteprima) {
     _destinatariCorrenti = (anteprima.destinatari || []).slice();
     _sigleStabilimento = anteprima.sigle_stabilimento || {};
+    _tipiDocumento = anteprima.tipi_documento || {};
 
     var nDoc = anteprima.righe.length;
     var nDcc = anteprima.righe.filter(function (r) { return r.cliente; }).length;

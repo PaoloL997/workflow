@@ -152,8 +152,8 @@ class TrasmittalInternoEndToEndTests(TestCase):
         )
         self.doc_c = Documento.objects.create(
             testata=self.testata,
-            vendor_doc="99090-01-ESH1",  # pattern SHn: ?????-??-ESH*
-            doc_title="Documento C (SHn)",
+            vendor_doc="99090-01-ESH1",  # tipo ESH: export@ in CC dalla migrazione 0065
+            doc_title="Documento C (ESH)",
             reparto="Ufficio Tecnico",
         )
         self.doc_d = Documento.objects.create(
@@ -370,12 +370,15 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertEqual(len(occorrenze), 1)
         self.assertEqual(occorrenze[0]["tipo"], "to")
 
-    # ── Punto 6: DOC-C (SHn) → export@ in CC; rimosso, sparisce ──────────────
+    # ── Punto 6: DOC-C (ESH) → export@ in CC; rimosso, sparisce ──────────────
 
     def test_09_export_presente_con_doc_c_assente_senza(self):
         anteprima_con_c = self._anteprima(self._righe_abcd(con_c=True))
-        emails_con_c = [d["email"] for d in anteprima_con_c["destinatari"]]
-        self.assertIn("export@brembanarolle.com", emails_con_c)
+        self.assertIn(
+            {"email": "export@brembanarolle.com", "tipo": "cc", "origine": "tipo_documento"},
+            anteprima_con_c["destinatari"],
+        )
+        self.assertEqual(anteprima_con_c["tipi_documento"], {"export@brembanarolle.com": ["ESH"]})
 
         anteprima_senza_c = self._anteprima(self._righe_abcd(con_c=False))
         emails_senza_c = [d["email"] for d in anteprima_senza_c["destinatari"]]

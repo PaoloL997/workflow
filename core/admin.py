@@ -15,6 +15,7 @@ from .models import (
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
     IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
     ModelloDocumento,
     Notifica,
     Permesso,
@@ -50,6 +51,16 @@ class IndirizzoStabilimentoAdmin(admin.ModelAdmin):
     list_editable = ("attivo",)
     list_filter = ("stabilimento", "tipo", "attivo")
     search_fields = ("email", "stabilimento__nome", "stabilimento__sigla")
+
+
+@admin.register(IndirizzoTipoDocumento)
+class IndirizzoTipoDocumentoAdmin(admin.ModelAdmin):
+    """Indirizzi del trasmittal interno per tipo di documento, validi per tutte le commesse."""
+
+    list_display = ("codice_tipo", "email", "tipo", "attivo")
+    list_editable = ("attivo",)
+    list_filter = ("codice_tipo", "tipo", "attivo")
+    search_fields = ("codice_tipo", "email")
 
 
 @admin.register(Reparto)

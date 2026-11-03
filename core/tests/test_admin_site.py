@@ -3,7 +3,13 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase
 
 from ..admin_site import GRUPPI_ADMIN, WorkflowAdminSite
-from ..models import IndirizzoStabilimento, Permesso, Stabilimento, TipoIndirizzoStabilimento
+from ..models import (
+    IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
+    Permesso,
+    Stabilimento,
+    TipoIndirizzoStabilimento,
+)
 from ._fixtures import User
 
 
@@ -49,6 +55,7 @@ class GruppiAdminTests(TestCase):
             trasmittal,
             [
                 "IndirizzoStabilimento",
+                "IndirizzoTipoDocumento",
                 "FirmatarioStabilimento",
                 "TransmittalInterno",
                 "PresaVisioneTransmittalInterno",
@@ -112,3 +119,33 @@ class IndirizzoStabilimentoAdminTests(TestCase):
 
         self.assertEqual(risposta.status_code, 200)
         self.assertEqual(risposta.context["inline_admin_formsets"], [])
+
+
+class IndirizzoTipoDocumentoAdminTests(TestCase):
+    """Le regole per tipo documento si gestiscono dall'admin, nel gruppo Trasmittal interno."""
+
+    URL_AGGIUNGI = "/admin/core/indirizzotipodocumento/add/"
+
+    def setUp(self):
+        self.client.force_login(User.objects.create_superuser("root", "root@example.com", "pw"))
+
+    def _aggiungi(self, codice):
+        return self.client.post(
+            self.URL_AGGIUNGI,
+            {"codice_tipo": codice, "email": "qa@b.it", "tipo": "cc", "attivo": "on"},
+        )
+
+    def test_aggiunta_con_codice_in_maiuscolo(self):
+        risposta = self._aggiungi("edv")
+
+        self.assertEqual(risposta.status_code, 302)
+        self.assertTrue(IndirizzoTipoDocumento.objects.filter(codice_tipo="EDV").exists())
+
+    def test_un_doppione_in_minuscolo_e_un_errore_del_form(self):
+        self._aggiungi("EDV")
+
+        risposta = self._aggiungi("edv")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertTrue(risposta.context["adminform"].form.errors)
+        self.assertEqual(IndirizzoTipoDocumento.objects.filter(codice_tipo="EDV").count(), 1)

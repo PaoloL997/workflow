@@ -35,6 +35,7 @@ GRUPPI_ADMIN = (
         (
             # Configurazione prima, storico delle lettere dopo.
             "core.IndirizzoStabilimento",
+            "core.IndirizzoTipoDocumento",
             "core.FirmatarioStabilimento",
             "core.TransmittalInterno",
             "core.PresaVisioneTransmittalInterno",
