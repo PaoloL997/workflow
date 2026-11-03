@@ -887,6 +887,13 @@ class MigrazioneFirmatariTests(TransactionTestCase):
     PRIMA = [("core", "0061_gruppo_servizio")]
     DOPO = [("core", "0062_presa_visione_trasmittal_interno")]
 
+    def tearDown(self):
+        # Rimette lo schema all'ultima migrazione: a 0062 esistono tabelle tolte
+        # dopo, che il flush finale non conosce e non riesce a svuotare.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
     def test_i_firmatari_esistenti_restano_e_ne_entrano_altri_per_lo_stesso_ruolo(self):
         executor = MigrationExecutor(connection)
         executor.migrate(self.PRIMA)

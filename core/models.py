@@ -197,7 +197,11 @@ class TipoIndirizzoStabilimento(models.TextChoices):
 
 
 class IndirizzoStabilimento(models.Model):
-    """Indirizzo email di uno stabilimento, per il trasmittal interno."""
+    """Indirizzo email A/CC di uno stabilimento, per il trasmittal interno.
+
+    Finisce in ogni lettera in cui lo stabilimento è tra i siti coinvolti,
+    se attivo — vedi ``core.services.trasmittal_interno._costruisci_destinatari``.
+    """
 
     stabilimento = models.ForeignKey(
         Stabilimento,
@@ -848,6 +852,8 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
     PE = "pe", "PE"
     QCI = "qci", "QCI"
     EXPORT = "export", "Export"
+    # Indirizzi "sempre in copia" del sito, solo nelle lettere emesse prima
+    # che diventassero indirizzi dello stabilimento (migrazione 0064).
     DEFAULT = "default", "Default"
     MANUALE = "manuale", "Manuale"
 
@@ -928,42 +934,6 @@ class PresaVisioneTransmittalInterno(models.Model):
 
     def __str__(self):
         return f"{self.trasmittal_id}: {self.ruolo} = {self.utente_id}"
-
-
-class IndirizzoDefaultTrasmittalInterno(models.Model):
-    """Indirizzo email sempre incluso nei destinatari del trasmittal interno
-    quando il suo stabilimento è tra i siti coinvolti nella lettera.
-
-    Si aggiunge, se attivo, ai TO/CC già risolti da ``IndirizzoStabilimento``
-    per lo stesso stabilimento — vedi
-    ``core.services.trasmittal_interno._costruisci_destinatari``. Gestito da
-    qui (admin), non dal codice.
-    """
-
-    stabilimento = models.ForeignKey(
-        Stabilimento,
-        on_delete=models.CASCADE,
-        related_name="indirizzi_default_trasmittal",
-    )
-    email = models.EmailField()
-    tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
-    attivo = models.BooleanField(default=True)
-
-    class Meta:
-        managed = True
-        db_table = "indirizzi_default_trasmittal_interno"
-        verbose_name = "Indirizzo default trasmittal interno"
-        verbose_name_plural = "Indirizzi default trasmittal interno"
-        ordering = ["stabilimento", "tipo", "email"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["stabilimento", "email", "tipo"],
-                name="uniq_indirizzo_default_trasmittal_interno",
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.stabilimento_id}: {self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):

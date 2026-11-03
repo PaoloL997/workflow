@@ -5,20 +5,19 @@ from unittest.mock import patch
 
 from django.apps import apps as django_apps
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
-from django.test import SimpleTestCase, TestCase
+from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from ..models import (
     DestinazioneDocumento,
     Documento,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     Reparto,
     RuoloFirmatarioStabilimento,
     Stabilimento,
     Testata,
-    TipoDestinatarioTransmittalInterno,
     TipoIndirizzoStabilimento,
 )
 from ..services.recipients_import import (
@@ -28,7 +27,6 @@ from ..services.recipients_import import (
 )
 from ..services.trasmittal_interno import (
     imposta_destinazioni,
-    indirizzi_default_per_siti,
     indirizzi_per_siti,
     siti_coinvolti,
     siti_del_documento,
@@ -294,44 +292,54 @@ class IndirizziPerSitiTests(TestCase):
         self.assertEqual(risultato["to"], ["attivo@b.it"])
 
 
-class IndirizziDefaultPerSitiTests(TestCase):
-    """indirizzi_default_per_siti: TO/CC "sempre in copia" per stabilimento, da admin."""
+class MigrazioneIndirizziDefaultTests(TransactionTestCase):
+    """La migrazione 0064 porta gli indirizzi "sempre in copia" tra quelli dello stabilimento."""
 
-    def setUp(self):
-        self.valbrembo = Stabilimento.objects.create(nome="Valbrembo", codice_bc=1)
-        self.albignasego = Stabilimento.objects.create(nome="Albignasego", codice_bc=2)
+    # Il flush finale non deve portarsi via i dati delle migrazioni (es. il gruppo Servizio).
+    serialized_rollback = True
 
-    def _indirizzo(self, stabilimento, email, tipo, attivo=True):
-        return IndirizzoDefaultTrasmittalInterno.objects.create(
-            stabilimento=stabilimento, email=email, tipo=tipo, attivo=attivo
+    PRIMA = [("core", "0063_revisionefilelink_tipo")]
+    DOPO = [("core", "0064_unisci_indirizzi_default_in_stabilimento")]
+
+    def tearDown(self):
+        # Rimette lo schema all'ultima migrazione per i test che seguono.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+    def test_gli_indirizzi_default_diventano_indirizzi_dello_stabilimento(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.PRIMA)
+        apps = executor.loader.project_state(self.PRIMA).apps
+        Stabilimento_ = apps.get_model("core", "Stabilimento")
+        Indirizzo = apps.get_model("core", "IndirizzoStabilimento")
+        Default = apps.get_model("core", "IndirizzoDefaultTrasmittalInterno")
+        bg = Stabilimento_.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        pd = Stabilimento_.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
+        # Solo tra i default: entra con il suo tipo e il suo stato.
+        Default.objects.create(stabilimento=bg, email="qualita@b.it", tipo="cc")
+        Default.objects.create(stabilimento=pd, email="spento@b.it", tipo="to", attivo=False)
+        # In entrambe le tabelle: resta uno solo, attivo se lo era almeno uno dei due.
+        Indirizzo.objects.create(stabilimento=bg, email="doppio@b.it", tipo="to", attivo=False)
+        Default.objects.create(stabilimento=bg, email="doppio@b.it", tipo="to")
+        Indirizzo.objects.create(stabilimento=pd, email="operativo@b.it", tipo="cc")
+        Default.objects.create(stabilimento=pd, email="operativo@b.it", tipo="cc", attivo=False)
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.DOPO)
+        apps = executor.loader.project_state(self.DOPO).apps
+        Indirizzo = apps.get_model("core", "IndirizzoStabilimento")
+
+        self.assertEqual(
+            sorted(Indirizzo.objects.values_list("stabilimento__sigla", "email", "tipo", "attivo")),
+            [
+                ("BG", "doppio@b.it", "to", True),
+                ("BG", "qualita@b.it", "cc", True),
+                ("PD", "operativo@b.it", "cc", True),
+                ("PD", "spento@b.it", "to", False),
+            ],
         )
-
-    def test_input_vuoto(self):
-        self._indirizzo(self.valbrembo, "a@b.it", TipoDestinatarioTransmittalInterno.TO)
-
-        self.assertEqual(indirizzi_default_per_siti([]), {"to": [], "cc": []})
-        self.assertEqual(indirizzi_default_per_siti(None), {"to": [], "cc": []})
-
-    def test_sito_senza_indirizzi_default_configurati(self):
-        self.assertEqual(indirizzi_default_per_siti([1]), {"to": [], "cc": []})
-
-    def test_solo_il_sito_coinvolto_contribuisce(self):
-        self._indirizzo(self.valbrembo, "bg@b.it", TipoDestinatarioTransmittalInterno.CC)
-        self._indirizzo(self.albignasego, "pd@b.it", TipoDestinatarioTransmittalInterno.CC)
-
-        risultato = indirizzi_default_per_siti([1])
-
-        self.assertEqual(risultato, {"to": [], "cc": ["bg@b.it"]})
-
-    def test_indirizzo_inattivo_escluso(self):
-        self._indirizzo(self.valbrembo, "attivo@b.it", TipoDestinatarioTransmittalInterno.TO)
-        self._indirizzo(
-            self.valbrembo, "inattivo@b.it", TipoDestinatarioTransmittalInterno.TO, attivo=False
-        )
-
-        risultato = indirizzi_default_per_siti([1])
-
-        self.assertEqual(risultato["to"], ["attivo@b.it"])
+        self.assertNotIn("indirizzodefaulttrasmittalinterno", apps.all_models["core"])
 
 
 class DestinazioneDocumentoTests(TestCase):

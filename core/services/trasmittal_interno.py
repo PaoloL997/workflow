@@ -23,7 +23,6 @@ from ..models import (
     DestinazioneDocumento,
     Documento,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
@@ -110,24 +109,19 @@ def indirizzi_per_siti(codici_bc):
         tra i TO. Un elenco di codici vuoto, o senza corrispondenze, dà
         ``{"to": [], "cc": []}``.
     """
-    return _indirizzi_to_cc(IndirizzoStabilimento, TipoIndirizzoStabilimento.TO, codici_bc)
-
-
-def _indirizzi_to_cc(modello, tipo_to, codici_bc):
-    """TO/CC attivi di ``modello`` per i siti dati, deduplicati (vedi ``indirizzi_per_siti``)."""
     codici = list(codici_bc or [])
     if not codici:
         return {"to": [], "cc": []}
 
-    indirizzi = modello.objects.filter(stabilimento__codice_bc__in=codici, attivo=True).values_list(
-        "email", "tipo"
-    )
+    indirizzi = IndirizzoStabilimento.objects.filter(
+        stabilimento__codice_bc__in=codici, attivo=True
+    ).values_list("email", "tipo")
 
     to, cc = [], []
     visti_to, visti_cc = set(), set()
     for email, tipo in indirizzi:
         chiave = email.strip().lower()
-        if tipo == tipo_to:
+        if tipo == TipoIndirizzoStabilimento.TO:
             if chiave not in visti_to:
                 visti_to.add(chiave)
                 to.append(email)
@@ -137,27 +131,6 @@ def _indirizzi_to_cc(modello, tipo_to, codici_bc):
 
     cc = [email for email in cc if email.strip().lower() not in visti_to]
     return {"to": to, "cc": cc}
-
-
-def indirizzi_default_per_siti(codici_bc):
-    """Email TO/CC "sempre in copia" attive per un elenco di siti, gestite da admin.
-
-    Come ``indirizzi_per_siti``, ma da ``IndirizzoDefaultTrasmittalInterno``
-    (indirizzi aggiuntivi per stabilimento, es. la casella qualità del sito,
-    tenuti separati dall'anagrafica TO/CC "operativa" di
-    ``IndirizzoStabilimento``).
-
-    Args:
-        codici_bc: Iterable di codici sito Business Central (``Stabilimento.codice_bc``).
-
-    Returns:
-        ``{"to": [...], "cc": [...]}``, liste di email senza duplicati
-        (confronto case-insensitive) e senza sovrapposizioni, come
-        ``indirizzi_per_siti``.
-    """
-    return _indirizzi_to_cc(
-        IndirizzoDefaultTrasmittalInterno, TipoDestinatarioTransmittalInterno.TO, codici_bc
-    )
 
 
 def siti_del_documento(documento):
@@ -353,10 +326,7 @@ def _costruisci_destinatari(testata, documenti, siti):
     1. indirizzi di stabilimento dei siti coinvolti (TO/CC da anagrafica);
     2. PM della commessa → TO;
     3. PE e QCI della commessa → CC;
-    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC;
-    5. indirizzi default attivi dei siti coinvolti
-       (``IndirizzoDefaultTrasmittalInterno``, TO/CC da admin, per
-       stabilimento) — stesso ambito del punto 1, lista separata.
+    4. se almeno un documento è di tipo SHn, ``EMAIL_EXPORT`` → CC.
 
     Un ruolo non valorizzato su nessuna ``PersonaCommessa`` risolta per la
     commessa non è un errore: contribuisce semplicemente zero indirizzi.
@@ -407,24 +377,6 @@ def _costruisci_destinatari(testata, documenti, siti):
                 OrigineDestinatarioTransmittalInterno.EXPORT,
             )
         )
-
-    default = indirizzi_default_per_siti([s.codice_bc for s in siti])
-    voci += [
-        (
-            email,
-            TipoDestinatarioTransmittalInterno.TO,
-            OrigineDestinatarioTransmittalInterno.DEFAULT,
-        )
-        for email in default["to"]
-    ]
-    voci += [
-        (
-            email,
-            TipoDestinatarioTransmittalInterno.CC,
-            OrigineDestinatarioTransmittalInterno.DEFAULT,
-        )
-        for email in default["cc"]
-    ]
 
     return _deduplica_destinatari(voci)
 
@@ -1060,8 +1012,8 @@ def indirizzi_email_noti():
     """Indirizzi email già presenti nell'applicazione, per l'autocompletamento in anteprima.
 
     Unisce, in quest'ordine: gli utenti attivi, gli indirizzi attivi degli
-    stabilimenti, quelli di default del trasmittal interno e i destinatari
-    delle lettere già emesse (compresi quelli aggiunti a mano). Deduplica
+    stabilimenti e i destinatari delle lettere già emesse (compresi quelli
+    aggiunti a mano). Deduplica
     senza distinguere maiuscole/minuscole, come ``_deduplica_destinatari``: a
     parità di indirizzo resta la prima fonte, così un utente tiene il suo nome.
 
@@ -1073,13 +1025,12 @@ def indirizzi_email_noti():
         (utente.email, utente.nome_completo)
         for utente in User.objects.filter(is_active=True).exclude(email="")
     ]
-    for modello in (IndirizzoStabilimento, IndirizzoDefaultTrasmittalInterno):
-        candidati += [
-            (email, f"Stabilimento {sigla or nome}")
-            for email, sigla, nome in modello.objects.filter(attivo=True).values_list(
-                "email", "stabilimento__sigla", "stabilimento__nome"
-            )
-        ]
+    candidati += [
+        (email, f"Stabilimento {sigla or nome}")
+        for email, sigla, nome in IndirizzoStabilimento.objects.filter(attivo=True).values_list(
+            "email", "stabilimento__sigla", "stabilimento__nome"
+        )
+    ]
     candidati += [
         (email, "")
         for email in DestinatarioTransmittalInterno.objects.order_by()

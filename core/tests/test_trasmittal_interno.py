@@ -16,7 +16,6 @@ from ..models import (
     DestinatarioTransmittalInterno,
     Documento,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
     Permesso,
@@ -354,29 +353,29 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
         self.assertEqual(destinatari.count(("bg@b.it", "to")), 1)
         self.assertNotIn(("bg@b.it", "cc"), destinatari)
 
-    def test_indirizzi_default_del_sito_coinvolto_aggiunti_alla_lettera(self):
+    def test_indirizzi_attivi_del_sito_coinvolto_aggiunti_alla_lettera(self):
         altro_sito = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            stabilimento=self.bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="qualita@b.it", tipo=TipoIndirizzoStabilimento.CC
         )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
+        IndirizzoStabilimento.objects.create(
             stabilimento=self.bg,
             email="disattivato@b.it",
-            tipo=TipoDestinatarioTransmittalInterno.CC,
+            tipo=TipoIndirizzoStabilimento.CC,
             attivo=False,
         )
-        # Default di un sito non coinvolto nella lettera: non deve comparire.
-        IndirizzoDefaultTrasmittalInterno.objects.create(
+        # Indirizzo di un sito non coinvolto nella lettera: non deve comparire.
+        IndirizzoStabilimento.objects.create(
             stabilimento=altro_sito,
             email="altro_sito@b.it",
-            tipo=TipoDestinatarioTransmittalInterno.CC,
+            tipo=TipoIndirizzoStabilimento.CC,
         )
 
         trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
 
         destinatari = set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
         email_presenti = trasmittal.destinatari.values_list("email", flat=True)
-        self.assertIn(("qualita@b.it", "cc", "default"), destinatari)
+        self.assertIn(("qualita@b.it", "cc", "stabilimento"), destinatari)
         self.assertNotIn("disattivato@b.it", email_presenti)
         self.assertNotIn("altro_sito@b.it", email_presenti)
 
@@ -2199,8 +2198,8 @@ class IndirizziEmailNotiApiTests(TestCase):
         IndirizzoStabilimento.objects.create(
             stabilimento=bg, email="spento@b.it", tipo=TipoIndirizzoStabilimento.CC, attivo=False
         )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            stabilimento=bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+        IndirizzoStabilimento.objects.create(
+            stabilimento=bg, email="qualita@b.it", tipo=TipoIndirizzoStabilimento.CC
         )
 
         trasmittal = TransmittalInterno.objects.create(
@@ -2227,7 +2226,7 @@ class IndirizziEmailNotiApiTests(TestCase):
     def test_richiede_login(self):
         self.assertEqual(self.client.get(self.URL).status_code, 401)
 
-    def test_unisce_utenti_stabilimenti_default_e_destinatari_gia_usati(self):
+    def test_unisce_utenti_stabilimenti_e_destinatari_gia_usati(self):
         self.assertEqual(
             self._indirizzi(),
             [

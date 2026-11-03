@@ -14,7 +14,6 @@ from .models import (
     Documento,
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     ModelloDocumento,
     Notifica,
@@ -43,19 +42,11 @@ class IndirizzoStabilimentoInline(admin.TabularInline):
     fields = ("email", "tipo", "attivo")
 
 
-class IndirizzoDefaultTrasmittalInternoInline(admin.TabularInline):
-    model = IndirizzoDefaultTrasmittalInterno
-    extra = 0
-    fields = ("email", "tipo", "attivo")
-    verbose_name = "Indirizzo default trasmittal interno"
-    verbose_name_plural = "Indirizzi default trasmittal interno (sempre in copia per questo sito)"
-
-
 @admin.register(Stabilimento)
 class StabilimentoAdmin(admin.ModelAdmin):
     list_display = ("id", "nome", "sigla", "codice_bc")
     search_fields = ("nome", "sigla")
-    inlines = [IndirizzoStabilimentoInline, IndirizzoDefaultTrasmittalInternoInline]
+    inlines = [IndirizzoStabilimentoInline]
 
 
 @admin.register(Reparto)

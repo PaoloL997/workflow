@@ -880,7 +880,7 @@ Ogni lettera passa da due momenti:
 | **Sito costruttivo** della commessa | **Informazioni archivio** (campo *Sito costruttivo*, vedi **6.1 Tempi di revisione**). Se manca, la card *Trasmittal interno* nella pagina commessa è bloccata con il messaggio *"Completa prima il sito costruttivo della commessa"*. Il controllo giornaliero con Business Central prova a impostarlo da solo |
 | Documenti dei reparti **UT**, **QC** e **WE** | Nella lettera entrano solo i documenti il cui reparto ha acronimo `UT`, `QC` o `WE`; il reparto WE entra quando un amministratore lo crea. I documenti degli altri reparti non compaiono |
 | Flag **Può scrivere sul trasmittal interno** sul tuo utente | Lo assegna un amministratore. È indipendente dal permesso generale di scrittura (vedi **1.2 Permessi degli utenti**): chi non lo ha vede storico, Destinazioni e Nuova lettera ma non può modificare destinazioni, emettere, annullare o ritentare un passo. Non serve per la presa visione |
-| **Stabilimenti** con sigla, codice sito Business Central e indirizzi email | Sono configurati da un amministratore: per ogni sito gli indirizzi **A (TO)** / **CC** e gli indirizzi sempre in copia. Se un sito non compare tra i siti coinvolti o manca un indirizzo, chiedi a un amministratore |
+| **Stabilimenti** con sigla, codice sito Business Central e indirizzi email | Sono configurati da un amministratore: per ogni sito gli indirizzi **A (TO)** / **CC**. Se un sito non compare tra i siti coinvolti o manca un indirizzo, chiedi a un amministratore |
 | **Persone commessa** (PM, PE, QCI) | Si inseriscono alla creazione della commessa (vedi **4.3 Creare una nuova commessa**) e chi ha il permesso Scrittura le modifica dall'intestazione della commessa (vedi **5.1 Intestazione**). Servono per i destinatari automatici dell'email: se mancano, il pannello *A chi va* lo segnala |
 | **Firmatari stabilimento** | Chi può prendere visione per Qualità e per Produzione di ogni sito è registrato da un amministratore, anche più persone per ruolo e sito (vedi **12.8 Presa visione QC e PROD**) |
 
@@ -958,7 +958,7 @@ Il pannello **A chi va** riepiloga cosa succederà: nome previsto della lettera,
 | **PM** | Project manager della commessa | TO |
 | **PE** / **QCI** | Project engineer e ispettore qualità della commessa | CC |
 | **Export** | `export@brembanarolle.com`, solo se nella lettera c'è almeno un documento SHn (B&R Doc del tipo `xxxxx-xx-ESH…`) | CC |
-| **Manuale** | Indirizzi aggiunti a mano e gli indirizzi "sempre in copia" configurati per i siti coinvolti | dove sono inseriti |
+| **Manuale** | Indirizzi aggiunti a mano | dove sono inseriti |
 
 Se sulla commessa manca una persona per un ruolo (PM, PE o QCI), un avviso lo segnala (*"Ruoli non valorizzati sulla commessa: PM, PE — nessun destinatario verrà aggiunto per questi ruoli."*). Il ruolo WE non ha una lista di distribuzione e non genera destinatari. Un indirizzo presente sia in A sia in CC viene tenuto solo in A. L'email di completamento invece va solo a chi ha emesso la lettera (vedi **12.8 Presa visione QC e PROD**).
 
