@@ -1,6 +1,6 @@
 import io
 import json
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 import openpyxl
@@ -455,25 +455,38 @@ class SituazioneOrizzontaleXlsxTests(TestCase):
         self.assertEqual(ws.max_row, 4)
 
     def test_valori_di_planning_e_revisioni(self):
-        from ..date_fmt import format_display_date
-
         ws = self._foglio()
         row = self._riga(ws, "SITXLS1-01")
         col = [c.value for c in ws[1]].index("Rev. 0") + 1
         self.assertEqual(
             [ws.cell(row, c).value for c in range(col, col + 6)],
-            [
-                format_display_date(date(2026, 1, 10)),
-                format_display_date(date(2026, 1, 20)),
-                "C",
-                format_display_date(date(2026, 2, 1)),
-                None,
-                None,
-            ],
+            [datetime(2026, 1, 10), datetime(2026, 1, 20), "C", datetime(2026, 2, 1), None, None],
         )
         # Ultima revisione inviata: resta pianificato solo il rientro.
         self.assertEqual(ws.cell(row, col - 2).value, None)
-        self.assertEqual(ws.cell(row, col - 1).value, format_display_date(date(2026, 3, 1)))
+        self.assertEqual(ws.cell(row, col - 1).value, datetime(2026, 3, 1))
+
+    def test_date_in_formato_excel_come_in_scarica(self):
+        ws = self._foglio()
+        row = self._riga(ws, "SITXLS1-01")
+        col = [c.value for c in ws[1]].index("Rev. 0") + 1
+        for cella in (ws.cell(row, col - 1), ws.cell(row, col), ws.cell(row, col + 1)):
+            self.assertEqual(cella.number_format, "DD/MM/YYYY")
+
+    def test_verticale_date_vere(self):
+        response = self.client.get(
+            f"/api/commesse/{self.testata.job}/situazione/export/?format=xlsx&vista=verticale"
+        )
+        self.assertEqual(response.status_code, 200)
+        ws = openpyxl.load_workbook(io.BytesIO(response.content)).active
+        sotto = [c.value for c in ws[2]]
+        rev1 = 4  # Rev. 0 e Rev. 1 di SITXLS1-01 nelle righe 3 e 4.
+        receipt = ws.cell(rev1, sotto.index("Receipt date") + 1)
+        dispatch = ws.cell(rev1, sotto.index("Dispatch") + 1)
+        self.assertEqual(receipt.value, datetime(2026, 3, 1))
+        self.assertEqual(dispatch.value, datetime(2026, 2, 1))
+        self.assertEqual({receipt.number_format, dispatch.number_format}, {"DD/MM/YYYY"})
+        self.assertIsNone(ws.cell(rev1, sotto.index("Received") + 1).value)
 
     def test_solo_b_r_doc_e_colorata_con_la_risposta(self):
         # Ultima revisione già rientrata: la cella B&R Doc segue quella risposta,
@@ -857,6 +870,4 @@ class PlannedDatesForLatestRevTest(TestCase):
         from src.pdf import _planned_dates_for_latest_rev
 
         rev = self._rev(ext_status_label="approved", ext_status_lettera="B")
-        self.assertEqual(
-            _planned_dates_for_latest_rev([rev])["planned_send"], "2026-01-10"
-        )
+        self.assertEqual(_planned_dates_for_latest_rev([rev])["planned_send"], "2026-01-10")

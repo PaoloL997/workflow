@@ -53,13 +53,9 @@
     if (raw.type === 'dateRange') {
       return { type: 'dateRange', from: raw.from || null, to: raw.to || null };
     }
-    if (typeof raw === 'string') {
-      return { type: 'excel', selected: null, contains: raw };
-    }
     return {
       type: 'excel',
       selected: raw.selected == null ? null : [...raw.selected],
-      contains: raw.contains || '',
     };
   }
 
@@ -70,7 +66,6 @@
       const ui = drf();
       return ui ? ui.isActive(state) : !!(state.from || state.to);
     }
-    if (state.contains) return true;
     if (state.selected === null) return false;
     if (!state.selected.length) return true;
     const allValues = collectUniqueValuesForKey(key);
@@ -109,14 +104,9 @@
       return ui.matchesIso(getDateIso(doc, key), state.from, state.to);
     }
 
-    const cellVal = _cfg.getCellValue(doc, key);
-    const display = filterDisplayValue(cellVal);
-    if (state.contains && !normalizeForFilter(display).includes(normalizeForFilter(state.contains))) {
-      return false;
-    }
     if (state.selected === null) return true;
     if (!state.selected.length) return false;
-    return state.selected.includes(display);
+    return state.selected.includes(filterDisplayValue(_cfg.getCellValue(doc, key)));
   }
 
   function activeFilterKeys() {
@@ -177,11 +167,10 @@
     const body = document.getElementById('col-filter-popover-body');
     const pop = document.getElementById('col-filter-popover');
     if (!body || !pop) return;
-    const state = getFilterState(key) || { type: 'excel', selected: null, contains: '' };
+    const state = getFilterState(key) || { type: 'excel', selected: null };
     const values = collectUniqueValuesForKey(key);
     // No value filter yet: start with nothing ticked, the user picks what to keep.
     const selectedSet = new Set(state.selected || []);
-    const contains = state.contains || '';
 
     let valuesHtml = '';
     values.forEach(function (value) {
@@ -200,11 +189,6 @@
       + '<input type="checkbox" id="col-filter-select-all">'
       + '<span>(Seleziona tutto)</span></label>'
       + '<div class="col-filter-values" id="col-filter-values">' + valuesHtml + '</div>'
-      + '</div>'
-      + '<div class="col-filter-contains-wrap">'
-      + '<span class="col-filter-contains-label">Contiene</span>'
-      + '<input type="text" class="col-filter-popover-input" id="col-filter-contains" '
-      + 'value="' + escHtml(contains) + '" placeholder="Contiene…" autocomplete="off">'
       + '</div>';
 
     const search = document.getElementById('col-filter-search');
@@ -343,7 +327,7 @@
         if (e.key === 'Enter' && _openFilterKey && pop && pop.classList.contains('open')) {
           const tag = document.activeElement && document.activeElement.tagName;
           const id = document.activeElement && document.activeElement.id;
-          if (tag === 'INPUT' && (id === 'col-filter-search' || id === 'col-filter-contains')) {
+          if (tag === 'INPUT' && id === 'col-filter-search') {
             e.preventDefault();
             DocListFilters.applyCurrentColumnFilter();
           }
@@ -416,13 +400,9 @@
         const allValues = collectUniqueValuesForKey(key);
         const boxes = Array.from(document.querySelectorAll('#col-filter-values input.col-filter-value-cb'));
         const checked = boxes.filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
-        const containsEl = document.getElementById('col-filter-contains');
-        const contains = ((containsEl && containsEl.value) || '').trim();
         // Nothing ticked means no value filter, not "hide every row".
-        let selected = null;
-        if (checked.length && checked.length < allValues.length) selected = checked;
-        if (selected !== null || contains) {
-          _columnFilters[key] = { selected: selected, contains: contains };
+        if (checked.length && checked.length < allValues.length) {
+          _columnFilters[key] = { selected: checked };
         } else {
           delete _columnFilters[key];
         }

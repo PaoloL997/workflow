@@ -327,6 +327,18 @@ l'header `Authorization: Token <chiave>` e restituiscono status e JSON dell'agen
   (`sessionStorage`). Nell'intestazione: **ℹ** apre le informazioni sull'agent, la matita inizia una
   nuova conversazione.
 
+## Trasmittal interno: link nelle email
+
+L'email di emissione del trasmittal interno porta il link alla pagina della lettera, dove i
+firmatari QC e PROD registrano la presa visione. L'indirizzo pubblico dell'app sta nel `.env`:
+
+```
+WORKFLOW_BASE_URL=http://<host>:<porta>
+```
+
+Se è vuoto, il link usa l'indirizzo con cui chi emette ha aperto l'app, che può essere un IP
+interno diverso da quello degli altri. Dopo la modifica serve `Restart-Service WorkflowWaitress`.
+
 ## Database
 
 PostgreSQL. Le credenziali di connessione sono caricate da `.env` — non committare questo file.

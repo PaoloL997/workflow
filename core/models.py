@@ -231,11 +231,14 @@ class RuoloFirmatarioStabilimento(models.TextChoices):
 
 
 class FirmatarioStabilimento(models.Model):
-    """Chi firma per uno stabilimento nel trasmittal interno, per ruolo.
+    """Chi prende visione dei trasmittal interni per uno stabilimento, per ruolo.
 
-    L'immagine della firma è quella dell'utente (``User.firma``), non un
-    campo di questo modello. Lo stesso utente può firmare per più
-    stabilimenti: è voluto.
+    Un utente presente qui per un ruolo su uno dei siti coinvolti in una
+    lettera può registrarne la presa visione per quel ruolo (vedi
+    ``core.services.trasmittal_interno.registra_presa_visione``). Più utenti
+    possono avere lo stesso ruolo sullo stesso stabilimento, e lo stesso
+    utente può comparire per più stabilimenti: è voluto. Nessuna immagine di
+    firma: conta il clic dell'utente autenticato.
     """
 
     stabilimento = models.ForeignKey(
@@ -258,8 +261,8 @@ class FirmatarioStabilimento(models.Model):
         ordering = ["stabilimento", "ruolo"]
         constraints = [
             models.UniqueConstraint(
-                fields=["stabilimento", "ruolo"],
-                name="uniq_firmatario_stabilimento_ruolo",
+                fields=["stabilimento", "ruolo", "utente"],
+                name="uniq_firmatario_stabilimento_ruolo_utente",
             ),
         ]
 
@@ -745,6 +748,11 @@ class TransmittalInterno(models.Model):
     # Testo facoltativo scritto prima dell'invio: va solo nell'email (le note
     # stanno nel PDF del modulo). Salvato qui perché Riprova lo rimandi uguale.
     messaggio_email = models.TextField(blank=True, verbose_name="Messaggio dell'email")
+    # Message-ID dell'email di emissione: l'email di completamento risponde
+    # nello stesso thread (In-Reply-To / References). Vuoto finché non è partita.
+    message_id = models.CharField(
+        max_length=255, blank=True, verbose_name="Message-ID dell'email di emissione"
+    )
 
     class Meta:
         managed = True
@@ -880,6 +888,46 @@ class DestinatarioTransmittalInterno(models.Model):
 
     def __str__(self):
         return f"{self.trasmittal_id}: {self.email} ({self.tipo})"
+
+
+class PresaVisioneTransmittalInterno(models.Model):
+    """La presa visione di una lettera di trasmittal interno per un ruolo (QC o PROD).
+
+    È il fatto che l'utente autenticato ha cliccato "Presa visione": nessuna
+    firma grafica. Una sola per ruolo e per lettera; quando ci sono entrambi
+    i ruoli la lettera è completata (PDF sul fileserver, cartella DCC, email
+    di completamento — vedi
+    ``core.services.trasmittal_interno.registra_presa_visione``).
+    """
+
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
+        on_delete=models.CASCADE,
+        related_name="prese_visione",
+    )
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="prese_visione_trasmittal_interno",
+    )
+    ruolo = models.CharField(max_length=20, choices=RuoloFirmatarioStabilimento.choices)
+    registrata_il = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        managed = True
+        db_table = "prese_visione_trasmittal_interno"
+        verbose_name = "Presa visione trasmittal interno"
+        verbose_name_plural = "Prese visione trasmittal interno"
+        ordering = ["trasmittal", "ruolo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "ruolo"],
+                name="uniq_presa_visione_trasmittal_ruolo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.ruolo} = {self.utente_id}"
 
 
 class IndirizzoDefaultTrasmittalInterno(models.Model):

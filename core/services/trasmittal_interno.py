@@ -3,16 +3,18 @@
 import logging
 import re
 import shutil
-from datetime import datetime, timedelta
-from email.utils import formataddr, parseaddr
+import threading
+from datetime import datetime
+from email.utils import formataddr, make_msgid, parseaddr
 from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import IntegrityError, connections, transaction
 from django.db.models import Max, Prefetch
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
 
@@ -20,13 +22,16 @@ from ..models import (
     DestinatarioTransmittalInterno,
     DestinazioneDocumento,
     Documento,
+    FirmatarioStabilimento,
     IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
     OrigineDestinatarioTransmittalInterno,
     PersonaCommessa,
+    PresaVisioneTransmittalInterno,
     Reparto,
     Revisione,
     RigaTransmittalInterno,
+    RuoloFirmatarioStabilimento,
     RuoloPersonaCommessa,
     Stabilimento,
     Testata,
@@ -53,6 +58,29 @@ EMAIL_EXPORT = "export@brembanarolle.com"
 
 class TrasmittalInternoAnnullaError(Exception):
     """Annullamento non consentito (non è l'ultimo trasmittal del giorno)."""
+
+
+class TrasmittalInternoPresaVisioneError(Exception):
+    """Presa visione rifiutata, con il codice HTTP che la descrive.
+
+    ``status`` è 400 (richiesta incompleta, es. ruolo da indicare), 403 (chi
+    clicca non è firmatario del ruolo sui siti della lettera) o 409 (ruolo già
+    visionato).
+    """
+
+    def __init__(self, messaggio, status=400):
+        super().__init__(messaggio)
+        self.status = status
+
+
+class TrasmittalInternoNonCompletatoError(Exception):
+    """Passo che richiede entrambe le prese visione (PDF, DCC, email di completamento)."""
+
+
+# Reparti i cui documenti entrano nel trasmittal interno, per Reparto.acronimo.
+# Conta solo un reparto che esiste in anagrafica: oggi non c'è un reparto WE, i
+# suoi documenti entreranno da soli quando l'admin lo creerà.
+REPARTI_TRASMITTAL_INTERNO = ("UT", "QC", "WE")
 
 
 # Documenti SHn: nel vecchio strumento Excel riconosciuti dal pattern DOS
@@ -178,24 +206,30 @@ def stabilimenti_costruttivi():
     return list(Stabilimento.objects.filter(codice_bc__isnull=False).order_by("codice_bc"))
 
 
-def documenti_ut(testata):
-    """Documenti UT della commessa: le righe della griglia destinazioni.
+def _reparti_trasmittal():
+    """Reparti in anagrafica con un acronimo di ``REPARTI_TRASMITTAL_INTERNO``."""
+    return list(Reparto.objects.filter(acronimo__in=REPARTI_TRASMITTAL_INTERNO))
 
-    Reparto.acronimo "UT" identifica il reparto; Documento.reparto ne porta
-    il nome (vedi core.services.commesse.prepara_per_dcc per lo stesso
-    accoppiamento). Nessun reparto con quell'acronimo → nessun documento.
+
+def documenti_trasmittal(testata):
+    """Documenti UT, QC e WE della commessa: le righe della griglia destinazioni.
+
+    Reparto.acronimo identifica il reparto; Documento.reparto ne porta il nome
+    (vedi core.services.commesse.prepara_per_dcc per lo stesso accoppiamento).
+    Nessuno di quei reparti in anagrafica → nessun documento.
     """
-    reparto_ut = Reparto.objects.filter(acronimo="UT").first()
-    if reparto_ut is None:
+    nomi = [reparto.nome for reparto in _reparti_trasmittal()]
+    if not nomi:
         return Documento.objects.none()
-    return Documento.objects.filter(testata=testata, reparto=reparto_ut.nome)
+    return Documento.objects.filter(testata=testata, reparto__in=nomi)
 
 
-def elenco_destinazioni_ut(testata):
-    """Documenti UT della commessa con le destinazioni cartacee correnti.
+def elenco_destinazioni(testata):
+    """Documenti UT, QC e WE della commessa con le destinazioni cartacee correnti.
 
-    Come ``elenco_selezione_ut``, la cartella UT sul fileserver è scansionata
-    una volta sola per ricavare l'ultima modifica del file di ogni documento.
+    Come ``elenco_selezione``, la cartella di ogni reparto sul fileserver è
+    scansionata una volta sola per ricavare l'ultima modifica del file di
+    ogni documento.
 
     Returns:
         Lista di dict ``{"id", "vendor_doc", "doc_title", "file_modificato_il",
@@ -204,19 +238,19 @@ def elenco_destinazioni_ut(testata):
         ``file_modificato_il`` l'ISO datetime del file risolto, o ``None``.
     """
     documenti = list(
-        documenti_ut(testata).prefetch_related("destinazioni__stabilimento").order_by("vendor_doc")
+        documenti_trasmittal(testata)
+        .prefetch_related("destinazioni__stabilimento")
+        .order_by("vendor_doc")
     )
     if not documenti:
         return []
-    indice_cartella = _indice_cartella_ut(testata)
+    indici = _indici_cartelle_reparti(testata, documenti)
     return [
         {
             "id": documento.pk,
             "vendor_doc": documento.vendor_doc,
             "doc_title": documento.doc_title,
-            "file_modificato_il": _data_modifica_iso(
-                _cerca_in_indice(indice_cartella, documento.vendor_doc)
-            ),
+            "file_modificato_il": _data_modifica_iso(_cerca_file_documento(indici, documento)),
             "codici_bc": [
                 destinazione.stabilimento.codice_bc for destinazione in documento.destinazioni.all()
             ],
@@ -225,33 +259,34 @@ def elenco_destinazioni_ut(testata):
     ]
 
 
-def imposta_destinazioni_ut(testata, documento_id, codici_bc):
-    """``imposta_destinazioni``, ristretto ai documenti UT della commessa data.
+def imposta_destinazioni_commessa(testata, documento_id, codici_bc):
+    """``imposta_destinazioni``, ristretto ai documenti UT, QC e WE della commessa data.
 
     Raises:
-        Documento.DoesNotExist: se ``documento_id`` non è un documento UT di
-            ``testata`` (commessa sbagliata, o non è UT).
+        Documento.DoesNotExist: se ``documento_id`` non è un documento di
+            ``testata`` di quei reparti (commessa sbagliata, o altro reparto).
     """
-    documento = documenti_ut(testata).get(pk=documento_id)
+    documento = documenti_trasmittal(testata).get(pk=documento_id)
     imposta_destinazioni(documento, codici_bc)
     return documento
 
 
 def imposta_destinazione_stabilimento_bulk(testata, codice_bc, documento_ids, attiva):
-    """Attiva o disattiva un singolo stabilimento sulle destinazioni di più documenti UT.
+    """Attiva o disattiva un singolo stabilimento sulle destinazioni di più documenti.
 
     Usata per la selezione in blocco della griglia destinazioni: il chiamante
     passa esplicitamente gli id dei documenti su cui agire (tipicamente quelli
     attualmente visibili dopo un filtro), così l'azione tocca solo quelli.
-    Eventuali id che non sono documenti UT di ``testata`` — perché di
-    un'altra commessa, o non UT — vengono ignorati silenziosamente: non è un
-    errore, sono semplicemente fuori dal set su cui questa griglia può agire.
+    Eventuali id che non sono documenti UT, QC o WE di ``testata`` — perché
+    di un'altra commessa, o di un altro reparto — vengono ignorati
+    silenziosamente: non è un errore, sono semplicemente fuori dal set su cui
+    questa griglia può agire.
 
     Returns:
         I documenti effettivamente aggiornati.
     """
     documenti = list(
-        documenti_ut(testata)
+        documenti_trasmittal(testata)
         .filter(pk__in=list(documento_ids or []))
         .prefetch_related("destinazioni__stabilimento")
     )
@@ -493,19 +528,6 @@ def crea_trasmittal_interno(testata, righe, utente, data=None, note=""):
     return trasmittal
 
 
-def data_impegno(oggi):
-    """Termine entro cui va completata la distribuzione delle copie cartacee.
-
-    Il giorno lavorativo successivo a ``oggi``: normalmente il giorno dopo,
-    ma se questo cade di sabato o domenica si passa al lunedì (quindi il
-    venerdì il termine è tre giorni dopo). Non è la data di firma.
-    """
-    successivo = oggi + timedelta(days=1)
-    while successivo.weekday() >= 5:  # 5 = sabato, 6 = domenica
-        successivo += timedelta(days=1)
-    return successivo
-
-
 def _percorso_pdf_da(job, nome):
     return get_jobs_root() / job / "Progetto" / "UT" / "Transmittal" / f"{nome}.pdf"
 
@@ -686,19 +708,34 @@ def _cerca_in_indice(indice, vendor_doc):
     return scegli_corrispondenza_esatta(trovati, vendor_doc)
 
 
-def _indice_cartella_ut(testata):
-    """File della cartella UT della commessa sul fileserver, in una sola scansione."""
-    reparto = Reparto.objects.filter(acronimo="UT").first()
-    if not (reparto and reparto.acronimo):
-        return []
-    return elenca_cartella(get_base_path(testata.job, reparto.acronimo))
+def _indici_cartelle_reparti(testata, documenti):
+    """File della cartella di ciascun reparto dei documenti dati, una scansione per reparto.
+
+    La cartella è ``get_base_path(job, acronimo)``: si scansionano solo i
+    reparti che compaiono fra ``documenti``.
+
+    Returns:
+        Dict ``{nome del reparto: [file, ...]}``, con le chiavi di
+        ``Documento.reparto``.
+    """
+    nomi = {documento.reparto for documento in documenti}
+    return {
+        reparto.nome: elenca_cartella(get_base_path(testata.job, reparto.acronimo))
+        for reparto in _reparti_trasmittal()
+        if reparto.nome in nomi
+    }
+
+
+def _cerca_file_documento(indici, documento):
+    """``_cerca_in_indice`` nella sola cartella del reparto del documento."""
+    return _cerca_in_indice(indici.get(documento.reparto, []), documento.vendor_doc)
 
 
 def _data_modifica_iso(trovati):
     """ISO datetime dell'ultima modifica del file, se ``trovati`` ne contiene esattamente uno.
 
     Con nessun file o più file corrispondenti il documento non ha un file
-    risolto (stessa regola di ``elenco_selezione_ut``): ``None``.
+    risolto (stessa regola di ``elenco_selezione``): ``None``.
     """
     if len(trovati) != 1 or not trovati[0]["mtime"]:
         return None
@@ -724,8 +761,8 @@ def _motivo_non_da_emettere(revisione, etichetta):
     return f"Rev {etichetta} già ricevuta dal cliente."
 
 
-def elenco_selezione_ut(testata):
-    """Documenti UT della commessa per la selezione della lettera trasmittal interno.
+def elenco_selezione(testata):
+    """Documenti UT, QC e WE della commessa per la selezione della lettera trasmittal interno.
 
     A differenza della griglia destinazioni, ogni documento porta anche la
     sua validità per la lettera: un documento senza revisione registrata,
@@ -735,11 +772,11 @@ def elenco_selezione_ut(testata):
     creazione come faceva il vecchio strumento Excel, che bloccava l'intera
     lettera.
 
-    Tutti i documenti UT condividono lo stesso reparto, quindi la stessa
-    cartella sul fileserver: viene scansionata una volta sola (non una volta
-    per documento, che su una share di rete con molti documenti è il motivo
-    per cui questa vista poteva metterci a lungo a caricare) e le revisioni/
-    destinazioni sono precaricate con prefetch invece di una query ciascuna.
+    Il file di ogni documento si cerca nella cartella del SUO reparto. Ogni
+    cartella viene scansionata una volta sola (non una volta per documento,
+    che su una share di rete con molti documenti è il motivo per cui questa
+    vista poteva metterci a lungo a caricare) e le revisioni/destinazioni
+    sono precaricate con prefetch invece di una query ciascuna.
 
     Returns:
         Lista di dict ordinata per ``vendor_doc``, uno per documento, con:
@@ -757,7 +794,7 @@ def elenco_selezione_ut(testata):
         - ``motivo``: perché non è selezionabile, altrimenti ``""``
     """
     documenti = list(
-        documenti_ut(testata)
+        documenti_trasmittal(testata)
         .prefetch_related(
             Prefetch("revisioni", queryset=Revisione.objects.order_by(*ORDINE_DECRESCENTE)),
             Prefetch(
@@ -772,7 +809,7 @@ def elenco_selezione_ut(testata):
     if not documenti:
         return []
 
-    indice_cartella = _indice_cartella_ut(testata)
+    indici = _indici_cartelle_reparti(testata, documenti)
 
     risultato = []
     for documento in documenti:
@@ -806,7 +843,7 @@ def elenco_selezione_ut(testata):
                 "numero": numero_revisione(latest_rev.rev_no, latest_rev.rev_let, *formato),
             }
         ]
-        trovati = _cerca_in_indice(indice_cartella, documento.vendor_doc)
+        trovati = _cerca_file_documento(indici, documento)
         if len(trovati) != 1:
             voce["motivo"] = (
                 "Più file corrispondenti sul fileserver."
@@ -824,9 +861,9 @@ def elenco_selezione_ut(testata):
 def _prepara_righe(testata, righe_payload):
     """Valida e converte il payload delle righe (dict JSON) per ``crea_trasmittal_interno``.
 
-    Ogni voce richiede ``documento_id`` (un documento UT selezionabile di
+    Ogni voce richiede ``documento_id`` (un documento selezionabile di
     questa commessa) e ``revisione`` (una delle sue ``revisioni_ammissibili``
-    di ``elenco_selezione_ut``); ``copie``, ``tpi``, ``tpi_destinatario``,
+    di ``elenco_selezione``); ``copie``, ``tpi``, ``tpi_destinatario``,
     ``note``, ``cliente`` sono opzionali. Il primo problema trovato interrompe
     con un ``ValueError`` esplicito — niente lettera creata a metà da un
     payload malformato o da una selezione che nel frattempo è diventata non
@@ -839,8 +876,8 @@ def _prepara_righe(testata, righe_payload):
     """
     if not righe_payload:
         raise ValueError("Selezionare almeno un documento.")
-    stati = {voce["id"]: voce for voce in elenco_selezione_ut(testata)}
-    documenti_map = {d.pk: d for d in documenti_ut(testata)}
+    stati = {voce["id"]: voce for voce in elenco_selezione(testata)}
+    documenti_map = {d.pk: d for d in documenti_trasmittal(testata)}
     righe = []
     for voce in righe_payload:
         documento_id = voce.get("documento_id")
@@ -887,6 +924,23 @@ def _prepara_righe(testata, righe_payload):
     return righe
 
 
+def _verifica_siti_lettera(righe):
+    """Una lettera deve coinvolgere almeno un sito: senza, nessuno può prenderne visione.
+
+    La presa visione spetta ai firmatari QC e PROD dei siti coinvolti (vedi
+    ``registra_presa_visione``): una lettera senza siti resterebbe in attesa
+    per sempre, senza PDF né cartella DCC.
+
+    Raises:
+        ValueError: nessun documento delle righe ha un sito coinvolto.
+    """
+    if not siti_coinvolti([riga["documento"] for riga in righe]):
+        raise ValueError(
+            "Nessun documento della lettera ha un sito coinvolto: senza siti nessuno può "
+            "prenderne visione. Imposta le destinazioni dei documenti e riprova."
+        )
+
+
 def anteprima_destinatari(testata, documenti):
     """Destinatari che risulterebbero per una lettera con questi documenti, senza persistere nulla."""
     return _costruisci_destinatari(testata, documenti, siti_coinvolti(documenti))
@@ -905,6 +959,7 @@ def anteprima_trasmittal(testata, righe_payload, utente=None):
     ``mittente_trasmittal``), così chi emette lo vede prima di confermare.
     """
     righe = _prepara_righe(testata, righe_payload)
+    _verifica_siti_lettera(righe)
     documenti = [riga["documento"] for riga in righe]
     oggi = timezone.localdate()
     # Anteprima del nome: il progressivo reale si assegna solo alla creazione
@@ -1073,25 +1128,107 @@ def _tabella_testo_righe(trasmittal):
     )
 
 
-def _corpo_email_trasmittal(trasmittal, percorso):
-    """Corpo dell'email: è la lettera per chi la riceve, non solo un avviso.
+# Presa visione: i due ruoli, nell'ordine in cui compaiono in email, elenco e
+# messaggi (QC prima di PROD), con la sigla usata nei testi.
+_RUOLI_PRESA_VISIONE = (
+    RuoloFirmatarioStabilimento.QUALITA,
+    RuoloFirmatarioStabilimento.PRODUZIONE,
+)
+_SIGLA_RUOLO = {
+    RuoloFirmatarioStabilimento.QUALITA: "QC",
+    RuoloFirmatarioStabilimento.PRODUZIONE: "PROD",
+}
 
-    Include la tabella delle righe (stesse colonne del PDF, così il
-    destinatario sa cosa gli è stato trasmesso senza dover aprire
-    l'allegato) e il percorso completo dove il PDF è salvato sul fileserver.
+STATO_IN_ATTESA = "in_attesa"
+STATO_PARZIALE = "parziale"
+STATO_COMPLETATO = "completato"
+
+TESTO_IN_ATTESA = "In attesa di presa visione QC e PROD"
+
+
+def _data_ora(momento):
+    """``gg/mm/aaaa hh:mm`` nell'ora locale, come nelle email e nel PDF."""
+    return timezone.localtime(momento).strftime("%d/%m/%Y %H:%M")
+
+
+def _righe_note(trasmittal):
+    """Le tre righe libere della lettera, le stesse del riquadro NOTES del PDF."""
+    from src.pdf import _righe_note_libere
+
+    return _righe_note_libere(trasmittal.note)
+
+
+def _riquadro_note_testo(trasmittal):
+    """Riquadro NOTES dell'email di emissione: le tre righe numerate 1) 2) 3)."""
+    righe = [f"{i}) {testo}".rstrip() for i, testo in enumerate(_righe_note(trasmittal), start=1)]
+    return "\n".join(["NOTES", *righe])
+
+
+def link_lettera(trasmittal, base_url=""):
+    """Indirizzo della pagina del trasmittal interno della commessa, aperta su questa lettera.
+
+    La base è ``settings.WORKFLOW_BASE_URL``. Se è vuota vale ``base_url``,
+    l'indirizzo con cui chi emette (o chi riprova l'invio) ha aperto l'app,
+    passato dalla view; senza nessuna delle due resta il solo percorso.
+    """
+    base = (getattr(settings, "WORKFLOW_BASE_URL", "") or base_url or "").rstrip("/")
+    percorso = reverse("trasmittal_interno_detail", args=[trasmittal.testata.job])
+    return f"{base}{percorso}?lettera={trasmittal.pk}"
+
+
+def _corpo_email_emissione(trasmittal, link):
+    """Corpo dell'email di emissione: è la lettera per chi la riceve, non solo un avviso.
+
+    Intestazione, messaggio facoltativo di chi emette, tabella delle righe
+    (stesse colonne del PDF, così il destinatario sa cosa gli è stato
+    trasmesso), riquadro NOTES con le tre righe libere della lettera e la riga
+    di stato con il link alla pagina in Workflow. Il percorso del PDF non c'è:
+    il PDF si salva solo dopo le due prese visione, e lo riporta l'email di
+    completamento (``_corpo_email_completamento``).
 
     Versione testo semplice: fa da corpo per i client senza HTML e da
     fallback, ma si allinea per colonna solo con un font monospace — molti
     client (Gmail, Outlook) mostrano il testo semplice con un font
     proporzionale, che rompe l'allineamento. Per questo l'email include anche
-    ``_corpo_email_trasmittal_html`` come alternativa ``text/html``.
+    ``_corpo_email_emissione_html`` come alternativa ``text/html``.
     """
     messaggio = (trasmittal.messaggio_email or "").strip()
     return (
         f"{_intestazione_email(trasmittal)}\n\n"
         + (f"{messaggio}\n\n" if messaggio else "")
         + f"{_tabella_testo_righe(trasmittal)}\n\n"
-        f"Salvato in: {percorso}"
+        + f"{_riquadro_note_testo(trasmittal)}\n\n"
+        + f"{TESTO_IN_ATTESA}: {link}"
+    )
+
+
+def _righe_visionato(trasmittal):
+    """``Visionato da <nome> (QC) il <data ora>``, una riga per presa visione, QC prima di PROD."""
+    prese = {p.ruolo: p for p in trasmittal.prese_visione.select_related("utente")}
+    return [
+        f"Visionato da {prese[ruolo].utente.nome_completo} ({_SIGLA_RUOLO[ruolo]}) "
+        f"il {_data_ora(prese[ruolo].registrata_il)}"
+        for ruolo in _RUOLI_PRESA_VISIONE
+        if ruolo in prese
+    ]
+
+
+def _riga_salvataggio(trasmittal):
+    """Dove è salvato il PDF; se il salvataggio non è riuscito lo dice, invece di un percorso vuoto."""
+    percorso = percorso_pdf(trasmittal)
+    if percorso.is_file():
+        return f"Salvato in: {percorso}"
+    return (
+        f"PDF non ancora salvato (salvataggio non riuscito, da riprovare in Workflow): {percorso}"
+    )
+
+
+def _corpo_email_completamento(trasmittal):
+    """Corpo dell'email di completamento: chi ha preso visione, quando, e dove è il PDF."""
+    return (
+        f"{_intestazione_email(trasmittal)}\n\n"
+        + "\n".join(_righe_visionato(trasmittal))
+        + f"\n\n{_riga_salvataggio(trasmittal)}"
     )
 
 
@@ -1128,16 +1265,44 @@ def _tabella_html_righe(trasmittal):
     return f'<table style="{_EMAIL_TABLE_STYLE}"><thead><tr>{testa}</tr></thead><tbody>{corpo}</tbody></table>'
 
 
-def _corpo_email_trasmittal_html(trasmittal, percorso):
-    """Versione HTML di ``_corpo_email_trasmittal``, allegata come alternativa
-    ``text/html`` (vedi ``invia_email_trasmittal``)."""
+_EMAIL_NOTE_CELL_STYLE = "border:1px solid #999;padding:4px 8px;text-align:left;min-width:400px;"
+
+
+def _riquadro_note_html(trasmittal):
+    """Riquadro NOTES di ``_riquadro_note_testo`` come tabella a una cella."""
+    righe = "<br>".join(
+        escape(f"{i}) {testo}".rstrip()) for i, testo in enumerate(_righe_note(trasmittal), start=1)
+    )
+    return (
+        f'<table style="{_EMAIL_TABLE_STYLE}margin-top:12px;"><thead><tr>'
+        f'<th style="{_EMAIL_HEADER_STYLE}">NOTES</th></tr></thead>'
+        f'<tbody><tr><td style="{_EMAIL_NOTE_CELL_STYLE}">{righe}</td></tr></tbody></table>'
+    )
+
+
+def _corpo_email_emissione_html(trasmittal, link):
+    """Versione HTML di ``_corpo_email_emissione``, allegata come alternativa
+    ``text/html`` (vedi ``invia_email_emissione``)."""
     messaggio = (trasmittal.messaggio_email or "").strip()
     messaggio_html = "<br>".join(escape(riga) for riga in messaggio.splitlines())
     return (
         f"<p>{escape(_intestazione_email(trasmittal))}</p>"
         + (f"<p>{messaggio_html}</p>" if messaggio else "")
-        + f"{_tabella_html_righe(trasmittal)}"
-        f"<p>Salvato in: {escape(str(percorso))}</p>"
+        + _tabella_html_righe(trasmittal)
+        + _riquadro_note_html(trasmittal)
+        + f'<p><strong>{escape(TESTO_IN_ATTESA)}</strong>: <a href="{escape(link)}">'
+        f"{escape(link)}</a></p>"
+    )
+
+
+def _corpo_email_completamento_html(trasmittal):
+    """Versione HTML di ``_corpo_email_completamento``."""
+    return (
+        f"<p>{escape(_intestazione_email(trasmittal))}</p>"
+        + "<p>"
+        + "<br>".join(escape(riga) for riga in _righe_visionato(trasmittal))
+        + "</p>"
+        + f"<p>{escape(_riga_salvataggio(trasmittal))}</p>"
     )
 
 
@@ -1182,27 +1347,19 @@ def _intestazione_email(trasmittal):
     )
 
 
-def invia_email_trasmittal(trasmittal):
-    """Invia via email il trasmittal interno ai destinatari TO/CC registrati.
+def _oggetto_email(trasmittal):
+    """Oggetto delle email della lettera: porta il riferimento al modulo del sistema
+    qualità (non è decorativo, identifica il documento). È lo stesso per l'email di
+    emissione e per quella di completamento, così restano nello stesso thread."""
+    return f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}"
 
-    Oggetto e corpo replicano il vecchio strumento: l'oggetto porta il
-    riferimento al modulo del sistema qualità (non è decorativo, identifica
-    il documento), il corpo è la lettera stessa per chi la riceve — righe,
-    percorso di salvataggio, promemoria di firma. Il PDF non è allegato: il
-    corpo riporta già il percorso dove è salvato sul fileserver (lo stesso
-    link che l'allegato duplicherebbe), e niente PDF da generare o
-    trasportare per ogni destinatario.
 
-    L'email parte dalla casella dell'applicazione (``mittente_trasmittal``);
-    chi ha emesso la lettera (``trasmittal.creato_da``) è scritto nella prima
-    riga del testo, e il suo indirizzo va in ``Reply-To`` e in copia, così le
-    risposte arrivano a lui e gliene resta un esemplare. Vale anche quando l'invio viene
-    ritentato da un'altra persona: conta chi ha emesso la lettera, che è
-    quanto scritto sul modulo.
+def _destinatari_email(trasmittal):
+    """TO e CC delle email della lettera: i destinatari registrati, più chi ha emesso in copia.
 
     Returns:
-        Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
-        indirizzi usati (``cc`` comprende chi ha emesso la lettera).
+        Tupla ``(to, cc)`` di liste di indirizzi; chi ha emesso la lettera è
+        aggiunto in coda ai CC se non è già fra i destinatari.
 
     Raises:
         ValueError: nessun destinatario in TO.
@@ -1219,15 +1376,57 @@ def invia_email_trasmittal(trasmittal):
     )
     if not to:
         raise ValueError("Nessun destinatario in TO: impossibile inviare l'email.")
-    # Chi ha emesso la lettera in copia, se non è già fra i destinatari.
     emittente = (getattr(trasmittal.creato_da, "email", "") or "").strip()
     if emittente and emittente.lower() not in {e.lower() for e in to + cc}:
         cc.append(emittente)
+    return to, cc
 
-    percorso = percorso_pdf(trasmittal)
-    subject = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}"
-    body = _corpo_email_trasmittal(trasmittal, percorso)
-    body_html = _corpo_email_trasmittal_html(trasmittal, percorso)
+
+def _destinatario_completamento(trasmittal):
+    """TO e CC dell'email di completamento: solo chi ha emesso la lettera.
+
+    Returns:
+        Tupla ``(to, cc)``: l'indirizzo di chi ha emesso, nessuna copia.
+
+    Raises:
+        ValueError: chi ha emesso la lettera non ha un indirizzo email.
+    """
+    emittente = (trasmittal.creato_da.email or "").strip()
+    if not emittente:
+        raise ValueError(
+            f"{trasmittal.creato_da.nome_completo} non ha un indirizzo email: "
+            "impossibile inviare l'email di completamento."
+        )
+    return [emittente], []
+
+
+def _invia_email(trasmittal, body, body_html, headers=None, destinatari=None):
+    """Invia un'email della lettera ai suoi destinatari TO/CC registrati.
+
+    L'email parte dalla casella dell'applicazione (``mittente_trasmittal``);
+    chi ha emesso la lettera (``trasmittal.creato_da``) è scritto nella prima
+    riga del testo, e il suo indirizzo va in ``Reply-To`` e in copia, così le
+    risposte arrivano a lui e gliene resta un esemplare. Vale anche quando
+    l'invio viene ritentato da un'altra persona o parte dalla presa visione
+    di qualcun altro: conta chi ha emesso la lettera, che è quanto scritto sul
+    modulo. Nessun allegato.
+
+    Con ``TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT`` impostato l'email va solo a
+    quell'indirizzo, con i destinatari veri nell'oggetto e nel testo.
+
+    Args:
+        destinatari: Tupla ``(to, cc)`` al posto di quelli registrati
+            (``_destinatari_email``), es. ``_destinatario_completamento``.
+
+    Returns:
+        Dict ``{"to": [...], "cc": [...], "mittente": str}`` con gli
+        indirizzi usati (``cc`` comprende chi ha emesso la lettera).
+
+    Raises:
+        ValueError: nessun destinatario in TO.
+    """
+    to, cc = destinatari or _destinatari_email(trasmittal)
+    subject = _oggetto_email(trasmittal)
     invio_to, invio_cc = to, cc
     test_redirect = getattr(settings, "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", "")
     if test_redirect:
@@ -1246,42 +1445,436 @@ def invia_email_trasmittal(trasmittal):
         to=invio_to,
         cc=invio_cc,
         reply_to=[rispondi_a] if rispondi_a else None,
+        headers=headers or None,
     )
     email.attach_alternative(body_html, "text/html")
     email.send(fail_silently=False)
     return {"to": to, "cc": cc, "mittente": mittente}
 
 
+def invia_email_emissione(trasmittal, base_url=""):
+    """Email di emissione: avvisa i destinatari che la lettera è emessa e attende la presa visione.
+
+    Corpo in testo e in HTML (vedi ``_corpo_email_emissione``): intestazione,
+    messaggio facoltativo, tabella delle righe, riquadro NOTES e la riga di
+    stato con il link alla pagina della lettera (``link_lettera``). Nessun
+    allegato e nessun percorso del PDF, che a questo punto non esiste ancora.
+
+    Il Message-ID è generato qui (``make_msgid``, sul dominio della casella
+    dell'app) e salvato in ``trasmittal.message_id`` dopo l'invio: l'email di
+    completamento lo cita in ``In-Reply-To``/``References`` per restare nello
+    stesso thread. Un nuovo invio (Riprova) genera e salva un nuovo Message-ID.
+
+    Returns:
+        Dict ``{"to", "cc", "mittente", "message_id"}``.
+
+    Raises:
+        ValueError: nessun destinatario in TO.
+    """
+    link = link_lettera(trasmittal, base_url)
+    mittente = mittente_trasmittal(trasmittal.creato_da)
+    message_id = make_msgid(domain=mittente.rpartition("@")[2] or None)
+    esito = _invia_email(
+        trasmittal,
+        _corpo_email_emissione(trasmittal, link),
+        _corpo_email_emissione_html(trasmittal, link),
+        headers={"Message-ID": message_id},
+    )
+    trasmittal.message_id = message_id
+    trasmittal.save(update_fields=["message_id"])
+    return {**esito, "message_id": message_id}
+
+
+def invia_email_completamento(trasmittal):
+    """Email di completamento: QC e PROD hanno preso visione, il PDF è sul fileserver.
+
+    Va solo a chi ha emesso la lettera (``_destinatario_completamento``), non
+    ai destinatari dell'emissione. Stesso oggetto e stesso Reply-To dell'email
+    di emissione, e header ``In-Reply-To`` e ``References`` con il Message-ID
+    salvato (``trasmittal.message_id``): chi ha emesso aveva la prima in
+    copia, quindi il suo client la mostra come risposta nello stesso thread.
+    Se l'email di emissione non è mai partita il Message-ID manca e l'email
+    parte senza quegli header.
+
+    Returns:
+        Dict ``{"to", "cc", "mittente"}``.
+
+    Raises:
+        ValueError: chi ha emesso la lettera non ha un indirizzo email.
+    """
+    headers = None
+    if trasmittal.message_id:
+        headers = {"In-Reply-To": trasmittal.message_id, "References": trasmittal.message_id}
+    return _invia_email(
+        trasmittal,
+        _corpo_email_completamento(trasmittal),
+        _corpo_email_completamento_html(trasmittal),
+        headers=headers,
+        destinatari=_destinatario_completamento(trasmittal),
+    )
+
+
+# ── Passi best-effort: emissione, completamento, Riprova ───────────────────────
+# Ogni passo è indipendente: un errore è registrato nel log e riportato nel suo
+# esito, mai silenzioso, e non ferma gli altri passi.
+
+
+def _passo_pdf(trasmittal):
+    try:
+        percorso = salva_pdf(trasmittal)
+        return {"ok": True, "errore": None, "percorso": str(percorso)}
+    except Exception as exc:
+        logger.exception('Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome)
+        return {"ok": False, "errore": str(exc), "percorso": None}
+
+
+def _passo_dcc(trasmittal):
+    try:
+        return {"ok": True, "errore": None, **prepara_per_dcc(trasmittal)}
+    except Exception as exc:
+        logger.exception('Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome)
+        return {"ok": False, "errore": str(exc), "cartella": None, "copiati": [], "mancanti": []}
+
+
+def _esito_email_fallita(trasmittal, exc):
+    return {
+        "ok": False,
+        "errore": str(exc),
+        "to": [],
+        "cc": [],
+        "mittente": mittente_trasmittal(trasmittal.creato_da),
+    }
+
+
+def _passo_email_emissione(trasmittal, base_url=""):
+    try:
+        return {"ok": True, "errore": None, **invia_email_emissione(trasmittal, base_url)}
+    except Exception as exc:
+        logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
+        return _esito_email_fallita(trasmittal, exc)
+
+
+def _passo_email_completamento(trasmittal):
+    try:
+        return {"ok": True, "errore": None, **invia_email_completamento(trasmittal)}
+    except Exception as exc:
+        logger.exception(
+            'Invio email di completamento del trasmittal interno "%s" fallito.', trasmittal.nome
+        )
+        return _esito_email_fallita(trasmittal, exc)
+
+
+def completa_trasmittal_interno(trasmittal):
+    """Archivia e distribuisce una lettera su cui QC e PROD hanno preso visione.
+
+    Salva il PDF sul fileserver (``salva_pdf``), prepara la cartella DCC
+    (``prepara_per_dcc``) e invia l'email di completamento
+    (``invia_email_completamento``), nell'ordine. Ogni passo è indipendente e
+    best-effort: un suo fallimento non ferma gli altri ed è riportato nel
+    risultato, così si ritenta solo quello (``riprova_passo``).
+
+    Returns:
+        Dict con ``pdf``, ``dcc`` ed ``email``, ognuno ``{"ok": bool,
+        "errore": str | None, ...}`` (stesso formato dell'emissione).
+    """
+    return {
+        "pdf": _passo_pdf(trasmittal),
+        "dcc": _passo_dcc(trasmittal),
+        "email": _passo_email_completamento(trasmittal),
+    }
+
+
+def _completa_lettera(trasmittal_id):
+    """Completamento in background: rilegge la lettera e la completa, segnalando nel log i passi falliti."""
+    trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
+        pk=trasmittal_id
+    )
+    esito = completa_trasmittal_interno(trasmittal)
+    falliti = [passo for passo, esito_passo in esito.items() if not esito_passo["ok"]]
+    if falliti:
+        logger.warning(
+            'Completamento del trasmittal interno "%s": passi non riusciti: %s.',
+            trasmittal.nome,
+            ", ".join(falliti),
+        )
+
+
+def _in_background(funzione, *args):
+    """Esegue ``funzione(*args)`` in un thread a parte e ne restituisce il ``Thread``.
+
+    Un errore finisce nel log; a fine lavoro il thread chiude le sue
+    connessioni al database, che Django apre per thread.
+    """
+
+    def esegui():
+        try:
+            funzione(*args)
+        except Exception:
+            logger.exception("Lavoro in background %s fallito.", funzione.__name__)
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=esegui, name=f"trasmittal-{funzione.__name__}", daemon=True)
+    thread.start()
+    return thread
+
+
+PASSI_LETTERA = ("email", "pdf", "dcc", "email_completamento")
+
+
+def riprova_passo(trasmittal, passo, base_url=""):
+    """Ritenta un solo passo di una lettera già creata.
+
+    ``email`` è l'email di emissione e si può sempre ritentare (``base_url``
+    serve al suo link, vedi ``link_lettera``). ``pdf``, ``dcc`` ed
+    ``email_completamento`` sono i passi di ``completa_trasmittal_interno``:
+    hanno senso solo a lettera completata.
+
+    Returns:
+        L'esito del passo, nello stesso formato di emissione e completamento.
+
+    Raises:
+        ValueError: passo sconosciuto.
+        TrasmittalInternoNonCompletatoError: un passo di completamento su una
+            lettera a cui manca ancora una presa visione.
+    """
+    if passo not in PASSI_LETTERA:
+        raise ValueError(f"Passo non valido: deve essere uno fra {', '.join(PASSI_LETTERA)}.")
+    if passo == "email":
+        return _passo_email_emissione(trasmittal, base_url)
+    stato = stato_prese_visione(trasmittal.prese_visione.select_related("utente"))
+    if stato["stato"] != STATO_COMPLETATO:
+        raise TrasmittalInternoNonCompletatoError(
+            "La lettera non ha ancora la presa visione di "
+            f"{' e '.join(stato['ruoli_mancanti'])}: PDF, cartella DCC ed email di "
+            "completamento arrivano dopo."
+        )
+    if passo == "pdf":
+        return _passo_pdf(trasmittal)
+    if passo == "dcc":
+        return _passo_dcc(trasmittal)
+    return _passo_email_completamento(trasmittal)
+
+
+# ── Presa visione QC / PROD ────────────────────────────────────────────────────
+
+
+def siti_lettera(trasmittal):
+    """Siti coinvolti nella lettera: unione degli snapshot delle sue righe."""
+    return Stabilimento.objects.filter(righe_trasmittal_interno__trasmittal=trasmittal).distinct()
+
+
+def ruoli_presa_visione_ammessi(trasmittal, utente):
+    """Ruoli per cui ``utente`` può prendere visione della lettera.
+
+    Un ruolo è ammesso se l'utente è ``FirmatarioStabilimento`` di quel ruolo
+    su almeno uno dei siti coinvolti nella lettera (``RigaTransmittalInterno.siti``).
+    """
+    return set(
+        FirmatarioStabilimento.objects.filter(
+            utente=utente, stabilimento__in=siti_lettera(trasmittal)
+        ).values_list("ruolo", flat=True)
+    )
+
+
+def _serializza_presa_visione(presa):
+    return {
+        "ruolo": presa.ruolo,
+        "sigla": _SIGLA_RUOLO[presa.ruolo],
+        "utente": presa.utente.nome_completo,
+        "registrata_il": timezone.localtime(presa.registrata_il).isoformat(),
+    }
+
+
+def stato_prese_visione(prese):
+    """Stato di una lettera rispetto alle prese visione QC e PROD.
+
+    Args:
+        prese: Le ``PresaVisioneTransmittalInterno`` della lettera, con
+            ``utente`` già caricato.
+
+    Returns:
+        Dict con ``stato`` (``in_attesa``, ``parziale`` o ``completato``),
+        ``ruoli_mancanti`` (sigle, QC prima di PROD) e ``prese_visione``
+        (lista di dict ``{"ruolo", "sigla", "utente", "registrata_il"}``,
+        QC prima di PROD).
+    """
+    per_ruolo = {presa.ruolo: presa for presa in prese}
+    mancanti = [_SIGLA_RUOLO[r] for r in _RUOLI_PRESA_VISIONE if r not in per_ruolo]
+    if not mancanti:
+        stato = STATO_COMPLETATO
+    elif len(mancanti) == len(_RUOLI_PRESA_VISIONE):
+        stato = STATO_IN_ATTESA
+    else:
+        stato = STATO_PARZIALE
+    return {
+        "stato": stato,
+        "ruoli_mancanti": mancanti,
+        "prese_visione": [
+            _serializza_presa_visione(per_ruolo[r]) for r in _RUOLI_PRESA_VISIONE if r in per_ruolo
+        ],
+    }
+
+
+def _ruoli_da_registrare(ruolo, ammessi, registrate):
+    """I ruoli per cui registrare la presa visione: quello chiesto, o tutti i mancanti dell'utente.
+
+    Raises:
+        TrasmittalInternoPresaVisioneError: ruolo non valido (400) o non
+            ammesso (403), o già registrato per tutti i ruoli candidati (409).
+    """
+    if ruolo:
+        if ruolo not in RuoloFirmatarioStabilimento.values:
+            raise TrasmittalInternoPresaVisioneError(f'Ruolo non valido: "{ruolo}".', status=400)
+        if ruolo not in ammessi:
+            sigla = _SIGLA_RUOLO[ruolo]
+            raise TrasmittalInternoPresaVisioneError(
+                f"Non puoi prendere visione come {sigla}: non sei firmatario {sigla} di "
+                "nessuno dei siti coinvolti nella lettera.",
+                status=403,
+            )
+        candidati = [ruolo]
+    else:
+        candidati = [r for r in _RUOLI_PRESA_VISIONE if r in ammessi]
+    mancanti = [r for r in candidati if r not in registrate]
+    if not mancanti:
+        gia = registrate[candidati[0]]
+        raise TrasmittalInternoPresaVisioneError(
+            f"La presa visione {_SIGLA_RUOLO[gia.ruolo]} è già stata registrata da "
+            f"{gia.utente.nome_completo} il {_data_ora(gia.registrata_il)}.",
+            status=409,
+        )
+    return mancanti
+
+
+def registra_presa_visione(trasmittal, utente, ruolo=None, completa_in_background=False):
+    """Registra la presa visione di ``utente`` e, se completa la lettera, la archivia.
+
+    Dalla pagina parte quando un firmatario apre l'anteprima della lettera
+    (``trasmittal_interno_lettera_pdf_api``): vederla vale come presa visione.
+    Può prendere visione un utente
+    ``FirmatarioStabilimento`` di quel ruolo su almeno uno dei siti coinvolti
+    nella lettera (``ruoli_presa_visione_ammessi``). Senza ``ruolo`` si
+    registrano tutti i ruoli ancora mancanti di cui l'utente è firmatario
+    (entrambi, se è firmatario sia QC sia PROD); ``ruolo`` limita la
+    registrazione a quello. Una sola presa visione per ruolo.
+
+    La registrazione blocca la riga del trasmittal (``select_for_update``):
+    due prese visione contemporanee si mettono in fila, e solo quella che
+    completa la coppia QC + PROD avvia ``completa_trasmittal_interno`` (PDF,
+    DCC, email di completamento), fuori dalla transazione e best-effort. Con
+    ``completa_in_background`` il completamento gira in un thread a parte dopo
+    il commit, così chi ha aperto l'anteprima non lo aspetta.
+
+    Args:
+        trasmittal: La lettera.
+        utente: Chi apre l'anteprima (l'utente autenticato).
+        ruolo: ``RuoloFirmatarioStabilimento`` scelto, facoltativo.
+        completa_in_background: Se ``True`` il completamento non si attende.
+
+    Returns:
+        Dict con ``trasmittal_id``, ``nome``, ``registrate`` (le prese visione
+        registrate ora), lo stato (``stato_prese_visione``) e
+        ``completamento``: l'esito di ``completa_trasmittal_interno``, oppure
+        ``None`` se manca ancora un ruolo o il completamento è in background.
+
+    Raises:
+        TrasmittalInternoPresaVisioneError: utente non autorizzato (403),
+            ruolo già visionato (409), ruolo non valido (400).
+    """
+    with transaction.atomic():
+        trasmittal = (
+            TransmittalInterno.objects.select_for_update()
+            .select_related("testata", "creato_da")
+            .get(pk=trasmittal.pk)
+        )
+        ammessi = ruoli_presa_visione_ammessi(trasmittal, utente)
+        if not ammessi:
+            raise TrasmittalInternoPresaVisioneError(
+                "Non puoi prendere visione di questa lettera: non sei firmatario QC o PROD "
+                "di nessuno dei siti coinvolti.",
+                status=403,
+            )
+        registrate = {p.ruolo: p for p in trasmittal.prese_visione.select_related("utente")}
+        nuove = []
+        for da_registrare in _ruoli_da_registrare(ruolo, ammessi, registrate):
+            try:
+                with transaction.atomic():
+                    presa = PresaVisioneTransmittalInterno.objects.create(
+                        trasmittal=trasmittal, utente=utente, ruolo=da_registrare
+                    )
+            except IntegrityError:
+                raise TrasmittalInternoPresaVisioneError(
+                    f"La presa visione {_SIGLA_RUOLO[da_registrare]} è già stata registrata.",
+                    status=409,
+                ) from None
+            registrate[da_registrare] = presa
+            nuove.append(presa)
+
+    for presa in nuove:
+        logger.info(
+            'Presa visione %s del trasmittal interno "%s" registrata da %s.',
+            _SIGLA_RUOLO[presa.ruolo],
+            trasmittal.nome,
+            utente.get_username(),
+        )
+    stato = stato_prese_visione(registrate.values())
+    risultato = {
+        "trasmittal_id": trasmittal.pk,
+        "nome": trasmittal.nome,
+        "registrate": [_serializza_presa_visione(p) for p in nuove],
+        **stato,
+        "completamento": None,
+    }
+    if stato["stato"] == STATO_COMPLETATO:
+        if completa_in_background:
+            # Dopo il commit: il thread usa un'altra connessione e deve vedere le prese visione.
+            transaction.on_commit(lambda: _in_background(_completa_lettera, trasmittal.pk))
+        else:
+            risultato["completamento"] = completa_trasmittal_interno(trasmittal)
+    return risultato
+
+
 MAX_MESSAGGIO_EMAIL = 2000
 
 
 def emetti_trasmittal_interno(
-    testata, righe_payload, utente, note="", data=None, destinatari=None, messaggio=""
+    testata,
+    righe_payload,
+    utente,
+    note="",
+    data=None,
+    destinatari=None,
+    messaggio="",
+    base_url="",
 ):
-    """Crea, archivia e distribuisce una lettera di trasmittal interno.
+    """Crea una lettera di trasmittal interno e invia l'email di emissione.
 
-    Un'unica operazione: crea il trasmittal (con i destinatari auto-risolti,
-    sostituiti da ``destinatari`` se dato — la conferma dell'anteprima,
-    eventualmente modificata dall'utente), salva il PDF sul fileserver,
-    prepara la cartella DCC, invia l'email. ``messaggio`` è il testo
-    facoltativo scritto prima dell'invio: va nell'email, sopra la tabella.
+    Crea il trasmittal (con i destinatari auto-risolti, sostituiti da
+    ``destinatari`` se dato — la conferma dell'anteprima, eventualmente
+    modificata dall'utente) e invia l'email di emissione
+    (``invia_email_emissione``). ``messaggio`` è il testo facoltativo scritto
+    prima dell'invio: va nell'email, sopra la tabella; ``base_url`` serve al
+    link della lettera (vedi ``link_lettera``).
+
+    PDF sul fileserver e cartella DCC NON si preparano qui: arrivano quando
+    QC e PROD hanno preso visione (``registra_presa_visione``).
 
     Solo la creazione (righe + destinatari) è atomica e può far fallire tutta
-    l'operazione: senza una lettera valida non c'è nulla da archiviare o
-    spedire. Ogni passo successivo — PDF, DCC, email — è indipendente e
-    best-effort: un suo fallimento non annulla la lettera già creata né gli
-    altri passi, ed è riportato nel risultato. Mai fallire in silenzio, mai
-    lasciare la lettera "a metà" senza dirlo.
+    l'operazione. L'email è best-effort: un suo fallimento non annulla la
+    lettera già creata ed è riportato nel risultato (si ritenta con
+    ``riprova_passo``). Mai fallire in silenzio.
 
     Raises:
-        ValueError: selezione non valida (vedi ``_prepara_righe``),
-            destinatari non validi (vedi ``sostituisci_destinatari``) o
-            messaggio troppo lungo — in questi casi non viene creata nessuna
-            lettera.
+        ValueError: selezione non valida (vedi ``_prepara_righe``), nessun
+            sito coinvolto (vedi ``_verifica_siti_lettera``), destinatari non
+            validi (vedi ``sostituisci_destinatari``) o messaggio troppo lungo
+            — in questi casi non viene creata nessuna lettera.
 
     Returns:
-        Dict con ``trasmittal_id``, ``nome`` e, per ciascuno di
-        ``pdf``/``dcc``/``email``, ``{"ok": bool, "errore": str | None, ...}``.
+        Dict con ``trasmittal_id``, ``nome``, lo stato delle prese visione
+        (``stato_prese_visione``: appena emessa è ``in_attesa``) ed
+        ``email``: ``{"ok": bool, "errore": str | None, ...}``.
     """
     messaggio = str(messaggio or "").strip()
     if len(messaggio) > MAX_MESSAGGIO_EMAIL:
@@ -1289,9 +1882,10 @@ def emetti_trasmittal_interno(
             f"Il messaggio dell'email può avere al massimo {MAX_MESSAGGIO_EMAIL} caratteri."
         )
     righe = _prepara_righe(testata, righe_payload)
+    _verifica_siti_lettera(righe)
     # Un'unica transazione: se i destinatari confermati non passano la
     # validazione, la lettera (e il suo progressivo del giorno) non deve
-    # restare nel database senza PDF, cartella DCC né email.
+    # restare nel database senza email.
     with transaction.atomic():
         trasmittal = crea_trasmittal_interno(testata, righe, utente, data=data, note=note)
         if messaggio:
@@ -1300,45 +1894,15 @@ def emetti_trasmittal_interno(
         if destinatari is not None:
             sostituisci_destinatari(trasmittal, destinatari)
 
-    risultato = {"trasmittal_id": trasmittal.pk, "nome": trasmittal.nome}
-
-    try:
-        percorso = salva_pdf(trasmittal)
-        risultato["pdf"] = {"ok": True, "errore": None, "percorso": str(percorso)}
-    except Exception as exc:
-        logger.exception('Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome)
-        risultato["pdf"] = {"ok": False, "errore": str(exc), "percorso": None}
-
-    try:
-        esito_dcc = prepara_per_dcc(trasmittal)
-        risultato["dcc"] = {"ok": True, "errore": None, **esito_dcc}
-    except Exception as exc:
-        logger.exception('Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome)
-        risultato["dcc"] = {
-            "ok": False,
-            "errore": str(exc),
-            "cartella": None,
-            "copiati": [],
-            "mancanti": [],
-        }
-
-    try:
-        esito_email = invia_email_trasmittal(trasmittal)
-        risultato["email"] = {"ok": True, "errore": None, **esito_email}
-    except Exception as exc:
-        logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
-        risultato["email"] = {
-            "ok": False,
-            "errore": str(exc),
-            "to": [],
-            "cc": [],
-            "mittente": mittente_trasmittal(trasmittal.creato_da),
-        }
-
-    return risultato
+    return {
+        "trasmittal_id": trasmittal.pk,
+        "nome": trasmittal.nome,
+        **stato_prese_visione([]),
+        "email": _passo_email_emissione(trasmittal, base_url),
+    }
 
 
-def elenco_trasmittal_interni(testata):
+def elenco_trasmittal_interni(testata, utente=None):
     """Lettere di trasmittal interno già emesse per la commessa, più recenti prima.
 
     ``annullabile`` segue esattamente la regola imposta da
@@ -1347,11 +1911,35 @@ def elenco_trasmittal_interni(testata):
     lettera può essere "l'ultima del suo giorno" se la commessa ha lettere
     emesse in giorni diversi).
 
+    Ogni lettera porta lo stato delle prese visione (``stato_prese_visione``)
+    e, in ``puo_prendere_visione``, i ruoli (``{"ruolo", "sigla"}``) per cui
+    ``utente`` può registrare ora la presa visione: quelli di cui è
+    firmatario su un sito della lettera e che mancano ancora. Senza
+    ``utente`` la lista è vuota.
+
     ``pdf_presente`` dice se il PDF è sul fileserver (``None`` se la cartella
-    non si può leggere): senza file il link non porterebbe a niente.
+    non si può leggere): senza file il link non porterebbe a niente. Il PDF
+    si salva solo a lettera completata.
     """
     lettere = list(
-        testata.trasmittal_interni.select_related("creato_da").order_by("-data", "-progressivo")
+        testata.trasmittal_interni.select_related("creato_da")
+        .prefetch_related(
+            Prefetch(
+                "prese_visione",
+                queryset=PresaVisioneTransmittalInterno.objects.select_related("utente"),
+            ),
+            Prefetch("righe", queryset=RigaTransmittalInterno.objects.prefetch_related("siti")),
+        )
+        .order_by("-data", "-progressivo")
+    )
+    firmatario_di = (
+        set(
+            FirmatarioStabilimento.objects.filter(utente=utente).values_list(
+                "stabilimento_id", "ruolo"
+            )
+        )
+        if utente is not None
+        else set()
     )
     pdf_sul_fileserver = _pdf_nella_cartella(testata.job)
     giorni_visti = set()
@@ -1359,12 +1947,17 @@ def elenco_trasmittal_interni(testata):
     for t in lettere:
         annullabile = t.data not in giorni_visti
         giorni_visti.add(t.data)
+        righe = list(t.righe.all())
+        siti = {sito.pk for riga in righe for sito in riga.siti.all()}
+        prese = list(t.prese_visione.all())
+        registrati = {presa.ruolo for presa in prese}
+        ammessi = {ruolo for stabilimento_id, ruolo in firmatario_di if stabilimento_id in siti}
         risultato.append(
             {
                 "id": t.pk,
                 "nome": t.nome,
                 "data": t.data.isoformat(),
-                "n_documenti": t.righe.count(),
+                "n_documenti": len(righe),
                 "creato_da": t.creato_da.nome_completo,
                 "annullabile": annullabile,
                 "pdf_presente": (
@@ -1372,6 +1965,12 @@ def elenco_trasmittal_interni(testata):
                     if pdf_sul_fileserver is None
                     else f"{t.nome}.pdf".lower() in pdf_sul_fileserver
                 ),
+                **stato_prese_visione(prese),
+                "puo_prendere_visione": [
+                    {"ruolo": ruolo, "sigla": _SIGLA_RUOLO[ruolo]}
+                    for ruolo in _RUOLI_PRESA_VISIONE
+                    if ruolo in ammessi and ruolo not in registrati
+                ],
             }
         )
     return risultato
@@ -1403,9 +2002,9 @@ def annulla_trasmittal_interno(trasmittal, utente):
     il progressivo resta coerente: annullare libera davvero il numero più
     alto di quel giorno, non un numero intermedio.
 
-    Elimina il record e le righe (CASCADE), rimuove il PDF dal fileserver e
-    i file che questo trasmittal aveva copiato nella cartella preparata per
-    il DCC. La cartella stessa viene rimossa solo se resta vuota dopo aver
+    Elimina il record, le righe e le prese visione (CASCADE) e, se la
+    lettera era già completata, rimuove il PDF dal fileserver e i file che
+    questo trasmittal aveva copiato nella cartella preparata per il DCC. La cartella stessa viene rimossa solo se resta vuota dopo aver
     tolto quei file: se contiene altro — mai scritto da questo trasmittal,
     dato che il nome della cartella è unico per trasmittal — non viene
     toccata.
@@ -1416,8 +2015,9 @@ def annulla_trasmittal_interno(trasmittal, utente):
     L'eventuale file orfano rimasto sul fileserver è segnalato nel log, non
     bloccante (stessa scelta già fatta per ``trasmittal_archivio.annulla_trasmittal``).
 
-    L'email eventualmente già inviata non può essere ritirata: l'esito lo
-    dice sempre esplicitamente, per un avviso chiaro in UI.
+    Le email eventualmente già inviate (emissione, completamento) non
+    possono essere ritirate: l'esito lo dice sempre esplicitamente, per un
+    avviso chiaro in UI.
 
     Args:
         trasmittal: Il ``TransmittalInterno`` da annullare.

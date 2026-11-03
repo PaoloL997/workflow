@@ -1000,7 +1000,8 @@
         '<form class="comment-form" data-id="' + s.id + '">' +
           '<textarea name="testo" rows="1" placeholder="Scrivi un commento…" required></textarea>' +
           '<button type="submit">Invia</button>' +
-        '</form>';
+        '</form>' +
+        '<p class="form-error comment-error"></p>';
     }
     html += '</div>';
     return html;
@@ -1033,7 +1034,9 @@
       try {
         await api('/api/segnalazioni/' + id + '/voto/', 'POST', { valore: valore });
         await loadFeed();
-      } catch (err) {}
+      } catch (err) {
+        if (err.status !== 403) alert(err.message || 'Impossibile registrare il voto.');
+      }
       return;
     }
     if (action === 'chiudi') {
@@ -1078,7 +1081,12 @@
       expanded.add(id);
       commentsOpen.add(id);
       await loadFeed();
-    } catch (err) {}
+    } catch (err) {
+      if (err.status === 403) return;
+      var errBox = form.parentNode.querySelector('.comment-error');
+      errBox.textContent = err.message || 'Impossibile inviare il commento.';
+      errBox.classList.add('visible');
+    }
   });
 
   document.querySelectorAll('.filter-item').forEach(function (item) {
