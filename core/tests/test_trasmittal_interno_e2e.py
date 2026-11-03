@@ -517,7 +517,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
     def test_16_oggetto_email_formato_atteso(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox), 1)
-        atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {esito['nome']}"
+        atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.01]: {esito['nome']}"
         self.assertEqual(mail.outbox[0].subject, atteso)
 
     @override_settings(WORKFLOW_BASE_URL="")

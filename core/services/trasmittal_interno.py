@@ -1351,7 +1351,7 @@ def _oggetto_email(trasmittal):
     """Oggetto delle email della lettera: porta il riferimento al modulo del sistema
     qualità (non è decorativo, identifica il documento). È lo stesso per l'email di
     emissione e per quella di completamento, così restano nello stesso thread."""
-    return f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {trasmittal.nome}"
+    return f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.01]: {trasmittal.nome}"
 
 
 def _destinatari_email(trasmittal):
