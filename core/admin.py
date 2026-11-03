@@ -202,7 +202,8 @@ class ModelloDocumentoAdmin(admin.ModelAdmin):
 
 @admin.register(RevisioneFileLink)
 class RevisioneFileLinkAdmin(admin.ModelAdmin):
-    list_display = ("id", "revisione", "percorso", "created_at", "updated_at")
+    list_display = ("id", "revisione", "tipo", "percorso", "created_at", "updated_at")
+    list_filter = ("tipo",)
     search_fields = ("percorso", "revisione__documento__vendor_doc")
     raw_id_fields = ("revisione",)
     readonly_fields = ("created_at", "updated_at")

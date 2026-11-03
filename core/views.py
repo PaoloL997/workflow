@@ -43,6 +43,7 @@ from .models import (
     Stabilimento,
     StatoEsterno,
     Testata,
+    TipoFileLink,
     TransmittalInterno,
     User,
     valida_immagine_avatar,
@@ -2946,20 +2947,33 @@ def import_documenti_template(request):
 # ── API: File revisione ───────────────────────────────────────────────────────
 
 
+def _tipo_file_link(valore):
+    """Il ``TipoFileLink`` chiesto dal client: ``ricevuto`` se manca, ``None`` se non valido."""
+    valore = str(valore or TipoFileLink.RICEVUTO).strip()
+    return valore if valore in TipoFileLink.values else None
+
+
+_TIPO_FILE_NON_VALIDO = "Tipo di file non valido: usare 'ricevuto' o 'inviato'."
+
+
 @api_login_required
 @require_http_methods(["GET"])
 def revisione_file_api(request, pk):
     """Resolve the filesystem file path for a revision.
 
-    Tries automatic resolution first (base path / RICEVUTI), then falls back
-    to the stored manual link.
+    Query parameter ``tipo``: ``ricevuto`` (default, cella Received) or
+    ``inviato`` (cella Dispatch). The stored manual link of that ``tipo``
+    wins; otherwise the file is searched automatically.
 
     Returns:
         JSON with ``status`` (``found`` | ``multiple`` | ``manual_linked`` |
-        ``not_found``) and ``files`` list.
+        ``not_found``) and ``files`` list; 400 for an invalid ``tipo``.
     """
+    tipo = _tipo_file_link(request.GET.get("tipo"))
+    if tipo is None:
+        return JsonResponse({"error": _TIPO_FILE_NON_VALIDO}, status=400)
     try:
-        result = risolvi_file_revisione(pk)
+        result = risolvi_file_revisione(pk, tipo)
         return JsonResponse(result)
     except Revisione.DoesNotExist:
         return JsonResponse({"error": "Revisione non trovata."}, status=404)
@@ -2974,7 +2988,8 @@ def revisione_file_api(request, pk):
 def revisione_file_link_api(request, pk):
     """Save a manual file link for a revision.
 
-    Request body: ``{"percorso": "Z:\\\\JOBS\\\\..."}``
+    Request body: ``{"percorso": "Z:\\\\JOBS\\\\...", "tipo": "inviato"}``;
+    ``tipo`` is optional (default ``ricevuto``).
 
     Returns:
         JSON with the saved ``percorso``.
@@ -2984,7 +2999,10 @@ def revisione_file_link_api(request, pk):
         percorso = (data.get("percorso") or "").strip()
         if not percorso:
             return JsonResponse({"error": "Percorso mancante."}, status=400)
-        link = salva_file_link(pk, percorso)
+        tipo = _tipo_file_link(data.get("tipo"))
+        if tipo is None:
+            return JsonResponse({"error": _TIPO_FILE_NON_VALIDO}, status=400)
+        link = salva_file_link(pk, percorso, tipo)
         return JsonResponse({"percorso": link.percorso})
     except Revisione.DoesNotExist:
         return JsonResponse({"error": "Revisione non trovata."}, status=404)
@@ -3041,7 +3059,8 @@ def revisione_file_serve(request, pk):
 
     Accepts an optional ``percorso`` query parameter to select a specific file
     (needed when multiple candidates exist). If omitted the file is resolved
-    automatically via ``risolvi_file_revisione``.
+    automatically via ``risolvi_file_revisione``, for the optional ``tipo``
+    (``ricevuto`` by default, or ``inviato``).
 
     Files are served inline (``as_attachment=False``): the browser displays
     types it can render (e.g. PDF) and downloads the others.
@@ -3079,8 +3098,11 @@ def revisione_file_serve(request, pk):
         except ValueError:
             return HttpResponseForbidden("Percorso non autorizzato.")
     else:
+        tipo = _tipo_file_link(request.GET.get("tipo"))
+        if tipo is None:
+            raise Http404
         try:
-            result = risolvi_file_revisione(pk)
+            result = risolvi_file_revisione(pk, tipo)
         except Revisione.DoesNotExist:
             raise Http404
         if result["status"] not in ("found", "manual_linked") or not result["files"]:

@@ -1032,13 +1032,30 @@ class Revisione(models.Model):
         return f"Rev {etichetta}" if etichetta else f"Rev #{self.pk}"
 
 
-class RevisioneFileLink(models.Model):
-    """Manual file link for a revision when auto-resolution fails."""
+class TipoFileLink(models.TextChoices):
+    """Quale file della revisione: quello ricevuto dal cliente o quello inviato."""
 
-    revisione = models.OneToOneField(
+    RICEVUTO = "ricevuto", "Received"
+    INVIATO = "inviato", "Dispatch"
+
+
+class RevisioneFileLink(models.Model):
+    """Manual file link for a revision when auto-resolution fails.
+
+    Una revisione ha al più un link per tipo: il file ricevuto (cella Received)
+    e quello inviato (cella Dispatch) si collegano separatamente.
+    """
+
+    revisione = models.ForeignKey(
         Revisione,
         on_delete=models.CASCADE,
-        related_name="file_link",
+        related_name="file_links",
+    )
+    tipo = models.CharField(
+        db_column="Tipo",
+        max_length=10,
+        choices=TipoFileLink.choices,
+        default=TipoFileLink.RICEVUTO,
     )
     percorso = models.CharField(
         db_column="Percorso",
@@ -1053,9 +1070,14 @@ class RevisioneFileLink(models.Model):
         db_table = "revisioni_file_link"
         verbose_name = "Link file revisione"
         verbose_name_plural = "Link file revisioni"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["revisione", "tipo"], name="uniq_revisione_file_link_tipo"
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.revisione} → {self.percorso}"
+        return f"{self.revisione} ({self.get_tipo_display()}) → {self.percorso}"
 
 
 class Transmittal(models.Model):

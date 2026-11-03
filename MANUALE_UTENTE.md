@@ -577,6 +577,8 @@ JOBS/
                 └── <YYYY-MM-DD>/   ← documenti ricevuti dal cliente
 ```
 
+I documenti **inviati** al cliente si cercano in due sole cartelle: `PROGETTO\UT` per i documenti UT, `PROGETTO\QC` per tutti gli altri (QC, WELD, PM…). Lì c'è l'ultima revisione inviata; le revisioni precedenti stanno nella sottocartella `OBSOLETI` (UT) o `SUPERATI` (QC).
+
 L'acronimo di ciascun reparto (es. Quality Control → `QC`) è impostato da un amministratore: un documento senza reparto, o con un reparto senza acronimo, non può essere cercato automaticamente.
 
 ### 8.2 Apertura automatica dei file
@@ -593,6 +595,15 @@ Clicca su un **chip revisione** (es. `Rev. 0`, `Rev. A`) nella lista documenti, 
 4. Se trova **un solo file** → lo apre direttamente.
 5. Se trova **più file** → il riquadro **Scegli il file da aprire** elenca i file con un pulsante **Apri** ciascuno. Succede anche quando un codice è contenuto in un altro (es. `…-ESH1` e `…-ESH10`).
 6. Se **non trova nulla** → apre il riquadro **Collega un file alla revisione**.
+
+**Cella Dispatch della situazione documenti.** Apre il file **inviato** con quella revisione e lo cerca nella cartella dei documenti inviati e nelle sue sottocartelle `OBSOLETI`/`SUPERATI` (vedi **8.1**):
+
+- se il nome del file indica la revisione (es. `Rev1`, `_1`, `_R1`, `Rev.1`, `Rev B`) → apre quello, preferendo il nome senza altro testo dopo la revisione (`Rev.2` invece di `Rev.2A`);
+- per l'**ultima revisione inviata**, se nessun nome indica la revisione → apre il file senza suffisso della cartella principale (es. `PROGETTO\UT\26027-01-EBM1.pdf`);
+- per la **prima revisione inviata** → apre il file senza suffisso in `OBSOLETI`/`SUPERATI`;
+- altrimenti il riquadro **Scegli il file da aprire** elenca tutti i file del documento; se non c'è nessun file → **Collega un file alla revisione**.
+
+I nomi dei file vecchi non seguono una regola unica, quindi per le revisioni precedenti la ricerca può sbagliare: in quel caso il file giusto va cercato direttamente sul fileserver.
 
 **Comportamento per tipo file:**
 
@@ -614,6 +625,8 @@ Se il file non viene trovato automaticamente:
 3. Con il file selezionato compare *"File selezionato"* con il percorso: clicca **Salva collegamento** (permessi: Scrittura; chi ha solo Lettura può navigare ma al salvataggio riceve l'avviso di permesso negato).
 
 Compare *"Collegamento salvato."* e il file si apre subito. Il collegamento viene memorizzato e da quel momento ha sempre la precedenza: il riquadro non ricompare più per quella revisione. Il file deve stare dentro la cartella JOBS. Per cambiare o togliere un collegamento salvato rivolgiti a un amministratore.
+
+Il file **inviato** (cella **Dispatch** della situazione documenti) e il file **ricevuto** (tutte le altre aperture) hanno collegamenti separati: collegare la Dispatch non cambia il file che si apre dalla Received, e viceversa.
 
 ---
 
@@ -818,9 +831,9 @@ Clicca l'icona **Schermo intero** per espandere la tabella a tutto lo schermo. C
 ### 11.6 Apertura file
 
 - **Vista verticale:** clicca una riga (che abbia una revisione).
-- **Vista orizzontale:** clicca la cella **Received** (se ha una data) o la cella **Status** di una revisione.
+- **Vista orizzontale:** clicca la cella **Received** (se ha una data) o la cella **Status** di una revisione per il file ricevuto; clicca la cella **Dispatch** (se ha una data) per il file inviato al cliente con quella revisione.
 
-Vale la stessa logica di **8.2 Apertura automatica dei file**, compresi i riquadri **Scegli il file da aprire** e **Collega un file alla revisione** (vedi **8.3 Collegamento manuale di un file**).
+Vale la stessa logica di **8.2 Apertura automatica dei file** (per la Dispatch la ricerca descritta in fondo a 8.2), compresi i riquadri **Scegli il file da aprire** e **Collega un file alla revisione** (vedi **8.3 Collegamento manuale di un file**).
 
 ### 11.7 Sblocca revisione
 
