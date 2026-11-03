@@ -128,7 +128,7 @@ if env_bool("USE_X_FORWARDED_PROTO", False):
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "core.admin_config.WorkflowAdminConfig",  # django.contrib.admin, tabelle per argomento
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

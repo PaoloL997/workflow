@@ -36,17 +36,20 @@ from .models import (
 from .permissions import GRUPPO_SERVIZIO
 
 
-class IndirizzoStabilimentoInline(admin.TabularInline):
-    model = IndirizzoStabilimento
-    extra = 0
-    fields = ("email", "tipo", "attivo")
-
-
 @admin.register(Stabilimento)
 class StabilimentoAdmin(admin.ModelAdmin):
     list_display = ("id", "nome", "sigla", "codice_bc")
     search_fields = ("nome", "sigla")
-    inlines = [IndirizzoStabilimentoInline]
+
+
+@admin.register(IndirizzoStabilimento)
+class IndirizzoStabilimentoAdmin(admin.ModelAdmin):
+    """Indirizzi A/CC dei siti per il trasmittal interno, nel gruppo omonimo dell'admin."""
+
+    list_display = ("stabilimento", "email", "tipo", "attivo")
+    list_editable = ("attivo",)
+    list_filter = ("stabilimento", "tipo", "attivo")
+    search_fields = ("email", "stabilimento__nome", "stabilimento__sigla")
 
 
 @admin.register(Reparto)
