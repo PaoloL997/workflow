@@ -232,7 +232,7 @@ Non elenca commesse o documenti: per gli elenchi usa le pagine della commessa, c
 
 ### 3.7 Novità della versione
 
-In basso a sinistra nella Home c'è il badge con il numero di versione (es. **v0.2.0**). Cliccandolo si apre il riquadro **Novità** con le novità principali della versione in uso, divise in **Aggiunte** e, quando ci sono, **Modifiche** e **Correzioni**. Si chiude con ✕, Esc o cliccando fuori.
+In basso a sinistra nella Home c'è il badge con il numero di versione (es. **v0.2.1**). Cliccandolo si apre il riquadro **Novità** con le novità principali della versione in uso, divise in **Aggiunte** e, quando ci sono, **Modifiche** e **Correzioni**. Si chiude con ✕, Esc o cliccando fuori.
 
 ---
 
