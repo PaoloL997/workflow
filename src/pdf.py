@@ -657,14 +657,11 @@ _INT_DIST_DATE_W = 35.0
 _INT_DIST_ROW_H = 12.0
 
 # Riga finale di riferimenti del modulo: testo fisso, descrive il modulo
-# stesso (form/revisione), non la singola lettera.
-_INT_FOOTER_COLS = (
-    ("B&R Form: MQ 7.5-04", 42.0),
-    ("Rif.: PQHSE 7.5-01", 40.0),
-    ("Date First Issue: 06/05/2024", 44.0),
-    ("Date Actual Issue: 06/05/2024", 44.0),
-    ("Rev.0", 10.0),
-)
+# stesso (form/revisione), non la singola lettera. Un solo riquadro a tutta
+# larghezza con bordo spesso, testo allineato a sinistra.
+_INT_FOOTER_TESTO = "B&R Form: MQ 7.5-04 Rev.01 Dated: 23/10/2026  Rif.: PQHSE 7.5-01"
+_INT_FOOTER_H = 6.0
+_INT_FOOTER_BORDO_MM = 0.5
 
 
 class TrasmittalInternoPDF(FPDF):
@@ -889,11 +886,17 @@ def _build_distribuzione_copie(pdf, prese_visione):
 
 
 def _build_footer_riferimenti(pdf):
-    """Riga finale con i riferimenti fissi del modulo (form, riferimento, date, revisione)."""
+    """Riga finale con i riferimenti fissi del modulo (form, revisione, data, riferimento)."""
+    x0, y0 = pdf.l_margin, pdf.get_y()
+    spessore_prec = pdf.line_width
+    pdf.set_line_width(_INT_FOOTER_BORDO_MM)
+    pdf.rect(x0, y0, _INT_TABLE_WIDTH_MM, _INT_FOOTER_H)
+    pdf.set_line_width(spessore_prec)
+
     pdf.set_font(pdf._font_family, "", 7)
-    pdf.set_x(pdf.l_margin)
-    for testo, w in _INT_FOOTER_COLS:
-        pdf.cell(w, 6, testo, border=1, align="C")
+    pdf.set_xy(x0 + 2, y0)
+    pdf.cell(_INT_TABLE_WIDTH_MM - 4, _INT_FOOTER_H, _INT_FOOTER_TESTO, align="L")
+    pdf.set_xy(x0, y0 + _INT_FOOTER_H)
 
 
 def genera_trasmittal_interno_pdf(trasmittal):

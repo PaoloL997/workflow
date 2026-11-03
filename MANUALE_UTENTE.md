@@ -1020,7 +1020,7 @@ Il PDF riproduce il modulo **MQ 7.5-04**, dall'alto in basso:
 3. **REMARKS LEGENDA**: la legenda delle sigle dei siti (a), il significato di CLIENT/TPI (b) e dei destinatari TPI (c).
 4. **NOTES**: le note libere della lettera, numerate (al massimo tre).
 5. **PAPER COPIES DISTRIBUTION**: una riga **PRODUCTION** e una **QUALITY**. Nella colonna *ACKNOWLEDGED BY* c'è il nome di chi ha preso visione per quel ruolo, nella colonna *DATE* la data e l'ora della presa visione. Finché manca una presa visione la sua riga resta vuota.
-6. I riferimenti fissi del modulo (*B&R Form: MQ 7.5-04 · Rif.: PQHSE 7.5-01 · Rev.0*).
+6. I riferimenti fissi del modulo, in un riquadro a tutta larghezza: *B&R Form: MQ 7.5-04 Rev.01 Dated: 23/10/2026 Rif.: PQHSE 7.5-01*.
 
 La revisione è scritta come indicato in **6.3 Revisioni** al momento dell'emissione; una lettera già emessa non cambia se la scelta cambia dopo.
 

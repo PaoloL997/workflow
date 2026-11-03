@@ -477,6 +477,28 @@ class TrasmittalInternoPdfTests(TestCase):
 
         self.assertTrue(contenuto.startswith(b"%PDF"))
 
+    def test_footer_riporta_i_riferimenti_del_modulo_rev01_in_un_solo_riquadro(self):
+        from src.pdf import (
+            _INT_TABLE_WIDTH_MM,
+            TrasmittalInternoPDF,
+            _build_footer_riferimenti,
+        )
+
+        pdf = TrasmittalInternoPDF()
+        pdf.add_page()
+        with (
+            patch.object(pdf, "cell", wraps=pdf.cell) as cell,
+            patch.object(pdf, "rect", wraps=pdf.rect) as rect,
+        ):
+            _build_footer_riferimenti(pdf)
+
+        testi = [c.args[2] for c in cell.call_args_list]
+        self.assertEqual(
+            testi, ["B&R Form: MQ 7.5-04 Rev.01 Dated: 23/10/2026  Rif.: PQHSE 7.5-01"]
+        )
+        rect.assert_called_once()
+        self.assertEqual(rect.call_args.args[2], _INT_TABLE_WIDTH_MM)
+
 
 class SalvaPdfTrasmittalInternoTests(TestCase):
     """salva_pdf: scrittura sul fileserver, sempre dentro la cartella JOBS."""
