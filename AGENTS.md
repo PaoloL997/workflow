@@ -28,6 +28,7 @@
 - Do not commit directly to the main/master branch.
 - Create a dedicated branch for changes.
 - Do not merge pull requests.
+- Before opening a pull request, run `git fetch origin main` and rebase the branch onto the latest `origin/main`, resolving any conflicts (typically in `TECH-DEBT.md`, which many PRs edit) so the PR is opened without conflicts. Re-run the tests after a non-trivial rebase. If force-pushing is not allowed, merge `origin/main` into the branch instead.
 
 ## Technical debt
 When working in an area of the codebase, look for small, concrete technical-debt issues as part of normal implementation and review. If you discover an issue that is:
