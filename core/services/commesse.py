@@ -967,8 +967,9 @@ def risolvi_file_revisione(revisione_id: int) -> dict:
     3. Else if ``dis_act_date`` is set → look in the base path.
     4. Otherwise return ``not_found``.
 
-    Matching rule: the filename must start with ``Documento.vendor_doc``
-    (case-insensitive).
+    Matching rule: the filename must contain ``Documento.vendor_doc``
+    (case-insensitive substring match, so prefixes such as "Check copy of "
+    are accepted).
 
     Args:
         revisione_id: Primary key of the ``Revisione`` to resolve.

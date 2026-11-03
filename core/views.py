@@ -2935,8 +2935,8 @@ def revisione_file_serve(request, pk):
     (needed when multiple candidates exist). If omitted the file is resolved
     automatically via ``risolvi_file_revisione``.
 
-    All file types are served as attachments, triggering a download prompt
-    so the OS opens the file with the default application.
+    Files are served inline (``as_attachment=False``): the browser displays
+    types it can render (e.g. PDF) and downloads the others.
 
     Args:
         pk: Primary key of the ``Revisione`` to serve.
