@@ -2725,7 +2725,7 @@ def import_documenti_excel(request, job):
                 errors.append(f"Riga {row_num}: {date_err}, data ignorata.")
 
         try:
-            doc = Documento.objects.create(
+            doc = Documento(
                 testata=testata,
                 item_no=str(data.get("item_no") or "").strip(),
                 vendor_doc=str(data.get("vendor_doc") or "").strip(),
@@ -2739,11 +2739,15 @@ def import_documenti_excel(request, job):
                 reparto=reparto_str,
                 remarks=str(data.get("remarks") or "").strip(),
             )
+            doc.full_clean()
+            doc.save()
             rev0 = Revisione.objects.create(documento=doc, rev_no=0)
             if dis_plan is not None:
                 rev0.dis_plan_date = dis_plan
                 rev0.save(update_fields=["dis_plan_date"])
             created.append(doc.pk)
+        except ValidationError as exc:
+            errors.append(f"Riga {row_num}: {_messaggio_validazione(exc)}")
         except Exception as exc:
             errors.append(f"Riga {row_num}: {exc}")
 
