@@ -4,10 +4,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from django.contrib.auth.models import Group
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 
+from ..permissions import GRUPPO_SERVIZIO
 from ..models import (
     Permesso,
     PersonaCommessa,
@@ -609,6 +611,14 @@ class UtentiCercaApiTests(TestCase):
 
     def test_meno_di_due_caratteri_restituisce_vuoto(self):
         risposta = self.client.get("/api/utenti/cerca/?q=R")
+        self.assertEqual(risposta.json()["utenti"], [])
+
+    def test_esclude_utenti_di_servizio(self):
+        servizio = User.objects.create_user(
+            "uca_servizio", "uca-servizio@b.it", "pw", first_name="Agente", last_name="Bot"
+        )
+        servizio.groups.add(Group.objects.get(name=GRUPPO_SERVIZIO))
+        risposta = self.client.get("/api/utenti/cerca/?q=uca_servizio")
         self.assertEqual(risposta.json()["utenti"], [])
 
     def test_esclude_utenti_non_attivi(self):
