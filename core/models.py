@@ -919,9 +919,15 @@ class PresaVisioneTransmittalInterno(models.Model):
         User,
         on_delete=models.PROTECT,
         related_name="prese_visione_trasmittal_interno",
+        null=True,
+        blank=True,
     )
     ruolo = models.CharField(max_length=20, choices=RuoloFirmatarioStabilimento.choices)
     registrata_il = models.DateTimeField(default=timezone.now)
+    automatica = models.BooleanField(
+        default=False,
+        help_text="Registrata dall'applicazione all'emissione («in automatico»), senza utente.",
+    )
 
     class Meta:
         managed = True

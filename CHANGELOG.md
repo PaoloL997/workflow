@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Trasmittal interno, **approvazione automatica** (misura temporanea): con `TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA=True` nel `.env` ogni lettera è visionata *in automatico* nel momento in cui viene emessa, senza attendere la presa visione di QC e PROD. Alla creazione si registrano le prese visione di QC e PROD con nome «in automatico» (senza utente), poi si salva il PDF sul fileserver e si copiano i documenti per il cliente nella cartella DCC; solo dopo parte l'email di emissione, che dice *Lettera visionata in automatico (QC e PROD)* e riporta dove sono il trasmittal (`Trasmittal salvato in:`) e i documenti (`Documenti per il DCC in:`), oltre al link alla lettera. L'email di completamento non parte. Nel PDF e nell'elenco lettere compare «in automatico» al posto del nome. Se un passo fallisce la lettera resta creata e l'esito lo dice, con **Riprova** per PDF, DCC ed email. Spento (default) vale la presa visione di QC e PROD come prima. Aggiunge la colonna `automatica` a *Prese visione trasmittal interno* e rende facoltativo l'utente (migrazione `0066`)
+
 ## [0.2.1] - 2026-11-03
 
 ### Added

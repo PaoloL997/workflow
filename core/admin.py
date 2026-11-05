@@ -441,7 +441,7 @@ class DestinatarioTransmittalInternoInline(_SolaLetturaInline, admin.TabularInli
 
 class PresaVisioneTransmittalInternoInline(_SolaLetturaInline, admin.TabularInline):
     model = PresaVisioneTransmittalInterno
-    fields = ("ruolo", "utente", "registrata_il")
+    fields = ("ruolo", "utente", "automatica", "registrata_il")
 
 
 @admin.register(TransmittalInterno)
@@ -496,7 +496,7 @@ class PresaVisioneTransmittalInternoAdmin(admin.ModelAdmin):
     ed email di completamento restano.
     """
 
-    list_display = ("trasmittal", "ruolo", "utente", "registrata_il")
+    list_display = ("trasmittal", "ruolo", "utente", "automatica", "registrata_il")
     list_filter = ("ruolo",)
     search_fields = (
         "trasmittal__nome",

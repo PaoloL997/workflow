@@ -875,7 +875,8 @@ def _build_distribuzione_copie(pdf, prese_visione):
         if presa is not None:
             pdf.set_font(family, "", 9)
             pdf.set_xy(x0 + w_lbl + 3, y_testo)
-            pdf.cell(w_sign - 6, 6, presa.utente.nome_completo)
+            nome = "in automatico" if presa.automatica else presa.utente.nome_completo
+            pdf.cell(w_sign - 6, 6, nome)
             pdf.set_xy(x0 + w_lbl + w_sign, y_testo)
             quando = timezone.localtime(presa.registrata_il).strftime("%d/%m/%Y %H:%M")
             pdf.cell(w_date, 6, quando, align="C")

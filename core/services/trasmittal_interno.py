@@ -1133,6 +1133,15 @@ STATO_PARZIALE = "parziale"
 STATO_COMPLETATO = "completato"
 
 TESTO_IN_ATTESA = "In attesa di presa visione QC e PROD"
+TESTO_VISIONATA_AUTOMATICA = "Lettera visionata in automatico (QC e PROD)"
+
+
+NOME_AUTOMATICO = "in automatico"
+
+
+def _nome_visione(presa):
+    """Chi ha preso visione: il nome dell'utente, o «in automatico» se l'ha registrata l'app."""
+    return NOME_AUTOMATICO if presa.automatica else presa.utente.nome_completo
 
 
 def _data_ora(momento):
@@ -1173,7 +1182,9 @@ def _corpo_email_emissione(trasmittal, link):
     trasmesso), riquadro NOTES con le tre righe libere della lettera e la riga
     di stato con il link alla pagina in Workflow. Il percorso del PDF non c'è:
     il PDF si salva solo dopo le due prese visione, e lo riporta l'email di
-    completamento (``_corpo_email_completamento``).
+    completamento (``_corpo_email_completamento``). Per una lettera visionata
+    in automatico (``_lettera_automatica``) la riga di stato dice invece dove
+    sono il PDF e la cartella DCC, già pronti.
 
     Versione testo semplice: fa da corpo per i client senza HTML e da
     fallback, ma si allinea per colonna solo con un font monospace — molti
@@ -1187,7 +1198,7 @@ def _corpo_email_emissione(trasmittal, link):
         + (f"{messaggio}\n\n" if messaggio else "")
         + f"{_tabella_testo_righe(trasmittal)}\n\n"
         + f"{_riquadro_note_testo(trasmittal)}\n\n"
-        + f"{TESTO_IN_ATTESA}: {link}"
+        + "\n".join(_righe_stato_emissione(trasmittal, link))
     )
 
 
@@ -1195,21 +1206,57 @@ def _righe_visionato(trasmittal):
     """``Visionato da <nome> (QC) il <data ora>``, una riga per presa visione, QC prima di PROD."""
     prese = {p.ruolo: p for p in trasmittal.prese_visione.select_related("utente")}
     return [
-        f"Visionato da {prese[ruolo].utente.nome_completo} ({_SIGLA_RUOLO[ruolo]}) "
+        f"Visionato {_visionato_da(prese[ruolo])} ({_SIGLA_RUOLO[ruolo]}) "
         f"il {_data_ora(prese[ruolo].registrata_il)}"
         for ruolo in _RUOLI_PRESA_VISIONE
         if ruolo in prese
     ]
 
 
-def _riga_salvataggio(trasmittal):
+def _visionato_da(presa):
+    """``da <nome>``, oppure ``in automatico`` per una presa visione registrata dall'app."""
+    return NOME_AUTOMATICO if presa.automatica else f"da {presa.utente.nome_completo}"
+
+
+def _riga_salvataggio(trasmittal, etichetta="Salvato in"):
     """Dove è salvato il PDF; se il salvataggio non è riuscito lo dice, invece di un percorso vuoto."""
     percorso = percorso_pdf(trasmittal)
     if percorso.is_file():
-        return f"Salvato in: {percorso}"
+        return f"{etichetta}: {percorso}"
     return (
         f"PDF non ancora salvato (salvataggio non riuscito, da riprovare in Workflow): {percorso}"
     )
+
+
+def _riga_dcc(trasmittal):
+    """Dove sono i documenti per il cliente (cartella DCC), o che non c'è nulla da preparare."""
+    if not trasmittal.righe.filter(cliente=True).exists():
+        return "Nessun documento per il cliente: la cartella DCC non viene preparata."
+    cartella = _percorso_dcc_da(trasmittal.testata.job, trasmittal.nome)
+    if cartella.is_dir():
+        return f"Documenti per il DCC in: {cartella}"
+    return f"Cartella DCC non ancora preparata (da riprovare in Workflow): {cartella}"
+
+
+def _lettera_automatica(trasmittal):
+    """``True`` se la lettera è stata visionata in automatico all'emissione."""
+    return trasmittal.prese_visione.filter(automatica=True).exists()
+
+
+def _righe_stato_emissione(trasmittal, link):
+    """Righe in coda all'email di emissione: stato della lettera, con il link in Workflow.
+
+    In attesa di presa visione, oppure, per una lettera visionata in
+    automatico, dove sono il PDF e i documenti per il DCC (già salvati).
+    """
+    if not _lettera_automatica(trasmittal):
+        return [f"{TESTO_IN_ATTESA}: {link}"]
+    return [
+        TESTO_VISIONATA_AUTOMATICA,
+        _riga_salvataggio(trasmittal, "Trasmittal salvato in"),
+        _riga_dcc(trasmittal),
+        f"Lettera in Workflow: {link}",
+    ]
 
 
 def _corpo_email_completamento(trasmittal):
@@ -1269,6 +1316,19 @@ def _riquadro_note_html(trasmittal):
     )
 
 
+def _stato_emissione_html(trasmittal, link):
+    """Versione HTML di ``_righe_stato_emissione``."""
+    link_html = f'<a href="{escape(link)}">{escape(link)}</a>'
+    if not _lettera_automatica(trasmittal):
+        return f"<p><strong>{escape(TESTO_IN_ATTESA)}</strong>: {link_html}</p>"
+    return (
+        f"<p><strong>{escape(TESTO_VISIONATA_AUTOMATICA)}</strong><br>"
+        + f"{escape(_riga_salvataggio(trasmittal, 'Trasmittal salvato in'))}<br>"
+        + f"{escape(_riga_dcc(trasmittal))}<br>"
+        + f"Lettera in Workflow: {link_html}</p>"
+    )
+
+
 def _corpo_email_emissione_html(trasmittal, link):
     """Versione HTML di ``_corpo_email_emissione``, allegata come alternativa
     ``text/html`` (vedi ``invia_email_emissione``)."""
@@ -1279,8 +1339,7 @@ def _corpo_email_emissione_html(trasmittal, link):
         + (f"<p>{messaggio_html}</p>" if messaggio else "")
         + _tabella_html_righe(trasmittal)
         + _riquadro_note_html(trasmittal)
-        + f'<p><strong>{escape(TESTO_IN_ATTESA)}</strong>: <a href="{escape(link)}">'
-        f"{escape(link)}</a></p>"
+        + _stato_emissione_html(trasmittal, link)
     )
 
 
@@ -1670,7 +1729,7 @@ def _serializza_presa_visione(presa):
     return {
         "ruolo": presa.ruolo,
         "sigla": _SIGLA_RUOLO[presa.ruolo],
-        "utente": presa.utente.nome_completo,
+        "utente": _nome_visione(presa),
         "registrata_il": timezone.localtime(presa.registrata_il).isoformat(),
     }
 
@@ -1729,8 +1788,8 @@ def _ruoli_da_registrare(ruolo, ammessi, registrate):
     if not mancanti:
         gia = registrate[candidati[0]]
         raise TrasmittalInternoPresaVisioneError(
-            f"La presa visione {_SIGLA_RUOLO[gia.ruolo]} è già stata registrata da "
-            f"{gia.utente.nome_completo} il {_data_ora(gia.registrata_il)}.",
+            f"La presa visione {_SIGLA_RUOLO[gia.ruolo]} è già stata registrata "
+            f"{_visionato_da(gia)} il {_data_ora(gia.registrata_il)}.",
             status=409,
         )
     return mancanti
@@ -1824,6 +1883,27 @@ def registra_presa_visione(trasmittal, utente, ruolo=None, completa_in_backgroun
     return risultato
 
 
+def registra_prese_visione_automatiche(trasmittal):
+    """Registra la presa visione «in automatico» di QC e PROD, senza utente e senza completare.
+
+    Misura temporanea (``settings.TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA``):
+    chiamata all'emissione, dentro la transazione che crea la lettera. Non
+    avvia il completamento: PDF e cartella DCC li prepara ``emetti_trasmittal_interno``
+    prima dell'email, che ne riporta i percorsi.
+
+    Returns:
+        Le ``PresaVisioneTransmittalInterno`` create, QC prima di PROD.
+    """
+    return PresaVisioneTransmittalInterno.objects.bulk_create(
+        [
+            PresaVisioneTransmittalInterno(
+                trasmittal=trasmittal, utente=None, ruolo=ruolo, automatica=True
+            )
+            for ruolo in _RUOLI_PRESA_VISIONE
+        ]
+    )
+
+
 MAX_MESSAGGIO_EMAIL = 2000
 
 
@@ -1848,6 +1928,12 @@ def emetti_trasmittal_interno(
 
     PDF sul fileserver e cartella DCC NON si preparano qui: arrivano quando
     QC e PROD hanno preso visione (``registra_presa_visione``).
+
+    Eccezione, misura temporanea: con
+    ``settings.TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA`` la lettera è
+    visionata «in automatico» (``registra_prese_visione_automatiche``) nella
+    stessa transazione che la crea; poi si salvano PDF e cartella DCC e solo
+    dopo parte l'email, che dice dove sono. L'email di completamento non parte.
 
     Solo la creazione (righe + destinatari) è atomica e può far fallire tutta
     l'operazione. L'email è best-effort: un suo fallimento non annulla la
@@ -1882,11 +1968,17 @@ def emetti_trasmittal_interno(
             trasmittal.save(update_fields=["messaggio_email"])
         if destinatari is not None:
             sostituisci_destinatari(trasmittal, destinatari)
+        automatica = settings.TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA
+        prese = registra_prese_visione_automatiche(trasmittal) if automatica else []
 
+    # PDF e DCC prima dell'email: l'email riporta dove sono.
+    esiti = {"pdf": _passo_pdf(trasmittal), "dcc": _passo_dcc(trasmittal)} if automatica else {}
     return {
         "trasmittal_id": trasmittal.pk,
         "nome": trasmittal.nome,
-        **stato_prese_visione([]),
+        **stato_prese_visione(prese),
+        "automatica": automatica,
+        **esiti,
         "email": _passo_email_emissione(trasmittal, base_url),
     }
 

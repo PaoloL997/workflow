@@ -863,6 +863,8 @@
   // Scrittura riservata a chi ha User.trasmittal_interno_writer (spuntabile da admin):
   // indipendente dal permesso generale USER_CAN_WRITE.
   const TI_CAN_WRITE = {{ trasmittal_interno_can_write|yesno:"true,false" }};
+  // Misura temporanea: la lettera è visionata in automatico all'emissione (vedi settings).
+  const TI_AUTO = {{ trasmittal_interno_automatica|yesno:"true,false" }};
 
   function requireWriteTI() {
     if (!TI_CAN_WRITE) {
@@ -885,6 +887,7 @@
       + '<div class="ti-info-step-num">1</div>'
       + '<div class="ti-info-step-text">Chi emette invia la lettera: parte un\'email ai destinatari con il link alla lettera.</div>'
       + '</div>'
+      + (TI_AUTO ? '<div class="ti-info-callout"><span><strong>Al momento le lettere sono visionate in automatico:</strong> QC e PROD risultano «in automatico» nel momento in cui la lettera viene emessa, il PDF si salva sul fileserver, i documenti per il cliente vengono copiati per il DCC e l\'email di emissione riporta dove sono. Non serve nessuna presa visione e non parte una seconda email.</span></div>' : '')
       + '<div class="ti-info-step">'
       + '<div class="ti-info-step-num">2</div>'
       + '<div class="ti-info-step-text">Un firmatario QC e uno PROD di uno dei siti coinvolti aprono l\'<strong>Anteprima</strong> della lettera qui nell\'elenco: aprirla vale come presa visione, registrata a loro nome con data e ora. I firmatari, anche più di uno per ruolo e sito: ' + firmatari + '.</div>'
@@ -1799,12 +1802,16 @@
       + '<li>Un\'email viene inviata ai destinatari qui sotto, con la tabella, le note e il link alla lettera, senza allegati'
       + (anteprima.mittente ? ', dalla casella <strong>' + escHtml(anteprima.mittente) + '</strong> con il tuo nome nel testo, te in copia e le risposte a te' : '')
       + '.</li>'
-      + '<li>La lettera resta <strong>in attesa di presa visione QC e PROD</strong>. Quando entrambi hanno preso visione:</li>'
+      + (TI_AUTO
+          ? '<li>La lettera è <strong>visionata in automatico</strong> (QC e PROD): subito dopo la creazione:</li>'
+          : '<li>La lettera resta <strong>in attesa di presa visione QC e PROD</strong>. Quando entrambi hanno preso visione:</li>')
       + '<li>&nbsp;&nbsp;· il PDF viene salvato in <code>' + escHtml(anteprima.percorso_pdf_preview) + '</code>;</li>'
       + (anteprima.percorso_dcc_preview
           ? '<li>&nbsp;&nbsp;· i documenti per il cliente vengono copiati in <code>' + escHtml(anteprima.percorso_dcc_preview) + '</code> (cartella DCC);</li>'
           : '<li>&nbsp;&nbsp;· nessun documento è marcato "Cliente": non viene preparata nessuna cartella DCC;</li>')
-      + '<li>&nbsp;&nbsp;· ricevi una seconda email, solo tu, nello stesso thread.</li>'
+      + (TI_AUTO
+          ? '<li>&nbsp;&nbsp;· l\'email ai destinatari riporta dove sono il PDF e i documenti.</li>'
+          : '<li>&nbsp;&nbsp;· ricevi una seconda email, solo tu, nello stesso thread.</li>')
       + '</ul></div>';
 
     document.getElementById('conferma-body').innerHTML =
@@ -1919,6 +1926,14 @@
       : '';
   }
 
+  function dettaglioDcc(dcc) {
+    if (!dcc || !dcc.ok) return '';
+    if (!dcc.cartella) return 'Nessun documento per il cliente: cartella non preparata.';
+    var manc = (dcc.mancanti || []).map(function (m) { return escHtml(m.vendor_doc); });
+    return escHtml(dcc.cartella) + ' — ' + (dcc.copiati || []).length + ' file copiati'
+      + (manc.length ? ' — <strong>file non trovati:</strong> ' + manc.join(', ') : '');
+  }
+
   // Riprova lo può fare solo chi emette i trasmittal interni: agli altri
   // (es. il firmatario che ha completato la lettera) l'esito dice a chi chiedere.
   function stepRiprova(step) { return TI_CAN_WRITE ? step : null; }
@@ -1931,8 +1946,12 @@
     document.getElementById('conferma-title').textContent = 'Lettera ' + esito.nome;
     document.getElementById('conferma-body').innerHTML =
       esitoRiga('Trasmittal creato e archiviato', { ok: true })
+      + (esito.automatica ? esitoRiga('PDF salvato sul fileserver', esito.pdf, esito.pdf && esito.pdf.percorso ? escHtml(esito.pdf.percorso) : '', stepRiprova('pdf'), id) : '')
+      + (esito.automatica ? esitoRiga('Cartella DCC preparata', esito.dcc, dettaglioDcc(esito.dcc), stepRiprova('dcc'), id) : '')
       + esitoRiga('Email di emissione inviata', esito.email, dettaglioEmail(esito.email), stepRiprova('email'), id)
-      + '<p class="ti-esito-nota">In attesa di presa visione QC e PROD: il PDF si salva sul fileserver e la cartella DCC si prepara quando entrambi hanno preso visione.</p>';
+      + (esito.automatica
+          ? '<p class="ti-esito-nota">Lettera visionata in automatico (QC e PROD): non serve nessuna presa visione.</p>'
+          : '<p class="ti-esito-nota">In attesa di presa visione QC e PROD: il PDF si salva sul fileserver e la cartella DCC si prepara quando entrambi hanno preso visione.</p>');
     document.getElementById('conferma-actions').innerHTML =
       '<button type="button" class="btn-confirm" onclick="chiudiConferma()">Fatto</button>';
   }

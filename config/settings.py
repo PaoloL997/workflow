@@ -251,6 +251,15 @@ TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
 # ha aperto l'app, che può essere un IP interno diverso da quello degli altri.
 WORKFLOW_BASE_URL = os.environ.get("WORKFLOW_BASE_URL", "").strip().rstrip("/")
 
+# Misura temporanea: con ``TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA=True`` ogni
+# trasmittal interno è visionato "in automatico" nel momento in cui viene emesso
+# (senza attendere QC e PROD): PDF sul fileserver e cartella DCC si preparano
+# subito e l'email di emissione dice dove sono. Spenta, vale la presa visione
+# di QC e PROD.
+TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA = env_bool(
+    "TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA", False
+)
+
 # Destinatari delle richieste di eliminazione commessa (chi non è admin non
 # elimina: chiede). Lista separata da virgole nel .env, come gli altri indirizzi.
 COMMESSA_DELETE_REQUEST_RECIPIENTS = env_list(
