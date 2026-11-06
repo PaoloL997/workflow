@@ -34,8 +34,8 @@ When working in an area of the codebase, look for small, concrete technical-debt
 - Clearly scoped and independently actionable;
 - Low-risk enough for a focused PR;
 - Described with an affected area, concrete problem, and desired outcome;
-add it to TECH-DEBT.md unless it is fixed in the current PR.
+add it as a new file in `tech-debt/` (one file per item, see TECH-DEBT.md) unless it is fixed in the current PR.
 
-Do not add broad refactors, speculative concerns, product ideas, or items that require significant investigation. Create a ticket instead for cross-cutting, risky, or large work, then link to that ticket from TECH-DEBT.md if useful.
+Do not add broad refactors, speculative concerns, product ideas, or items that require significant investigation. Create a ticket instead for cross-cutting, risky, or large work, then link to that ticket from the item's file in `tech-debt/` if useful.
 
 Check if there are already open PRs that address the issue before picking it up.

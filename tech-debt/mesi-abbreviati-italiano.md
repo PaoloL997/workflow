@@ -1,0 +1,1 @@
+core/templates/core/base.html `MONTHS_SHORT` (riga ~535): le date delle schermate usano le abbreviazioni inglesi dei mesi (`10 jan 2026`) in un'interfaccia tutta in italiano; la stessa lista è usata dal campo «Return date» della ricezione, dalle notifiche e dal forum. Scegliere le abbreviazioni italiane (o un formato numerico) e aggiornare i parser che le rileggono.
