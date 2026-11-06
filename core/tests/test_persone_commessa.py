@@ -18,8 +18,10 @@ from ..models import (
     Testata,
 )
 from ..services.commesse import (
+    aggiungi_persona_commessa,
     create_commessa,
     persone_per_ruolo,
+    rimuovi_persona_commessa,
     risolvi_persona_commessa,
 )
 from ..services.organizzazione_commesse import (
@@ -706,3 +708,199 @@ class PersonaCommessaRisolviApiTests(TestCase):
         )
 
         self.assertEqual(risposta.status_code, 400)
+
+
+class AggiungiRimuoviPersonaCommessaTests(TestCase):
+    """aggiungi_persona_commessa e rimuovi_persona_commessa: modifica a mano dei ruoli."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="66030")
+        self.utente = User.objects.create_user(
+            "apc1", "apc1@b.it", "pw", first_name="Anna", last_name="Neri"
+        )
+
+    def test_aggiunge_l_utente_al_ruolo(self):
+        persona = aggiungi_persona_commessa(self.testata, "pm", self.utente.pk)
+
+        self.assertEqual(persona.ruolo, RuoloPersonaCommessa.PM)
+        self.assertEqual(persona.utente, self.utente)
+        self.assertEqual(persone_per_ruolo(self.testata)["pm"][0]["nome"], "Anna Neri")
+
+    def test_lo_stesso_utente_non_si_duplica_sul_ruolo(self):
+        prima = aggiungi_persona_commessa(self.testata, "pe", self.utente.pk)
+        seconda = aggiungi_persona_commessa(self.testata, "pe", self.utente.pk)
+
+        self.assertEqual(prima.pk, seconda.pk)
+        self.assertEqual(PersonaCommessa.objects.filter(testata=self.testata).count(), 1)
+
+    def test_lo_stesso_utente_su_ruoli_diversi(self):
+        aggiungi_persona_commessa(self.testata, "pm", self.utente.pk)
+        aggiungi_persona_commessa(self.testata, "we", self.utente.pk)
+
+        self.assertEqual(PersonaCommessa.objects.filter(testata=self.testata).count(), 2)
+
+    def test_ruolo_non_valido(self):
+        with self.assertRaises(ValueError):
+            aggiungi_persona_commessa(self.testata, "direttore", self.utente.pk)
+
+    def test_utente_disattivato_non_si_aggiunge(self):
+        self.utente.is_active = False
+        self.utente.save()
+
+        with self.assertRaises(User.DoesNotExist):
+            aggiungi_persona_commessa(self.testata, "pm", self.utente.pk)
+
+    def test_rimuove_anche_un_nome_libero(self):
+        libero = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, nome_libero="Baldelli"
+        )
+
+        persona = rimuovi_persona_commessa(libero.pk)
+
+        self.assertEqual((persona.testata, persona.ruolo), (self.testata, RuoloPersonaCommessa.QCI))
+        self.assertFalse(PersonaCommessa.objects.exists())
+
+    def test_rimuovi_persona_inesistente(self):
+        with self.assertRaises(PersonaCommessa.DoesNotExist):
+            rimuovi_persona_commessa(999999)
+
+
+class PersoneCommessaApiTests(TestCase):
+    """POST /api/commesse/<job>/persone/ e DELETE /api/persone-commessa/<pk>/."""
+
+    def setUp(self):
+        self.client = Client()
+        self.scrittura = User.objects.create_user(
+            "pca_scrittura", "pca-scrittura@b.it", "pw", permesso=Permesso.WRITING
+        )
+        self.lettura = User.objects.create_user(
+            "pca_lettura", "pca-lettura@b.it", "pw", permesso=Permesso.READING
+        )
+        self.candidato = User.objects.create_user(
+            "pca_candidato", "pca-candidato@b.it", "pw", first_name="Paolo", last_name="Gialli"
+        )
+        self.testata = Testata.objects.create(job="66040")
+
+    def _aggiungi(self, ruolo, utente_id, job=None):
+        return self.client.post(
+            f"/api/commesse/{job or self.testata.job}/persone/",
+            data=json.dumps({"ruolo": ruolo, "utente_id": utente_id}),
+            content_type="application/json",
+        )
+
+    def test_aggiunta_richiede_login(self):
+        self.assertNotEqual(self._aggiungi("pm", self.candidato.pk).status_code, 200)
+        self.assertFalse(PersonaCommessa.objects.exists())
+
+    def test_aggiunta_richiede_permesso_di_scrittura(self):
+        self.client.force_login(self.lettura)
+
+        self.assertEqual(self._aggiungi("pm", self.candidato.pk).status_code, 403)
+        self.assertFalse(PersonaCommessa.objects.exists())
+
+    def test_aggiunge_e_restituisce_le_persone_del_ruolo(self):
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PE, nome_libero="Baldelli"
+        )
+        self.client.force_login(self.scrittura)
+
+        risposta = self._aggiungi("pe", self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        self.assertEqual(corpo["ruolo"], "pe")
+        self.assertEqual(
+            [(p["nome"], p["abbinato"]) for p in corpo["persone"]],
+            [("Baldelli", False), ("Paolo Gialli", True)],
+        )
+
+    def test_ruolo_non_valido_400(self):
+        self.client.force_login(self.scrittura)
+
+        risposta = self._aggiungi("direttore", self.candidato.pk)
+
+        self.assertEqual(risposta.status_code, 400)
+        self.assertIn("Ruolo non valido", risposta.json()["error"])
+
+    def test_utente_id_mancante_o_non_numerico_400(self):
+        self.client.force_login(self.scrittura)
+
+        self.assertEqual(self._aggiungi("pm", None).status_code, 400)
+        self.assertEqual(self._aggiungi("pm", "abc").status_code, 400)
+
+    def test_utente_inesistente_404(self):
+        self.client.force_login(self.scrittura)
+
+        self.assertEqual(self._aggiungi("pm", 999999).status_code, 404)
+
+    def test_commessa_inesistente_404(self):
+        self.client.force_login(self.scrittura)
+
+        self.assertEqual(self._aggiungi("pm", self.candidato.pk, job="00000").status_code, 404)
+
+    def test_rimozione_richiede_permesso_di_scrittura(self):
+        persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.candidato
+        )
+        self.client.force_login(self.lettura)
+
+        risposta = self.client.delete(f"/api/persone-commessa/{persona.pk}/")
+
+        self.assertEqual(risposta.status_code, 403)
+        self.assertTrue(PersonaCommessa.objects.filter(pk=persona.pk).exists())
+
+    def test_rimuove_e_restituisce_le_persone_rimaste(self):
+        persona = PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.PM, utente=self.candidato
+        )
+        self.client.force_login(self.scrittura)
+
+        risposta = self.client.delete(f"/api/persone-commessa/{persona.pk}/")
+
+        self.assertEqual(risposta.status_code, 200)
+        self.assertEqual(risposta.json(), {"ok": True, "ruolo": "pm", "persone": []})
+        self.assertFalse(PersonaCommessa.objects.exists())
+
+    def test_rimozione_di_una_voce_inesistente_404(self):
+        self.client.force_login(self.scrittura)
+
+        self.assertEqual(self.client.delete("/api/persone-commessa/999999/").status_code, 404)
+
+
+class IntestazioneModificaRuoliTests(TestCase):
+    """La matita accanto a PM/PE/QCI/WE compare solo a chi ha il permesso Scrittura."""
+
+    def setUp(self):
+        self.client = Client()
+        self.testata = Testata.objects.create(job="66050")
+        utente = User.objects.create_user(
+            "ipm1", "ipm1@b.it", "pw", first_name="Sara", last_name="Blu"
+        )
+        PersonaCommessa.objects.create(
+            testata=self.testata, ruolo=RuoloPersonaCommessa.QCI, utente=utente
+        )
+
+    def _pagina(self, permesso):
+        utente = User.objects.create_user(
+            f"ipm_{permesso}", f"ipm-{permesso}@b.it", "pw", permesso=permesso
+        )
+        self.client.force_login(utente)
+        return self.client.get(f"/commesse/{self.testata.job}/")
+
+    def test_chi_scrive_vede_la_matita_per_ogni_ruolo(self):
+        pagina = self._pagina(Permesso.WRITING)
+
+        self.assertEqual(pagina.status_code, 200)
+        for ruolo in ("pm", "pe", "qci", "we"):
+            self.assertContains(pagina, f'class="persona-modifica" data-ruolo="{ruolo}"')
+        # Gli utenti abbinati portano il loro id: il popover li elenca per toglierli.
+        persona = PersonaCommessa.objects.get()
+        self.assertContains(
+            pagina, f'<span data-persona-id="{persona.pk}">Sara Blu</span>', html=True
+        )
+
+    def test_chi_legge_non_vede_la_matita(self):
+        pagina = self._pagina(Permesso.READING)
+
+        self.assertEqual(pagina.status_code, 200)
+        self.assertNotContains(pagina, 'class="persona-modifica"')

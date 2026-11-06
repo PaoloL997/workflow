@@ -31,6 +31,7 @@ from src.pdf import (
 )
 
 from .api_auth import autentica_api, token_valido
+from .date_fmt import parse_iso_date
 from .models import (
     ApiToken,
     Documento,
@@ -42,6 +43,7 @@ from .models import (
     Stabilimento,
     StatoEsterno,
     Testata,
+    TipoFileLink,
     TransmittalInterno,
     User,
     valida_immagine_avatar,
@@ -59,6 +61,7 @@ from .services.annulla_invio import InvioNonAnnullabile, annulla_invio_cliente
 from .services.bc_sync import BusinessCentralNonDisponibile, sincronizza_commesse
 from .services.bc_sync import list_aggiornamenti as list_aggiornamenti_bc
 from .services.commesse import (
+    aggiungi_persona_commessa,
     close_commessa,
     create_commessa,
     create_documento,
@@ -89,6 +92,7 @@ from .services.commesse import (
     pin_commessa,
     request_delete_commessa,
     revisioni_by_doc_for_job,
+    rimuovi_persona_commessa,
     risolvi_file_revisione,
     risolvi_persona_commessa,
     salva_file_link,
@@ -104,13 +108,13 @@ from .services.commesse import (
     update_revisione,
     update_stato_esterno,
 )
+from .services.export_grezzo import FORMATO_DATA as XLSX_FORMATO_DATA
 from .services.export_grezzo import build_workbook as build_dati_grezzi_workbook
 from .services.export_grezzo import list_tabelle as list_tabelle_grezze
 from .services.import_old import importa_commessa_da_access
 from .services.manuale import leggi_manuale
 from .services.media import (
     ERRORI_STORAGE,
-    StorageNonDisponibile,
     elimina_file,
     risposta_immagine,
 )
@@ -142,24 +146,27 @@ from .services.segnalazioni import (
 from .services.situazione_cella_vendor import colori_cella_vendor
 from .services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 from .services.trasmittal_interno import (
+    PASSI_LETTERA,
+    STATO_COMPLETATO,
     TrasmittalInternoAnnullaError,
+    TrasmittalInternoNonCompletatoError,
+    TrasmittalInternoPresaVisioneError,
     annulla_trasmittal_interno,
     anteprima_pdf_bytes,
     anteprima_trasmittal,
-    elenco_destinazioni_ut,
-    elenco_selezione_ut,
+    elenco_destinazioni,
+    elenco_selezione,
     elenco_trasmittal_interni,
     emetti_trasmittal_interno,
     imposta_destinazione_stabilimento_bulk,
-    imposta_destinazioni_ut,
+    imposta_destinazioni_commessa,
     indirizzi_email_noti,
     indirizzi_per_siti,
-    invia_email_trasmittal,
-    mittente_trasmittal,
     percorso_pdf_lettera,
-    prepara_per_dcc,
-    salva_pdf,
+    registra_presa_visione,
+    riprova_passo,
     stabilimenti_costruttivi,
+    stato_prese_visione,
 )
 from .services.ultima_revisione import ultima_revisione
 
@@ -818,6 +825,51 @@ def persona_commessa_risolvi_api(request, pk):
     return JsonResponse({"ok": True, "nome": persona.nome_visualizzato})
 
 
+@api_login_required
+@api_write_required
+@require_http_methods(["POST"])
+@con_commessa
+def persone_commessa_api(request, job, testata):
+    """Aggiunge un utente registrato a un ruolo (PM/PE/QCI/WE) della commessa.
+
+    Body: ``{"ruolo": "pm" | "pe" | "qci" | "we", "utente_id": <id>}``. Risponde
+    con le persone di quel ruolo come le mostra l'intestazione della commessa.
+    """
+    data = _json_body(request)
+    if data is None:
+        return _errore("JSON non valido.")
+    ruolo = data.get("ruolo")
+    try:
+        utente_id = int(data.get("utente_id"))
+    except (TypeError, ValueError):
+        return _errore("Parametro utente_id mancante o non valido.")
+    try:
+        aggiungi_persona_commessa(testata, ruolo, utente_id)
+    except ValueError as exc:
+        return _errore(str(exc))
+    except User.DoesNotExist:
+        return _errore("Utente non trovato.", 404)
+    return JsonResponse({"ok": True, "ruolo": ruolo, "persone": persone_per_ruolo(testata)[ruolo]})
+
+
+@api_login_required
+@api_write_required
+@require_http_methods(["DELETE"])
+def persona_commessa_api_detail(request, pk):
+    """Toglie una persona da un ruolo della commessa; risponde con le persone rimaste del ruolo."""
+    try:
+        persona = rimuovi_persona_commessa(pk)
+    except PersonaCommessa.DoesNotExist:
+        return _errore("Voce non trovata.", 404)
+    return JsonResponse(
+        {
+            "ok": True,
+            "ruolo": persona.ruolo,
+            "persone": persone_per_ruolo(persona.testata)[persona.ruolo],
+        }
+    )
+
+
 # ── API: Indirizzi di Spedizione ─────────────────────────────────────────────
 
 
@@ -1197,7 +1249,7 @@ def trasmittal_interno_destinazioni_api(request, job, testata):
     return JsonResponse(
         {
             "stabilimenti": _stabilimenti_costruttivi_payload(),
-            "documenti": elenco_destinazioni_ut(testata),
+            "documenti": elenco_destinazioni(testata),
         }
     )
 
@@ -1214,7 +1266,7 @@ def documento_destinazioni_api(request, job, pk, testata):
     if not isinstance(codici_bc, list) or not all(isinstance(c, int) for c in codici_bc):
         return JsonResponse({"error": "codici_bc deve essere una lista di interi."}, status=400)
     try:
-        imposta_destinazioni_ut(testata, pk, codici_bc)
+        imposta_destinazioni_commessa(testata, pk, codici_bc)
     except Documento.DoesNotExist:
         return JsonResponse({"error": "Documento non trovato."}, status=404)
     return JsonResponse({"ok": True})
@@ -1274,7 +1326,7 @@ def trasmittal_interno_selezione_api(request, job, testata):
     return JsonResponse(
         {
             "stabilimenti": _stabilimenti_costruttivi_payload(),
-            "documenti": elenco_selezione_ut(testata),
+            "documenti": elenco_selezione(testata),
         }
     )
 
@@ -1316,11 +1368,18 @@ def trasmittal_interno_anteprima_pdf_api(request, job, testata):
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
-    except StorageNonDisponibile as exc:
-        return JsonResponse({"error": str(exc)}, status=503)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="anteprima_trasmittal_interno.pdf"'
     return response
+
+
+def _base_url(request):
+    """Indirizzo dell'app per i link nelle email, se ``WORKFLOW_BASE_URL`` non è impostato.
+
+    È l'host con cui chi fa la richiesta ha aperto l'app (vedi
+    ``core.services.trasmittal_interno.link_lettera``).
+    """
+    return request.build_absolute_uri("/")
 
 
 @api_login_required
@@ -1339,6 +1398,7 @@ def trasmittal_interno_emetti_api(request, job, testata):
             note=data.get("note", ""),
             destinatari=data.get("destinatari"),
             messaggio=data.get("messaggio", ""),
+            base_url=_base_url(request),
         )
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
@@ -1349,16 +1409,46 @@ def trasmittal_interno_emetti_api(request, job, testata):
 @require_http_methods(["GET"])
 @con_commessa
 def trasmittal_interno_lettere_api(request, job, testata):
-    return JsonResponse({"lettere": elenco_trasmittal_interni(testata)})
+    """Lettere emesse, con lo stato delle prese visione e cosa può fare chi chiede."""
+    utente = None if is_service_user(request.user) else request.user
+    return JsonResponse({"lettere": elenco_trasmittal_interni(testata, utente)})
+
+
+def _lettera_della_commessa(job, trasmittal_id):
+    """La lettera ``trasmittal_id`` della commessa ``job``, con testata e chi l'ha emessa.
+
+    Raises:
+        TransmittalInterno.DoesNotExist: nessuna lettera con questo id per questa commessa.
+    """
+    return TransmittalInterno.objects.select_related("testata", "creato_da").get(
+        pk=trasmittal_id, testata__job=job
+    )
 
 
 @api_login_required
 @require_http_methods(["GET"])
 def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
+    """Il PDF definitivo della lettera, sul fileserver: c'è solo a lettera completata.
+
+    Finché manca la presa visione di QC o di PROD risponde 409 con il ruolo
+    mancante: il PDF del momento si apre con ``trasmittal_interno_lettera_pdf_api``.
+    """
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404 from None
+    stato = stato_prese_visione(trasmittal.prese_visione.select_related("utente"))
+    if stato["stato"] != STATO_COMPLETATO:
+        return JsonResponse(
+            {
+                "error": "Il PDF definitivo si salva dopo la presa visione di QC e PROD. "
+                f"Manca: {', '.join(stato['ruoli_mancanti'])}.",
+                **stato,
+            },
+            status=409,
+        )
     try:
         file_path = percorso_pdf_lettera(job, trasmittal_id)
-    except TransmittalInterno.DoesNotExist:
-        raise Http404
     except PermissionError:
         return HttpResponseForbidden("Percorso non autorizzato.")
     if not file_path.is_file():
@@ -1369,6 +1459,71 @@ def trasmittal_interno_lettera_file_serve(request, job, trasmittal_id):
         as_attachment=False,
         filename=file_path.name,
     )
+
+
+@api_login_required
+@require_http_methods(["GET"])
+def trasmittal_interno_lettera_pdf_api(request, job, trasmittal_id):
+    """PDF di una lettera emessa, generato al momento: è l'Anteprima dell'elenco.
+
+    Il blocco PAPER COPIES DISTRIBUTION riporta le prese visione registrate
+    finora (vuoto o parziale finché la lettera non è completata). Non scrive
+    niente sul fileserver.
+
+    Con ``?presa_visione=1`` (l'Anteprima di un firmatario a cui manca la
+    presa visione) aprire il PDF la registra prima di generarlo, così il PDF
+    riporta già il suo nome: un GET con effetto voluto, perché vedere la
+    lettera è la presa visione. Se completa la lettera, PDF sul fileserver,
+    cartella DCC ed email partono in background. Chi non può prendere visione,
+    o l'ha già presa, riceve il PDF e basta.
+    """
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        raise Http404 from None
+    if request.GET.get("presa_visione") == "1" and not is_service_user(request.user):
+        try:
+            registra_presa_visione(trasmittal, request.user, completa_in_background=True)
+        except TrasmittalInternoPresaVisioneError:
+            pass  # non firmatario o già registrata: l'anteprima si apre comunque
+    from src.pdf import genera_trasmittal_interno_pdf
+
+    response = HttpResponse(
+        genera_trasmittal_interno_pdf(trasmittal), content_type="application/pdf"
+    )
+    response["Content-Disposition"] = f'inline; filename="{trasmittal.nome}.pdf"'
+    return response
+
+
+@api_login_required
+@require_http_methods(["POST"])
+def trasmittal_interno_presa_visione_api(request, job, trasmittal_id):
+    """Registra la presa visione QC o PROD dell'utente loggato su una lettera.
+
+    Per chi la registra via API e vuole l'esito del completamento nella
+    risposta; la pagina la registra aprendo l'anteprima
+    (``trasmittal_interno_lettera_pdf_api``). Non serve il permesso di scrittura del
+    trasmittal interno: può prendere visione chi è firmatario QC o PROD di un
+    sito della lettera (vedi ``registra_presa_visione``). Senza payload si
+    registrano tutti i ruoli mancanti dell'utente; ``{"ruolo": "qualita"}`` o
+    ``"produzione"`` limita a quello. Se la presa visione completa la lettera,
+    la risposta riporta in ``completamento`` l'esito di PDF, cartella DCC ed
+    email di completamento.
+    """
+    if is_service_user(request.user):
+        return JsonResponse({"error": "Permesso negato."}, status=403)
+    try:
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
+    except TransmittalInterno.DoesNotExist:
+        return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
+    data = _json_body(request, vuoto={})
+    if data is None:
+        return _errore("JSON non valido.")
+    try:
+        risultato = registra_presa_visione(trasmittal, request.user, ruolo=data.get("ruolo"))
+    except TrasmittalInternoPresaVisioneError as exc:
+        return JsonResponse({"error": str(exc)}, status=exc.status)
+    return JsonResponse({"ok": True, **risultato})
 
 
 @api_login_required
@@ -1393,20 +1548,15 @@ def trasmittal_interno_annulla_api(request, job, trasmittal_id):
 @trasmittal_interno_write_required
 @require_http_methods(["POST"])
 def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
-    """Riprova un solo passo (pdf/dcc/email) di una lettera già creata.
+    """Riprova un solo passo di una lettera già creata (vedi ``riprova_passo``).
 
-    Stessa logica di orchestrazione per-passo già usata dentro
-    ``emetti_trasmittal_interno`` — qui applicata a un singolo passo, sulle
-    stesse funzioni di servizio pubbliche, nessuna logica nuova nei servizi.
-
-    Il passo "email" riparte a nome di chi ha emesso la lettera, non di chi
-    preme Riprova (vedi ``invia_email_trasmittal``): da qui ``creato_da`` è
-    precaricato insieme alla testata.
+    ``email`` è l'email di emissione; ``pdf``, ``dcc`` ed
+    ``email_completamento`` sono i passi che seguono le due prese visione e
+    rispondono 409 finché ne manca una. Le email ripartono a nome di chi ha
+    emesso la lettera, non di chi preme Riprova.
     """
     try:
-        trasmittal = TransmittalInterno.objects.select_related("testata", "creato_da").get(
-            pk=trasmittal_id, testata__job=job
-        )
+        trasmittal = _lettera_della_commessa(job, trasmittal_id)
     except TransmittalInterno.DoesNotExist:
         return JsonResponse({"error": "Trasmittal non trovato."}, status=404)
     data = _json_body(request)
@@ -1414,47 +1564,14 @@ def trasmittal_interno_lettera_retry_api(request, job, trasmittal_id):
         return _errore("JSON non valido.")
 
     step = data.get("step")
-    if step not in ("pdf", "dcc", "email"):
-        return JsonResponse({"error": 'step deve essere "pdf", "dcc" o "email".'}, status=400)
-
-    if step == "pdf":
-        try:
-            percorso = salva_pdf(trasmittal)
-            esito = {"ok": True, "errore": None, "percorso": str(percorso)}
-        except Exception as exc:
-            logger.exception(
-                'Salvataggio PDF del trasmittal interno "%s" fallito.', trasmittal.nome
-            )
-            esito = {"ok": False, "errore": str(exc), "percorso": None}
-    elif step == "dcc":
-        try:
-            esito_dcc = prepara_per_dcc(trasmittal)
-            esito = {"ok": True, "errore": None, **esito_dcc}
-        except Exception as exc:
-            logger.exception(
-                'Preparazione DCC del trasmittal interno "%s" fallita.', trasmittal.nome
-            )
-            esito = {
-                "ok": False,
-                "errore": str(exc),
-                "cartella": None,
-                "copiati": [],
-                "mancanti": [],
-            }
-    else:
-        try:
-            esito_email = invia_email_trasmittal(trasmittal)
-            esito = {"ok": True, "errore": None, **esito_email}
-        except Exception as exc:
-            logger.exception('Invio email del trasmittal interno "%s" fallito.', trasmittal.nome)
-            esito = {
-                "ok": False,
-                "errore": str(exc),
-                "to": [],
-                "cc": [],
-                "mittente": mittente_trasmittal(trasmittal.creato_da),
-            }
-
+    if step not in PASSI_LETTERA:
+        return JsonResponse(
+            {"error": f"step deve essere uno fra {', '.join(PASSI_LETTERA)}."}, status=400
+        )
+    try:
+        esito = riprova_passo(trasmittal, step, base_url=_base_url(request))
+    except TrasmittalInternoNonCompletatoError as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
     return JsonResponse({"ok": True, "step": step, "esito": esito})
 
 
@@ -1937,6 +2054,9 @@ def _style_xlsx_header_cell(cell):
 
 def _style_xlsx_data_cell(cell, *, overdue=False, center=False, wrap=False):
     cell.border = _XLSX_THIN
+    if isinstance(cell.value, _date):
+        # Data vera (ordinabile e filtrabile in Excel), come in "Scarica".
+        cell.number_format = XLSX_FORMATO_DATA
     if center:
         cell.alignment = _XLSX_CENTER_ALIGN
     elif wrap:
@@ -1986,7 +2106,7 @@ def _autosize_xlsx_columns(ws, headers, *, data_start_row: int = 2):
             # Acronyms / flags: fit content, keep narrow (header wraps).
             width = float(max(5, min(max(content_len + 1, 5), 10)))
         elif header in _XLSX_DATE_COLS:
-            width = float(max(11, min(max(content_len + 1, 11), 14)))
+            width = float(max(12, min(max(content_len + 1, 12), 14)))
         elif header in ("Internal status", "Client response"):
             width = float(max(12, min(max(content_len + 2, 12), 24)))
         elif header in ("B&R Doc", "Client Doc N°", "Contractor Doc N°", "Client Doc Class"):
@@ -2085,8 +2205,6 @@ def _export_planned_docs_xlsx(
     emission_date_key="latest_dis_act_date",
 ):
     """Build an Excel export for emissione/ricezione document lists."""
-    from .date_fmt import format_display_date
-
     docs = _sort_docs_by_date(docs, date_key)
 
     wb = openpyxl.Workbook()
@@ -2130,11 +2248,12 @@ def _export_planned_docs_xlsx(
         cells_meta.append((d.get("client_doc_class") or "", False, True))
         cells_meta.append((d.get("doc_title") or "", False, False))
         if emission_date_header:
-            raw_em = d.get(emission_date_key)
-            cells_meta.append((format_display_date(raw_em) if raw_em else "", False, True))
+            cells_meta.append((parse_iso_date(d.get(emission_date_key)), False, True))
         raw_plan = d.get(date_key)
-        plan_text = format_display_date(raw_plan) if raw_plan else ""
-        cells_meta.append((plan_text, _is_export_date_overdue(raw_plan) and bool(plan_text), True))
+        plan_date = parse_iso_date(raw_plan)
+        cells_meta.append(
+            (plan_date, plan_date is not None and _is_export_date_overdue(raw_plan), True)
+        )
 
         for value, overdue, center in cells_meta:
             cell = ws.cell(row=row_idx, column=col, value=value)
@@ -2229,8 +2348,6 @@ def export_ricezione(request, job):
 
 def _export_situazione_verticale_xlsx(job, payload):
     """Excel of the vista verticale: one row per revision, Planning/Actual date groups."""
-    from .date_fmt import format_display_date
-
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
@@ -2312,8 +2429,6 @@ def _export_situazione_verticale_xlsx(job, payload):
         revs = rev_map.get(d["id"]) or rev_map.get(str(d["id"])) or []
         revs = sorted(revs, key=lambda r: (r.get("rev_no") is None, r.get("rev_no") or 0))
         for rev in revs or [None]:
-            dis_plan = rev.get("dis_plan_date") if rev else None
-            rec_plan = rev.get("rec_plan_date") if rev else None
             values = [
                 d.get("item_no") or "",
                 d.get("vendor_doc") or "",
@@ -2325,14 +2440,10 @@ def _export_situazione_verticale_xlsx(job, payload):
                 "Yes" if d.get("doc_penalty") else "",
                 "Yes" if d.get("doc_payment") else "",
                 _rev_label(rev),
-                format_display_date(dis_plan) if dis_plan else "",
-                format_display_date(rec_plan) if rec_plan else "",
-                format_display_date(rev.get("dis_act_date"))
-                if rev and rev.get("dis_act_date")
-                else "",
-                format_display_date(rev.get("rec_act_date"))
-                if rev and rev.get("rec_act_date")
-                else "",
+                parse_iso_date(rev.get("dis_plan_date")) if rev else None,
+                parse_iso_date(rev.get("rec_plan_date")) if rev else None,
+                parse_iso_date(rev.get("dis_act_date")) if rev else None,
+                parse_iso_date(rev.get("rec_act_date")) if rev else None,
                 _int_status_label(rev),
                 (rev.get("ext_status_label") or "") if rev else "",
             ]
@@ -2389,8 +2500,6 @@ def _export_situazione_orizzontale_xlsx(job, payload):
     schermo e nel PDF (vedi services/situazione_cella_vendor.py); le celle
     Status riportano la lettera della risposta senza colore.
     """
-    from .date_fmt import format_display_date
-
     docs = payload.get("documenti") or []
     rev_map = payload.get("revisioni_by_doc") or {}
     rev_let_flag = bool(payload.get("rev_let_flag"))
@@ -2445,15 +2554,15 @@ def _export_situazione_orizzontale_xlsx(job, payload):
         planned = _planned_dates_for_latest_rev(revs)
         values = [d.get(key) or "" for key in keys]
         values += [
-            format_display_date(planned["planned_send"]),
-            format_display_date(planned["planned_receipt"]),
+            parse_iso_date(planned["planned_send"]),
+            parse_iso_date(planned["planned_receipt"]),
         ]
         for r in range(max_revs):
             rev = revs[r] if r < len(revs) else None
             if rev:
                 values += [
-                    format_display_date(rev.get("dis_act_date")),
-                    format_display_date(rev.get("rec_act_date")),
+                    parse_iso_date(rev.get("dis_act_date")),
+                    parse_iso_date(rev.get("rec_act_date")),
                     (rev.get("ext_status_lettera") or "").strip(),
                 ]
             else:
@@ -2727,7 +2836,7 @@ def import_documenti_excel(request, job):
                 errors.append(f"Riga {row_num}: {date_err}, data ignorata.")
 
         try:
-            doc = Documento.objects.create(
+            doc = Documento(
                 testata=testata,
                 item_no=str(data.get("item_no") or "").strip(),
                 vendor_doc=str(data.get("vendor_doc") or "").strip(),
@@ -2741,11 +2850,15 @@ def import_documenti_excel(request, job):
                 reparto=reparto_str,
                 remarks=str(data.get("remarks") or "").strip(),
             )
+            doc.full_clean()
+            doc.save()
             rev0 = Revisione.objects.create(documento=doc, rev_no=0)
             if dis_plan is not None:
                 rev0.dis_plan_date = dis_plan
                 rev0.save(update_fields=["dis_plan_date"])
             created.append(doc.pk)
+        except ValidationError as exc:
+            errors.append(f"Riga {row_num}: {_messaggio_validazione(exc)}")
         except Exception as exc:
             errors.append(f"Riga {row_num}: {exc}")
 
@@ -2840,20 +2953,33 @@ def import_documenti_template(request):
 # ── API: File revisione ───────────────────────────────────────────────────────
 
 
+def _tipo_file_link(valore):
+    """Il ``TipoFileLink`` chiesto dal client: ``ricevuto`` se manca, ``None`` se non valido."""
+    valore = str(valore or TipoFileLink.RICEVUTO).strip()
+    return valore if valore in TipoFileLink.values else None
+
+
+_TIPO_FILE_NON_VALIDO = "Tipo di file non valido: usare 'ricevuto' o 'inviato'."
+
+
 @api_login_required
 @require_http_methods(["GET"])
 def revisione_file_api(request, pk):
     """Resolve the filesystem file path for a revision.
 
-    Tries automatic resolution first (base path / RICEVUTI), then falls back
-    to the stored manual link.
+    Query parameter ``tipo``: ``ricevuto`` (default, cella Received) or
+    ``inviato`` (cella Dispatch). The stored manual link of that ``tipo``
+    wins; otherwise the file is searched automatically.
 
     Returns:
         JSON with ``status`` (``found`` | ``multiple`` | ``manual_linked`` |
-        ``not_found``) and ``files`` list.
+        ``not_found``) and ``files`` list; 400 for an invalid ``tipo``.
     """
+    tipo = _tipo_file_link(request.GET.get("tipo"))
+    if tipo is None:
+        return JsonResponse({"error": _TIPO_FILE_NON_VALIDO}, status=400)
     try:
-        result = risolvi_file_revisione(pk)
+        result = risolvi_file_revisione(pk, tipo)
         return JsonResponse(result)
     except Revisione.DoesNotExist:
         return JsonResponse({"error": "Revisione non trovata."}, status=404)
@@ -2868,7 +2994,8 @@ def revisione_file_api(request, pk):
 def revisione_file_link_api(request, pk):
     """Save a manual file link for a revision.
 
-    Request body: ``{"percorso": "Z:\\\\JOBS\\\\..."}``
+    Request body: ``{"percorso": "Z:\\\\JOBS\\\\...", "tipo": "inviato"}``;
+    ``tipo`` is optional (default ``ricevuto``).
 
     Returns:
         JSON with the saved ``percorso``.
@@ -2878,7 +3005,10 @@ def revisione_file_link_api(request, pk):
         percorso = (data.get("percorso") or "").strip()
         if not percorso:
             return JsonResponse({"error": "Percorso mancante."}, status=400)
-        link = salva_file_link(pk, percorso)
+        tipo = _tipo_file_link(data.get("tipo"))
+        if tipo is None:
+            return JsonResponse({"error": _TIPO_FILE_NON_VALIDO}, status=400)
+        link = salva_file_link(pk, percorso, tipo)
         return JsonResponse({"percorso": link.percorso})
     except Revisione.DoesNotExist:
         return JsonResponse({"error": "Revisione non trovata."}, status=404)
@@ -2935,10 +3065,11 @@ def revisione_file_serve(request, pk):
 
     Accepts an optional ``percorso`` query parameter to select a specific file
     (needed when multiple candidates exist). If omitted the file is resolved
-    automatically via ``risolvi_file_revisione``.
+    automatically via ``risolvi_file_revisione``, for the optional ``tipo``
+    (``ricevuto`` by default, or ``inviato``).
 
-    All file types are served as attachments, triggering a download prompt
-    so the OS opens the file with the default application.
+    Files are served inline (``as_attachment=False``): the browser displays
+    types it can render (e.g. PDF) and downloads the others.
 
     Args:
         pk: Primary key of the ``Revisione`` to serve.
@@ -2973,8 +3104,11 @@ def revisione_file_serve(request, pk):
         except ValueError:
             return HttpResponseForbidden("Percorso non autorizzato.")
     else:
+        tipo = _tipo_file_link(request.GET.get("tipo"))
+        if tipo is None:
+            raise Http404
         try:
-            result = risolvi_file_revisione(pk)
+            result = risolvi_file_revisione(pk, tipo)
         except Revisione.DoesNotExist:
             raise Http404
         if result["status"] not in ("found", "manual_linked") or not result["files"]:

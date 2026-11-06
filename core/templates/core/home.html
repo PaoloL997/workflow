@@ -1101,7 +1101,7 @@
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
   </svg>
-  v0.2.0
+  v0.2.1
 </button>
 
 <!-- ── Modal: Changelog / version ── -->
@@ -1113,7 +1113,7 @@
           <path d="M12.5 2c-.4 2.2.2 4.1 1.6 5.6 1.2 1.3 1.9 2.9 1.6 4.6-.2 1.4-.9 2.6-2 3.4.9-.2 1.7-.7 2.3-1.4 1.5-1.8 1.8-4.3.7-6.4 2.4 2 3.8 5 3.3 8.1C19.5 20.3 16.1 23 12 23c-4.4 0-8-3.4-8-7.8 0-3.1 1.5-5.5 3.2-7.4C8.5 6.3 10.2 4.4 11 2.5c.2-.4.6-.7 1-.7.2 0 .4.1.5.2z"/>
         </svg>
         <h2 class="version-modal-title" id="version-modal-title">Novità</h2>
-        <span class="version-modal-tag">v0.2.0</span>
+        <span class="version-modal-tag">v0.2.1</span>
       </div>
       <button type="button" class="btn-close" id="version-modal-close" aria-label="Chiudi">✕</button>
     </div>
@@ -1121,7 +1121,25 @@
       <section>
         <h3 class="version-modal-section-title">Aggiunte</h3>
         <ul class="version-modal-list">
-          <li><strong>Workflow Agent</strong>, in versione demo: dal pulsante con il robot in basso a destra un assistente risponde su documenti e revisioni e spiega come si usa Workflow. Con il permesso di scrittura corregge anche risposte del cliente, ricezioni e invii registrati per errore, sempre dopo la tua approvazione. Il tasto <strong>ℹ</strong> nella finestra spiega cosa sa fare</li>
+          <li>Trasmittal interno, <strong>presa visione</strong> di Qualità e Produzione: il firmatario QC o PROD di un sito coinvolto la registra aprendo l'<strong>Anteprima</strong> della lettera. Con entrambe le prese visione il PDF si salva sul fileserver, si prepara la cartella DCC e parte un'email a chi ha emesso la lettera</li>
+          <li>Trasmittal interno: nell'elenco lettere, per QC e PROD, chi ha preso visione e quando, oppure <em>In attesa</em>. Il PDF si apre da <strong>Anteprima</strong> e il link dell'email porta alla lettera evidenziata</li>
+          <li>Situazione documenti: anche la cella <strong>Dispatch</strong> si apre con un clic e mostra il file inviato al cliente, come la cella <strong>Received</strong></li>
+          <li>Pagina commessa: chi ha il permesso Scrittura modifica PM, PE, QCI e WE dall'intestazione, con la matita accanto al ruolo</li>
+          <li>Per gli amministratori: token di servizio senza scadenza per i servizi esterni e indirizzo dell'app per i link nelle email (<code>WORKFLOW_BASE_URL</code>)</li>
+        </ul>
+      </section>
+      <section>
+        <h3 class="version-modal-section-title">Modifiche</h3>
+        <ul class="version-modal-list">
+          <li>Trasmittal interno: all'emissione parte solo l'email di emissione, con documenti, note e link alla lettera. PDF e cartella DCC arrivano dopo le due prese visione</li>
+          <li>Trasmittal interno: entrano anche i documenti QC e WE, oltre a quelli UT, e il file si cerca nella cartella del reparto del documento</li>
+          <li>Trasmittal interno, PDF: la colonna <strong>ACKNOWLEDGED BY</strong> riporta chi ha preso visione, con data e ora, e il modulo passa alla Rev.01, anche nell'oggetto delle email</li>
+          <li>Trasmittal interno, <strong>A chi va</strong>: gli indirizzi per tipo di documento valgono per tutte le commesse e compaiono nel gruppo <strong>Tipo documento</strong> con i tipi che li hanno portati. <code>export@brembanarolle.com</code> ora va in CC per i documenti EBM, EGA ed ESH</li>
+          <li>Trasmittal interno, <strong>A chi va</strong>: gli indirizzi sempre in copia dei siti compaiono tra quelli degli <strong>Stabilimenti</strong>, con la sigla del sito</li>
+          <li>Trasmittal interno: una lettera senza siti coinvolti non si emette, e annullare una lettera elimina anche le sue prese visione</li>
+          <li>Filtri di colonna: aprendo un filtro nessun valore è spuntato e si spuntano solo quelli da tenere. Al posto di <strong>Contiene</strong> si scrive in <em>Cerca…</em> e si spunta <strong>(Seleziona tutto)</strong>; in Situazione documenti il campo resta</li>
+          <li>Excel di Gestisci emissione, Gestisci ricezione e Situazione documenti: le date sono vere date di Excel (gg/mm/aaaa), che si ordinano e si filtrano</li>
+          <li>Admin: tabelle raggruppate per argomento; gli indirizzi dei siti e quelli per tipo documento stanno in <em>Trasmittal interno</em></li>
         </ul>
       </section>
     </div>

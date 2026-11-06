@@ -2485,7 +2485,11 @@
       for (let r = 0; r < maxRevs; r++) {
         const rev = revs[r];
         if (rev) {
-          tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_act_date)}</td>`;
+          if (rev.dis_act_date) {
+            tbody += `<td class="sit-rev-first sit-row-clickable" onclick="onRevBtnClick(${rev.id}, this, 'inviato')">${fmtDate(rev.dis_act_date)}</td>`;
+          } else {
+            tbody += `<td class="sit-rev-first">${fmtDate(rev.dis_act_date)}</td>`;
+          }
           const extLabel = (rev.ext_status_label || '').trim();
           const extLetter = (rev.ext_status_lettera || '').trim();
           const ricTitle = (rev.rec_act_date && extLabel)
@@ -2683,6 +2687,9 @@
   }
 
   let _currentRevId = null;
+  /* Quale file della revisione: 'ricevuto' (Received, Status, vista verticale)
+     o 'inviato' (Dispatch). I collegamenti manuali sono separati per tipo. */
+  let _currentTipo = 'ricevuto';
 
   function apriFile(file) {
     const ext = (file.estensione || '').toLowerCase();
@@ -2701,10 +2708,11 @@
     setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 300);
   }
 
-  window.onRevBtnClick = function (revId, row) {
+  window.onRevBtnClick = function (revId, row, tipo) {
     row.classList.add('loading');
     _currentRevId = revId;
-    apiFetch('/api/revisioni/' + revId + '/file/')
+    _currentTipo = tipo === 'inviato' ? 'inviato' : 'ricevuto';
+    apiFetch('/api/revisioni/' + revId + '/file/?tipo=' + _currentTipo)
       .then(function (r) {
         return r.text().then(function (text) {
           let body;
@@ -2842,7 +2850,7 @@
     apiFetch('/api/revisioni/' + _currentRevId + '/file/link/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ percorso: _browserSelectedPath }),
+      body: JSON.stringify({ percorso: _browserSelectedPath, tipo: _currentTipo }),
     })
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, body: b }; }); })
       .then(function (res) {

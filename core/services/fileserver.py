@@ -9,8 +9,15 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 from django.conf import settings
+
+# Sottocartelle della cartella di invio in cui finiscono le revisioni superate
+# (UT usa OBSOLETI, QC usa SUPERATI o OBSOLETI).
+CARTELLE_REVISIONI_SUPERATE = ("OBSOLETI", "SUPERATI")
+
+_ESTENSIONI_FILE = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".dwg")
 
 
 def get_jobs_root() -> Path:
@@ -51,6 +58,89 @@ def get_ricevuti_path(commessa: str, reparto_acronimo: str, data_str: str) -> Pa
     return get_base_path(commessa, reparto_acronimo) / "RICEVUTI" / data_str
 
 
+def get_cartella_invio(commessa: str, reparto_acronimo: str) -> Path:
+    """Cartella dei file inviati al cliente per un documento.
+
+    I documenti UT stanno in ``PROGETTO/UT``; tutti gli altri (QC, WE, PM,
+    AM) in ``PROGETTO/QC``. Lì c'è l'ultima revisione inviata, le precedenti
+    nelle sottocartelle ``CARTELLE_REVISIONI_SUPERATE``.
+
+    Args:
+        commessa: Job number.
+        reparto_acronimo: Department acronym of the document.
+
+    Returns:
+        Path: ``{JOBS_ROOT}/{commessa}/PROGETTO/UT`` or ``.../PROGETTO/QC``.
+    """
+    cartella = "UT" if (reparto_acronimo or "").strip().upper() == "UT" else "QC"
+    return get_base_path(commessa, cartella)
+
+
+class RevisioneNelNome(NamedTuple):
+    """Revisione letta dal nome di un file (vedi ``estrai_revisione``)."""
+
+    token: str | None
+    """``"2"`` o ``"A"``; ``""`` se dopo il codice non c'è nulla; ``None`` se non si capisce."""
+    solo_revisione: bool
+    """True se dopo la revisione il nome non ha altro testo (``Rev.2`` sì, ``Rev.2A`` no)."""
+
+
+# " (2)" in fondo al nome è una copia di Windows, non una revisione.
+_COPIA_WINDOWS = re.compile(r"\s*\(\d+\)\s*$")
+_REVISIONE_NEL_NOME = re.compile(
+    r"""^[\s_.\-]*(?:
+        rev(?:isione)?[\s._\-,]*(?P<rev_num>\d{1,3})(?!\d)   # Rev0 _REV_0 Rev.0 rev,4 Rev-5 Rev 0 Rev1.0 Rev2A
+      | rev[\s._\-]*(?P<rev_let>[a-z]{1,2}\d?)(?![a-z0-9])  # Rev A  rev.D  RevZ0
+      | r[\s_]*(?P<r_num>\d{1,3})(?!\d)                     # _R0 R00 -R3 R_0
+      | (?P<num>\d{1,3})(?!\d)                              # _0 -00 _2.0 _3RA
+    )""",
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def estrai_revisione(nome_file: str, vendor_doc: str) -> RevisioneNelNome | None:
+    """Prova a leggere la revisione dal nome di un file inviato.
+
+    Guarda solo il testo che segue ``vendor_doc`` (cercato a parola intera,
+    così ``…-ESH1`` non trova ``…-ESH10``). Numero e lettera vengono
+    normalizzati: ``Rev.01`` → ``"1"``, ``rev.d`` → ``"D"``.
+
+    TODO: bisognerà uniformare la maniera in cui gli utenti salvano i file
+    delle revisioni vecchie (OBSOLETI/SUPERATI). Oggi convivono decine di
+    formati (``Rev0``, ``_0``, ``_R0``, ``Rev.0``, ``_Rev_0``, ``Rev A``, file
+    senza suffisso, testo libero come ``_RA`` o ``priced``…) e questa funzione
+    prova a indovinarli: sulle commesse 25/26 legge il numero di circa 9 file
+    su 10 in UT e 2 su 3 in QC.
+
+    Args:
+        nome_file: Nome del file (con estensione).
+        vendor_doc: Codice del documento.
+
+    Returns:
+        ``None`` se il codice non compare nel nome; altrimenti una
+        ``RevisioneNelNome``.
+    """
+    if not vendor_doc.strip():
+        return None
+    stem = nome_file
+    while os.path.splitext(stem)[1].lower() in _ESTENSIONI_FILE:
+        stem = os.path.splitext(stem)[0]
+    codice = re.search(
+        rf"(?<![0-9a-z]){re.escape(vendor_doc.strip())}(?![0-9a-z])", stem, re.IGNORECASE
+    )
+    if codice is None:
+        return None
+    resto = _COPIA_WINDOWS.sub("", stem[codice.end() :])
+    if not resto.strip(" _.-"):
+        return RevisioneNelNome("", True)
+    m = _REVISIONE_NEL_NOME.match(resto)
+    if m is None:
+        return RevisioneNelNome(None, False)
+    numero = m.group("rev_num") or m.group("r_num") or m.group("num")
+    token = str(int(numero)) if numero is not None else m.group("rev_let").upper()
+    return RevisioneNelNome(token, not resto[m.end() :].strip(" _.-"))
+
+
 def _scandir_files(directory: Path):
     """Yield ``os.DirEntry`` for the regular files in ``directory``.
 
@@ -61,7 +151,7 @@ def _scandir_files(directory: Path):
     becomes its own network round trip. On a share with a few dozen files
     that difference is a couple hundred milliseconds; with realistic latency
     it can turn a page load into a multi-second (or worse, per-caller-loop,
-    multi-minute) wait — see ``elenco_selezione_ut``.
+    multi-minute) wait — see ``elenco_selezione``.
 
     Returns empty if ``directory`` does not exist.
     """
