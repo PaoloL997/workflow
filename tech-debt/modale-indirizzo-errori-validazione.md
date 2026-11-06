@@ -1,0 +1,1 @@
+core/templates/core/archivio_detail.html (modale indirizzo): su un errore di validazione del server (es. campo oltre la lunghezza massima) il modale resta aperto senza nessun messaggio, perché la risposta non 403 viene ignorata. Mostrare l'errore nel footer del modale.
