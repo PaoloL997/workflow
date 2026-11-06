@@ -1,6 +1,7 @@
 from django.utils import timezone
 
 from ..models import Notifica, SegnalazioneCommento, TipoSegnalazione, User
+from ..permissions import GRUPPO_SERVIZIO
 
 MAX_NOTIFICHE = 50
 
@@ -46,7 +47,7 @@ def serialize_notifica(n):
 
 
 def notifica_nuova_segnalazione(segnalazione):
-    """Create one unread notification per active user, except the author.
+    """Create one unread notification per active user, except the author and service users.
 
     Args:
         segnalazione: The freshly created Segnalazione instance.
@@ -55,7 +56,11 @@ def notifica_nuova_segnalazione(segnalazione):
         The list of created Notifica rows.
     """
     testo = testo_segnalazione(segnalazione)
-    destinatari = User.objects.filter(is_active=True).exclude(pk=segnalazione.autore_id)
+    destinatari = (
+        User.objects.filter(is_active=True)
+        .exclude(pk=segnalazione.autore_id)
+        .exclude(groups__name=GRUPPO_SERVIZIO)
+    )
     return Notifica.objects.bulk_create(
         [
             Notifica(

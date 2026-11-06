@@ -50,6 +50,7 @@ from .models import (
     valida_immagine_firma,
 )
 from .permissions import (
+    GRUPPO_SERVIZIO,
     api_write_required,
     is_service_user,
     trasmittal_interno_write_required,
@@ -791,6 +792,7 @@ def utenti_cerca_api(request):
         return JsonResponse({"utenti": []})
     utenti = (
         User.objects.filter(is_active=True)
+        .exclude(groups__name=GRUPPO_SERVIZIO)
         .filter(Q(first_name__icontains=q) | Q(last_name__icontains=q) | Q(username__icontains=q))
         .order_by("last_name", "first_name")[:10]
     )

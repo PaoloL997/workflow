@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 
+from django.contrib.auth.models import Group
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -16,6 +17,7 @@ from ..models import (
 from ..services.notifiche import count_notifiche, list_notifiche, segna_lette
 
 # ── Shared fixture factory (unit tests only — uses temp dir) ──────────────────
+from ..permissions import GRUPPO_SERVIZIO
 from ._fixtures import User
 
 
@@ -381,6 +383,14 @@ class NotificheTestCase(TestCase):
                 Notifica.objects.values_list("destinatario__username", flat=True),
             ),
             {"notif_altro", "notif_terzo"},
+        )
+
+    def test_utenti_di_servizio_non_ricevono_notifiche(self):
+        self.terzo.groups.add(Group.objects.get(name=GRUPPO_SERVIZIO))
+        self._crea_segnalazione(self.autore)
+        self.assertEqual(
+            set(Notifica.objects.values_list("destinatario__username", flat=True)),
+            {"notif_altro"},
         )
 
     def test_nuovo_problema_ha_testo_dedicato(self):
