@@ -126,8 +126,8 @@ class TrasmittalInternoEndToEndTests(TestCase):
                 ruolo=RuoloFirmatarioStabilimento.QUALITA,
                 utente=self.firmatari_utenti[qualita],
             )
-        # Nessun firmatario ha un'immagine di firma caricata (punto 9): il
-        # campo firma resta vuoto per tutti, di proposito.
+        # Nessun firmatario ha un'immagine di firma caricata: la presa visione
+        # non ne usa, il PDF riporta nome, data e ora.
 
         # ── Commessa e documenti UT ──
         self.reparto_ut = Reparto.objects.create(nome="Ufficio Tecnico", acronimo="UT")
@@ -152,8 +152,8 @@ class TrasmittalInternoEndToEndTests(TestCase):
         )
         self.doc_c = Documento.objects.create(
             testata=self.testata,
-            vendor_doc="99090-01-ESH1",  # pattern SHn: ?????-??-ESH*
-            doc_title="Documento C (SHn)",
+            vendor_doc="99090-01-ESH1",  # tipo ESH: export@ in CC dalla migrazione 0065
+            doc_title="Documento C (ESH)",
             reparto="Ufficio Tecnico",
         )
         self.doc_d = Documento.objects.create(
@@ -239,6 +239,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
         return risposta.json()
 
     def _emetti(self, righe, note="", destinatari=None):
+        """Emette la lettera via API: crea il trasmittal e invia l'email di emissione."""
         payload = {"righe": righe, "note": note}
         if destinatari is not None:
             payload["destinatari"] = destinatari
@@ -248,6 +249,29 @@ class TrasmittalInternoEndToEndTests(TestCase):
             content_type="application/json",
         )
         return risposta
+
+    def _prendi_visione(self, utente, trasmittal_id, ruolo=None):
+        """Presa visione via API come ``utente``, poi di nuovo loggati come chi emette."""
+        self.client.force_login(utente)
+        risposta = self.client.post(
+            self._url(f"lettere/{trasmittal_id}/presa-visione/"),
+            data=json.dumps({"ruolo": ruolo} if ruolo else {}),
+            content_type="application/json",
+        )
+        self.client.force_login(self.writer)
+        return risposta
+
+    def _completa(self, trasmittal_id):
+        """QC (MGalli) e PROD (DGiunchi), firmatari di PD e VE: la lettera si completa.
+
+        Returns:
+            L'esito del completamento (``pdf``, ``dcc``, ``email``).
+        """
+        qc = self._prendi_visione(self.firmatari_utenti["MGalli"], trasmittal_id)
+        self.assertEqual(qc.status_code, 200, qc.content)
+        prod = self._prendi_visione(self.firmatari_utenti["DGiunchi"], trasmittal_id)
+        self.assertEqual(prod.status_code, 200, prod.content)
+        return prod.json()["completamento"]
 
     def _righe_abcd(self, con_c=True):
         righe = [self._riga(self.doc_a, cliente=True), self._riga(self.doc_b, cliente=False)]
@@ -346,12 +370,15 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertEqual(len(occorrenze), 1)
         self.assertEqual(occorrenze[0]["tipo"], "to")
 
-    # ── Punto 6: DOC-C (SHn) → export@ in CC; rimosso, sparisce ──────────────
+    # ── Punto 6: DOC-C (ESH) → export@ in CC; rimosso, sparisce ──────────────
 
     def test_09_export_presente_con_doc_c_assente_senza(self):
         anteprima_con_c = self._anteprima(self._righe_abcd(con_c=True))
-        emails_con_c = [d["email"] for d in anteprima_con_c["destinatari"]]
-        self.assertIn("export@brembanarolle.com", emails_con_c)
+        self.assertIn(
+            {"email": "export@brembanarolle.com", "tipo": "cc", "origine": "tipo_documento"},
+            anteprima_con_c["destinatari"],
+        )
+        self.assertEqual(anteprima_con_c["tipi_documento"], {"export@brembanarolle.com": ["ESH"]})
 
         anteprima_senza_c = self._anteprima(self._righe_abcd(con_c=False))
         emails_senza_c = [d["email"] for d in anteprima_senza_c["destinatari"]]
@@ -387,22 +414,25 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertEqual(risposta.status_code, 200, risposta.content)
         self.assertTrue(risposta.json()["ok"])
 
-    # ── Punto 8: firmatari PD+VE deduplicati (DGiunchi/MGalli comuni) ───────
-    # Nessuna libreria di estrazione testo da PDF è disponibile in questo
-    # ambiente (fitz non installato — vedi il fallimento preesistente in
-    # SituazioneApiTestCase): verifico quindi la stessa funzione di dedup
-    # usata da genera_trasmittal_interno_pdf direttamente sui siti reali
-    # della lettera, non analizzando i byte del PDF.
+    # ── Punto 8: presa visione dei firmatari dei siti della lettera ─────────
+    # La lettera coinvolge BG, PD e VE: DGiunchi e MGalli (PD e VE) possono
+    # prendere visione, POro (solo CR) no.
 
-    def test_11_firmatari_pd_ve_deduplicati_per_ruolo(self):
-        from src.pdf import _firmatari_per_ruolo
+    def test_11_presa_visione_solo_ai_firmatari_dei_siti_della_lettera(self):
+        esito = self._emetti(self._righe_abcd()).json()
+        lettera_id = esito["trasmittal_id"]
 
-        siti = [self.pd, self.ve]
-        produzione = _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.PRODUZIONE)
-        qualita = _firmatari_per_ruolo(siti, RuoloFirmatarioStabilimento.QUALITA)
+        estraneo = self._prendi_visione(self.firmatari_utenti["POro"], lettera_id)
+        self.assertEqual(estraneo.status_code, 403)
 
-        self.assertEqual([f.utente_id for f in produzione], [self.firmatari_utenti["DGiunchi"].pk])
-        self.assertEqual([f.utente_id for f in qualita], [self.firmatari_utenti["MGalli"].pk])
+        qc = self._prendi_visione(self.firmatari_utenti["MGalli"], lettera_id)
+        self.assertEqual(qc.status_code, 200, qc.content)
+        self.assertEqual([p["sigla"] for p in qc.json()["registrate"]], ["QC"])
+        self.assertEqual(qc.json()["stato"], "parziale")
+        self.assertIsNone(qc.json()["completamento"])
+
+        doppia = self._prendi_visione(self.firmatari_utenti["FBaldin"], lettera_id)  # QC di BG
+        self.assertEqual(doppia.status_code, 409)
 
     # ── Punto 9: firmatario senza immagine → PDF generato comunque ──────────
 
@@ -424,10 +454,13 @@ class TrasmittalInternoEndToEndTests(TestCase):
     # ── Punto 10: nome file e percorso ───────────────────────────────────────
 
     def test_13_nome_file_pdf_e_percorso(self):
-        risposta = self._emetti(self._righe_abcd())
-        corpo = risposta.json()
-        self.assertTrue(corpo["pdf"]["ok"])
-        percorso = Path(corpo["pdf"]["percorso"])
+        corpo = self._emetti(self._righe_abcd()).json()
+        self.assertNotIn("pdf", corpo)  # all'emissione il PDF non si salva
+
+        completamento = self._completa(corpo["trasmittal_id"])
+
+        self.assertTrue(completamento["pdf"]["ok"])
+        percorso = Path(completamento["pdf"]["percorso"])
         oggi = timezone.localdate().isoformat()
         self.assertEqual(percorso.name, f"99090_{oggi}_E1.pdf")
         self.assertIn(str(Path("99090") / "Progetto" / "UT" / "Transmittal"), str(percorso))
@@ -449,33 +482,37 @@ class TrasmittalInternoEndToEndTests(TestCase):
         self.assertTrue(seconda["nome"].endswith("_E2"))
         self.assertTrue(terza["nome"].endswith("_E1"))
 
-    # ── Punto 12: data di distribuzione (venerdì → lunedì, altrimenti dopo) ──
-    # La data di distribuzione mostrata all'utente riflette data_impegno()
-    # (giorno lavorativo successivo, lunedì se venerdì), non la data di
-    # emissione: verifico che generare il PDF invochi davvero data_impegno.
+    # ── Punto 12: il blocco PAPER COPIES DISTRIBUTION riporta le prese visione ──
+    # Senza estrazione di testo dal PDF (vedi il punto 8), verifico cosa riceve
+    # il blocco quando la pagina chiede il PDF del momento della lettera.
 
-    def test_15_data_impegno_e_invocata_generando_il_pdf(self):
-        from core.services.trasmittal_interno import data_impegno
-        from src.pdf import genera_trasmittal_interno_pdf
+    def test_15_il_pdf_del_momento_riporta_le_prese_visione_registrate(self):
+        from src import pdf as pdf_module
 
-        venerdi = date(2026, 9, 18)
-        self.assertEqual(data_impegno(venerdi), date(2026, 9, 21))  # lunedì, per DataImpegnoTests
+        esito = self._emetti(self._righe_abcd()).json()
+        lettera_id = esito["trasmittal_id"]
 
-        with patch("core.services.trasmittal_interno.timezone.localdate", return_value=venerdi):
-            esito = self._emetti(self._righe_abcd()).json()
-        trasmittal = TransmittalInterno.objects.get(pk=esito["trasmittal_id"])
-        self.assertEqual(trasmittal.data, venerdi)
+        def prese_nel_pdf():
+            with patch.object(
+                pdf_module,
+                "_build_distribuzione_copie",
+                wraps=pdf_module._build_distribuzione_copie,
+            ) as blocco:
+                risposta = self.client.get(self._url(f"lettere/{lettera_id}/pdf/"))
+            self.assertEqual(risposta.status_code, 200)
+            self.assertEqual(risposta["Content-Type"], "application/pdf")
+            return {ruolo: p.utente.username for ruolo, p in blocco.call_args.args[1].items()}
 
-        with patch(
-            "core.services.trasmittal_interno.data_impegno", side_effect=data_impegno
-        ) as mock_impegno:
-            genera_trasmittal_interno_pdf(trasmittal)
-
-        self.assertTrue(
-            mock_impegno.called,
-            "data_impegno() non è invocata generando il PDF: la colonna DATE di "
-            "'PAPER COPIES DISTRIBUTION' mostrerebbe la data di emissione invece "
-            "del giorno lavorativo successivo (lunedì se venerdì).",
+        self.assertEqual(prese_nel_pdf(), {})
+        self._prendi_visione(self.firmatari_utenti["MGalli"], lettera_id)
+        self.assertEqual(prese_nel_pdf(), {RuoloFirmatarioStabilimento.QUALITA: "mgalli"})
+        self._prendi_visione(self.firmatari_utenti["DGiunchi"], lettera_id)
+        self.assertEqual(
+            prese_nel_pdf(),
+            {
+                RuoloFirmatarioStabilimento.QUALITA: "mgalli",
+                RuoloFirmatarioStabilimento.PRODUZIONE: "dgiunchi",
+            },
         )
 
     # ── Punti 15-16: oggetto e corpo dell'email ──────────────────────────────
@@ -483,11 +520,12 @@ class TrasmittalInternoEndToEndTests(TestCase):
     def test_16_oggetto_email_formato_atteso(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox), 1)
-        atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.0]: {esito['nome']}"
+        atteso = f"DOCUMENT TRANSMITTAL [Form MQ 7.5-04 Rev.01]: {esito['nome']}"
         self.assertEqual(mail.outbox[0].subject, atteso)
 
-    def test_17_corpo_email_contiene_le_righe_e_il_percorso(self):
-        esito = self._emetti(self._righe_abcd()).json()
+    @override_settings(WORKFLOW_BASE_URL="")
+    def test_17_corpo_email_contiene_righe_note_e_stato_ma_non_il_percorso(self):
+        esito = self._emetti(self._righe_abcd(), note="Prima nota\nSeconda nota").json()
         self.assertEqual(len(mail.outbox), 1)
         corpo = mail.outbox[0].body
         for doc in (self.doc_a, self.doc_b, self.doc_c):
@@ -495,7 +533,16 @@ class TrasmittalInternoEndToEndTests(TestCase):
         # Non solo i documenti: anche gli altri valori di riga, come nel PDF.
         self.assertIn("YES", corpo)  # CLIENT di doc_a/doc_c
         self.assertIn("NO", corpo)  # CLIENT di doc_b
-        self.assertIn(esito["pdf"]["percorso"], corpo)
+        self.assertIn("NOTES\n1) Prima nota\n2) Seconda nota\n3)", corpo)
+        self.assertIn(
+            "In attesa di presa visione QC e PROD: "
+            f"http://testserver/commesse/{self.testata.job}/trasmittal-interno/"
+            f"?lettera={esito['trasmittal_id']}",
+            corpo,
+        )
+        # Niente percorso del PDF: si salva solo dopo le due prese visione.
+        self.assertNotIn(str(Path("Progetto") / "UT" / "Transmittal"), corpo)
+        self.assertNotIn("Salvato in", corpo)
 
     # ── Punto 17: destinatari modificati in anteprima → usati e registrati ──
 
@@ -511,18 +558,23 @@ class TrasmittalInternoEndToEndTests(TestCase):
         registrati = list(trasmittal.destinatari.values_list("email", "tipo"))
         self.assertEqual(registrati, [("destinatario.scelto@brembanarolle.com", "to")])
 
-    # ── Punto 18: il PDF non è allegato, solo linkato nel corpo ─────────────
+    # ── Punto 18: nessun allegato; il percorso arriva con l'email di completamento ──
 
-    def test_19_pdf_non_allegato_alla_email(self):
+    def test_19_pdf_mai_allegato_percorso_nella_seconda_email(self):
         esito = self._emetti(self._righe_abcd()).json()
         self.assertEqual(len(mail.outbox[0].attachments), 0)
-        self.assertIn(esito["pdf"]["percorso"], mail.outbox[0].body)
+
+        completamento = self._completa(esito["trasmittal_id"])
+
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(len(mail.outbox[1].attachments), 0)
+        self.assertIn(f"Salvato in: {completamento['pdf']['percorso']}", mail.outbox[1].body)
 
     # ── Punto 13: DOC-B (CLIENT NO) non in DCC; DOC-A/DOC-C sì ──────────────
 
     def test_20_doc_b_escluso_dal_dcc_doc_a_e_c_inclusi(self):
         esito = self._emetti(self._righe_abcd())
-        corpo = esito.json()
+        corpo = self._completa(esito.json()["trasmittal_id"])
         copiati = {c["vendor_doc"] for c in corpo["dcc"]["copiati"]}
 
         self.assertIn(self.doc_a.vendor_doc, copiati)
@@ -560,7 +612,7 @@ class TrasmittalInternoEndToEndTests(TestCase):
 
     def test_22_annullamento_rimuove_pdf_cartella_dcc_e_libera_il_progressivo(self):
         esito = self._emetti(self._righe_abcd())
-        corpo = esito.json()
+        corpo = {**esito.json(), **self._completa(esito.json()["trasmittal_id"])}
         pdf_path = Path(corpo["pdf"]["percorso"])
         cartella_dcc = Path(corpo["dcc"]["cartella"])
         self.assertTrue(pdf_path.is_file())

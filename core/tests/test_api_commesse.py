@@ -4,8 +4,11 @@ Prima di questo modulo il CRUD via HTTP non aveva nessun test: i servizi
 erano coperti, le viste no.
 """
 
+import io
 import json
+from datetime import datetime
 
+import openpyxl
 from django.core import mail
 from django.test import Client, TestCase
 from django.utils import timezone
@@ -314,6 +317,48 @@ class RicezioneApiTests(_ApiTestCase):
         self.assertTrue(pdf.content.startswith(b"%PDF"))
 
         self.assertEqual(self.client.get("/api/commesse/NOPE/ricezione/export/").status_code, 404)
+
+
+class ExportDateExcelApiTests(_ApiTestCase):
+    """Le date negli Excel di emissione e ricezione sono date vere, come in "Scarica"."""
+
+    def _foglio(self, url):
+        risposta = self.client.get(url)
+        self.assertEqual(risposta.status_code, 200)
+        return openpyxl.load_workbook(io.BytesIO(risposta.content)).active
+
+    def _celle(self, ws, *intestazioni):
+        nomi = [c.value for c in ws[1]]
+        return [ws.cell(row=2, column=nomi.index(h) + 1) for h in intestazioni]
+
+    def test_emissione(self):
+        self.rev0.dis_plan_date = "2026-05-04"
+        self.rev0.save()
+
+        ws = self._foglio(f"/api/commesse/{self.testata.job}/emissione/export/")
+
+        (pianificata,) = self._celle(ws, "Planned date")
+        self.assertEqual(pianificata.value, datetime(2026, 5, 4))
+        self.assertEqual(pianificata.number_format, "DD/MM/YYYY")
+
+    def test_ricezione(self):
+        self.rev0.int_status = "inviato_al_cliente"
+        self.rev0.dis_act_date = "2026-04-01"
+        self.rev0.rec_plan_date = "2026-04-11"
+        self.rev0.save()
+
+        ws = self._foglio(f"/api/commesse/{self.testata.job}/ricezione/export/")
+
+        emissione, rientro = self._celle(ws, "Emission date", "Planned return date")
+        self.assertEqual(emissione.value, datetime(2026, 4, 1))
+        self.assertEqual(rientro.value, datetime(2026, 4, 11))
+        self.assertEqual({emissione.number_format, rientro.number_format}, {"DD/MM/YYYY"})
+
+    def test_data_mancante_resta_vuota(self):
+        ws = self._foglio(f"/api/commesse/{self.testata.job}/emissione/export/")
+
+        (pianificata,) = self._celle(ws, "Planned date")
+        self.assertIsNone(pianificata.value)
 
 
 class ExportDocumentiApiTests(_ApiTestCase):

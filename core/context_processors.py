@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from .permissions import user_can_write_trasmittal_interno
 
 
@@ -7,9 +9,11 @@ def user_permissions(request):
             "user_can_write": request.user.can_write,
             "user_is_admin": request.user.is_app_admin,
             "trasmittal_interno_can_write": user_can_write_trasmittal_interno(request.user),
+            "trasmittal_interno_automatica": settings.TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA,
         }
     return {
         "user_can_write": False,
         "user_is_admin": False,
         "trasmittal_interno_can_write": False,
+        "trasmittal_interno_automatica": settings.TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA,
     }

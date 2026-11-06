@@ -8,8 +8,6 @@ from unittest.mock import patch
 from django.contrib import admin
 from django.core import mail
 from django.core.exceptions import ValidationError
-from django.core.files.storage import FileSystemStorage
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
@@ -18,11 +16,12 @@ from ..models import (
     DestinatarioTransmittalInterno,
     Documento,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
     OrigineDestinatarioTransmittalInterno,
     Permesso,
     PersonaCommessa,
+    PresaVisioneTransmittalInterno,
     Reparto,
     Revisione,
     RigaTransmittalInterno,
@@ -36,21 +35,23 @@ from ..models import (
     TransmittalInterno,
 )
 from ..services.fileserver import get_base_path
-from ..services.media import StorageNonDisponibile
 from ..services.trasmittal_interno import (
+    anteprima_destinatari,
     componi_nome,
     crea_trasmittal_interno,
-    data_impegno,
     imposta_destinazioni,
-    invia_email_trasmittal,
+    indirizzi_per_tipi_documento,
+    invia_email_emissione,
     mittente_trasmittal,
     prepara_per_dcc,
     prossimo_progressivo,
+    registra_presa_visione,
     salva_pdf,
+    tipo_documento,
 )
 
 # ── Shared fixture factory (unit tests only — uses temp dir) ──────────────────
-from ._fixtures import User, _dai_firma, _media_temporanea, _png, _storage_irraggiungibile
+from ._fixtures import User, _media_temporanea
 
 
 class TransmittalInternoAdminTests(TestCase):
@@ -259,7 +260,7 @@ class RigaTransmittalInternoTpiTests(TestCase):
 
 
 class DestinatariTrasmittalInternoRuoliTests(TestCase):
-    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per documenti SHn."""
+    """Risoluzione dei destinatari da PM/PE/QCI e dalla regola export@ per i documenti ESH."""
 
     def setUp(self):
         self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
@@ -311,20 +312,21 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
             {("bg@b.it", "to", "stabilimento")},
         )
 
-    def test_documento_shn_aggiunge_export_in_cc(self):
-        doc_shn = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
-        imposta_destinazioni(doc_shn, [1])
+    def test_documento_esh_aggiunge_export_in_cc(self):
+        # Regola iniziale della migrazione 0065, senza crearla qui.
+        doc_esh = Documento.objects.create(testata=self.testata, vendor_doc="99012-01-ESH1")
+        imposta_destinazioni(doc_esh, [1])
 
         trasmittal = crea_trasmittal_interno(
-            self.testata, self._righe(self.doc, doc_shn), self.utente
+            self.testata, self._righe(self.doc, doc_esh), self.utente
         )
 
         self.assertIn(
-            ("export@brembanarolle.com", "cc", "export"),
+            ("export@brembanarolle.com", "cc", "tipo_documento"),
             set(trasmittal.destinatari.values_list("email", "tipo", "origine")),
         )
 
-    def test_documento_non_shn_non_aggiunge_export(self):
+    def test_documento_senza_regola_non_aggiunge_export(self):
         trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
 
         self.assertNotIn(
@@ -356,50 +358,156 @@ class DestinatariTrasmittalInternoRuoliTests(TestCase):
         self.assertEqual(destinatari.count(("bg@b.it", "to")), 1)
         self.assertNotIn(("bg@b.it", "cc"), destinatari)
 
-    def test_indirizzi_default_del_sito_coinvolto_aggiunti_alla_lettera(self):
+    def test_indirizzi_attivi_del_sito_coinvolto_aggiunti_alla_lettera(self):
         altro_sito = Stabilimento.objects.create(nome="Albignasego", sigla="PD", codice_bc=2)
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            stabilimento=self.bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="qualita@b.it", tipo=TipoIndirizzoStabilimento.CC
         )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
+        IndirizzoStabilimento.objects.create(
             stabilimento=self.bg,
             email="disattivato@b.it",
-            tipo=TipoDestinatarioTransmittalInterno.CC,
+            tipo=TipoIndirizzoStabilimento.CC,
             attivo=False,
         )
-        # Default di un sito non coinvolto nella lettera: non deve comparire.
-        IndirizzoDefaultTrasmittalInterno.objects.create(
+        # Indirizzo di un sito non coinvolto nella lettera: non deve comparire.
+        IndirizzoStabilimento.objects.create(
             stabilimento=altro_sito,
             email="altro_sito@b.it",
-            tipo=TipoDestinatarioTransmittalInterno.CC,
+            tipo=TipoIndirizzoStabilimento.CC,
         )
 
         trasmittal = crea_trasmittal_interno(self.testata, self._righe(self.doc), self.utente)
 
         destinatari = set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
         email_presenti = trasmittal.destinatari.values_list("email", flat=True)
-        self.assertIn(("qualita@b.it", "cc", "default"), destinatari)
+        self.assertIn(("qualita@b.it", "cc", "stabilimento"), destinatari)
         self.assertNotIn("disattivato@b.it", email_presenti)
         self.assertNotIn("altro_sito@b.it", email_presenti)
 
 
-class DataImpegnoTests(SimpleTestCase):
-    """data_impegno: termine per completare la distribuzione, non la data di firma."""
+class TipoDocumentoTests(SimpleTestCase):
+    """tipo_documento: le lettere del B&R Doc dopo il secondo trattino."""
 
-    def test_lunedi_martedi(self):
-        self.assertEqual(data_impegno(date(2026, 9, 14)), date(2026, 9, 15))
+    def test_codici(self):
+        casi = {
+            "26026-01-EBM1": "EBM",
+            "26026-01-esh10": "ESH",
+            "26026-03-ED02": "ED",
+            "26026-04-QCPA": "QCPA",
+            " 26026-01-EGA1 ": "EGA",
+            "26026-QWR1": "",
+            "26026-01-123": "",
+            "": "",
+            None: "",
+        }
+        for vendor_doc, atteso in casi.items():
+            with self.subTest(vendor_doc=vendor_doc):
+                self.assertEqual(tipo_documento(vendor_doc), atteso)
 
-    def test_giovedi_venerdi(self):
-        self.assertEqual(data_impegno(date(2026, 9, 17)), date(2026, 9, 18))
 
-    def test_venerdi_lunedi_tre_giorni_dopo(self):
-        self.assertEqual(data_impegno(date(2026, 9, 18)), date(2026, 9, 21))
+class IndirizziTipoDocumentoTests(TestCase):
+    """Indirizzi del trasmittal interno per tipo di documento (``IndirizzoTipoDocumento``)."""
 
-    def test_sabato_lunedi(self):
-        self.assertEqual(data_impegno(date(2026, 9, 19)), date(2026, 9, 21))
+    def setUp(self):
+        # Senza le regole iniziali della migrazione: ogni test crea le sue.
+        IndirizzoTipoDocumento.objects.all().delete()
+        self.bg = Stabilimento.objects.create(nome="Valbrembo", sigla="BG", codice_bc=1)
+        IndirizzoStabilimento.objects.create(
+            stabilimento=self.bg, email="bg@b.it", tipo=TipoIndirizzoStabilimento.TO
+        )
+        self.testata = Testata.objects.create(job="99013")
+        self.utente = User.objects.create_user("tipo_doc_utente", password="pw")
 
-    def test_domenica_lunedi(self):
-        self.assertEqual(data_impegno(date(2026, 9, 20)), date(2026, 9, 21))
+    def _documento(self, vendor_doc):
+        documento = Documento.objects.create(testata=self.testata, vendor_doc=vendor_doc)
+        imposta_destinazioni(documento, [1])
+        return documento
+
+    def _destinatari(self, *documenti):
+        righe = [{"documento": documento, "revisione": "1"} for documento in documenti]
+        trasmittal = crea_trasmittal_interno(self.testata, righe, self.utente)
+        return set(trasmittal.destinatari.values_list("email", "tipo", "origine"))
+
+    def _regola(self, codice, email, tipo=TipoDestinatarioTransmittalInterno.CC, attivo=True):
+        return IndirizzoTipoDocumento.objects.create(
+            codice_tipo=codice, email=email, tipo=tipo, attivo=attivo
+        )
+
+    def test_regola_attiva_aggiunge_l_indirizzo_col_suo_tipo(self):
+        self._regola("EBM", "qa@b.it", tipo=TipoDestinatarioTransmittalInterno.TO)
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertIn(("qa@b.it", "to", "tipo_documento"), destinatari)
+
+    def test_documento_di_altro_tipo_non_aggiunge_nulla(self):
+        self._regola("EBM", "qa@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EGA1"))
+
+        self.assertNotIn("qa@b.it", {email for email, _, _ in destinatari})
+
+    def test_il_confronto_sul_tipo_e_esatto(self):
+        self._regola("ED", "ed@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EDV1"))
+
+        self.assertNotIn("ed@b.it", {email for email, _, _ in destinatari})
+
+    def test_regola_disattivata_ignorata(self):
+        self._regola("EBM", "qa@b.it", attivo=False)
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertNotIn("qa@b.it", {email for email, _, _ in destinatari})
+
+    def test_un_indirizzo_per_piu_tipi_compare_una_volta_con_tutti_i_tipi(self):
+        for codice in ("EBM", "ESH", "EGA"):
+            self._regola(codice, "export@b.it")
+        documenti = [self._documento("99013-01-EBM1"), self._documento("99013-01-ESH1")]
+
+        self.assertEqual(
+            indirizzi_per_tipi_documento(documenti),
+            [{"email": "export@b.it", "tipo": "cc", "codici": ["EBM", "ESH"]}],
+        )
+        self.assertEqual(
+            [
+                voce
+                for voce in anteprima_destinatari(self.testata, documenti)
+                if voce["email"] == "export@b.it"
+            ],
+            [{"email": "export@b.it", "tipo": "cc", "origine": "tipo_documento"}],
+        )
+
+    def test_indirizzo_gia_di_stabilimento_resta_in_to(self):
+        self._regola("EBM", "bg@b.it")
+
+        destinatari = self._destinatari(self._documento("99013-01-EBM1"))
+
+        self.assertIn(("bg@b.it", "to", "stabilimento"), destinatari)
+        self.assertNotIn(("bg@b.it", "cc", "tipo_documento"), destinatari)
+
+    def test_codice_in_maiuscolo_e_validato(self):
+        regola = self._regola("ebm", "qa@b.it")
+        self.assertEqual(regola.codice_tipo, "EBM")
+
+        doppione = IndirizzoTipoDocumento(codice_tipo="Ebm", email="qa@b.it", tipo="cc")
+        with self.assertRaises(ValidationError):
+            doppione.full_clean()
+        with self.assertRaises(ValidationError):
+            IndirizzoTipoDocumento(codice_tipo="EB1", email="x@b.it", tipo="cc").full_clean()
+
+
+class RegoleExportInizialiTests(TestCase):
+    """La migrazione 0065 porta in tabella la regola export@, estesa a EBM ed EGA."""
+
+    def test_export_in_cc_per_ebm_ega_esh(self):
+        regole = IndirizzoTipoDocumento.objects.filter(email="export@brembanarolle.com")
+
+        self.assertEqual(
+            list(regole.values_list("codice_tipo", "tipo", "attivo")),
+            [("EBM", "cc", True), ("EGA", "cc", True), ("ESH", "cc", True)],
+        )
 
 
 class TrasmittalInternoPdfTests(TestCase):
@@ -414,10 +522,6 @@ class TrasmittalInternoPdfTests(TestCase):
         self.produzione = User.objects.create_user(
             "pdf_produzione", "pdf-produzione@b.it", "pw", first_name="Mario", last_name="Rossi"
         )
-        self.produzione.firma = SimpleUploadedFile("firma.png", _png(), "image/png")
-        self.produzione.save()
-        # Lo stesso utente firma per la Qualità di entrambi i siti: nel PDF
-        # deve comparire una sola volta.
         self.qualita = User.objects.create_user(
             "pdf_qualita", "pdf-qualita@b.it", "pw", first_name="Anna", last_name="Bianchi"
         )
@@ -465,15 +569,6 @@ class TrasmittalInternoPdfTests(TestCase):
         self.assertTrue(contenuto.startswith(b"%PDF"))
         self.assertGreater(len(contenuto), 1000)
 
-    def test_firme_deduplicate_per_utente_condiviso_tra_stabilimenti(self):
-        from src.pdf import _firmatari_per_ruolo
-
-        firmatari_qualita = _firmatari_per_ruolo(
-            [self.bg, self.pd], RuoloFirmatarioStabilimento.QUALITA
-        )
-
-        self.assertEqual([f.utente_id for f in firmatari_qualita], [self.qualita.pk])
-
     # -- colonna TPI: "NO" se spento, il destinatario se acceso --
 
     def test_colonna_tpi_mostra_no_se_spento(self):
@@ -498,29 +593,40 @@ class TrasmittalInternoPdfTests(TestCase):
         self.assertIn("NO", tabella)
         self.assertIn("ABC", tabella)
 
-    def test_firma_assente_dallo_storage_lascia_il_riquadro_vuoto(self):
-        from src.pdf import _leggi_firma_bytes
-
-        _dai_firma(self.qualita, "firme/sparita.png")
-
-        self.assertIsNone(_leggi_firma_bytes(self.qualita))
-
-    def test_storage_irraggiungibile_non_emette_un_pdf_senza_firme(self):
+    def test_il_pdf_si_genera_anche_con_le_prese_visione(self):
         from src.pdf import genera_trasmittal_interno_pdf
 
-        with (
-            patch.object(FileSystemStorage, "open", side_effect=_storage_irraggiungibile()),
-            self.assertRaises(StorageNonDisponibile),
-        ):
-            genera_trasmittal_interno_pdf(self.trasmittal)
+        PresaVisioneTransmittalInterno.objects.create(
+            trasmittal=self.trasmittal,
+            utente=self.qualita,
+            ruolo=RuoloFirmatarioStabilimento.QUALITA,
+        )
 
-    def test_firmatario_senza_immagine_non_solleva_eccezioni(self):
-        from src.pdf import genera_trasmittal_interno_pdf
-
-        # self.qualita non ha un'immagine di firma caricata.
         contenuto = genera_trasmittal_interno_pdf(self.trasmittal)
 
         self.assertTrue(contenuto.startswith(b"%PDF"))
+
+    def test_footer_riporta_i_riferimenti_del_modulo_rev01_in_un_solo_riquadro(self):
+        from src.pdf import (
+            _INT_TABLE_WIDTH_MM,
+            TrasmittalInternoPDF,
+            _build_footer_riferimenti,
+        )
+
+        pdf = TrasmittalInternoPDF()
+        pdf.add_page()
+        with (
+            patch.object(pdf, "cell", wraps=pdf.cell) as cell,
+            patch.object(pdf, "rect", wraps=pdf.rect) as rect,
+        ):
+            _build_footer_riferimenti(pdf)
+
+        testi = [c.args[2] for c in cell.call_args_list]
+        self.assertEqual(
+            testi, ["B&R Form: MQ 7.5-04 Rev.01 Dated: 23/10/2026  Rif.: PQHSE 7.5-01"]
+        )
+        rect.assert_called_once()
+        self.assertEqual(rect.call_args.args[2], _INT_TABLE_WIDTH_MM)
 
 
 class SalvaPdfTrasmittalInternoTests(TestCase):
@@ -716,10 +822,18 @@ class TrasmittalInternoDestinazioniViewTests(TestCase):
             doc_title="Documento Beta",
             reparto=self.reparto_ut.nome,
         )
+        # Un reparto con un acronimo fuori da UT/QC/WE: i suoi documenti restano fuori.
         self.doc_non_ut = Documento.objects.create(
             testata=self.testata,
-            vendor_doc="99040-QC",
+            vendor_doc="99040-QMD",
             reparto=self.reparto_qc.nome,
+        )
+        self.reparto_qc_vero = Reparto.objects.create(nome="Quality Control", acronimo="QC")
+        self.doc_qc = Documento.objects.create(
+            testata=self.testata,
+            vendor_doc="99040-QC",
+            doc_title="Documento QC",
+            reparto=self.reparto_qc_vero.nome,
         )
 
         self.writer = User.objects.create_user(
@@ -800,7 +914,7 @@ class TrasmittalInternoDestinazioniViewTests(TestCase):
         risposta = self.client.get(self._api_destinazioni_url())
         self.assertNotEqual(risposta.status_code, 200)
 
-    def test_api_destinazioni_elenca_solo_i_documenti_ut(self):
+    def test_api_destinazioni_elenca_i_documenti_ut_qc_e_we(self):
         self.client.force_login(self.reader)
 
         risposta = self.client.get(self._api_destinazioni_url())
@@ -809,7 +923,7 @@ class TrasmittalInternoDestinazioniViewTests(TestCase):
         dati = risposta.json()
         self.assertEqual(
             {d["vendor_doc"] for d in dati["documenti"]},
-            {self.doc_alfa.vendor_doc, self.doc_beta.vendor_doc},
+            {self.doc_alfa.vendor_doc, self.doc_beta.vendor_doc, self.doc_qc.vendor_doc},
         )
         self.assertEqual(
             [s["sigla"] for s in dati["stabilimenti"]], ["BG", "PD"]
@@ -845,7 +959,7 @@ class TrasmittalInternoDestinazioniViewTests(TestCase):
         self.assertEqual(risposta.status_code, 403)
         self.assertEqual(list(self.doc_alfa.destinazioni.all()), [])
 
-    def test_salvataggio_su_documento_non_ut_rifiutato(self):
+    def test_salvataggio_su_documento_di_un_altro_reparto_rifiutato(self):
         self.client.force_login(self.writer)
 
         risposta = self.client.post(
@@ -1183,19 +1297,6 @@ class TrasmittalInternoLetteraTests(TestCase):
 
     # -- anteprima --
 
-    def test_anteprima_pdf_con_storage_irraggiungibile_risponde_503(self):
-        self.client.force_login(self.writer)
-
-        with patch("core.views.anteprima_pdf_bytes", side_effect=StorageNonDisponibile()):
-            risposta = self.client.post(
-                self._url("anteprima/pdf/"),
-                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
-                content_type="application/json",
-            )
-
-        self.assertEqual(risposta.status_code, 503)
-        self.assertIn("non raggiungibile", risposta.json()["error"])
-
     def test_anteprima_mostra_destinatari_risolti_con_origine(self):
         self.client.force_login(self.reader)
 
@@ -1252,7 +1353,9 @@ class TrasmittalInternoLetteraTests(TestCase):
 
     # -- conferma --
 
-    def test_conferma_crea_trasmittal_salva_pdf_popola_dcc_e_invia_email(self):
+    def test_conferma_crea_trasmittal_e_invia_l_email_senza_pdf_ne_dcc(self):
+        from core.services.trasmittal_interno import _percorso_dcc_da, percorso_pdf
+
         self.client.force_login(self.writer)
 
         risposta = self.client.post(
@@ -1264,16 +1367,19 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertEqual(risposta.status_code, 200)
         corpo = risposta.json()
         self.assertTrue(corpo["ok"])
-        self.assertTrue(corpo["pdf"]["ok"])
-        self.assertTrue(Path(corpo["pdf"]["percorso"]).is_file())
-        self.assertTrue(corpo["dcc"]["ok"])
-        self.assertEqual(len(corpo["dcc"]["copiati"]), 1)
         self.assertTrue(corpo["email"]["ok"])
+        self.assertEqual(corpo["stato"], "in_attesa")
+        self.assertEqual(corpo["ruoli_mancanti"], ["QC", "PROD"])
+        # PDF e cartella DCC arrivano solo dopo le due prese visione.
+        self.assertNotIn("pdf", corpo)
+        self.assertNotIn("dcc", corpo)
+        lettera = TransmittalInterno.objects.get(pk=corpo["trasmittal_id"])
+        self.assertFalse(percorso_pdf(lettera).exists())
+        self.assertFalse(_percorso_dcc_da(self.testata.job, lettera.nome).exists())
 
         self.assertEqual(TransmittalInterno.objects.filter(testata=self.testata).count(), 1)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["bg@b.it", "til-pm@b.it"])
-        # Il PDF non è allegato: il corpo riporta già il percorso sul fileserver.
         self.assertEqual(len(mail.outbox[0].attachments), 0)
 
     def test_destinatari_modificati_in_anteprima_sono_quelli_usati_e_registrati(self):
@@ -1328,21 +1434,19 @@ class TrasmittalInternoLetteraTests(TestCase):
         self.assertTrue(corpo["ok"])
         self.assertFalse(corpo["email"]["ok"])
         self.assertIn("SMTP non raggiungibile", corpo["email"]["errore"])
-        # La lettera resta in archivio nonostante l'invio email fallito, e gli
-        # altri passi indipendenti (pdf, dcc) restano chiaramente riusciti.
+        # La lettera resta in archivio nonostante l'invio email fallito.
         self.assertTrue(TransmittalInterno.objects.filter(pk=corpo["trasmittal_id"]).exists())
-        self.assertTrue(corpo["pdf"]["ok"])
-        self.assertTrue(corpo["dcc"]["ok"])
+        self.assertEqual(corpo["stato"], "in_attesa")
         self.assertEqual(len(mail.outbox), 0)
 
     # -- mittente: chi ha compilato ed emesso la lettera --
 
     def _pdf_finto(self):
-        """Sostituisce la generazione del PDF nel flusso di emissione.
+        """Sostituisce la generazione del PDF nel completamento della lettera.
 
-        Il rendering vero non c'entra con il mittente dell'email e dipende dai
+        Il rendering vero non c'entra con l'elenco e le email e dipende dai
         font di sistema (``src.pdf._register_unicode_font``): sostituirlo tiene
-        questi test sul solo passo di invio.
+        questi test sui passi che verificano.
         """
         return patch("src.pdf.genera_trasmittal_interno_pdf", return_value=b"%PDF-1.4 finto")
 
@@ -1531,14 +1635,24 @@ class TrasmittalInternoLetteraTests(TestCase):
     def test_elenco_segnala_le_lettere_senza_pdf_sul_fileserver(self):
         from core.services.trasmittal_interno import percorso_pdf
 
+        qc = User.objects.create_user("til_qc", "til-qc@b.it", "pw")
+        prod = User.objects.create_user("til_prod", "til-prod@b.it", "pw")
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=qc
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.PRODUZIONE, utente=prod
+        )
         self.client.force_login(self.writer)
-        with self._pdf_finto():
-            emessa = self.client.post(
-                self._url("emetti/"),
-                data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
-                content_type="application/json",
-            ).json()
+        emessa = self.client.post(
+            self._url("emetti/"),
+            data=json.dumps({"righe": [self._riga(self.doc_ok)]}),
+            content_type="application/json",
+        ).json()
         lettera = TransmittalInterno.objects.get(pk=emessa["trasmittal_id"])
+        with self._pdf_finto():
+            registra_presa_visione(lettera, qc)
+            registra_presa_visione(lettera, prod)
 
         voce = self.client.get(self._url("lettere/")).json()["lettere"][0]
         self.assertTrue(voce["pdf_presente"])
@@ -1620,7 +1734,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_invio_dalla_casella_dell_app_con_risposte_e_copia_a_chi_ha_emesso(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        esito = invia_email_trasmittal(trasmittal)
+        esito = invia_email_emissione(trasmittal)
 
         self.assertEqual(esito["mittente"], self.MITTENTE)
         self.assertEqual(esito["cc"], ["anna.bianchi@b.it"])
@@ -1642,7 +1756,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         trasmittal = self._trasmittal(self.emittente)
         trasmittal.destinatari.create(email="Anna.Bianchi@b.it", tipo="cc", origine="manuale")
 
-        invia_email_trasmittal(trasmittal)
+        invia_email_emissione(trasmittal)
 
         self.assertEqual(mail.outbox[0].cc, ["Anna.Bianchi@b.it"])
 
@@ -1650,28 +1764,28 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
         senza_email = User.objects.create_user("senza_email", "", "pw")
         trasmittal = self._trasmittal(senza_email)
 
-        invia_email_trasmittal(trasmittal)
+        invia_email_emissione(trasmittal)
 
         self.assertEqual(mail.outbox[0].from_email, "noreply@b.it")
         self.assertEqual(mail.outbox[0].reply_to, [])
         self.assertEqual(mail.outbox[0].cc, [])
         self.assertIn("— emesso da senza_email.", mail.outbox[0].body)
 
-    def test_il_messaggio_e_nell_email_sopra_la_tabella_le_note_no(self):
+    def test_il_messaggio_e_sopra_la_tabella_le_note_nel_riquadro_notes(self):
         trasmittal = self._trasmittal(self.emittente)
         trasmittal.messaggio_email = "Consegnare entro venerdì.\nCopia per l'ufficio <qualità>."
         trasmittal.note = "Nota del modulo"
         trasmittal.save(update_fields=["messaggio_email", "note"])
 
-        invia_email_trasmittal(trasmittal)
+        invia_email_emissione(trasmittal)
 
         inviata = mail.outbox[0]
         self.assertIn(
             "anna.bianchi@b.it).\n\nConsegnare entro venerdì.\nCopia per l'ufficio <qualità>.\n\nB&R",
             inviata.body,
         )
-        # Le note restano nel PDF del modulo.
-        self.assertNotIn("Nota del modulo", inviata.body)
+        # Le note della lettera sono nel riquadro NOTES, numerate come nel PDF.
+        self.assertIn("NOTES\n1) Nota del modulo\n2)\n3)\n\n", inviata.body)
         html = inviata.alternatives[0][0]
         self.assertIn(
             "<p>Consegnare entro venerdì.<br>Copia per l&#x27;ufficio &lt;qualità&gt;.</p>", html
@@ -1681,7 +1795,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_senza_messaggio_nessun_paragrafo_vuoto(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        invia_email_trasmittal(trasmittal)
+        invia_email_emissione(trasmittal)
 
         self.assertIn("(anna.bianchi@b.it).\n\nB&R DOC. No.", mail.outbox[0].body)
 
@@ -1689,7 +1803,7 @@ class MittenteEmailTrasmittalInternoTests(TestCase):
     def test_redirect_di_test_cambia_i_destinatari_ma_non_il_mittente(self):
         trasmittal = self._trasmittal(self.emittente)
 
-        esito = invia_email_trasmittal(trasmittal)
+        esito = invia_email_emissione(trasmittal)
 
         self.assertEqual(esito["to"], ["dest@b.it"])  # gli indirizzi reali, nell'esito
         self.assertEqual(mail.outbox[0].to, ["prove@b.it"])  # il reindirizzamento di test
@@ -1965,19 +2079,34 @@ class AnnullaTrasmittalInternoTests(TestCase):
         self.reader = User.objects.create_user(
             "ann_reader", "ann-reader@b.it", "pw", permesso=Permesso.READING
         )
+        self.qc = User.objects.create_user("ann_qc", "ann-qc@b.it", "pw")
+        self.prod = User.objects.create_user("ann_prod", "ann-prod@b.it", "pw")
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.QUALITA, utente=self.qc
+        )
+        FirmatarioStabilimento.objects.create(
+            stabilimento=self.bg, ruolo=RuoloFirmatarioStabilimento.PRODUZIONE, utente=self.prod
+        )
 
     def _url(self, path):
         return f"/api/commesse/{self.testata.job}/trasmittal-interno/{path}"
 
-    def _emetti(self, documento):
-        risposta = self.client.post(
+    def _emetti(self, documento, completa=True):
+        """Emette la lettera e, con ``completa``, registra le prese visione QC e PROD:
+        il risultato porta anche gli esiti ``pdf`` e ``dcc`` del completamento."""
+        emesso = self.client.post(
             self._url("emetti/"),
             data=json.dumps(
                 {"righe": [{"documento_id": documento.pk, "revisione": "0", "cliente": True}]}
             ),
             content_type="application/json",
-        )
-        return risposta.json()
+        ).json()
+        if not completa:
+            return emesso
+        lettera = TransmittalInterno.objects.get(pk=emesso["trasmittal_id"])
+        registra_presa_visione(lettera, self.qc)
+        completata = registra_presa_visione(lettera, self.prod)
+        return {**emesso, **completata["completamento"]}
 
     def test_annullamento_dell_ultimo_riesce_e_rimuove_record_pdf_e_cartella_dcc(self):
         self.client.force_login(self.writer)
@@ -1998,6 +2127,28 @@ class AnnullaTrasmittalInternoTests(TestCase):
         self.assertFalse(TransmittalInterno.objects.filter(pk=emesso["trasmittal_id"]).exists())
         self.assertFalse(pdf_path.exists())
         self.assertFalse(cartella_dcc.exists())
+        # Le prese visione se ne vanno con la lettera (CASCADE).
+        self.assertFalse(
+            PresaVisioneTransmittalInterno.objects.filter(
+                trasmittal_id=emesso["trasmittal_id"]
+            ).exists()
+        )
+
+    def test_annullamento_di_una_lettera_in_attesa_con_una_presa_visione(self):
+        self.client.force_login(self.writer)
+        emesso = self._emetti(self.doc1, completa=False)
+        lettera = TransmittalInterno.objects.get(pk=emesso["trasmittal_id"])
+        registra_presa_visione(lettera, self.qc)
+
+        risposta = self.client.post(self._url(f"lettere/{emesso['trasmittal_id']}/annulla/"))
+
+        self.assertEqual(risposta.status_code, 200)
+        corpo = risposta.json()
+        # Nessun PDF né cartella DCC da togliere: la lettera non era completata.
+        self.assertFalse(corpo["pdf_rimosso"])
+        self.assertFalse(corpo["cartella_dcc_rimossa"])
+        self.assertFalse(TransmittalInterno.objects.filter(pk=lettera.pk).exists())
+        self.assertFalse(PresaVisioneTransmittalInterno.objects.exists())
 
     def test_annullamento_di_uno_non_ultimo_rifiutato(self):
         self.client.force_login(self.writer)
@@ -2177,8 +2328,8 @@ class IndirizziEmailNotiApiTests(TestCase):
         IndirizzoStabilimento.objects.create(
             stabilimento=bg, email="spento@b.it", tipo=TipoIndirizzoStabilimento.CC, attivo=False
         )
-        IndirizzoDefaultTrasmittalInterno.objects.create(
-            stabilimento=bg, email="qualita@b.it", tipo=TipoDestinatarioTransmittalInterno.CC
+        IndirizzoStabilimento.objects.create(
+            stabilimento=bg, email="qualita@b.it", tipo=TipoIndirizzoStabilimento.CC
         )
 
         trasmittal = TransmittalInterno.objects.create(
@@ -2205,7 +2356,7 @@ class IndirizziEmailNotiApiTests(TestCase):
     def test_richiede_login(self):
         self.assertEqual(self.client.get(self.URL).status_code, 401)
 
-    def test_unisce_utenti_stabilimenti_default_e_destinatari_gia_usati(self):
+    def test_unisce_utenti_stabilimenti_e_destinatari_gia_usati(self):
         self.assertEqual(
             self._indirizzi(),
             [

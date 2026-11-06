@@ -128,7 +128,7 @@ if env_bool("USE_X_FORWARDED_PROTO", False):
 # Application definition
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    "core.admin_config.WorkflowAdminConfig",  # django.contrib.admin, tabelle per argomento
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -243,6 +243,21 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 # nessuno. Vuota in produzione.
 TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT = os.environ.get(
     "TRASMITTAL_INTERNO_EMAIL_TEST_REDIRECT", ""
+)
+
+# Indirizzo pubblico dell'app (es. http://workflow.brembanarolle.local:8000),
+# usato per i link nelle email: l'email di emissione del trasmittal interno
+# porta alla pagina della lettera. Se vuoto vale l'indirizzo con cui chi emette
+# ha aperto l'app, che può essere un IP interno diverso da quello degli altri.
+WORKFLOW_BASE_URL = os.environ.get("WORKFLOW_BASE_URL", "").strip().rstrip("/")
+
+# Misura temporanea: con ``TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA=True`` ogni
+# trasmittal interno è visionato "in automatico" nel momento in cui viene emesso
+# (senza attendere QC e PROD): PDF sul fileserver e cartella DCC si preparano
+# subito e l'email di emissione dice dove sono. Spenta, vale la presa visione
+# di QC e PROD.
+TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA = env_bool(
+    "TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA", False
 )
 
 # Destinatari delle richieste di eliminazione commessa (chi non è admin non

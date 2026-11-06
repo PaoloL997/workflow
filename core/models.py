@@ -6,6 +6,7 @@ from urllib.parse import quote
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -197,7 +198,11 @@ class TipoIndirizzoStabilimento(models.TextChoices):
 
 
 class IndirizzoStabilimento(models.Model):
-    """Indirizzo email di uno stabilimento, per il trasmittal interno."""
+    """Indirizzo email A/CC di uno stabilimento, per il trasmittal interno.
+
+    Finisce in ogni lettera in cui lo stabilimento è tra i siti coinvolti,
+    se attivo — vedi ``core.services.trasmittal_interno._costruisci_destinatari``.
+    """
 
     stabilimento = models.ForeignKey(
         Stabilimento,
@@ -231,11 +236,14 @@ class RuoloFirmatarioStabilimento(models.TextChoices):
 
 
 class FirmatarioStabilimento(models.Model):
-    """Chi firma per uno stabilimento nel trasmittal interno, per ruolo.
+    """Chi prende visione dei trasmittal interni per uno stabilimento, per ruolo.
 
-    L'immagine della firma è quella dell'utente (``User.firma``), non un
-    campo di questo modello. Lo stesso utente può firmare per più
-    stabilimenti: è voluto.
+    Un utente presente qui per un ruolo su uno dei siti coinvolti in una
+    lettera può registrarne la presa visione per quel ruolo (vedi
+    ``core.services.trasmittal_interno.registra_presa_visione``). Più utenti
+    possono avere lo stesso ruolo sullo stesso stabilimento, e lo stesso
+    utente può comparire per più stabilimenti: è voluto. Nessuna immagine di
+    firma: conta il clic dell'utente autenticato.
     """
 
     stabilimento = models.ForeignKey(
@@ -258,8 +266,8 @@ class FirmatarioStabilimento(models.Model):
         ordering = ["stabilimento", "ruolo"]
         constraints = [
             models.UniqueConstraint(
-                fields=["stabilimento", "ruolo"],
-                name="uniq_firmatario_stabilimento_ruolo",
+                fields=["stabilimento", "ruolo", "utente"],
+                name="uniq_firmatario_stabilimento_ruolo_utente",
             ),
         ]
 
@@ -745,6 +753,11 @@ class TransmittalInterno(models.Model):
     # Testo facoltativo scritto prima dell'invio: va solo nell'email (le note
     # stanno nel PDF del modulo). Salvato qui perché Riprova lo rimandi uguale.
     messaggio_email = models.TextField(blank=True, verbose_name="Messaggio dell'email")
+    # Message-ID dell'email di emissione: l'email di completamento risponde
+    # nello stesso thread (In-Reply-To / References). Vuoto finché non è partita.
+    message_id = models.CharField(
+        max_length=255, blank=True, verbose_name="Message-ID dell'email di emissione"
+    )
 
     class Meta:
         managed = True
@@ -839,7 +852,12 @@ class OrigineDestinatarioTransmittalInterno(models.TextChoices):
     PM = "pm", "PM"
     PE = "pe", "PE"
     QCI = "qci", "QCI"
+    TIPO_DOCUMENTO = "tipo_documento", "Tipo documento"
+    # export@ per i documenti ESH, solo nelle lettere emesse prima che
+    # diventasse un indirizzo per tipo documento (migrazione 0065).
     EXPORT = "export", "Export"
+    # Indirizzi "sempre in copia" del sito, solo nelle lettere emesse prima
+    # che diventassero indirizzi dello stabilimento (migrazione 0064).
     DEFAULT = "default", "Default"
     MANUALE = "manuale", "Manuale"
 
@@ -849,8 +867,8 @@ class DestinatarioTransmittalInterno(models.Model):
 
     ``origine`` spiega perché quell'indirizzo è finito in lista: vedi
     ``core.services.trasmittal_interno.crea_trasmittal_interno`` per le
-    regole di indirizzamento (stabilimento, PM, PE, QCI, export@ per i
-    documenti SHn); ``MANUALE`` per un indirizzo aggiunto a mano in
+    regole di indirizzamento (stabilimento, PM, PE, QCI, indirizzi per tipo
+    documento); ``MANUALE`` per un indirizzo aggiunto a mano in
     anteprima (vedi ``core.services.trasmittal_interno.sostituisci_destinatari``).
     WE non ha un'origine dedicata: la sua lista di distribuzione non è
     ancora definita.
@@ -882,20 +900,68 @@ class DestinatarioTransmittalInterno(models.Model):
         return f"{self.trasmittal_id}: {self.email} ({self.tipo})"
 
 
-class IndirizzoDefaultTrasmittalInterno(models.Model):
-    """Indirizzo email sempre incluso nei destinatari del trasmittal interno
-    quando il suo stabilimento è tra i siti coinvolti nella lettera.
+class PresaVisioneTransmittalInterno(models.Model):
+    """La presa visione di una lettera di trasmittal interno per un ruolo (QC o PROD).
 
-    Si aggiunge, se attivo, ai TO/CC già risolti da ``IndirizzoStabilimento``
-    per lo stesso stabilimento — vedi
-    ``core.services.trasmittal_interno._costruisci_destinatari``. Gestito da
-    qui (admin), non dal codice.
+    È il fatto che l'utente autenticato ha cliccato "Presa visione": nessuna
+    firma grafica. Una sola per ruolo e per lettera; quando ci sono entrambi
+    i ruoli la lettera è completata (PDF sul fileserver, cartella DCC, email
+    di completamento — vedi
+    ``core.services.trasmittal_interno.registra_presa_visione``).
     """
 
-    stabilimento = models.ForeignKey(
-        Stabilimento,
+    trasmittal = models.ForeignKey(
+        TransmittalInterno,
         on_delete=models.CASCADE,
-        related_name="indirizzi_default_trasmittal",
+        related_name="prese_visione",
+    )
+    utente = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="prese_visione_trasmittal_interno",
+        null=True,
+        blank=True,
+    )
+    ruolo = models.CharField(max_length=20, choices=RuoloFirmatarioStabilimento.choices)
+    registrata_il = models.DateTimeField(default=timezone.now)
+    automatica = models.BooleanField(
+        default=False,
+        help_text="Registrata dall'applicazione all'emissione («in automatico»), senza utente.",
+    )
+
+    class Meta:
+        managed = True
+        db_table = "prese_visione_trasmittal_interno"
+        verbose_name = "Presa visione trasmittal interno"
+        verbose_name_plural = "Prese visione trasmittal interno"
+        ordering = ["trasmittal", "ruolo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["trasmittal", "ruolo"],
+                name="uniq_presa_visione_trasmittal_ruolo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.trasmittal_id}: {self.ruolo} = {self.utente_id}"
+
+
+class IndirizzoTipoDocumento(models.Model):
+    """Indirizzo email del trasmittal interno per un tipo di documento, in ogni commessa.
+
+    Entra, se attivo, in ogni lettera con almeno un documento di quel tipo
+    (es. export@ in CC per EBM, EGA ed ESH). Il tipo sono le lettere del
+    B&R Doc dopo il secondo trattino: ``26026-01-EBM1`` → ``EBM``, vedi
+    ``core.services.trasmittal_interno.tipo_documento``. Il confronto è
+    esatto: una regola per ``ED`` non vale per ``EDV``.
+    """
+
+    codice_tipo = models.CharField(
+        max_length=10,
+        validators=[
+            RegexValidator(r"^[A-Za-z]+$", "Solo lettere, senza numeri né trattini (es. EBM).")
+        ],
+        help_text="Le lettere del B&R Doc dopo il secondo trattino: EBM per 26026-01-EBM1.",
     )
     email = models.EmailField()
     tipo = models.CharField(max_length=10, choices=TipoDestinatarioTransmittalInterno.choices)
@@ -903,19 +969,27 @@ class IndirizzoDefaultTrasmittalInterno(models.Model):
 
     class Meta:
         managed = True
-        db_table = "indirizzi_default_trasmittal_interno"
-        verbose_name = "Indirizzo default trasmittal interno"
-        verbose_name_plural = "Indirizzi default trasmittal interno"
-        ordering = ["stabilimento", "tipo", "email"]
+        db_table = "indirizzi_tipo_documento"
+        verbose_name = "Indirizzo per tipo documento"
+        verbose_name_plural = "Indirizzi per tipo documento"
+        ordering = ["codice_tipo", "tipo", "email"]
         constraints = [
             models.UniqueConstraint(
-                fields=["stabilimento", "email", "tipo"],
-                name="uniq_indirizzo_default_trasmittal_interno",
+                fields=["codice_tipo", "email", "tipo"],
+                name="uniq_indirizzo_tipo_documento",
             ),
         ]
 
+    def clean(self):
+        # Prima del controllo di unicità: "ebm" e "EBM" sono la stessa regola.
+        self.codice_tipo = (self.codice_tipo or "").strip().upper()
+
+    def save(self, *args, **kwargs):
+        self.codice_tipo = (self.codice_tipo or "").strip().upper()
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.stabilimento_id}: {self.email} ({self.tipo})"
+        return f"{self.codice_tipo}: {self.email} ({self.tipo})"
 
 
 class Revisione(models.Model):
@@ -984,13 +1058,30 @@ class Revisione(models.Model):
         return f"Rev {etichetta}" if etichetta else f"Rev #{self.pk}"
 
 
-class RevisioneFileLink(models.Model):
-    """Manual file link for a revision when auto-resolution fails."""
+class TipoFileLink(models.TextChoices):
+    """Quale file della revisione: quello ricevuto dal cliente o quello inviato."""
 
-    revisione = models.OneToOneField(
+    RICEVUTO = "ricevuto", "Received"
+    INVIATO = "inviato", "Dispatch"
+
+
+class RevisioneFileLink(models.Model):
+    """Manual file link for a revision when auto-resolution fails.
+
+    Una revisione ha al più un link per tipo: il file ricevuto (cella Received)
+    e quello inviato (cella Dispatch) si collegano separatamente.
+    """
+
+    revisione = models.ForeignKey(
         Revisione,
         on_delete=models.CASCADE,
-        related_name="file_link",
+        related_name="file_links",
+    )
+    tipo = models.CharField(
+        db_column="Tipo",
+        max_length=10,
+        choices=TipoFileLink.choices,
+        default=TipoFileLink.RICEVUTO,
     )
     percorso = models.CharField(
         db_column="Percorso",
@@ -1005,9 +1096,14 @@ class RevisioneFileLink(models.Model):
         db_table = "revisioni_file_link"
         verbose_name = "Link file revisione"
         verbose_name_plural = "Link file revisioni"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["revisione", "tipo"], name="uniq_revisione_file_link_tipo"
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.revisione} → {self.percorso}"
+        return f"{self.revisione} ({self.get_tipo_display()}) → {self.percorso}"
 
 
 class Transmittal(models.Model):

@@ -14,12 +14,13 @@ from .models import (
     Documento,
     EsecuzioneSchedulata,
     FirmatarioStabilimento,
-    IndirizzoDefaultTrasmittalInterno,
     IndirizzoStabilimento,
+    IndirizzoTipoDocumento,
     ModelloDocumento,
     Notifica,
     Permesso,
     PersonaCommessa,
+    PresaVisioneTransmittalInterno,
     Reparto,
     Revisione,
     RevisioneFileLink,
@@ -36,25 +37,30 @@ from .models import (
 from .permissions import GRUPPO_SERVIZIO
 
 
-class IndirizzoStabilimentoInline(admin.TabularInline):
-    model = IndirizzoStabilimento
-    extra = 0
-    fields = ("email", "tipo", "attivo")
-
-
-class IndirizzoDefaultTrasmittalInternoInline(admin.TabularInline):
-    model = IndirizzoDefaultTrasmittalInterno
-    extra = 0
-    fields = ("email", "tipo", "attivo")
-    verbose_name = "Indirizzo default trasmittal interno"
-    verbose_name_plural = "Indirizzi default trasmittal interno (sempre in copia per questo sito)"
-
-
 @admin.register(Stabilimento)
 class StabilimentoAdmin(admin.ModelAdmin):
     list_display = ("id", "nome", "sigla", "codice_bc")
     search_fields = ("nome", "sigla")
-    inlines = [IndirizzoStabilimentoInline, IndirizzoDefaultTrasmittalInternoInline]
+
+
+@admin.register(IndirizzoStabilimento)
+class IndirizzoStabilimentoAdmin(admin.ModelAdmin):
+    """Indirizzi A/CC dei siti per il trasmittal interno, nel gruppo omonimo dell'admin."""
+
+    list_display = ("stabilimento", "email", "tipo", "attivo")
+    list_editable = ("attivo",)
+    list_filter = ("stabilimento", "tipo", "attivo")
+    search_fields = ("email", "stabilimento__nome", "stabilimento__sigla")
+
+
+@admin.register(IndirizzoTipoDocumento)
+class IndirizzoTipoDocumentoAdmin(admin.ModelAdmin):
+    """Indirizzi del trasmittal interno per tipo di documento, validi per tutte le commesse."""
+
+    list_display = ("codice_tipo", "email", "tipo", "attivo")
+    list_editable = ("attivo",)
+    list_filter = ("codice_tipo", "tipo", "attivo")
+    search_fields = ("codice_tipo", "email")
 
 
 @admin.register(Reparto)
@@ -201,7 +207,8 @@ class ModelloDocumentoAdmin(admin.ModelAdmin):
 
 @admin.register(RevisioneFileLink)
 class RevisioneFileLinkAdmin(admin.ModelAdmin):
-    list_display = ("id", "revisione", "percorso", "created_at", "updated_at")
+    list_display = ("id", "revisione", "tipo", "percorso", "created_at", "updated_at")
+    list_filter = ("tipo",)
     search_fields = ("percorso", "revisione__documento__vendor_doc")
     raw_id_fields = ("revisione",)
     readonly_fields = ("created_at", "updated_at")
@@ -432,6 +439,11 @@ class DestinatarioTransmittalInternoInline(_SolaLetturaInline, admin.TabularInli
     fields = ("email", "tipo", "origine")
 
 
+class PresaVisioneTransmittalInternoInline(_SolaLetturaInline, admin.TabularInline):
+    model = PresaVisioneTransmittalInterno
+    fields = ("ruolo", "utente", "automatica", "registrata_il")
+
+
 @admin.register(TransmittalInterno)
 class TransmittalInternoAdmin(admin.ModelAdmin):
     """Sola lettura, cancellabile: l'archivio si scrive da ``crea_trasmittal_interno``,
@@ -439,8 +451,8 @@ class TransmittalInternoAdmin(admin.ModelAdmin):
     test o errori — es. non è "l'ultima del giorno" e quindi il tasto Annulla
     dell'app non la copre.
 
-    Eliminare qui cancella solo il record (e a cascata le sue righe/i suoi
-    destinatari): non tocca il PDF già scritto su Z:\\JOBS, l'eventuale
+    Eliminare qui cancella solo il record (e a cascata le sue righe, i suoi
+    destinatari e le prese visione): non tocca il PDF già scritto su Z:\\JOBS, l'eventuale
     cartella DCC "DA SPEDIRE" preparata, né richiama un'email già inviata.
     Il progressivo di quel giorno per la commessa resta "bucato" (il
     successivo riparte comunque da max+1, senza collisioni): per l'uso
@@ -450,8 +462,49 @@ class TransmittalInternoAdmin(admin.ModelAdmin):
     list_display = ("nome", "testata", "data", "progressivo", "creato_da", "creato_il")
     list_filter = ("data",)
     search_fields = ("nome", "testata__job")
-    readonly_fields = ("testata", "data", "progressivo", "nome", "creato_da", "creato_il", "note")
-    inlines = [RigaTransmittalInternoInline, DestinatarioTransmittalInternoInline]
+    readonly_fields = (
+        "testata",
+        "data",
+        "progressivo",
+        "nome",
+        "creato_da",
+        "creato_il",
+        "note",
+        "messaggio_email",
+        "message_id",
+    )
+    inlines = [
+        RigaTransmittalInternoInline,
+        DestinatarioTransmittalInternoInline,
+        PresaVisioneTransmittalInternoInline,
+    ]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PresaVisioneTransmittalInterno)
+class PresaVisioneTransmittalInternoAdmin(admin.ModelAdmin):
+    """Sola lettura, cancellabile: le prese visione si registrano dall'app
+    (pulsante "Presa visione"), non da qui.
+
+    Eliminarne una riporta la lettera in attesa di quel ruolo, ma non
+    toglie quanto già fatto al completamento: PDF su Z:\\JOBS, cartella DCC
+    ed email di completamento restano.
+    """
+
+    list_display = ("trasmittal", "ruolo", "utente", "automatica", "registrata_il")
+    list_filter = ("ruolo",)
+    search_fields = (
+        "trasmittal__nome",
+        "utente__username",
+        "utente__first_name",
+        "utente__last_name",
+    )
+    readonly_fields = ("trasmittal", "ruolo", "utente", "registrata_il")
 
     def has_add_permission(self, request):
         return False

@@ -212,6 +212,59 @@
     font-style: italic;
   }
 
+  /* ── Modifica delle persone di un ruolo (matita accanto a PM/PE/QCI/WE) ── */
+  .persona-modifica {
+    display: inline-flex;
+    align-self: center;
+    background: none;
+    border: none;
+    padding: 2px;
+    margin: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    opacity: 0.45;
+    line-height: 1;
+  }
+  .persona-modifica:hover,
+  .persona-modifica:focus-visible { opacity: 1; color: var(--color-accent); }
+  .persona-popover--ruolo { width: 290px; }
+  .persona-popover-titolo {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    margin: 2px 2px 8px;
+  }
+  .persona-popover-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+  .persona-popover-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 3px 2px 9px;
+    border-radius: 999px;
+    background: var(--color-elevated);
+    border: 1px solid var(--color-border);
+    font-size: 12.5px;
+    color: var(--color-text-primary);
+  }
+  .persona-popover-chip.libero { font-style: italic; color: var(--color-danger, #e53e3e); }
+  .persona-popover-chip-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+  }
+  .persona-popover-chip-x:hover { background: var(--color-border); color: var(--color-text-primary); }
+
   /* ── Header actions (chiudi / elimina) ── */
   .commessa-header-actions {
     display: flex;
@@ -1372,10 +1425,10 @@
           <dt class="commessa-meta-label">Termini consegna</dt>
           <dd class="commessa-meta-value{% if not testata.delivery_term %} empty{% endif %}">{{ testata.delivery_term|default:"—" }}</dd>
         </div>
-        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PM" persone=persone_ruoli.pm %}
-        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PE" persone=persone_ruoli.pe %}
-        {% include "core/partials/persona_ruolo_meta.html" with etichetta="QCI" persone=persone_ruoli.qci %}
-        {% include "core/partials/persona_ruolo_meta.html" with etichetta="WE" persone=persone_ruoli.we %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PM" ruolo="pm" persone=persone_ruoli.pm %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="PE" ruolo="pe" persone=persone_ruoli.pe %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="QCI" ruolo="qci" persone=persone_ruoli.qci %}
+        {% include "core/partials/persona_ruolo_meta.html" with etichetta="WE" ruolo="we" persone=persone_ruoli.we %}
       </dl>
       {% if testata.job_detail %}
       <p class="commessa-desc">{{ testata.job_detail }}</p>
@@ -2034,11 +2087,13 @@
 </script>
 
 <script>
-/* ── Risolvi persona (PM/PE/QCI/WE) non abbinata a un utente ── */
+/* ── Persone dei ruoli PM/PE/QCI/WE: abbina un nome libero a un utente,
+      aggiungi o togli persone dal ruolo ── */
 (function () {
   'use strict';
 
   var CSRF = window.CSRF_TOKEN || '';
+  var JOB = '{{ testata.job|escapejs }}';
   var popover = null;
   var debounce = null;
 
@@ -2056,14 +2111,14 @@
   }
 
   function onOutsideClick(e) {
-    if (popover && !popover.contains(e.target) && !e.target.closest('.persona-non-abbinata')) {
+    if (popover && !popover.contains(e.target) && !e.target.closest('.persona-non-abbinata, .persona-modifica')) {
       chiudiPopover();
     }
   }
 
   function posiziona(pop, ancora) {
     var rect = ancora.getBoundingClientRect();
-    pop.style.left = rect.left + 'px';
+    pop.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
     pop.style.top = (rect.bottom + 4) + 'px';
   }
 
@@ -2103,6 +2158,7 @@
         return;
       }
       var span = document.createElement('span');
+      span.dataset.personaId = personaId;
       span.textContent = data.nome;
       bottone.replaceWith(span);
     } catch (e) {
@@ -2110,14 +2166,8 @@
     }
   }
 
-  function apriPopover(bottone) {
-    if (!requireWrite()) return;
-    chiudiPopover();
-
-    var personaId = bottone.dataset.personaId;
-    popover = document.createElement('div');
-    popover.className = 'persona-popover';
-
+  // Campo "Cerca utente…": dalla seconda lettera propone gli utenti registrati.
+  function campoRicerca(onScegli) {
     var input = document.createElement('input');
     input.type = 'text';
     input.className = 'persona-popover-input';
@@ -2126,12 +2176,6 @@
 
     var lista = document.createElement('ul');
     lista.className = 'persona-popover-suggestions';
-
-    popover.appendChild(input);
-    popover.appendChild(lista);
-    document.body.appendChild(popover);
-    posiziona(popover, bottone);
-    input.focus();
 
     input.addEventListener('input', function () {
       clearTimeout(debounce);
@@ -2144,23 +2188,162 @@
         try {
           var res = await fetch('/api/utenti/cerca/?q=' + encodeURIComponent(q));
           var data = await res.json();
-          renderSuggerimenti(lista, data.utenti || [], function (u) {
-            risolvi(personaId, u, bottone);
-            chiudiPopover();
-          });
+          renderSuggerimenti(lista, data.utenti || [], onScegli);
         } catch (e) {
           lista.replaceChildren();
         }
       }, 250);
     });
+    return { input: input, lista: lista };
+  }
 
+  function mostraPopover(ancora, figli, classe) {
+    popover = document.createElement('div');
+    popover.className = 'persona-popover' + (classe ? ' ' + classe : '');
+    figli.forEach(function (el) { popover.appendChild(el); });
+    document.body.appendChild(popover);
+    posiziona(popover, ancora);
     document.addEventListener('keydown', onEscape);
     document.addEventListener('mousedown', onOutsideClick);
   }
 
+  function apriPopover(bottone) {
+    if (!requireWrite()) return;
+    chiudiPopover();
+
+    var personaId = bottone.dataset.personaId;
+    var ricerca = campoRicerca(function (u) {
+      risolvi(personaId, u, bottone);
+      chiudiPopover();
+    });
+    mostraPopover(bottone, [ricerca.input, ricerca.lista]);
+    ricerca.input.focus();
+  }
+
+  // Persone del ruolo come le mostra l'intestazione: utenti e nomi liberi.
+  function personeInIntestazione(ruolo) {
+    var dd = document.getElementById('persone-ruolo-' + ruolo);
+    return Array.from(dd ? dd.querySelectorAll('[data-persona-id]') : []).map(function (el) {
+      return {
+        id: el.dataset.personaId,
+        nome: el.textContent,
+        abbinato: !el.classList.contains('persona-non-abbinata'),
+      };
+    });
+  }
+
+  // Riscrive il ruolo nell'intestazione, come il partial persona_ruolo_meta.
+  function aggiornaIntestazione(ruolo, persone) {
+    var dd = document.getElementById('persone-ruolo-' + ruolo);
+    if (!dd) return;
+    dd.replaceChildren();
+    dd.classList.toggle('empty', !persone.length);
+    if (!persone.length) {
+      dd.textContent = '—';
+      return;
+    }
+    persone.forEach(function (p, i) {
+      if (i) dd.appendChild(document.createTextNode(', '));
+      var el = document.createElement(p.abbinato ? 'span' : 'button');
+      if (!p.abbinato) {
+        el.type = 'button';
+        el.className = 'persona-non-abbinata';
+        el.dataset.nome = p.nome;
+      }
+      el.dataset.personaId = p.id;
+      el.textContent = p.nome;
+      dd.appendChild(el);
+    });
+  }
+
+  async function chiamaApi(metodo, url, corpo) {
+    try {
+      var res = await fetch(url, {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: corpo ? JSON.stringify(corpo) : undefined,
+      });
+      var data = {};
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        if (!isPermissionDeniedResponse(res, data)) alert(data.error || 'Errore durante la modifica.');
+        return null;
+      }
+      return data;
+    } catch (e) {
+      alert('Errore di rete. Riprova.');
+      return null;
+    }
+  }
+
+  function renderChips(contenitore, ruolo, persone) {
+    contenitore.replaceChildren();
+    if (!persone.length) {
+      var vuoto = document.createElement('span');
+      vuoto.className = 'persona-popover-hint';
+      vuoto.textContent = 'Nessuno: cerca un utente per aggiungerlo.';
+      contenitore.appendChild(vuoto);
+      return;
+    }
+    persone.forEach(function (p) {
+      var chip = document.createElement('span');
+      chip.className = 'persona-popover-chip' + (p.abbinato ? '' : ' libero');
+      if (!p.abbinato) chip.title = 'Nome non abbinato a un utente registrato';
+      chip.appendChild(document.createTextNode(p.nome));
+      var togli = document.createElement('button');
+      togli.type = 'button';
+      togli.className = 'persona-popover-chip-x';
+      togli.setAttribute('aria-label', 'Togli ' + p.nome);
+      togli.textContent = '×';
+      togli.addEventListener('click', async function () {
+        var data = await chiamaApi('DELETE', '/api/persone-commessa/' + p.id + '/');
+        if (data) aggiornaRuolo(contenitore, ruolo, data.persone);
+      });
+      chip.appendChild(togli);
+      contenitore.appendChild(chip);
+    });
+  }
+
+  function aggiornaRuolo(contenitore, ruolo, persone) {
+    aggiornaIntestazione(ruolo, persone);
+    renderChips(contenitore, ruolo, persone);
+  }
+
+  function apriModificaRuolo(bottone) {
+    if (!requireWrite()) return;
+    chiudiPopover();
+
+    var ruolo = bottone.dataset.ruolo;
+    var titolo = document.createElement('div');
+    titolo.className = 'persona-popover-titolo';
+    titolo.textContent = bottone.dataset.etichetta;
+    var chips = document.createElement('div');
+    chips.className = 'persona-popover-chips';
+    renderChips(chips, ruolo, personeInIntestazione(ruolo));
+
+    var ricerca = campoRicerca(async function (u) {
+      var data = await chiamaApi('POST', '/api/commesse/' + encodeURIComponent(JOB) + '/persone/', {
+        ruolo: ruolo,
+        utente_id: u.id,
+      });
+      if (!data) return;
+      aggiornaRuolo(chips, ruolo, data.persone);
+      ricerca.input.value = '';
+      ricerca.lista.replaceChildren();
+      ricerca.input.focus();
+    });
+    mostraPopover(bottone, [titolo, chips, ricerca.input, ricerca.lista], 'persona-popover--ruolo');
+    ricerca.input.focus();
+  }
+
   document.addEventListener('click', function (e) {
     var bottone = e.target.closest('.persona-non-abbinata');
-    if (bottone) apriPopover(bottone);
+    if (bottone) {
+      apriPopover(bottone);
+      return;
+    }
+    var modifica = e.target.closest('.persona-modifica');
+    if (modifica) apriModificaRuolo(modifica);
   });
 })();
 </script>

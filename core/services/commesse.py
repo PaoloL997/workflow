@@ -1,6 +1,7 @@
 import logging
 from datetime import date as date_type
 from datetime import timedelta
+from pathlib import Path
 
 from django.conf import settings
 from django.core.mail import send_mail
@@ -21,6 +22,7 @@ from ..models import (
     RuoloPersonaCommessa,
     StatoEsterno,
     Testata,
+    TipoFileLink,
     User,
 )
 from .stato_esterno_colori import cell_colors, da_inviare_cell_colors, inviato_cell_colors
@@ -209,6 +211,42 @@ def risolvi_persona_commessa(persona_id, utente_id):
     persona.utente = utente
     persona.nome_libero = ""
     persona.save(update_fields=["utente", "nome_libero"])
+    return persona
+
+
+def aggiungi_persona_commessa(testata, ruolo, utente_id):
+    """Aggiunge un utente registrato a un ruolo (PM/PE/QCI/WE) della commessa.
+
+    Lo stesso utente due volte sullo stesso ruolo non si duplica: resta la
+    voce che c'è già.
+
+    Args:
+        ruolo: ``"pm"``, ``"pe"``, ``"qci"`` o ``"we"``.
+
+    Raises:
+        ValueError: ruolo non valido.
+        User.DoesNotExist: utente inesistente o disattivato.
+    """
+    if ruolo not in _RUOLI_PERSONA:
+        raise ValueError(f'Ruolo non valido: "{ruolo}".')
+    utente = User.objects.get(pk=utente_id, is_active=True)
+    persona, _ = PersonaCommessa.objects.get_or_create(
+        testata=testata, ruolo=_RUOLI_PERSONA[ruolo], utente=utente
+    )
+    return persona
+
+
+def rimuovi_persona_commessa(persona_id):
+    """Toglie una persona (utente o nome libero) dal suo ruolo della commessa.
+
+    Returns:
+        La ``PersonaCommessa`` eliminata: ``testata`` e ``ruolo`` restano leggibili.
+
+    Raises:
+        PersonaCommessa.DoesNotExist: se la voce non esiste.
+    """
+    persona = PersonaCommessa.objects.select_related("testata").get(pk=persona_id)
+    persona.delete()
     return persona
 
 
@@ -958,20 +996,106 @@ def crea_revisione_successiva(doc, rev):
 # ── File resolution ───────────────────────────────────────────────────────────
 
 
-def risolvi_file_revisione(revisione_id: int) -> dict:
+def _esito_file(files: list[dict]) -> dict:
+    """``found`` con un file, ``multiple`` con più file, ``not_found`` senza."""
+    if not files:
+        return {"status": "not_found", "files": []}
+    return {"status": "found" if len(files) == 1 else "multiple", "files": files}
+
+
+def _risolvi_file_invio(rev, doc, reparto_acronimo: str) -> dict:
+    """Il file inviato al cliente con la revisione ``rev`` (cella Dispatch).
+
+    Cerca nella cartella di invio del documento (``get_cartella_invio``) e
+    nelle sue sottocartelle delle revisioni superate, fra i file il cui nome
+    contiene il codice a parola intera. Sceglie in quest'ordine:
+
+    1. i file la cui revisione nel nome (``estrai_revisione``) è quella di
+       ``rev``, preferendo quelli senza altro testo dopo la revisione;
+    2. se ``rev`` è l'ultima revisione inviata, i file senza suffisso della
+       cartella di invio (lì c'è sempre l'ultima versione);
+    3. se ``rev`` è la prima revisione inviata, i file senza suffisso delle
+       cartelle delle revisioni superate;
+    4. altrimenti tutti i file del documento, da cui l'utente sceglie.
+    """
+    from .fileserver import (
+        CARTELLE_REVISIONI_SUPERATE,
+        elenca_cartella,
+        estrai_revisione,
+        get_cartella_invio,
+    )
+
+    vendor_doc = doc.vendor_doc.strip()
+    cartella = get_cartella_invio(doc.testata.job, reparto_acronimo)
+    candidati = []  # (file, revisione nel nome, sta nella cartella di invio?)
+    for directory, in_base in [(cartella, True)] + [
+        (cartella / sotto, False) for sotto in CARTELLE_REVISIONI_SUPERATE
+    ]:
+        for voce in elenca_cartella(directory):
+            nel_nome = estrai_revisione(voce["nome"], vendor_doc)
+            if nel_nome is None:
+                continue
+            file = {k: voce[k] for k in ("percorso", "nome", "estensione")}
+            candidati.append((file, nel_nome, in_base))
+    if not candidati:
+        return _esito_file([])
+
+    # 1. Per revisione: numero, lettera o etichetta della sequenza della testata.
+    attese = {
+        str(rev.rev_no) if rev.rev_no is not None else "",
+        (rev.rev_let or "").strip().upper(),
+        (rev.etichetta(doc.testata) or "").strip().upper(),
+    }
+    attese.discard("")
+    per_revisione = [c for c in candidati if c[1].token in attese]
+    if len(per_revisione) > 1:
+        solo_revisione = [c for c in per_revisione if c[1].solo_revisione]
+        per_revisione = solo_revisione or per_revisione
+    if per_revisione:
+        return _esito_file([c[0] for c in per_revisione])
+
+    # 2-3. Senza revisione nel nome: l'ultima inviata sta nella cartella di
+    # invio, la prima (senza suffisso, quando c'è) nelle revisioni superate.
+    inviate = list(
+        doc.revisioni.filter(dis_act_date__isnull=False)
+        .order_by(*ORDINE_CRESCENTE)
+        .values_list("pk", flat=True)
+    )
+    senza_suffisso = [c for c in candidati if c[1].token == ""]
+    if inviate and rev.pk == inviate[-1]:
+        in_base = [c[0] for c in senza_suffisso if c[2]]
+        if in_base:
+            return _esito_file(in_base)
+    if inviate and rev.pk == inviate[0]:
+        superate = [c[0] for c in senza_suffisso if not c[2]]
+        if superate:
+            return _esito_file(superate)
+
+    # 4. Nessuna regola decide: si fa scegliere fra tutti i file del documento.
+    return _esito_file([c[0] for c in candidati])
+
+
+def risolvi_file_revisione(revisione_id: int, tipo: str = TipoFileLink.RICEVUTO) -> dict:
     """Attempt to auto-resolve the filesystem path for a revision's file.
 
+    ``tipo`` sceglie quale file: ``ricevuto`` (cella Received, default) o
+    ``inviato`` (cella Dispatch).
+
     Resolution order:
-    1. Return the manual link if one has been saved in ``RevisioneFileLink``.
-    2. If ``rec_act_date`` is set → look in ``RICEVUTI/{date}/``.
-    3. Else if ``dis_act_date`` is set → look in the base path.
+    1. Return the manual link of the same ``tipo``, if one has been saved in
+       ``RevisioneFileLink``.
+    2. ``inviato``: see ``_risolvi_file_invio`` (needs ``dis_act_date``).
+    3. ``ricevuto``: if ``rec_act_date`` is set → look in ``RICEVUTI/{date}/``;
+       else if ``dis_act_date`` is set → look in the base path.
     4. Otherwise return ``not_found``.
 
-    Matching rule: the filename must start with ``Documento.vendor_doc``
-    (case-insensitive).
+    Matching rule (``ricevuto``): the filename must contain
+    ``Documento.vendor_doc`` (case-insensitive substring match, so prefixes
+    such as "Check copy of " are accepted).
 
     Args:
         revisione_id: Primary key of the ``Revisione`` to resolve.
+        tipo: ``TipoFileLink.RICEVUTO`` or ``TipoFileLink.INVIATO``.
 
     Returns:
         Dict with keys:
@@ -982,9 +1106,7 @@ def risolvi_file_revisione(revisione_id: int) -> dict:
     Raises:
         Revisione.DoesNotExist: If no revision matches ``revisione_id``.
     """
-    from pathlib import Path as _Path
-
-    from ..models import Reparto, RevisioneFileLink
+    from ..models import RevisioneFileLink
     from .fileserver import get_base_path, get_ricevuti_path, trova_file
 
     rev = Revisione.objects.select_related("documento__testata").get(pk=revisione_id)
@@ -992,21 +1114,19 @@ def risolvi_file_revisione(revisione_id: int) -> dict:
     vendor_doc = doc.vendor_doc.strip()
 
     # 1. Check manual link first
-    try:
-        link = RevisioneFileLink.objects.get(revisione=rev)
+    link = RevisioneFileLink.objects.filter(revisione=rev, tipo=tipo).first()
+    if link is not None:
         percorso = link.percorso
         return {
             "status": "manual_linked",
             "files": [
                 {
                     "percorso": percorso,
-                    "nome": _Path(percorso).name,
-                    "estensione": _Path(percorso).suffix.lstrip(".").lower(),
+                    "nome": Path(percorso).name,
+                    "estensione": Path(percorso).suffix.lstrip(".").lower(),
                 }
             ],
         }
-    except RevisioneFileLink.DoesNotExist:
-        pass
 
     if not vendor_doc:
         return {"status": "not_found", "files": []}
@@ -1017,6 +1137,11 @@ def risolvi_file_revisione(revisione_id: int) -> dict:
         return {"status": "not_found", "files": []}
     reparto_acronimo = reparto_obj.acronimo
     commessa = doc.testata.job
+
+    if tipo == TipoFileLink.INVIATO:
+        if not rev.dis_act_date:
+            return {"status": "not_found", "files": []}
+        return _risolvi_file_invio(rev, doc, reparto_acronimo)
 
     # 3. Determine directory to scan
     if rev.rec_act_date:
@@ -1036,12 +1161,14 @@ def risolvi_file_revisione(revisione_id: int) -> dict:
     return {"status": "multiple", "files": files}
 
 
-def salva_file_link(revisione_id: int, percorso: str) -> object:
-    """Create or update the manual file link for a revision.
+def salva_file_link(revisione_id: int, percorso: str, tipo: str = TipoFileLink.RICEVUTO) -> object:
+    """Create or update the manual file link of a given ``tipo`` for a revision.
 
     Args:
         revisione_id: Primary key of the ``Revisione``.
         percorso: Full filesystem path to the file. Must be inside FILESERVER_JOBS_PATH.
+        tipo: ``TipoFileLink.RICEVUTO`` (cella Received) or ``TipoFileLink.INVIATO``
+            (cella Dispatch): the two links are independent.
 
     Returns:
         The saved ``RevisioneFileLink`` instance.
@@ -1050,8 +1177,6 @@ def salva_file_link(revisione_id: int, percorso: str) -> object:
         Revisione.DoesNotExist: If no revision matches ``revisione_id``.
         PermissionError: If the path is outside the JOBS root.
     """
-    from pathlib import Path
-
     from ..models import RevisioneFileLink
     from .fileserver import get_jobs_root
 
@@ -1063,6 +1188,7 @@ def salva_file_link(revisione_id: int, percorso: str) -> object:
         raise PermissionError("Percorso non autorizzato: fuori dalla cartella JOBS.")
     link, _ = RevisioneFileLink.objects.update_or_create(
         revisione=rev,
+        tipo=tipo,
         defaults={"percorso": percorso_clean},
     )
     return link
