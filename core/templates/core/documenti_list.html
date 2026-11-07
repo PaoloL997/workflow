@@ -1708,10 +1708,21 @@
     apiFetch(url)
       .then(function(r){ return r.json().then(function(b){ return {ok:r.ok, body:b}; }); })
       .then(function(res){
-        if (!res.ok) { list.innerHTML = '<div class="filebrowser-empty">' + esc(res.body.error || 'Errore.') + '</div>'; return; }
+        if (!res.ok) { showBrowserError(list, res.body.error || 'Errore.', path); return; }
         renderBrowserList(res.body);
       })
       .catch(function(){ list.innerHTML = '<div class="filebrowser-empty">Errore di rete.</div>'; });
+  }
+
+  function showBrowserError(list, msg, path) {
+    list.innerHTML = '<div class="filebrowser-empty">' + esc(msg) + '</div>';
+    if (!path) return;
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'filebrowser-item filebrowser-item--up';
+    up.innerHTML = '<span>\u2191 Su (JOBS)</span>';
+    up.addEventListener('click', function () { browseTo(''); });
+    list.appendChild(up);
   }
 
   function renderBrowserList(data) {
