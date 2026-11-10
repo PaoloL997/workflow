@@ -1708,10 +1708,22 @@
     apiFetch(url)
       .then(function(r){ return r.json().then(function(b){ return {ok:r.ok, body:b}; }); })
       .then(function(res){
-        if (!res.ok) { list.innerHTML = '<div class="filebrowser-empty">' + esc(res.body.error || 'Errore.') + '</div>'; return; }
+        if (!res.ok) { renderBrowserError(list, esc(res.body.error || 'Errore.'), path); return; }
         renderBrowserList(res.body);
       })
-      .catch(function(){ list.innerHTML = '<div class="filebrowser-empty">Errore di rete.</div>'; });
+      .catch(function(){ renderBrowserError(list, 'Errore di rete.', path); });
+  }
+
+  // Su errore (es. cartella commessa mancante) resta la voce «↑ Su», che riporta a JOBS.
+  function renderBrowserError(list, messageHtml, path) {
+    list.innerHTML = '<div class="filebrowser-empty">' + messageHtml + '</div>';
+    if (!path) return;
+    var up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'filebrowser-item filebrowser-item--up';
+    up.innerHTML = '<span>↑ Su</span>';
+    up.addEventListener('click', function(){ browseTo(''); });
+    list.appendChild(up);
   }
 
   function renderBrowserList(data) {
