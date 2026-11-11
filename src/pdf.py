@@ -23,19 +23,59 @@ from core.services.stato_interno import DA_INVIARE_LABEL, stato_interno_label
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOGO_PATH = BASE_DIR / "core" / "static" / "core" / "img" / "trasmittal_logo.JPG"
 
-_WINDOWS_FONTS_DIR = Path(r"C:\Windows\Fonts")
-_ARIAL_FILES = {"": "arial.ttf", "B": "arialbd.ttf", "I": "ariali.ttf", "BI": "arialbi.ttf"}
+# Cartelle in cui cercare i font TrueType Unicode: Windows (Arial di sistema) e le
+# posizioni abituali su Linux (Arial da ``ttf-mscorefonts-installer``, Liberation
+# Sans, DejaVu Sans).
+_FONT_DIRS = (
+    Path(r"C:\Windows\Fonts"),
+    Path("/usr/share/fonts/truetype/msttcorefonts"),
+    Path("/usr/share/fonts/truetype/liberation"),
+    Path("/usr/share/fonts/liberation"),
+    Path("/usr/share/fonts/truetype/dejavu"),
+    Path("/usr/share/fonts/dejavu"),
+    Path("/usr/share/fonts/TTF"),
+)
+# Famiglie candidate in ordine di preferenza: file per stile ("", "B", "I", "BI").
+# Liberation Sans ha le stesse metriche di Arial, quindi l'impaginazione resta uguale.
+_FONT_FAMILIES = (
+    {"": "arial.ttf", "B": "arialbd.ttf", "I": "ariali.ttf", "BI": "arialbi.ttf"},
+    {
+        "": "LiberationSans-Regular.ttf",
+        "B": "LiberationSans-Bold.ttf",
+        "I": "LiberationSans-Italic.ttf",
+        "BI": "LiberationSans-BoldItalic.ttf",
+    },
+    {
+        "": "DejaVuSans.ttf",
+        "B": "DejaVuSans-Bold.ttf",
+        "I": "DejaVuSans-Oblique.ttf",
+        "BI": "DejaVuSans-BoldOblique.ttf",
+    },
+)
+_FALLBACK_FONT = "Helvetica"
 
 
-def _register_unicode_font(pdf, family):
-    """Register Arial (Unicode-capable) under ``family`` on ``pdf``; fall back to
-    the core Helvetica font (Latin-1 only) if the TTFs are not installed."""
-    paths = {style: _WINDOWS_FONTS_DIR / fname for style, fname in _ARIAL_FILES.items()}
-    if all(p.exists() for p in paths.values()):
-        for style, p in paths.items():
-            pdf.add_font(family, style, str(p))
-        return family
-    return "Helvetica"
+def _trova_font_unicode(styles=("", "B", "I", "BI")):
+    """Return ``{style: Path}`` for the first candidate family whose TTF files for
+    all ``styles`` exist in one of ``_FONT_DIRS``; ``None`` if none is installed."""
+    for files in _FONT_FAMILIES:
+        for font_dir in _FONT_DIRS:
+            paths = {style: font_dir / files[style] for style in styles}
+            if all(p.exists() for p in paths.values()):
+                return paths
+    return None
+
+
+def _register_unicode_font(pdf, family, styles=("", "B", "I", "BI")):
+    """Register a Unicode-capable TTF family (Arial, Liberation Sans or DejaVu Sans) under
+    ``family`` on ``pdf``; fall back to the core Helvetica font (Latin-1 only)
+    if no suitable TTFs are installed."""
+    paths = _trova_font_unicode(styles)
+    if paths is None:
+        return _FALLBACK_FONT
+    for style, p in paths.items():
+        pdf.add_font(family, style, str(p))
+    return family
 
 
 # Usable table width on A4 with 15mm side margins.
@@ -1003,15 +1043,7 @@ class SituazioneDocumentiPDF(FPDF):
         super().__init__(orientation="P", unit="mm", format=(w, _A3_LANDSCAPE_H))
         self.set_margins(left=0, top=0, right=0)
         self.set_auto_page_break(auto=False)
-        fonts = Path(r"C:\Windows\Fonts")
-        arial = fonts / "arial.ttf"
-        arial_bd = fonts / "arialbd.ttf"
-        if arial.exists() and arial_bd.exists():
-            self.add_font("SitArial", "", str(arial))
-            self.add_font("SitArial", "B", str(arial_bd))
-            self._sit_font = "SitArial"
-        else:
-            self._sit_font = "Helvetica"
+        self._sit_font = _register_unicode_font(self, "SitArial", styles=("", "B"))
         self._sit_testata = None
         self._sit_report_date = None
         self._sit_header_left_pt = None
