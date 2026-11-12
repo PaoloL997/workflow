@@ -454,7 +454,14 @@
     display: flex;
     gap: 8px;
     justify-content: flex-end;
+    align-items: center;
     margin-top: 24px;
+  }
+  .addr-modal-error {
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--color-danger);
   }
   .addr-modal-cancel {
     padding: 9px 20px;
@@ -841,6 +848,7 @@
       </div>
     </form>
     <div class="addr-modal-actions">
+      <div class="addr-modal-error" id="addr-modal-error" role="alert" hidden></div>
       <button class="addr-modal-cancel" type="button" onclick="closeAddrModal()">Annulla</button>
       <button class="addr-modal-save" type="button" onclick="saveAddr()">Salva</button>
     </div>
@@ -1089,6 +1097,7 @@
     _currentAddrId = pk;
     document.getElementById('addr-modal-title').textContent = pk ? 'Modifica indirizzo' : 'Nuovo indirizzo';
     document.getElementById('addr-modal-form').reset();
+    showAddrError('');
     if (pk) {
       const addr = _addrData.find(a => a.id === pk);
       if (addr) {
@@ -1103,7 +1112,14 @@
 
   function closeAddrModal() {
     document.getElementById('addr-modal-overlay').classList.remove('open');
+    showAddrError('');
     _currentAddrId = null;
+  }
+
+  function showAddrError(msg) {
+    const el = document.getElementById('addr-modal-error');
+    el.textContent = msg || '';
+    el.hidden = !msg;
   }
 
   async function saveAddr() {
@@ -1111,6 +1127,7 @@
     const fields = ['consignee', 'address', 'zip_code', 'city', 'country', 'attn', 'ph_no'];
     const data   = {};
     fields.forEach(f => { data[f] = (document.getElementById(`addr-${f}`)?.value || '').trim(); });
+    showAddrError('');
 
     let res;
     if (_currentAddrId) {
@@ -1130,6 +1147,7 @@
       let data = {};
       try { data = await res.json(); } catch (_) {}
       if (isPermissionDeniedResponse(res, data)) return;
+      showAddrError(typeof data.error === 'string' && data.error ? data.error : 'Errore durante il salvataggio.');
       return;
     }
     closeAddrModal();
