@@ -1260,6 +1260,7 @@
 {% include "core/partials/export_format_menu.html" %}
 
 {{ testata.rev_sequenza|json_script:"rev-seq-pagina" }}
+{{ stati_interni_label|json_script:"stati-interni-label" }}
 <script>
 /* ── Situazione documenti ── */
 (function () {
@@ -1270,15 +1271,11 @@
   let REV_LET_FLAG = {{ testata.rev_let_flag|yesno:"true,false" }};
   let REV_SEQ = revSequenzaDaPagina('rev-seq-pagina');
 
-  const STATI_LABEL = {
-    da_iniziare:       'Da iniziare',
-    in_lavorazione:    'In lavorazione',
-    in_revisione:      'In revisione',
-    in_approvazione:   'In approvazione',
-    da_emettere:       'Da emettere',
-    inviato_al_cliente:'Inviato al cliente',
-    ricevuto:          'Ricevuto',
-  };
+  /* Etichette degli stati interni: arrivano dal server (STATI_INTERNI_CHOICES)
+     così badge, legenda e filtro usano la stessa grafia della cella B&R Doc. */
+  const STATI_LABEL = JSON.parse(
+    document.getElementById('stati-interni-label').textContent
+  );
 
   const STATI_CLASS = {
     da_iniziare:       'stato-da-iniziare',
