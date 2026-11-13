@@ -7,6 +7,7 @@ import openpyxl
 from django.test import Client, SimpleTestCase, TestCase
 
 from ..models import (
+    STATI_INTERNI_CHOICES,
     Documento,
     Permesso,
     Revisione,
@@ -538,6 +539,13 @@ class SituazioneOrizzontaleXlsxTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'id="btn-export" type="button" onclick="toggleExportMenu(')
         self.assertNotContains(response, "exportSituazione(")
+
+    def test_la_pagina_prende_le_etichette_degli_stati_interni_dal_server(self):
+        response = self.client.get(f"/commesse/{self.testata.job}/situazione/")
+        self.assertEqual(response.context["stati_interni_label"], dict(STATI_INTERNI_CHOICES))
+        self.assertContains(response, 'id="stati-interni-label"')
+        self.assertContains(response, "Inviato al Cliente")
+        self.assertNotContains(response, "Inviato al cliente")
 
     def test_la_pagina_ha_i_controlli_di_filtro_in_barra(self):
         response = self.client.get(f"/commesse/{self.testata.job}/situazione/")
