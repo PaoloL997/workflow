@@ -128,13 +128,21 @@ class SalvaFileLinkTest(TestCase):
     """Unit tests for ``salva_file_link``."""
 
     def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.patcher = patch("django.conf.settings.FILESERVER_JOBS_PATH", self.tmp)
+        self.patcher.start()
+        self.addCleanup(self.patcher.stop)
         objs = _make_fixtures_mock()
         self.rev = objs["rev_qmdbi_0"]
 
     def _jobs_path(self, *parts: str) -> str:
-        from ..services.fileserver import get_jobs_root
+        return str(Path(self.tmp).joinpath(*parts))
 
-        return str(get_jobs_root().joinpath(*parts))
+    def test_path_outside_jobs_root_is_rejected(self):
+        outside = str(Path(self.tmp).parent / "altro" / "file.pdf")
+        with self.assertRaises(PermissionError):
+            salva_file_link(self.rev.pk, outside)
+        self.assertEqual(RevisioneFileLink.objects.count(), 0)
 
     def test_create_link(self):
         path = self._jobs_path("25056", "PROGETTO", "QC", "25056-QMDBI Rev0.pdf")
