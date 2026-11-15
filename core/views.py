@@ -33,6 +33,7 @@ from src.pdf import (
 from .api_auth import autentica_api, token_valido
 from .date_fmt import parse_iso_date
 from .models import (
+    STATI_INTERNI_CHOICES,
     ApiToken,
     Documento,
     IndirSped,
@@ -552,7 +553,11 @@ def situazione_detail_view(request, job, testata):
     return render(
         request,
         "core/situazione_detail.html",
-        {"testata": testata, "commessa_folder": commessa_folder},
+        {
+            "testata": testata,
+            "commessa_folder": commessa_folder,
+            "stati_interni_label": dict(STATI_INTERNI_CHOICES),
+        },
     )
 
 
