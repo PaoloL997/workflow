@@ -3,7 +3,6 @@ Trasmittal PDF generation using fpdf2.
 """
 
 import html
-import re
 from datetime import date, datetime
 from pathlib import Path
 
@@ -1722,12 +1721,6 @@ def _situazione_row_values(doc: dict, revs: list, max_revs: int, active_fixed: l
     return values
 
 
-def _vendor_doc_sort_key(doc: dict):
-    """Natural sort key for B&R Doc (vendor_doc), mirroring the UI table."""
-    s = str(doc.get("vendor_doc") or "").strip().lower()
-    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", s) if p]
-
-
 def _situazione_table_meta(
     documenti: list,
     revisioni_by_doc: dict,
@@ -1735,8 +1728,12 @@ def _situazione_table_meta(
     page_w_mm: float,
     rev_sequenza=None,
 ) -> dict:
-    """Build column layout meta for the situazione export table."""
-    docs = sorted(list(documenti or []), key=_vendor_doc_sort_key)
+    """Build column layout meta for the situazione export table.
+
+    I documenti restano nell'ordine ricevuto: è quello mostrato a schermo, lo
+    stesso che seguono gli Excel.
+    """
+    docs = list(documenti or [])
     revs_list = []
     for doc in docs:
         revs = _revs_for_doc(revisioni_by_doc, doc.get("id"))
@@ -1853,9 +1850,12 @@ def _situazione_verticale_flat_rows(
     rev_let_flag: bool,
     rev_sequenza=None,
 ) -> list:
-    """One flat row per revision (same shape as the verticale UI table)."""
+    """One flat row per revision (same shape as the verticale UI table).
+
+    I documenti restano nell'ordine ricevuto, come negli Excel.
+    """
     rows = []
-    for doc in sorted(list(documenti or []), key=_vendor_doc_sort_key):
+    for doc in documenti or []:
         revs = _revs_for_doc(revisioni_by_doc, doc.get("id"))
         revs = sorted(
             revs,
