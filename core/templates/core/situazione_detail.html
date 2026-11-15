@@ -2558,9 +2558,10 @@
       + '&format=' + encodeURIComponent(format);
   }
 
-  /* Con un filtro attivo l'export deve contenere quello che si vede: si mandano
-     al server gli id dei documenti a schermo e, in verticale, delle revisioni
-     rimaste. Senza filtri resta la navigazione diretta di sempre. */
+  /* L'export deve contenere quello che si vede, nell'ordine a schermo: si
+     mandano sempre al server gli id dei documenti mostrati (nell'ordine della
+     tabella) e, in verticale, delle revisioni rimaste. Excel e PDF seguono
+     l'ordine degli id ricevuti. */
   function exportSelezione() {
     if (_vista === 'verticale') {
       const docIds = [];
@@ -2574,10 +2575,6 @@
     }
     // In orizzontale le revisioni non si filtrano: rev_ids null, non lista vuota.
     return { doc_ids: _lastShownDocRevs.map(e => e.doc.id), rev_ids: null };
-  }
-
-  function exportFiltrato() {
-    return Boolean(activeFilterKeys().length || (_vista === 'verticale' && _soloUltimaRev));
   }
 
   function nomeFileDaHeader(header, fallback) {
@@ -2625,10 +2622,7 @@
 
   window.onExportFormatChosen = function (format) {
     const fmt = format === 'xlsx' ? 'xlsx' : 'pdf';
-    if (!exportFiltrato()) {
-      window.location.href = exportSituazioneUrl(fmt);
-      return;
-    }
+    // Sempre in POST, anche senza filtri: l'ordinamento a schermo va rispettato.
     scaricaExportFiltrato(fmt);
   };
 

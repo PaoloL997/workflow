@@ -15,6 +15,7 @@ from ..models import (
 )
 from ..services.commesse import (
     filtra_situazione,
+    list_situazione,
     serialize_revisione,
 )
 from ..services.revisione_sblocco import list_revisioni_sbloccabili
@@ -707,6 +708,37 @@ class SituazioneExportFiltratoTests(TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res["Content-Type"], "application/pdf")
         self.assertTrue(res.content.startswith(b"%PDF"))
+
+    def test_excel_orizzontale_segue_l_ordine_ricevuto(self):
+        ws = self._foglio(self._post({"doc_ids": [self.doc_c.pk, self.doc_a.pk, self.doc_b.pk]}))
+        self.assertEqual(self._vendor_doc_righe(ws), ["EXPF1-03", "EXPF1-01", "EXPF1-02"])
+
+    def test_pdf_segue_l_ordine_ricevuto_come_gli_excel(self):
+        from src.pdf import _situazione_table_meta, _situazione_verticale_flat_rows
+
+        payload = filtra_situazione(
+            list_situazione(self.testata.job),
+            doc_ids=[self.doc_c.pk, self.doc_a.pk, self.doc_b.pk],
+        )
+        docs = payload["documenti"]
+        rev_map = payload["revisioni_by_doc"]
+        meta = _situazione_table_meta(docs, rev_map, False, 297)
+        self.assertEqual(
+            [d["vendor_doc"] for d in meta["docs"]], ["EXPF1-03", "EXPF1-01", "EXPF1-02"]
+        )
+        righe = _situazione_verticale_flat_rows(docs, rev_map, False)
+        self.assertEqual(
+            [r["vendor_doc"] for r in righe],
+            ["EXPF1-03", "EXPF1-01", "EXPF1-01", "EXPF1-02"],
+        )
+
+    def test_la_pagina_manda_sempre_la_selezione_in_ordine(self):
+        res = self.client.get(f"/commesse/{self.testata.job}/situazione/")
+        self.assertEqual(res.status_code, 200)
+        # Niente più navigazione diretta in GET: l'ordine a schermo arriva col POST.
+        self.assertNotContains(res, "exportFiltrato")
+        self.assertNotContains(res, "window.location.href = exportSituazioneUrl(")
+        self.assertContains(res, "scaricaExportFiltrato(fmt);")
 
     def test_senza_csrf_token_il_post_e_rifiutato(self):
         client = Client(enforce_csrf_checks=True)
