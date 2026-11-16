@@ -1051,6 +1051,86 @@ class RevisioniPersonalizzateArchivioTests(TestCase):
         RevisioneLabelExportTests._assert_helper_revisione_integri(self, response)
 
 
+class RevisioneNumeroLetteraPatchTests(TestCase):
+    """PATCH di una revisione con il solo numero o la sola lettera (form anomalie)."""
+
+    def setUp(self):
+        self.testata = Testata.objects.create(job="26021")
+        self.doc = Documento.objects.create(
+            testata=self.testata, vendor_doc="26021-01-0001", doc_title="Doc"
+        )
+        self.writer = User.objects.create_user(
+            "writer_patch", "writer_patch@example.com", "pw", permesso=Permesso.WRITING
+        )
+        self.client = Client()
+        self.client.force_login(self.writer)
+
+    def _patch(self, rev, **dati):
+        return self.client.patch(
+            f"/api/revisioni/{rev.pk}/", data=dati, content_type="application/json"
+        )
+
+    def test_lettera_ricava_il_numero(self):
+        self.testata.rev_let_flag = True
+        self.testata.save()
+        rev = Revisione.objects.create(documento=self.doc, rev_no=2, rev_let="F")
+
+        response = self._patch(rev, rev_let="d")
+
+        self.assertEqual(response.status_code, 200)
+        rev.refresh_from_db()
+        self.assertEqual((rev.rev_no, rev.rev_let), (3, "D"))
+
+    def test_lettera_non_valida_rifiutata(self):
+        self.testata.rev_let_flag = True
+        self.testata.save()
+        rev = Revisione.objects.create(documento=self.doc, rev_no=2, rev_let="C")
+
+        response = self._patch(rev, rev_let="?")
+
+        self.assertEqual(response.status_code, 400)
+        rev.refresh_from_db()
+        self.assertEqual((rev.rev_no, rev.rev_let), (2, "C"))
+
+    def test_numero_riallinea_la_lettera_esistente(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=2, rev_let="F")
+
+        response = self._patch(rev, rev_no=4)
+
+        self.assertEqual(response.status_code, 200)
+        rev.refresh_from_db()
+        self.assertEqual((rev.rev_no, rev.rev_let), (4, "E"))
+
+    def test_numero_senza_lettera_non_la_introduce(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=2)
+
+        self._patch(rev, rev_no=3)
+
+        rev.refresh_from_db()
+        self.assertEqual((rev.rev_no, rev.rev_let), (3, ""))
+
+    def test_numero_con_sequenza_personalizzata(self):
+        self.testata.rev_sequenza = ["1", "2", "D"]
+        self.testata.save()
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0, rev_let="F")
+
+        self._patch(rev, rev_no=2)
+
+        rev.refresh_from_db()
+        self.assertEqual(rev.rev_no, 2)
+        self.assertEqual(
+            format_revisione_label(rev.rev_no, rev.rev_let, False, self.testata.rev_sequenza), "D"
+        )
+
+    def test_numero_e_lettera_insieme_restano_come_ricevuti(self):
+        rev = Revisione.objects.create(documento=self.doc, rev_no=0)
+
+        self._patch(rev, rev_no=1, rev_let="X")
+
+        rev.refresh_from_db()
+        self.assertEqual((rev.rev_no, rev.rev_let), (1, "X"))
+
+
 class UltimaRevisioneTests(TestCase):
     """Una regola sola per "ultima revisione", con ``rev_no`` NULL incluso.
 

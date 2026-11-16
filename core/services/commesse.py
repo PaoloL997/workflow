@@ -4,6 +4,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Prefetch
@@ -25,6 +26,7 @@ from ..models import (
     TipoFileLink,
     User,
 )
+from .revisione_label import numero_a_lettera, numero_revisione
 from .stato_esterno_colori import cell_colors, da_inviare_cell_colors, inviato_cell_colors
 from .stato_interno import (
     DA_INVIARE_LABEL,
@@ -831,9 +833,37 @@ def update_revisione(pk, data):
     r = Revisione.objects.select_related("documento__testata").get(pk=pk)
     for k, v in _clean_revisione_fields(data).items():
         setattr(r, k, v)
+    _allinea_numero_lettera(r, data)
     r.full_clean()
     r.save()
     return r
+
+
+def _allinea_numero_lettera(r, data):
+    """Ricava numero o lettera quando il payload ne porta uno solo.
+
+    Il form delle anomalie mostra solo il campo coerente con
+    ``Testata.rev_modalita`` (la lettera con «Revisioni con lettera», altrimenti
+    il numero): l'altro va ricavato qui, così i due non restano incoerenti
+    (es. ``rev_no`` 2 con ``rev_let`` «F»). Con entrambi o nessuno dei due nel
+    payload i valori restano quelli ricevuti.
+    """
+    ha_numero, ha_lettera = "rev_no" in data, "rev_let" in data
+    if ha_numero == ha_lettera:
+        return
+    testata = r.documento.testata
+    if ha_lettera:
+        lettera = str(r.rev_let or "").strip()
+        numero = numero_revisione(None, lettera, testata.rev_let_flag, testata.rev_sequenza)
+        if lettera and (numero is None or numero < 0):
+            raise ValidationError({"rev_let": f"Revisione «{lettera}» non valida."})
+        r.rev_no = numero
+        r.rev_let = numero_a_lettera(numero)
+        return
+    # Solo il numero: la lettera serve solo con le lettere attive; altrimenti
+    # la si tiene allineata se c'era già, senza introdurla dove mancava.
+    if testata.rev_modalita == "lettera" or str(r.rev_let or "").strip():
+        r.rev_let = numero_a_lettera(r.rev_no)
 
 
 def delete_revisione(pk):
