@@ -478,9 +478,15 @@
         '<label for="anom-f-' + name + '">' + esc(label) + '</label>' + html + '</div>';
     }
 
+    /* Solo il campo coerente con l'archivio: la lettera con «Revisioni con
+       lettera», altrimenti il numero (anche con la sequenza personalizzata, che
+       ignora la lettera). L'altro lo ricava il server (update_revisione). */
+    const revField = (REV_LET_FLAG && !REV_SEQ.length)
+      ? field('rev_let', 'Lettera revisione', '<input id="anom-f-rev_let" type="text" value="' + esc(formatRevLabel(rev)) + '" maxlength="10">')
+      : field('rev_no', 'N. revisione', '<input id="anom-f-rev_no" type="number" value="' + esc(rev.rev_no ?? '') + '">');
+
     return '<div class="anom-resolve-form" id="anom-resolve-form">' +
-      field('rev_no', 'N. revisione', '<input id="anom-f-rev_no" type="number" value="' + esc(rev.rev_no ?? '') + '">') +
-      field('rev_let', 'Lettera revisione', '<input id="anom-f-rev_let" type="text" value="' + esc(rev.rev_let || '') + '" maxlength="10">') +
+      revField +
       field('dis_plan_date', 'Invio previsto', '<input id="anom-f-dis_plan_date" type="date" value="' + esc(rev.dis_plan_date || '') + '">') +
       field('dis_act_date', 'Invio effettivo', '<input id="anom-f-dis_act_date" type="date" value="' + esc(rev.dis_act_date || '') + '">') +
       field('rec_plan_date', 'Rientro previsto', '<input id="anom-f-rec_plan_date" type="date" value="' + esc(rev.rec_plan_date || '') + '">') +
@@ -606,10 +612,14 @@
   }
 
   function collectFormPayload() {
+    /* Solo il campo mostrato: l'altro lo ricava il server. */
     const revNo = getFormVal('anom-f-rev_no');
+    const revLet = getFormVal('anom-f-rev_let');
+    const rev = revLet !== null
+      ? { rev_let: revLet.trim() }
+      : { rev_no: revNo === '' || revNo == null ? null : parseInt(revNo, 10) };
     return {
-      rev_no: revNo === '' || revNo == null ? null : parseInt(revNo, 10),
-      rev_let: getFormVal('anom-f-rev_let') || '',
+      ...rev,
       dis_plan_date: getFormVal('anom-f-dis_plan_date') || '',
       dis_act_date: getFormVal('anom-f-dis_act_date') || '',
       rec_plan_date: getFormVal('anom-f-rec_plan_date') || '',
