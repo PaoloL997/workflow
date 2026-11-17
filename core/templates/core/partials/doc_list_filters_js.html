@@ -196,14 +196,14 @@
     const valuesEl = document.getElementById('col-filter-values');
     if (!search || !selectAll || !valuesEl) return;
 
-    function allCheckboxes() {
-      return Array.from(valuesEl.querySelectorAll('input.col-filter-value-cb'));
-    }
     function visibleRows() {
       return Array.from(valuesEl.querySelectorAll('.col-filter-value-row[data-value]:not(.hidden)'));
     }
     function syncSelectAll() {
-      const boxes = allCheckboxes();
+      /* Solo i valori visibili: con un testo in «Cerca…» quelli nascosti non contano. */
+      const boxes = visibleRows().map(function (row) {
+        return row.querySelector('input.col-filter-value-cb');
+      }).filter(Boolean);
       const checked = boxes.filter(function (cb) { return cb.checked; });
       selectAll.checked = boxes.length > 0 && checked.length === boxes.length;
       selectAll.indeterminate = checked.length > 0 && checked.length < boxes.length;
