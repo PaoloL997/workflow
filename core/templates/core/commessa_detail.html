@@ -1454,8 +1454,9 @@
     <!-- ── Gauge stato ── -->
     <div class="gauge-card" id="gauge-widget" aria-label="Stato commessa">
       <!--
-        Horizontal segmented bar. x: 24 → 476 (length = 452px).
-        Segments: 18 on / 7 off (cycle 25). BAR_LEN = 452.
+        Horizontal segmented bar. x: 16 → 484 (length = 468px), centred in 500.
+        Segments: 18 on / 7 off (cycle 25) → 19 dashes + 18 gaps = 468,
+        so the bar ends on a full dash (no partial stub).
       -->
       <svg class="gauge-svg" viewBox="0 0 500 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- Status label above bar, centred -->
@@ -1468,21 +1469,21 @@
               fill="var(--color-text-primary)">—</text>
         <!-- Gray dashed track -->
         <path class="gauge-track-path"
-              d="M 24 34 L 476 34"
+              d="M 16 34 L 484 34"
               fill="none" stroke-width="10" stroke-linecap="butt"/>
         <!-- Colored segmented fill (animated via JS) -->
         <path id="gauge-fill-path"
-              d="M 24 34 L 476 34"
+              d="M 16 34 L 484 34"
               fill="none" stroke-width="10" stroke-linecap="butt"/>
         <!-- Date labels below bar -->
         <text id="arc-start-label"
               class="gauge-date-label"
-              x="24" y="56"
+              x="16" y="56"
               text-anchor="start"
               font-size="13">—</text>
         <text id="arc-end-label"
               class="gauge-date-label"
-              x="476" y="56"
+              x="484" y="56"
               text-anchor="end"
               font-size="13">—</text>
       </svg>
@@ -1900,8 +1901,8 @@
     ? 100
     : Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)));
 
-  /* Arc length: horizontal bar x:24→476 */
-  var ARC_LEN   = 452; /* 476 - 24 */
+  /* Bar length: x:16→484 = 19 dashes × 18 + 18 gaps × 7 */
+  var ARC_LEN   = 468; /* 484 - 16 */
   var targetLen = (progress / 100) * ARC_LEN;
 
   /* Status: date-based stages */
