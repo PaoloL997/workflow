@@ -250,17 +250,6 @@ def _storage_irraggiungibile():
     return EndpointConnectionError(endpoint_url="http://127.0.0.1:3900")
 
 
-def _dai_firma(utente, nome="firme/prova.png"):
-    """L'utente con un'immagine di firma.
-
-    Basta il nome del file: non serve leggerlo. I test che caricano davvero
-    l'immagine usano ``_png`` e una cartella media temporanea.
-    """
-    utente.firma = nome
-    utente.save(update_fields=["firma"])
-    return utente
-
-
 def _png(dimensione=(160, 48), modo="RGBA", formato="PNG"):
     """Un'immagine vera, come la carica un utente."""
     buffer = io.BytesIO()

@@ -48,7 +48,6 @@ from .models import (
     TransmittalInterno,
     User,
     valida_immagine_avatar,
-    valida_immagine_firma,
 )
 from .permissions import (
     GRUPPO_SERVIZIO,
@@ -3182,13 +3181,6 @@ def profilo_view(request):
                 except ValidationError as exc:
                     errors["avatar"] = " ".join(exc.messages)
 
-            firma_file = request.FILES.get("firma")
-            if firma_file:
-                try:
-                    valida_immagine_firma(firma_file)
-                except ValidationError as exc:
-                    errors["firma"] = " ".join(exc.messages)
-
             if not errors:
                 user.first_name = first_name
                 user.last_name = last_name
@@ -3203,13 +3195,6 @@ def profilo_view(request):
                     da_eliminare.append(user.avatar.name)
                     user.avatar = avatar_file
 
-                if firma_file:
-                    da_eliminare.append(user.firma.name)
-                    user.firma = firma_file
-                elif request.POST.get("rimuovi_firma") and user.firma:
-                    da_eliminare.append(user.firma.name)
-                    user.firma = None
-
                 try:
                     # Atomico: un errore dello storage annulla solo questo
                     # salvataggio, poi l'utente si rilegge dal database.
@@ -3218,13 +3203,13 @@ def profilo_view(request):
                 except ERRORI_STORAGE:
                     logger.warning("Salvataggio del profilo di %s fallito.", user, exc_info=True)
                     user.refresh_from_db()
-                    errors["avatar" if avatar_file else "firma"] = (
+                    errors["avatar"] = (
                         "Impossibile salvare l'immagine: archivio non raggiungibile, riprova."
                     )
                 else:
                     # Mai il file appena salvato, anche se ha ripreso il nome del
                     # vecchio (succede se il vecchio mancava già dallo storage).
-                    elimina_file(set(da_eliminare) - {user.avatar.name, user.firma.name})
+                    elimina_file(set(da_eliminare) - {user.avatar.name})
                     return redirect("home")
 
     reparti = list_reparti()
@@ -3240,27 +3225,13 @@ def profilo_view(request):
 
 
 @login_required
-def firma_utente_view(request, pk):
-    """L'immagine di firma di un utente, per chi è autenticato.
-
-    Si serve da qui e non dall'URL dei file caricati, che Django serve solo in
-    sviluppo: così la firma si vede in ogni installazione. L'URL porta il nome
-    del file (vedi il template del profilo), quindi una nuova immagine non
-    resta in cache.
-    """
-    utente = User.objects.filter(pk=pk).only("firma").first()
-    if utente is None:
-        raise Http404
-    return risposta_immagine(utente.firma, cache_control="private, no-cache")
-
-
-@login_required
 def avatar_utente_view(request, pk):
     """La foto profilo di un utente, per chi è autenticato.
 
-    Come per la firma: il bucket S3 è privato e la cartella media è servita da
-    Django solo in sviluppo. L'URL (``User.url_avatar``) cambia a ogni nuovo
-    caricamento, quindi il browser può tenerla in cache.
+    Si serve da qui e non dall'URL dei file caricati: il bucket S3 è privato e
+    la cartella media la serve Django solo in sviluppo. L'URL
+    (``User.url_avatar``) cambia a ogni nuovo caricamento, quindi il browser
+    può tenerla in cache.
     """
     utente = User.objects.filter(pk=pk).only("avatar").first()
     if utente is None:

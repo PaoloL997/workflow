@@ -89,9 +89,9 @@ aggiornamento si continuerebbero a servire i file vecchi. Con `DEBUG=False` è o
 **Nota:** modifiche al file `.env` richiedono `Restart-Service WorkflowWaitress` (non basta
 recycle del pool IIS).
 
-### Storage S3 per foto profilo e firme (SeaweedFS)
+### Storage S3 per le foto profilo (SeaweedFS)
 
-Foto profilo e firme degli utenti stanno su [SeaweedFS](https://github.com/seaweedfs/seaweedfs),
+Le foto profilo degli utenti stanno su [SeaweedFS](https://github.com/seaweedfs/seaweedfs),
 uno storage compatibile S3 che gira come servizio Windows (`WorkflowStorage`, con NSSM come
 `WorkflowWaitress`) sulla stessa macchina. Ascolta solo su `127.0.0.1` (porte 3900-3903): il
 bucket è privato e le immagini le serve l'applicazione, solo agli utenti loggati. Senza

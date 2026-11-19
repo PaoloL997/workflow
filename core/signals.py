@@ -8,10 +8,10 @@ from core.services.media import elimina_file
 
 @receiver(post_delete, sender=User)
 def elimina_media_utente(sender, instance, **kwargs):
-    """Cancella foto profilo e firma di un utente eliminato.
+    """Cancella la foto profilo di un utente eliminato.
 
     Django non cancella i file dei ``FileField``. Si aspetta il commit: se
     l'eliminazione viene annullata i file devono restare.
     """
-    nomi = [instance.avatar.name, instance.firma.name]
+    nomi = [instance.avatar.name]
     transaction.on_commit(lambda: elimina_file(nomi))

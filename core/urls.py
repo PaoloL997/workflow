@@ -45,7 +45,6 @@ urlpatterns = [
     # HTML — Home
     path("", views.home_view, name="home"),
     path("profilo/", views.profilo_view, name="profilo"),
-    path("utenti/<int:pk>/firma/", views.firma_utente_view, name="firma_utente"),
     path("utenti/<int:pk>/avatar/", views.avatar_utente_view, name="avatar_utente"),
     path("commesse/", views.commesse_list_view, name="commesse_list"),
     path("commesse/<str:job>/", views.commessa_detail_view, name="commessa_detail"),
