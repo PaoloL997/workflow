@@ -57,38 +57,6 @@ class Permesso(models.TextChoices):
     READING = "reading", "Lettura"
 
 
-FIRMA_MAX_BYTE = 1024 * 1024
-FIRMA_FORMATI = ("PNG", "JPEG")
-
-
-def valida_immagine_firma(file):
-    """L'immagine di firma: un PNG o un JPEG veri, al massimo 1 MB.
-
-    Il formato si legge dal contenuto e non dal nome: un ".png" che non è
-    un'immagine si rifiuta. Il caso previsto è un PNG con lo sfondo
-    trasparente, che si posa bene su qualsiasi colore.
-    """
-    from PIL import Image, UnidentifiedImageError
-
-    if file.size > FIRMA_MAX_BYTE:
-        raise ValidationError("L'immagine di firma può pesare al massimo 1 MB.")
-    try:
-        file.seek(0)
-        with Image.open(file) as immagine:
-            formato = immagine.format
-            immagine.verify()
-    except (UnidentifiedImageError, OSError, SyntaxError, ValueError):
-        raise ValidationError(
-            "Il file non è un'immagine valida: carica un PNG, meglio se trasparente, o un JPEG."
-        ) from None
-    finally:
-        file.seek(0)
-    if formato not in FIRMA_FORMATI:
-        raise ValidationError(
-            "Formato non ammesso: carica un PNG, meglio se trasparente, o un JPEG."
-        )
-
-
 AVATAR_MAX_BYTE = 5 * 1024 * 1024
 AVATAR_FORMATI = ("PNG", "JPEG", "GIF", "WEBP")
 
@@ -96,7 +64,8 @@ AVATAR_FORMATI = ("PNG", "JPEG", "GIF", "WEBP")
 def valida_immagine_avatar(file):
     """La foto profilo: un PNG, JPEG, GIF o WebP veri, al massimo 5 MB.
 
-    Come per la firma, il formato si legge dal contenuto e non dal nome.
+    Il formato si legge dal contenuto e non dal nome: un ".png" che non è
+    un'immagine si rifiuta.
     """
     from PIL import Image, UnidentifiedImageError
 
@@ -122,14 +91,6 @@ class User(AbstractUser):
     ruolo = models.CharField(db_column="Ruolo", max_length=100, blank=True)
     reparto = models.CharField(db_column="Reparto", max_length=100, blank=True)
     avatar = models.ImageField(db_column="Avatar", upload_to="avatars/", null=True, blank=True)
-    firma = models.ImageField(
-        db_column="Firma",
-        upload_to="firme/",
-        null=True,
-        blank=True,
-        validators=[valida_immagine_firma],
-        verbose_name="Immagine di firma",
-    )
     permesso = models.CharField(
         db_column="Permesso",
         max_length=20,

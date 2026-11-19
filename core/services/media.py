@@ -1,4 +1,4 @@
-"""File caricati dagli utenti (foto profilo e firme) e il loro storage.
+"""File caricati dagli utenti (le foto profilo) e il loro storage.
 
 Lo storage è quello di default di Django: il bucket S3 di SeaweedFS sul
 server (deploy/install-seaweedfs-service.ps1), una cartella in sviluppo (vedi
@@ -47,7 +47,7 @@ def _segna_storage_giu():
 class StorageNonDisponibile(RuntimeError):
     """Lo storage dei file caricati non risponde."""
 
-    def __init__(self, messaggio="Archivio di firme e foto non raggiungibile: riprova tra poco."):
+    def __init__(self, messaggio="Archivio delle foto non raggiungibile: riprova tra poco."):
         super().__init__(messaggio)
 
 
@@ -126,19 +126,18 @@ class ReportCopia:
 
 
 def nomi_media_utenti() -> dict[str, list[str]]:
-    """Nomi dei file di foto profilo e firme in uso, con gli username che li usano."""
+    """Nomi dei file delle foto profilo in uso, con gli username che li usano."""
     from ..models import User
 
     nomi: dict[str, list[str]] = {}
-    for username, avatar, firma in User.objects.values_list("username", "avatar", "firma"):
-        for nome in (avatar, firma):
-            if nome:
-                nomi.setdefault(nome, []).append(username)
+    for username, avatar in User.objects.values_list("username", "avatar"):
+        if avatar:
+            nomi.setdefault(avatar, []).append(username)
     return nomi
 
 
 def copia_media_su_storage(sorgente, destinazione, *, dry_run=False) -> ReportCopia:
-    """Copia foto profilo e firme da uno storage all'altro, con lo stesso nome.
+    """Copia le foto profilo da uno storage all'altro, con lo stesso nome.
 
     Serve per passare dalla cartella media al bucket S3: il nome nel database
     resta quello, quindi non c'è niente da aggiornare. Copia solo i file usati

@@ -434,12 +434,9 @@ class TrasmittalInternoEndToEndTests(TestCase):
         doppia = self._prendi_visione(self.firmatari_utenti["FBaldin"], lettera_id)  # QC di BG
         self.assertEqual(doppia.status_code, 409)
 
-    # ── Punto 9: firmatario senza immagine → PDF generato comunque ──────────
+    # ── Punto 9: nessuna firma grafica → PDF generato comunque ──────────────
 
     def test_12_pdf_generato_senza_immagini_di_firma(self):
-        for firmatario in self.firmatari_utenti.values():
-            self.assertFalse(firmatario.firma)
-
         risposta = self.client.post(
             self._url("anteprima/pdf/"),
             data=json.dumps({"righe": self._righe_abcd()}),

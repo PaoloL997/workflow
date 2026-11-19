@@ -30,7 +30,7 @@ def env_list(name: str, default: list[str]) -> list[str]:
 
 
 def storage_media_da_env() -> dict:
-    """Storage dei file caricati dagli utenti (foto profilo e firme).
+    """Storage dei file caricati dagli utenti (le foto profilo).
 
     Con ``S3_BUCKET`` nel .env i file vanno sullo storage S3 (SeaweedFS,
     servizio Windows accanto all'app sul server, vedi README); senza, restano

@@ -1,4 +1,4 @@
-"""Copia foto profilo e firme dalla cartella media allo storage S3."""
+"""Copia le foto profilo dalla cartella media allo storage S3."""
 
 from pathlib import Path
 
@@ -12,7 +12,7 @@ from core.services.media import ERRORI_STORAGE, copia_media_su_storage
 
 class Command(BaseCommand):
     help = (
-        "Copia le foto profilo e le firme degli utenti dalla cartella media "
+        "Copia le foto profilo degli utenti dalla cartella media "
         "(MEDIA_ROOT) allo storage configurato, cioè il bucket S3 indicato da "
         "S3_BUCKET nel .env. I file mantengono lo stesso nome, quindi il database "
         "non cambia. Copia solo i file usati da un utente e salta quelli già "

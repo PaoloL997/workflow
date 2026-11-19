@@ -113,16 +113,6 @@ Clicca sull'immagine circolare a sinistra (icona della fotocamera, *"Cambia foto
 3. **Reparto**: scegli uno dei reparti presenti nel menu.
 4. Clicca **Salva modifiche**.
 
-#### Firma
-
-Nel riquadro **Firma** puoi caricare l'immagine della tua firma. Il trasmittal interno non la usa: nel suo PDF compaiono il nome e la data e ora di chi ha preso visione (vedi **12.8 Presa visione QC e PROD**).
-
-- **Carica immagine** / **Sostituisci immagine**: PNG (meglio con sfondo trasparente) oppure JPEG, al massimo **1 MB**. Compare subito l'anteprima.
-- Spunta **Rimuovi** per cancellare la firma attuale.
-- La firma si salva con **Salva modifiche**.
-
-Errori possibili: *"L'immagine di firma può pesare al massimo 1 MB."*, *"Formato non ammesso: carica un PNG, meglio se trasparente, o un JPEG."*, *"Impossibile salvare l'immagine: archivio non raggiungibile, riprova."* In quest'ultimo caso la firma precedente resta al suo posto.
-
 #### Uscire dall'account
 
 Dalla pagina Profilo, clicca **Logout** (in basso nella colonna sinistra). È l'unico punto da cui si esce.

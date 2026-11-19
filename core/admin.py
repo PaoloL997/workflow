@@ -1,9 +1,7 @@
 from django import forms
 from django.contrib import admin
-from django.contrib.admin.widgets import AdminFileWidget
 from django.contrib.auth.admin import UserAdmin
 from django.db.models import Exists, OuterRef
-from django.urls import reverse
 
 from .models import (
     AggiornamentoBC,
@@ -69,39 +67,10 @@ class RepartoAdmin(admin.ModelAdmin):
     search_fields = ("nome", "acronimo")
 
 
-class _FileServitoDallApp:
-    """Il file attuale come lo mostra il widget: nome e URL della vista dell'app."""
-
-    def __init__(self, nome, url):
-        self.nome = nome
-        self.url = url
-
-    def __str__(self):
-        return self.nome
-
-
-class FirmaAdminWidget(AdminFileWidget):
-    """Il link «Attualmente» della firma punta alla vista dell'app.
-
-    ``firma.url`` sarebbe un URL dello storage S3, privato e non raggiungibile
-    dal browser (vedi config.settings.storage_media_da_env).
-    """
-
-    def __init__(self, url, attrs=None):
-        super().__init__(attrs)
-        self.url_firma = url
-
-    def get_context(self, name, value, attrs):
-        context = super().get_context(name, value, attrs)
-        if context["widget"]["is_initial"]:
-            context["widget"]["value"] = _FileServitoDallApp(str(value), self.url_firma)
-        return context
-
-
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
-        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento", "firma")}),
+        ("Profilo", {"fields": ("ruolo", "reparto", "stabilimento")}),
     )
     # I permessi dell'app li aggiunge get_fieldsets, anche nel form di creazione.
     add_fieldsets = UserAdmin.add_fieldsets + (
@@ -147,10 +116,6 @@ class CustomUserAdmin(UserAdmin):
             form.base_fields["reparto"].required = False
         if "permesso" in form.base_fields:
             form.base_fields["permesso"].initial = Permesso.READING
-        if obj is not None and obj.firma and "firma" in form.base_fields:
-            form.base_fields["firma"].widget = FirmaAdminWidget(
-                url=reverse("firma_utente", args=[obj.pk])
-            )
         return form
 
 
