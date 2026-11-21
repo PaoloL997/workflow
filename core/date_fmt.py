@@ -1,4 +1,4 @@
-"""Display formatting for dates: ``10 jan 2026``."""
+"""Display formatting for dates: ``10 gen 2026`` (``10 jan 2026`` nei PDF)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,25 @@ from datetime import date, datetime
 
 from django.utils import timezone
 
+# Schermate: abbreviazioni italiane, come il resto dell'interfaccia. Stessa
+# lista di ``MONTHS_SHORT`` in ``core/templates/core/base.html``.
 _MONTHS_SHORT = (
+    "gen",
+    "feb",
+    "mar",
+    "apr",
+    "mag",
+    "giu",
+    "lug",
+    "ago",
+    "set",
+    "ott",
+    "nov",
+    "dic",
+)
+
+# PDF dei trasmittal: sono documenti in inglese e tengono i mesi in inglese.
+_MONTHS_SHORT_EN = (
     "jan",
     "feb",
     "mar",
@@ -42,7 +60,16 @@ def parse_iso_date(value, *, strict: bool = False) -> date | None:
 
 
 def format_display_date(value) -> str:
-    """Format a date/datetime/ISO string as ``d mon yyyy`` (e.g. ``10 jan 2026``)."""
+    """Format a date/datetime/ISO string as ``d mon yyyy`` (e.g. ``10 gen 2026``)."""
+    return _format(value, _MONTHS_SHORT)
+
+
+def format_document_date(value) -> str:
+    """Come ``format_display_date`` ma con i mesi in inglese (``10 jan 2026``), per i PDF."""
+    return _format(value, _MONTHS_SHORT_EN)
+
+
+def _format(value, months) -> str:
     if value is None or value == "":
         return ""
     if isinstance(value, datetime):
@@ -58,4 +85,4 @@ def format_display_date(value) -> str:
             return value
     elif not isinstance(value, date):
         return str(value)
-    return f"{value.day} {_MONTHS_SHORT[value.month - 1]} {value.year}"
+    return f"{value.day} {months[value.month - 1]} {value.year}"

@@ -531,8 +531,17 @@
     /* Referenced here so the CSRF cookie is always set for global fetch calls */
     window.CSRF_TOKEN = '{{ csrf_token }}';
 
-    /* Date display: 10 jan 2026 — available before page scripts in content */
-    var MONTHS_SHORT = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    /* Date display: 10 gen 2026 — available before page scripts in content.
+       Stessa lista di core/date_fmt.py (_MONTHS_SHORT). */
+    var MONTHS_SHORT = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+    /* Abbreviazioni inglesi usate fino a novembre 2026: i campi data le accettano ancora. */
+    var MONTHS_SHORT_EN = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+    /* Indice 0-11 del mese da un'abbreviazione di tre lettere, italiana o inglese; -1 se non è un mese. */
+    function monthIndexFromShort(abbr) {
+      var a = String(abbr || '').toLowerCase();
+      var i = MONTHS_SHORT.indexOf(a);
+      return i >= 0 ? i : MONTHS_SHORT_EN.indexOf(a);
+    }
     function formatDate(iso) {
       if (!iso) return '—';
       const [y, m, d] = String(iso).slice(0, 10).split('-');

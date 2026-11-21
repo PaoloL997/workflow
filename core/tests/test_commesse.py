@@ -162,17 +162,54 @@ class TitoloPaginaCommessaViewTests(TestCase):
 
 
 class DateDisplayFormatTests(SimpleTestCase):
-    """Dates are shown as ``10 jan 2026`` across the app."""
+    """Dates are shown as ``10 gen 2026`` on screen and ``10 jan 2026`` in PDFs."""
 
     def test_format_display_date(self):
         import datetime
 
         from ..date_fmt import format_display_date
 
-        self.assertEqual(format_display_date(datetime.date(2026, 1, 10)), "10 jan 2026")
+        self.assertEqual(format_display_date(datetime.date(2026, 1, 10)), "10 gen 2026")
         self.assertEqual(format_display_date("2026-03-05"), "5 mar 2026")
         self.assertEqual(format_display_date(None), "")
         self.assertEqual(format_display_date(""), "")
+
+    def test_mesi_abbreviati_in_italiano(self):
+        import datetime
+
+        from ..date_fmt import format_display_date
+
+        mesi = [format_display_date(datetime.date(2026, m, 1)).split()[1] for m in range(1, 13)]
+        self.assertEqual(
+            mesi,
+            ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"],
+        )
+
+    def test_mesi_js_allineati_al_server(self):
+        """``MONTHS_SHORT`` di base.html è la stessa lista di ``core.date_fmt``."""
+        import re
+        from pathlib import Path
+
+        from .. import date_fmt
+
+        base = Path(date_fmt.__file__).parent / "templates" / "core" / "base.html"
+        html = base.read_text(encoding="utf-8")
+        for nome, attesi in (
+            ("MONTHS_SHORT", date_fmt._MONTHS_SHORT),
+            ("MONTHS_SHORT_EN", date_fmt._MONTHS_SHORT_EN),
+        ):
+            trovato = re.search(rf"var {nome} = \[([^\]]*)\];", html)
+            self.assertIsNotNone(trovato, nome)
+            self.assertEqual(tuple(re.findall(r"'([a-z]{3})'", trovato.group(1))), attesi)
+
+    def test_format_document_date_resta_in_inglese(self):
+        import datetime
+
+        from ..date_fmt import format_document_date
+
+        self.assertEqual(format_document_date(datetime.date(2026, 1, 10)), "10 jan 2026")
+        self.assertEqual(format_document_date("2026-05-05"), "5 may 2026")
+        self.assertEqual(format_document_date(None), "")
 
     def test_pdf_date_line(self):
         from src.pdf import _fmt_date
@@ -194,4 +231,4 @@ class FormatDisplayDateTests(SimpleTestCase):
         from core.date_fmt import format_display_date
 
         self.assertEqual(format_display_date(datetime(2026, 3, 14, 23, 30)), "14 mar 2026")
-        self.assertEqual(format_display_date(date(2026, 1, 10)), "10 jan 2026")
+        self.assertEqual(format_display_date(date(2026, 1, 10)), "10 gen 2026")

@@ -11,7 +11,7 @@ from django.utils import timezone
 from fpdf import FPDF, FontFace
 from fpdf.enums import TableBordersLayout
 
-from core.date_fmt import format_display_date
+from core.date_fmt import format_document_date
 from core.models import RuoloFirmatarioStabilimento, Stabilimento
 from core.services.revisione_label import format_revisione_label
 from core.services.situazione_cella_vendor import colore_cella_vendor
@@ -169,7 +169,7 @@ class TrasmittalPDF(FPDF):
 
 def _fmt_date(date_str, city):
     """Convert ISO date string to 'CITY, 10 jan 2026' format."""
-    formatted = format_display_date(date_str) or (date_str or "")
+    formatted = format_document_date(date_str) or (date_str or "")
     if city:
         return f"{city}, {formatted}"
     return formatted
@@ -488,7 +488,7 @@ def _normalize_doc_id_cols(doc_id_cols=None, doc_id_mode=None):
 def _cell_value_for_col(doc, key):
     """Display value for a trasmittal table column key."""
     if key == "required_by":
-        return format_display_date(doc.get("required_by")) or ""
+        return format_document_date(doc.get("required_by")) or ""
     if key == "rev_no":
         # ``rev_label`` è già lettera o numero secondo il flag di archivio;
         # ``rev_no`` resta il ripiego per i chiamanti che non lo passano.

@@ -797,7 +797,7 @@
             <div class="dp-wrap">
               <input type="text" class="dp-text-input${dateIso ? ' filled' : ''}" data-doc="${d.id}"
                      maxlength="12" autocomplete="off" spellcheck="false"
-                     placeholder="10 jan 2026"
+                     placeholder="10 gen 2026"
                      value="${escHtml(dateText)}"
                      oninput="onDpTextInput(this)">
               <button type="button" class="dp-cal-btn" data-doc="${d.id}"
@@ -846,7 +846,7 @@
     document.getElementById('ric-btn').disabled = total === 0;
   }
 
-  /* Manual text input for date (10 jan 2026 or gg/mm/aaaa) */
+  /* Manual text input for date (10 gen 2026 — anche 10 jan 2026 — or gg/mm/aaaa) */
   window.onDpTextInput = function(el) {
     const docId  = el.dataset.doc;
     const hidden = document.querySelector(`.ric-date[data-doc="${docId}"]`);
@@ -855,7 +855,7 @@
 
     const letterMatch = val.match(/^(\d{1,2})\s+([a-z]{3})\s+(\d{4})$/);
     if (letterMatch) {
-      const mon = MONTHS_SHORT.indexOf(letterMatch[2]);
+      const mon = monthIndexFromShort(letterMatch[2]);
       if (mon >= 0) {
         iso = `${letterMatch[3]}-${String(mon + 1).padStart(2, '0')}-${letterMatch[1].padStart(2, '0')}`;
       }
