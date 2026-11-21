@@ -6,6 +6,10 @@
 
 - Trasmittal interno, **approvazione automatica** (misura temporanea): con `TRASMITTAL_INTERNO_APPROVAZIONE_AUTOMATICA=True` nel `.env` ogni lettera è visionata *in automatico* nel momento in cui viene emessa, senza attendere la presa visione di QC e PROD. Alla creazione si registrano le prese visione di QC e PROD con nome «in automatico» (senza utente), poi si salva il PDF sul fileserver e si copiano i documenti per il cliente nella cartella DCC; solo dopo parte l'email di emissione, che dice *Lettera visionata in automatico (QC e PROD)* e riporta dove sono il trasmittal (`Trasmittal salvato in:`) e i documenti (`Documenti per il DCC in:`), oltre al link alla lettera. L'email di completamento non parte. Nel PDF e nell'elenco lettere compare «in automatico» al posto del nome. Se un passo fallisce la lettera resta creata e l'esito lo dice, con **Riprova** per PDF, DCC ed email. Spento (default) vale la presa visione di QC e PROD come prima. Aggiunge la colonna `automatica` a *Prese visione trasmittal interno* e rende facoltativo l'utente (migrazione `0066`)
 
+### Changed
+
+- Date nelle schermate: il mese abbreviato è in italiano (`10 gen 2026` al posto di `10 jan 2026`), come il resto dell'interfaccia: elenchi e dettagli, notifiche, forum, «Chiusa il…» e aggiornamenti da Business Central. Il campo **Return date** della ricezione accetta `10 gen 2026` e, come prima, `10 jan 2026` e `gg/mm/aaaa`. I PDF dei trasmittal, che sono in inglese, restano con il mese in inglese
+
 ### Removed
 
 - Profilo: il riquadro **Firma** non c'è più e l'immagine di firma esce dall'applicazione. Dalla presa visione del trasmittal interno nessuna funzione la usava: nel PDF compaiono nome, data e ora di chi ha preso visione. La migrazione `0067` cancella i file delle firme dallo storage e toglie la colonna `Firma` dagli utenti; nell'admin la scheda utente non ha più il campo. Le foto profilo restano come prima

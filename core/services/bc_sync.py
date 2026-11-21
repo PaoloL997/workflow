@@ -263,7 +263,7 @@ def sincronizza_commesse(
 
 
 def _valore_leggibile(campo: str, valore: str) -> str:
-    """Valore pronto per l'interfaccia: le date come ``10 jan 2026``."""
+    """Valore pronto per l'interfaccia: le date come ``10 gen 2026``."""
     if campo.endswith("_date"):
         return format_display_date(valore)
     return valore

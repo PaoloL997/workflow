@@ -161,7 +161,7 @@ In basso a destra trovi il pulsante circolare per cambiare tema (luna in tema ch
 
 ### 3.4 Formato delle date
 
-Nelle schermate le date compaiono nel formato *giorno mese anno* con il mese abbreviato in inglese, ad esempio `10 jan 2026`. Nei campi di inserimento vale quanto indicato nel capitolo della singola funzione.
+Nelle schermate le date compaiono nel formato *giorno mese anno* con il mese abbreviato in italiano, ad esempio `10 gen 2026` (nei PDF dei trasmittal, che sono in inglese, il mese resta in inglese: `10 jan 2026`). Nei campi di inserimento vale quanto indicato nel capitolo della singola funzione.
 
 ### 3.5 Notifiche
 
@@ -298,7 +298,7 @@ In alto compaiono il nome del cliente, il titolo **Commessa <job>**, la riga con
 
 **Permessi:** Scrittura.
 
-Il pulsante **Chiudi commessa** (accanto a Elimina commessa) registra la data odierna come data di consegna effettiva, senza richiesta di conferma. Al posto del pulsante compare poi *"Chiusa il 10 jan 2026"* e la barra di avanzamento passa a **Completato**. La commessa chiusa resta consultabile e modificabile in tutte le sue sezioni; il controllo giornaliero con Business Central la salta (il pulsante **Aggiorna da BC** funziona comunque, vedi **6.4 Aggiornamenti da Business Central**). Non esiste un pulsante per riaprirla: chiedi a un amministratore.
+Il pulsante **Chiudi commessa** (accanto a Elimina commessa) registra la data odierna come data di consegna effettiva, senza richiesta di conferma. Al posto del pulsante compare poi *"Chiusa il 10 gen 2026"* e la barra di avanzamento passa a **Completato**. La commessa chiusa resta consultabile e modificabile in tutte le sue sezioni; il controllo giornaliero con Business Central la salta (il pulsante **Aggiorna da BC** funziona comunque, vedi **6.4 Aggiornamenti da Business Central**). Non esiste un pulsante per riaprirla: chiedi a un amministratore.
 
 ### 5.3 Eliminare una commessa o chiederne l'eliminazione
 
@@ -732,7 +732,7 @@ I documenti sono ordinati per data di ricezione prevista: quelli con data scadut
 Per ogni documento da registrare:
 
 1. **Client response** — scegli la risposta del cliente dal menu *"— Seleziona —"* (es. Approved, Commented…). È facoltativa: una riga con la sola data viene registrata senza risposta. L'elenco delle risposte è configurato da un amministratore.
-2. **Return date** — scrivi la data nel formato `gg/mm/aaaa` oppure `10 jan 2026`, o usa il **calendario** (icona accanto al campo; mesi in italiano, settimana da lunedì, oggi evidenziato). È l'**unico campo obbligatorio**: una data non riconosciuta viene azzerata.
+2. **Return date** — scrivi la data nel formato `gg/mm/aaaa` oppure `10 gen 2026` (vale ancora anche l'abbreviazione inglese, `10 jan 2026`), o usa il **calendario** (icona accanto al campo; mesi in italiano, settimana da lunedì, oggi evidenziato). È l'**unico campo obbligatorio**: una data non riconosciuta viene azzerata.
 3. **New rev.** — interruttore che indica se creare automaticamente la revisione successiva. È **acceso di default**; quando scegli una risposta si allinea da solo all'impostazione di quella risposta (*Crea nuova revisione*), e puoi comunque cambiarlo a mano.
 
 Il contatore in alto dice *"N di T documenti compilati"* (le righe con una data valida). I valori inseriti restano anche cambiando filtri o ordinamento, ma **non** sopravvivono a un ricaricamento della pagina.

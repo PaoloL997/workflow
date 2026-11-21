@@ -257,8 +257,8 @@ class SincronizzazioneBusinessCentralTests(TestCase):
 
         self.assertEqual(voci["client"]["etichetta"], "Cliente")
         self.assertEqual(voci["client"]["nuovo"], "Cliente Nuovo")
-        # Le date sono già pronte per l'interfaccia (10 jan 2026 → 1 mar 2026).
-        self.assertEqual(voci["delivery_date"]["precedente"], "10 jan 2026")
+        # Le date sono già pronte per l'interfaccia (10 gen 2026 → 1 mar 2026).
+        self.assertEqual(voci["delivery_date"]["precedente"], "10 gen 2026")
         self.assertEqual(voci["delivery_date"]["nuovo"], "1 mar 2026")
 
     def test_fetch_from_bc_riusa_il_connettore_aperto(self):
